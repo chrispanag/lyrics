@@ -43,19 +43,30 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
 });
 
-// The layout the three field primitives share; the chrome they share with the
-// browse search box lives in fieldStyles.
+// The shape the three field primitives share; the chrome they share with the
+// browse search box lives in fieldStyles. Everything a call site might vary —
+// size, padding, width — is stated by the primitive itself rather than shared
+// here, because cn is a plain join: two classes for one property both land in
+// the list and CSS source order picks the winner.
 //
-// Padding is per-primitive rather than shared: the select has to reserve room
-// on the right for its chevron, and cn is a plain join — so a shared `px-3`
-// with a `pr-9` after it would leave both in the class list and let CSS source
-// order pick the winner.
-const fieldLayout = "w-full rounded-xl";
+// That is not hypothetical. A shared `w-full` outranked the `w-36` the credit
+// editor passes for its role picker, so that row rendered with the person
+// field crushed to a sliver and the picker swallowing the rest — while the
+// admin filter's `sm:w-44` survived the same collision, since a variant is
+// always emitted after the base utility it qualifies. Width now belongs to
+// whoever places the control: an <Input> or <Textarea> always fills its field,
+// a <Select> sits in a toolbar or beside another control just as often, so it
+// asks. A select that forgets is visibly shrink-to-fit, not subtly wrong.
+const fieldLayout = "rounded-xl";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {
     return (
-      <input ref={ref} className={cn(fieldChrome, fieldLayout, "h-11 px-3", className)} {...props} />
+      <input
+        ref={ref}
+        className={cn(fieldChrome, fieldLayout, "h-11 w-full px-3", className)}
+        {...props}
+      />
     );
   },
 );
@@ -65,7 +76,11 @@ export const Textarea = forwardRef<
   TextareaHTMLAttributes<HTMLTextAreaElement>
 >(function Textarea({ className, ...props }, ref) {
   return (
-    <textarea ref={ref} className={cn(fieldChrome, fieldLayout, "px-3 py-2.5", className)} {...props} />
+    <textarea
+      ref={ref}
+      className={cn(fieldChrome, fieldLayout, "w-full px-3 py-2.5", className)}
+      {...props}
+    />
   );
 });
 
@@ -75,7 +90,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
       <select
         ref={ref}
         // select-chevron draws the arrow the native control would; see the rule
-        // in styles/index.css for why that one is given up.
+        // in styles/index.css for why that one is given up. No width here — see
+        // fieldLayout.
         className={cn(fieldChrome, fieldLayout, "select-chevron h-11 appearance-none pl-3 pr-9", className)}
         {...props}
       >

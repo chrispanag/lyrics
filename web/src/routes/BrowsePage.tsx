@@ -348,6 +348,7 @@ export function BrowsePage() {
               </label>
               <Select
                 id="filter-language"
+                className="w-full"
                 value={language}
                 onChange={(event) => setParam("language", event.target.value || null)}
               >
@@ -363,6 +364,7 @@ export function BrowsePage() {
               </label>
               <Select
                 id="filter-sort"
+                className="w-full"
                 value={activeSort}
                 onChange={(event) => setParam("sort", event.target.value || null)}
               >

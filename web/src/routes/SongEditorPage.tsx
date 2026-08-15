@@ -192,6 +192,7 @@ export function SongEditorPage() {
           <Field label="Language" htmlFor="language" error={fieldErrors.language}>
             <Select
               id="language"
+              className="w-full"
               value={language}
               onChange={(event) => track(setLanguage)(event.target.value)}
             >

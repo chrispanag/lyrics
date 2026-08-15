@@ -44,7 +44,7 @@ export function AdminUsersPage() {
           aria-label="Filter by role"
           value={roleFilter}
           onChange={(event) => setRoleFilter(event.target.value)}
-          className="sm:w-44"
+          className="w-full sm:w-44"
         >
           <option value="">All roles</option>
           {ROLES.map((role) => (
