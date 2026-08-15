@@ -125,6 +125,16 @@ lint-web: ## Typecheck and lint the frontend
 e2e: ## Run the Playwright smoke suite (needs Prelude credentials, see README)
 	cd web && npm run e2e
 
+# --- deployment --------------------------------------------------------------
+
+.PHONY: deploy-check
+deploy-check: ## Validate .do/app.yaml against the DigitalOcean API, changing nothing
+	./scripts/deploy-do.sh --validate
+
+.PHONY: deploy
+deploy: ## Create or update the DigitalOcean app from .do/app.yaml
+	./scripts/deploy-do.sh
+
 # --- everything --------------------------------------------------------------
 
 .PHONY: test

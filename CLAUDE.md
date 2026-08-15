@@ -192,3 +192,34 @@ because the caller supplies the claims. To see a real token:
 - `ADMIN_EMAILS` applies **only at provisioning**. Adding an address later does
   not promote an existing account — change `users.role` directly, or use
   Admin → Users.
+
+---
+
+## Deployment
+
+`.do/app.yaml` is the App Platform spec; `scripts/deploy-do.sh` applies it,
+substituting the placeholder env values from `.env` so no credential lands in a
+tracked file. Four components: a static site at `/`, the API at `/api`, a
+pre-deploy migration job, and a managed PostgreSQL. README has the walkthrough;
+these three are the parts that break quietly.
+
+- **The `/api` ingress rule needs `preserve_path_prefix: true`.** App Platform
+  strips a matched prefix by default, and the router mounts at `/api/v1` — so
+  without it every request arrives as `/v1/…` and the app answers "No such
+  endpoint" to a frontend that looks correctly configured. (The old `squid-app`
+  spec omits it because its backend did not carry the prefix. Do not copy it.)
+- **The backend image must keep `CMD` rather than `ENTRYPOINT`.** `run_command`
+  replaces a component's command, and with an `ENTRYPOINT` in place it may be
+  appended to it as arguments instead — in which case the migration job starts a
+  second API and hangs until the deploy times out rather than migrating. With no
+  `ENTRYPOINT` the question does not arise, which is the only reason the image
+  gives one up.
+- **A production frontend build must leave `VITE_API_BASE_URL` unset**, which
+  makes it call its own origin. Vite inlines the value at build time, so setting
+  it bakes in a hostname that a domain change then invalidates — and the failure
+  appears only in the browser, long after a green deploy.
+
+Migrations run from `cmd/migrate`, which embeds `backend/migrations` with
+`go:embed` (hence `migrations/embed.go` — the directive cannot reach upward).
+The tests still read the same files from disk, so editing SQL takes effect
+without a rebuild. The API deliberately still does not migrate on boot.

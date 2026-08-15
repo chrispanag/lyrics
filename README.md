@@ -355,11 +355,95 @@ is skipped rather than duplicated — matched on its normalized title plus the s
 of people credited on it. Title alone is too weak a key: the old catalog holds
 seven groups of genuinely different songs that share one.
 
+## Deploying to DigitalOcean App Platform
+
+`.do/app.yaml` describes the whole deployment. Four components in one app:
+
+| Component | Kind          | Built from                | Serves                          |
+| --------- | ------------- | ------------------------- | ------------------------------- |
+| `web`     | static site   | `web/`, Node buildpack    | `/` — the built assets, via CDN |
+| `api`     | service       | `backend/Dockerfile`      | `/api` — the Go API             |
+| `migrate` | pre-deploy job | `backend/Dockerfile`     | nothing; applies the schema     |
+| `db`      | dev database  | managed PostgreSQL 17     | —                               |
+
+Everything is one origin. `/api` routes to the service with the path prefix
+preserved (the router mounts at `/api/v1`), and every other path falls through
+to the assets, with `catchall_document` handling client-side routes. A
+production build of the frontend has no API base URL compiled into it and calls
+its own origin, so moving the app to another domain never means rebuilding it.
+
+### Before the first deploy
+
+1. **Connect the repository.** App Platform pulls from `chrispanag/lyrics`, so
+   DigitalOcean's GitHub app needs access to it. This is the one step with no
+   API: grant it under GitHub → Settings → Applications → DigitalOcean.
+2. **Fill in `.env`** — `PRELUDE_APP_ID`, `PRELUDE_API_KEY`, `ADMIN_EMAILS`, and
+   optionally `VITE_PRELUDE_SDK_KEY`. The tracked spec holds placeholders where
+   these belong; `scripts/deploy-do.sh` substitutes them at request time so no
+   credential is ever written to a tracked file.
+3. **Get an API token** with write scope and export it as
+   `DIGITALOCEAN_ACCESS_TOKEN`, or add it to `.env`.
+
+```bash
+make deploy-check   # validate the spec and price it; creates nothing
+make deploy         # create the app, or update it if it already exists
+```
+
+`deploy-check` runs DigitalOcean's own dry run, which rejects a malformed spec
+and reports the monthly cost. `deploy` is idempotent: it looks the app up by
+name each time rather than recording an id here, so there is no local state to
+drift out of date.
+
+### What happens on each deploy
+
+The `migrate` job runs to completion **before** any new container serves
+traffic, so a request never reaches code whose migration has not landed. It is
+built from the same image as the API — the migrations are compiled into the
+binary with `go:embed` — which is what guarantees the schema and the code that
+expects it come from one commit.
+
+That image has no `ENTRYPOINT`, deliberately. App Platform's `run_command`
+replaces a component's command, and with an `ENTRYPOINT` in place it may be
+appended to the API's arguments instead — in which case the pre-deploy job
+quietly starts a second web server and hangs rather than migrating. Giving up
+the `ENTRYPOINT` makes the question moot.
+
+The API still does not migrate at startup. Nothing else moves the schema
+forward in production, which keeps the ordering explicit rather than racing
+several booting replicas against each other.
+
+### Loading the catalog
+
+A fresh deployment has an empty catalog: `seed.sql` is sample data and is not
+wired into the deploy. Load the real thing from the machine holding the export,
+against the deployed database's connection string (DigitalOcean console → the
+app → `db` → connection details):
+
+```bash
+DATABASE_URL='postgres://...?sslmode=require' make import-songs FILE=songs.ndjson
+```
+
+The load is one transaction and re-running is safe, so a failed attempt leaves
+nothing to clean up.
+
+### Custom domain
+
+`paroles.gr` currently points at the previous app and is **not** attached here.
+Moving it is a deliberate, separate step: add a `domains:` block to
+`.do/app.yaml` and remove it from the old app first — two apps cannot claim the
+same domain. `CORS_ORIGINS` is `${APP_URL}`, so it follows the primary domain
+automatically once one is attached.
+
+---
+
 ## Layout
 
 ```
+.do/
+  app.yaml           App Platform spec (see "Deploying to DigitalOcean")
 backend/
   cmd/api/           entry point, graceful shutdown, -healthcheck probe
+  cmd/migrate/       applies the embedded migrations; the pre-deploy job
   cmd/import-songs/  NDJSON catalog loader (see "Importing the old catalog")
   internal/
     api/             routing, request decoding, authorization, error mapping
@@ -379,6 +463,7 @@ web/
 scripts/
   export-old-db.sql       old catalog -> NDJSON
   migrate-from-old-db.sh  export + load, in one command
+  deploy-do.sh            render .do/app.yaml with secrets, create or update
 ```
 
 ### Notes on the implementation

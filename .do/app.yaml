@@ -1,0 +1,157 @@
+# DigitalOcean App Platform specification for the lyrics catalog.
+#
+# One app, one origin: the built frontend is served at `/`, and `/api` is routed
+# to the Go service. Same-origin is what lets the browser bundle use relative
+# URLs, so a domain change never requires rebuilding it — and it means the API's
+# CORS configuration is a formality rather than the thing standing between the
+# app and its own data.
+#
+# Apply it with `./scripts/deploy-do.sh`, which fills the placeholder values
+# below from `.env`. Secrets are deliberately absent here: this file is tracked.
+
+name: lyrics
+region: fra
+
+# A development database: single node, no automated failover, backups limited to
+# the last day. That matches what this catalog is — a few thousand rows that can
+# be rebuilt from `songs.ndjson` — and it is the same tier the previous
+# incarnation of the site ran on. `production: true` plus a `cluster_name` moves
+# it onto a managed cluster later without touching anything else here.
+databases:
+  - name: db
+    engine: PG
+    version: "17"
+    production: false
+
+# The schema is applied by a pre-deploy job rather than at API startup. The
+# ordering is the point: this runs to completion before any new container is
+# allowed to serve traffic, so a request never arrives at code whose migration
+# has not landed. It shares the API's image, so the schema and the code that
+# expects it are always built from the same commit.
+jobs:
+  - name: migrate
+    kind: PRE_DEPLOY
+    github:
+      repo: chrispanag/lyrics
+      branch: main
+      deploy_on_push: true
+    source_dir: backend
+    dockerfile_path: backend/Dockerfile
+    # The image has no ENTRYPOINT precisely so this replaces the command rather
+    # than being appended to the API's arguments.
+    run_command: /app/migrate
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+
+services:
+  - name: api
+    github:
+      repo: chrispanag/lyrics
+      branch: main
+      deploy_on_push: true
+    source_dir: backend
+    dockerfile_path: backend/Dockerfile
+    http_port: 8080
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1
+
+    # /api/v1/health pings the database, so a service that cannot reach Postgres
+    # is never rolled into rotation. The initial delay covers the JWKS fetch the
+    # verifier performs at startup.
+    health_check:
+      http_path: /api/v1/health
+      initial_delay_seconds: 15
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+
+      # Resolves to the primary domain once one is attached, and to the
+      # ondigitalocean.app hostname until then — so the allowed origin follows
+      # the app rather than being pinned to whatever it was called on day one.
+      - key: CORS_ORIGINS
+        scope: RUN_TIME
+        value: ${APP_URL}
+
+      - key: PRELUDE_API_BASE
+        scope: RUN_TIME
+        value: https://api.prelude.dev
+      - key: LOG_LEVEL
+        scope: RUN_TIME
+        value: info
+
+      # --- filled in by scripts/deploy-do.sh from .env ---------------------
+      - key: PRELUDE_APP_ID
+        scope: RUN_TIME
+        value: SET_BY_DEPLOY_SCRIPT
+      - key: PRELUDE_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: SET_BY_DEPLOY_SCRIPT
+      # Applies only when an account is first provisioned; adding an address
+      # here does not promote an existing user.
+      - key: ADMIN_EMAILS
+        scope: RUN_TIME
+        value: SET_BY_DEPLOY_SCRIPT
+
+# Static assets are built by the Node buildpack and served from DigitalOcean's
+# CDN — no container, and no nginx.conf. `web/nginx.conf` still describes the
+# Compose deployment; the two need to agree on SPA fallback, which is what
+# catchall_document provides here.
+static_sites:
+  - name: web
+    github:
+      repo: chrispanag/lyrics
+      branch: main
+      deploy_on_push: true
+    source_dir: web
+    build_command: npm run build
+    output_dir: dist
+    # Every unmatched path is a React Router route, not a missing file.
+    catchall_document: index.html
+
+    envs:
+      # VITE_API_BASE_URL is deliberately unset: Vite inlines these at build
+      # time, and a production build with no override targets its own origin,
+      # which is exactly the routing below. Setting it here would bake a
+      # hostname into the bundle for no gain.
+      #
+      # Both values are publishable client identifiers — unlike PRELUDE_API_KEY,
+      # they are meant to reach the browser. They are still filled from .env
+      # rather than written here, so there is one place to change them.
+      - key: VITE_PRELUDE_APP_ID
+        scope: BUILD_TIME
+        value: SET_BY_DEPLOY_SCRIPT
+      - key: VITE_PRELUDE_SDK_KEY
+        scope: BUILD_TIME
+        value: SET_BY_DEPLOY_SCRIPT
+
+# Longest prefix wins, so /api reaches the service and everything else the
+# assets. preserve_path_prefix is load-bearing: the router mounts at /api/v1,
+# and without it App Platform strips /api and every route 404s.
+ingress:
+  rules:
+    - match:
+        path:
+          prefix: /api
+      component:
+        name: api
+        preserve_path_prefix: true
+    - match:
+        path:
+          prefix: /
+      component:
+        name: web
+
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED

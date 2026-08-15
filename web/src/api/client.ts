@@ -1,6 +1,15 @@
 import type { ApiErrorBody } from "@/lib/types";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+// A production build defaults to the page's own origin, because that is how the
+// app is deployed: one domain, with `/api` routed to the API and everything
+// else to these assets. Baking an absolute URL in would survive until the
+// domain changed and then serve a bundle pointing at the old one.
+//
+// Development is the case that needs an override — Vite serves :5173 and the
+// API listens on :8080 — so the fallback is only reached there. An explicit
+// VITE_API_BASE_URL still wins in either mode, including when set to "".
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://localhost:8080" : "");
 
 /** Error carrying the API's structured failure body. */
 export class ApiError extends Error {
