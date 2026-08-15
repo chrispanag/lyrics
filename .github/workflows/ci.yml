@@ -33,9 +33,9 @@ jobs:
           --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
@@ -52,11 +52,11 @@ jobs:
         working-directory: backend
         run: go vet ./...
 
-      # v8 is the first major that installs golangci-lint v2. The v6 action
-      # pins to the last v1 release, which is built with Go 1.24 and refuses a
+      # Keep this action on v8 or later: earlier majors install the last
+      # golangci-lint v1 release, which is built with Go 1.24 and refuses a
       # module targeting 1.25 outright — it fails before linting anything.
       # The version is pinned so CI and `make check` run the same binary.
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           working-directory: backend
           version: v2.9.0
@@ -79,9 +79,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -114,13 +114,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
 
       # Built but not pushed: this proves the Dockerfiles still work, which a
       # `go build` alone does not.
       - name: Build API image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./backend
           push: false
@@ -128,7 +128,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build web image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./web
           push: false
