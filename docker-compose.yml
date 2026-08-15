@@ -1,0 +1,63 @@
+name: lyrics
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: lyrics
+      POSTGRES_PASSWORD: lyrics
+      POSTGRES_DB: lyrics
+      # Deterministic collation, so ordering does not shift with the host locale.
+      POSTGRES_INITDB_ARGS: "--locale=C.UTF-8 --encoding=UTF8"
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lyrics -d lyrics"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgres://lyrics:lyrics@db:5432/lyrics?sslmode=disable
+      PORT: "8080"
+      # Deliberately not guarded with `:?` here: that fires while merely parsing
+      # the file, which would make `docker compose up db` fail before Postgres
+      # even starts. The API validates its own configuration at boot and reports
+      # every missing value at once.
+      PRELUDE_APP_ID: ${PRELUDE_APP_ID:-}
+      PRELUDE_API_KEY: ${PRELUDE_API_KEY:-}
+      PRELUDE_API_BASE: ${PRELUDE_API_BASE:-https://api.prelude.dev}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/api", "-healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+        VITE_PRELUDE_APP_ID: ${PRELUDE_APP_ID:-}
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  db_data:

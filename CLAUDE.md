@@ -1,0 +1,194 @@
+# Lyrics
+
+Multilingual song lyrics catalog (Greek + English). Go REST API + PostgreSQL,
+React/TypeScript frontend, authentication delegated to Prelude Auth.
+
+Guests browse and search. Users build lists. Contributors add songs and edit
+their own. Admins do everything.
+
+`README.md` covers setup and the API surface. This file covers what is easy to
+break.
+
+---
+
+## Commands
+
+```bash
+make up          # start PostgreSQL (host port 5433)
+make seed        # migrate + load sample songs
+make api         # run the API on :8080
+make web         # run the web app on :5173
+make check       # lint + test, both stacks
+```
+
+`make test-backend` depends on `up` deliberately: the integration tests **skip**
+when no database is reachable, so without it a broken schema reports green.
+
+Keep `make check` clean. Backend must be `gofmt`-clean with zero `golangci-lint`
+findings; frontend must have zero `tsc` errors and zero eslint findings
+(warnings included — the fast-refresh warnings are why styles live in their own
+modules, see Conventions).
+
+---
+
+## Invariants that fail silently
+
+Each of these has been broken once. None of them produced an error message that
+pointed at the cause, and each is pinned by a test that names the failure.
+
+### Search
+
+- **`app_norm()` must stay equivalent to what the `app_simple` text search
+  configuration does to raw text.** An earlier version also folded Greek final
+  sigma. Matching still worked — but `ts_headline` reads the *raw* lyrics, has
+  no such folding, and every snippet for a Greek word ending in ς quietly lost
+  its highlighting. Matching and highlighting fail independently; test both.
+- **Snippets are delimited `⟦…⟧`, never `<b>`.** `ts_headline` returns source
+  text verbatim, so markup typed into lyrics comes back untouched. HTML
+  delimiters would make lyrics a stored XSS vector. The client splits on the
+  sentinels and builds elements, so injection is structurally impossible rather
+  than filtered.
+- **Fuzzy matching uses `word_similarity`, not `similarity`.** `similarity`
+  scores the query against the *whole* concatenated credits field, so the score
+  decays as a song gains credits and fuzzy search breaks on exactly the
+  best-documented songs.
+- **Everything in index and generated-column expressions is schema-qualified**
+  (`public.unaccent`, `'public.app_simple'`). PostgreSQL evaluates those under a
+  restricted `search_path`; an unqualified call resolves fine in an ordinary
+  query and then fails at `CREATE INDEX` with "function does not exist".
+- The index is deliberately **unstemmed** — the corpus mixes Greek and English,
+  and each language's stemmer mangles the other. Prefix matching (`:*` on every
+  term) is the only recall mechanism for Greek inflection. Do not "improve" this
+  by switching to a stemmed configuration without handling both languages.
+
+### Prelude tokens
+
+Two properties of a real access token contradict both the docs and the app's own
+OAuth metadata. Both broke sign-in, and both surfaced as *"Access token is
+invalid or has expired"*:
+
+- **`iss` is the bare host** (`<app_id>.session.prelude.dev`) while
+  `/.well-known/oauth-authorization-server` advertises the `https://` form. The
+  verifier compares hosts and accepts either.
+- **`sub` and `user_id` are different identifiers.** `sub` is the `usr_…` id the
+  Management API returns and that `users.prelude_user_id` stores; `user_id` is
+  Prelude's internal UUID. **Join on `sub`.** Joining on `user_id` matches
+  nothing and re-provisions the user as a duplicate.
+- Tokens live **~60 seconds** and set `nbf` to issue time. The verifier allows
+  15s of clock skew; the frontend retries once after a 401 with a forced
+  refresh.
+
+Verifying with a token from `POST /tokens` does **not** catch either issue,
+because the caller supplies the claims. To see a real token:
+`POST /v1/session/login/email/password` → `POST /v1/session/login/finalize`.
+
+### Frontend
+
+- **`BrowsePage`'s debounced-search effect needs its guard.** `setParams` is not
+  referentially stable, so the effect re-runs after *any* param write; without
+  the guard it clears `page` every time and pagination cannot advance. The
+  failure is silent — the button works, the same rows return.
+- **Song pages link credits to `/?person=<id>`.** Browse must read that param,
+  or clicking an artist lands on the unfiltered catalog with no error, reading
+  as "this artist is on every song".
+
+---
+
+## Decisions worth not reversing
+
+- **Roles live in our Postgres, not in Prelude claims.** A promotion applies on
+  the next request instead of the next token refresh. Prelude supports custom
+  claims; using them here would make role changes lag by a token lifetime.
+- **Registration goes through our backend.** The browser SDK can only *log in* —
+  creating a user is a Management API call needing the API key, which must never
+  reach a browser. `POST /auth/register` makes two upstream calls and **deletes
+  the account if the second fails**: a user created without a password can
+  neither sign in nor register again, permanently burning that address.
+- **Queries are hand-written against pgx, not generated.** Most of the surface is
+  dynamic — composable filters, blended relevance ranking — which generators
+  model poorly.
+- **Handlers return errors**; `httpx.Handler` renders them. The response envelope
+  is consistent by construction rather than by convention.
+- **`created_by` is nullable.** Catalog content outlives the account that entered
+  it, so deleting a user leaves their songs in place.
+- **Credit filters are `EXISTS` subqueries, not joins.** A join multiplies a song
+  by its matching credits, and two credit filters then union instead of
+  intersecting.
+
+---
+
+## Conventions
+
+- **PATCH is tri-state.** `optionalString`/`optionalBool` distinguish absent
+  (leave alone) from explicit null (clear). A plain `*string` passed through to
+  the store blanks every omitted field on `PATCH {}`.
+- **Style modules over co-exports.** `buttonStyles.ts`, `fieldStyles.ts`,
+  `lib/snippet.ts`, `lib/credits.ts`, `lib/theme.ts`, `auth/context.ts` exist so
+  component files export *only* components — that is what keeps fast refresh
+  working, and eslint enforces it.
+- **`cn()` is a plain join, not tailwind-merge.** Later classes do not override
+  earlier ones; share the chrome rather than passing overrides through.
+- **Filter state lives in the URL**, so a filtered search is shareable and the
+  back button behaves.
+- Frontend permission checks (`hasRole`, `canEditSong` in `lib/types.ts`) decide
+  what to *render* only — the server is the authority and enforces every rule
+  independently. They are shared rather than inlined so an affordance and the
+  guard behind it cannot disagree about who gets in.
+
+---
+
+## Testing
+
+- **Backend integration tests need a real PostgreSQL** — the generated search
+  vector, denormalization triggers, `ts_headline` and trigram ranking all live in
+  the database and cannot be faked. Each test binary creates **its own database**
+  (`lyrics_test_<binary>`): `go test ./...` runs packages in parallel, and a
+  shared database means one package truncates another's fixtures mid-test.
+- Override with `TEST_DATABASE_URL`. Tests skip (not fail) when nothing is
+  reachable, which is why `make test-backend` starts the database first.
+- **Token verification is tested against a locally generated key set** served by
+  `httptest` (`testutil.TokenIssuer`) — the only way to produce expired,
+  wrong-issuer, foreign-key and `alg: none` tokens on demand. `PRELUDE_JWKS_URL`
+  and `PRELUDE_ISSUER` point the app at it.
+- Frontend uses vitest + RTL + MSW, with `onUnhandledRequest: "error"` — an
+  unstubbed request is a bug in the test, not something to pass through.
+- `renderWithProviders` stubs the auth context rather than mounting the real
+  provider, so tests never touch the Prelude SDK.
+- Playwright's guest specs need only a running seeded stack. The signed-in spec
+  cannot be stubbed (the SDK talks to Prelude directly) and skips unless
+  `E2E_USER_EMAIL`/`E2E_USER_PASSWORD` are set.
+
+---
+
+## Data
+
+- `make seed` loads a small Greek + English catalog — enough for search ranking,
+  diacritic folding and credit filters to be observable immediately.
+- **Importing the old catalog** (previous TypeORM/PG14 database):
+
+  ```bash
+  OLD_DATABASE_URL=postgres://... make migrate-catalog ARGS=--dry-run
+  make import-songs FILE=songs.ndjson ARGS=-dry-run   # reload an existing export
+  ```
+
+  Export and load are two stages on purpose: the NDJSON is the only artifact
+  that survives a failed load, and the old database sits behind a
+  trusted-sources firewall that may not be open on a second attempt. The load
+  runs in one transaction and is re-runnable — a song already present (matched
+  on normalized title plus its credited people) is skipped, since `songs` has no
+  unique constraint to lean on. Always start with the dry run.
+
+---
+
+## Environment
+
+- `.env` is **gitignored and holds live Prelude credentials**. Never copy secrets
+  into tracked files, and note that the recursive `grep` here is gitignore-aware,
+  so it will silently skip `.env` when scanning.
+- The Management API key is server-side only. `VITE_PRELUDE_SDK_KEY` is a
+  publishable client identifier and is safe in the bundle.
+- Vite only exposes `VITE_`-prefixed variables; `make web` maps `PRELUDE_APP_ID`
+  across rather than keeping a second copy in `.env`.
+- `ADMIN_EMAILS` applies **only at provisioning**. Adding an address later does
+  not promote an existing account — change `users.role` directly, or use
+  Admin → Users.

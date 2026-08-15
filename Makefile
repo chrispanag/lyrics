@@ -1,0 +1,137 @@
+.DEFAULT_GOAL := help
+
+# Load .env if present so DATABASE_URL and the Prelude settings are available
+# to every target without repeating them on the command line.
+ifneq (,$(wildcard .env))
+include .env
+export
+endif
+
+DATABASE_URL ?= postgres://lyrics:lyrics@localhost:5433/lyrics?sslmode=disable
+MIGRATIONS   := backend/migrations
+
+.PHONY: help
+help: ## Show this help
+	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
+		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+# --- environment -------------------------------------------------------------
+
+.PHONY: up
+up: ## Start Postgres and wait for it to accept connections
+	docker compose up -d db
+	@printf 'waiting for postgres'
+	@until docker compose exec -T db pg_isready -U lyrics -d lyrics >/dev/null 2>&1; do \
+		printf '.'; sleep 1; \
+	done
+	@echo ' ready'
+
+.PHONY: up-all
+# The API does not migrate on boot, so a fresh volume leaves it serving 500s
+# behind a health check that only pings. `seed` runs migrations first.
+up-all: ## Start every service (db, api, web) in Docker, then migrate and seed
+	docker compose up -d --build
+	$(MAKE) seed
+
+.PHONY: down
+down: ## Stop all services
+	docker compose down
+
+.PHONY: clean
+clean: ## Stop services and delete the database volume
+	docker compose down -v
+
+.PHONY: logs
+logs: ## Follow service logs
+	docker compose logs -f
+
+# --- database ----------------------------------------------------------------
+
+.PHONY: migrate
+migrate: up ## Apply all pending migrations
+	migrate -path $(MIGRATIONS) -database "$(DATABASE_URL)" up
+
+.PHONY: migrate-down
+migrate-down: ## Roll back the most recent migration
+	migrate -path $(MIGRATIONS) -database "$(DATABASE_URL)" down 1
+
+.PHONY: migrate-status
+migrate-status: ## Show the current schema version
+	migrate -path $(MIGRATIONS) -database "$(DATABASE_URL)" version
+
+.PHONY: seed
+seed: migrate ## Load sample songs (Greek and English)
+	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f $(MIGRATIONS)/seed.sql
+
+.PHONY: migrate-catalog
+# Two stages so the exported NDJSON survives a failed load: the old database is
+# behind a trusted-sources firewall and may not be reachable on a second try.
+migrate-catalog: migrate ## Import the song catalog from the old database (needs OLD_DATABASE_URL)
+	OUT="$(OUT)" ./scripts/migrate-from-old-db.sh $(ARGS)
+
+.PHONY: import-songs
+# The path is made absolute before the `cd`, so FILE can be given either
+# relative to the repository root or as an absolute path.
+import-songs: migrate ## Load songs from an existing NDJSON export (FILE=songs.ndjson)
+	cd backend && go run ./cmd/import-songs \
+		-database-url "$(DATABASE_URL)" -file "$(abspath $(or $(FILE),songs.ndjson))" $(ARGS)
+
+.PHONY: db-reset
+db-reset: ## Drop and rebuild the schema, then reseed
+	psql "$(DATABASE_URL)" -q -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+	$(MAKE) seed
+
+.PHONY: psql
+psql: ## Open a psql shell
+	psql "$(DATABASE_URL)"
+
+# --- backend -----------------------------------------------------------------
+
+.PHONY: api
+api: migrate ## Run the API locally
+	cd backend && DATABASE_URL="$(DATABASE_URL)" go run ./cmd/api
+
+.PHONY: test-backend
+# Integration tests skip themselves without a database, which would quietly
+# turn a broken schema into a green run — so the database is a prerequisite.
+test-backend: up ## Run backend tests with the race detector
+	cd backend && go test ./... -count=1 -race
+
+.PHONY: lint-backend
+lint-backend: ## Lint the backend
+	cd backend && golangci-lint run ./... && go vet ./...
+
+# --- frontend ----------------------------------------------------------------
+
+.PHONY: web
+# Vite only exposes variables prefixed with VITE_, so the app ID is mapped
+# across here rather than duplicated in .env under two names.
+web: ## Run the web dev server
+	cd web && VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" npm run dev
+
+.PHONY: install
+install: ## Install frontend dependencies
+	cd web && npm install
+
+.PHONY: test-web
+test-web: ## Run frontend unit tests
+	cd web && npm run test
+
+.PHONY: lint-web
+lint-web: ## Typecheck and lint the frontend
+	cd web && npm run typecheck && npm run lint
+
+.PHONY: e2e
+e2e: ## Run the Playwright smoke suite (needs Prelude credentials, see README)
+	cd web && npm run e2e
+
+# --- everything --------------------------------------------------------------
+
+.PHONY: test
+test: test-backend test-web ## Run all tests
+
+.PHONY: lint
+lint: lint-backend lint-web ## Lint everything
+
+.PHONY: check
+check: lint test ## Lint and test everything

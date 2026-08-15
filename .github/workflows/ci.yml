@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push makes an in-flight run for the same branch obsolete.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Must match the Compose image: the schema depends on unaccent,
+        # pg_trgm, and a custom text search configuration.
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: lyrics
+          POSTGRES_PASSWORD: lyrics
+          POSTGRES_DB: lyrics
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U lyrics -d lyrics"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Verify formatting
+        working-directory: backend
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: Vet
+        working-directory: backend
+        run: go vet ./...
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: backend
+
+      - name: Test
+        working-directory: backend
+        env:
+          # The suite creates a database per test binary from this connection.
+          # Without it the integration tests would skip themselves and a broken
+          # schema would report as a green build.
+          TEST_DATABASE_URL: postgres://lyrics:lyrics@localhost:5433/lyrics?sslmode=disable
+        run: go test ./... -count=1 -race
+
+      - name: Build
+        working-directory: backend
+        run: go build ./...
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        working-directory: web
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: web
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: web
+        run: npm run lint
+
+      - name: Test
+        working-directory: web
+        run: npm run test
+
+      - name: Build
+        working-directory: web
+        env:
+          VITE_API_BASE_URL: http://localhost:8080
+        run: npx vite build
+
+  docker:
+    name: Docker images
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      # Built but not pushed: this proves the Dockerfiles still work, which a
+      # `go build` alone does not.
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          push: false
+          build-args: |
+            VITE_API_BASE_URL=http://localhost:8080
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

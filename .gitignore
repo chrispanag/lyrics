@@ -1,0 +1,30 @@
+.env
+.env.local
+*.local
+
+# Go
+backend/bin/
+backend/tmp/
+*.test
+*.out
+
+# Node
+node_modules/
+web/dist/
+web/.vite/
+web/playwright-report/
+web/test-results/
+web/coverage/
+
+# Catalog exports produced by scripts/migrate-from-old-db.sh — real content,
+# not fixtures, and large enough that it does not belong in the repository.
+songs.ndjson
+*.ndjson
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+.remember/
