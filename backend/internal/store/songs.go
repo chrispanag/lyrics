@@ -133,6 +133,17 @@ func matchClause(a *args, query string) (clause, tsqParam, rawParam string) {
 	return clause, tsqParam, rawParam
 }
 
+// Valid reports whether the sort is one this package implements. An empty sort
+// is valid and means "the default for this mode".
+func (s SongSort) Valid() bool {
+	switch s {
+	case "", SortRelevance, SortTitle, SortNewest, SortOldest:
+		return true
+	default:
+		return false
+	}
+}
+
 func orderClause(sort SongSort) string {
 	switch sort {
 	case SortTitle:
@@ -141,6 +152,29 @@ func orderClause(sort SongSort) string {
 		return "s.created_at ASC, s.id ASC"
 	default:
 		return "s.created_at DESC, s.id ASC"
+	}
+}
+
+// searchOrderClause is orderClause's counterpart for relevance mode, expressed
+// over the columns the `scored`/`hits` CTEs carry rather than over `songs`.
+//
+// Without it an explicit sort was accepted and then silently discarded whenever
+// a query was present: the UI offers Title and Newest alongside a search box,
+// and picking one changed nothing. The prefix lets the same ordering be written
+// twice — once inside the CTE that applies LIMIT, once on the join that reads
+// it back — which must agree or the page is ordered differently from the way it
+// was selected.
+func searchOrderClause(sort SongSort, prefix string) string {
+	col := func(name string) string { return prefix + name }
+	switch sort {
+	case SortTitle:
+		return col("sort_title") + " ASC, " + col("id") + " ASC"
+	case SortNewest:
+		return col("created_at") + " DESC, " + col("id") + " ASC"
+	case SortOldest:
+		return col("created_at") + " ASC, " + col("id") + " ASC"
+	default:
+		return col("score") + " DESC, " + col("sort_title") + " ASC, " + col("id") + " ASC"
 	}
 }
 
@@ -217,25 +251,29 @@ func (s *Store) searchSongs(ctx context.Context, f SongFilter) ([]Song, int, err
 			           word_similarity(app_norm(%[3]s), app_norm(s.title)),
 			           word_similarity(app_norm(%[3]s), app_norm(s.credits_text))
 			       ) AS trgm_score,
-			       app_norm(s.title) AS sort_title
+			       app_norm(s.title) AS sort_title,
+			       s.created_at
 			FROM songs s
 			WHERE %[4]s
 		),
 		hits AS (
-			SELECT id, sort_title, (%[5]v * text_rank + %[6]v * trgm_score) AS score
+			SELECT id, sort_title, created_at,
+			       (%[5]v * text_rank + %[6]v * trgm_score) AS score
 			FROM scored
-			ORDER BY score DESC, sort_title ASC, id ASC
-			LIMIT %[7]s OFFSET %[8]s
+			ORDER BY %[7]s
+			LIMIT %[8]s OFFSET %[9]s
 		)
-		SELECT %[9]s, h.score,
+		SELECT %[10]s, h.score,
 		       ts_headline('public.app_simple', s.lyrics,
-		                   to_tsquery('public.app_simple', %[2]s), %[10]s)
+		                   to_tsquery('public.app_simple', %[2]s), %[11]s)
 		FROM hits h
 		JOIN songs s ON s.id = h.id
-		ORDER BY h.score DESC, h.sort_title ASC, h.id ASC`,
+		ORDER BY %[12]s`,
 		weightArray, tsqParam, rawParam, where,
 		textRankWeight, trgmWeight,
-		a.next(f.Limit), a.next(f.Offset), songColumns, a.next(headlineOptions))
+		searchOrderClause(f.Sort, ""),
+		a.next(f.Limit), a.next(f.Offset), songColumns, a.next(headlineOptions),
+		searchOrderClause(f.Sort, "h."))
 
 	songs, err := s.collectSongs(ctx, query, a.values, true)
 	if err != nil {
@@ -374,18 +412,6 @@ func (s *Store) GetSong(ctx context.Context, id uuid.UUID) (*Song, error) {
 		return nil, err
 	}
 	return &songs[0], nil
-}
-
-// SongOwner returns the account that created a song, which is what the edit
-// permission check needs. Reading the single column avoids loading the whole
-// song — lyrics body, credits, and genres — only to discard it.
-func (s *Store) SongOwner(ctx context.Context, id uuid.UUID) (*uuid.UUID, error) {
-	var createdBy *uuid.UUID
-	err := s.pool.QueryRow(ctx, `SELECT created_by FROM songs WHERE id = $1`, id).Scan(&createdBy)
-	if err != nil {
-		return nil, translateErr(err)
-	}
-	return createdBy, nil
 }
 
 // actorRef maps a zero actor onto NULL. created_by/updated_by are nullable

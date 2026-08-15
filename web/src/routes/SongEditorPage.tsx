@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -34,7 +34,7 @@ export function SongEditorPage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
 
-  const { data: existing, isLoading: loadingSong } = useSong(id);
+  const { data: existing, isLoading: loadingSong, isError: songFailed } = useSong(id);
   const { data: genres } = useGenres();
   const createSong = useCreateSong();
   const updateSong = useUpdateSong(id ?? "");
@@ -53,9 +53,16 @@ export function SongEditorPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [dirty, setDirty] = useState(false);
 
-  // Populate once the song arrives.
+  // Populate once the song arrives, and only once per song.
+  //
+  // Keying this on `existing` alone made it re-run on every refetch — react-query
+  // hands back a fresh object each time — so a reconnect or a cache invalidation
+  // silently overwrote whatever was in the form and reset `dirty`, taking the
+  // unsaved-changes guard down with it.
+  const hydratedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!existing) return;
+    if (!existing || hydratedFor.current === existing.id) return;
+    hydratedFor.current = existing.id;
     setTitle(existing.title);
     setAltTitle(existing.alt_title ?? "");
     setLyrics(existing.lyrics);
@@ -87,6 +94,21 @@ export function SongEditorPage() {
   if (authLoading) return <Spinner />;
   if (!hasRole(user?.role, "contributor")) return <Navigate to="/" replace />;
   if (isEdit && loadingSong) return <Spinner />;
+
+  // A failed load must not fall through to the form. The fields would render
+  // empty under an "Edit song" heading, and every save sends the whole song —
+  // so a contributor who assumed the page had merely lost focus and retyped the
+  // title would overwrite the real lyrics, credits, and genres with blanks.
+  if (isEdit && (songFailed || !existing)) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-6">
+        <ErrorMessage>
+          This song could not be loaded, so it cannot be edited right now. Reload the page to
+          try again.
+        </ErrorMessage>
+      </div>
+    );
+  }
 
   // The server enforces this too; the redirect just avoids showing a form that
   // is guaranteed to be rejected.

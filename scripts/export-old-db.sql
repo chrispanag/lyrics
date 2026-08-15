@@ -50,7 +50,11 @@ SELECT json_build_object(
          'credits',      (
            SELECT coalesce(json_agg(
                     json_build_object(
-                      'name', btrim(p."firstName" || ' ' || p."lastName"),
+                      -- concat_ws, not `||`: concatenation propagates NULL, so a
+                      -- mononym stored with a NULL surname exported as
+                      -- `"name": null` and the loader then dropped the credit —
+                      -- that artist's whole catalog arrived unattributed.
+                      'name', btrim(concat_ws(' ', p."firstName", p."lastName")),
                       'role', sp.role
                     )
                     -- Composers before lyricists, then by the join table's own

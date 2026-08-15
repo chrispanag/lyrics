@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -192,9 +193,15 @@ const maxBodyBytes = 1 << 20
 // so that a typo in a client payload surfaces as an error instead of being
 // silently ignored.
 func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
-	if ct := r.Header.Get("Content-Type"); ct != "" &&
-		ct != "application/json" && ct != "application/json; charset=utf-8" {
-		return BadRequest("Content-Type must be application/json.")
+	// Parsed rather than string-compared: the header carries optional parameters
+	// and arbitrary spacing, so matching two exact spellings rejected the
+	// perfectly valid `application/json;charset=UTF-8` that several HTTP
+	// clients send by default.
+	if ct := r.Header.Get("Content-Type"); ct != "" {
+		mediaType, _, err := mime.ParseMediaType(ct)
+		if err != nil || mediaType != "application/json" {
+			return BadRequest("Content-Type must be application/json.")
+		}
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)

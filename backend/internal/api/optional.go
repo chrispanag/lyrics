@@ -44,6 +44,30 @@ func (o *optionalString) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// optionalInt is the integer counterpart of optionalString. Unlike a bool, nil
+// is meaningful for the columns behind it — a song with no known release year —
+// so an explicit null clears rather than being ignored.
+type optionalInt struct {
+	Set   bool
+	Value *int
+}
+
+func (o *optionalInt) UnmarshalJSON(data []byte) error {
+	o.Set = true
+
+	if string(data) == "null" {
+		o.Value = nil
+		return nil
+	}
+
+	var v int
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	o.Value = &v
+	return nil
+}
+
 // optionalBool is the boolean counterpart of optionalString.
 type optionalBool struct {
 	Set   bool
@@ -51,6 +75,15 @@ type optionalBool struct {
 }
 
 func (o *optionalBool) UnmarshalJSON(data []byte) error {
+	// Unmarshalling a JSON null into a bool is a documented no-op that returns
+	// no error, so without this branch `{"is_public": null}` would arrive as
+	// Set=true, Value=false and silently make a public list private. The
+	// columns behind this type are NOT NULL, so a null carries nothing to
+	// apply: treat it as absent, which is what the tri-state contract means by
+	// "leave the value alone".
+	if string(data) == "null" {
+		return nil
+	}
 	o.Set = true
 	return json.Unmarshal(data, &o.Value)
 }

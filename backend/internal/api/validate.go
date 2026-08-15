@@ -18,6 +18,15 @@ const (
 	maxDescriptionLen = 1_000
 	minPasswordLen    = 8
 	maxPasswordLen    = 256
+
+	// Collection bounds. The 1 MB body cap alone is not a bound on *work*: a
+	// credit is about 30 bytes on the wire but costs one sequential round trip
+	// to upsert a person, and a bare UUID is 38 bytes but costs one UPDATE in
+	// an open transaction. Left uncapped, a single accepted request could hold
+	// one of the ten pooled connections for the full write timeout.
+	maxCredits     = 64
+	maxGenreRefs   = 32
+	maxReorderRefs = 2_000
 )
 
 // validationErrors accumulates field-level problems so a form can show all of
@@ -55,7 +64,10 @@ func validatePassword(password string) string {
 	switch {
 	case utf8.RuneCountInString(password) < minPasswordLen:
 		return "Password must be at least 8 characters."
-	case len(password) > maxPasswordLen:
+	// Runes on both sides. Measuring the maximum in bytes rejected a 200-
+	// character Greek passphrase at roughly 400 bytes, while telling the user
+	// the limit was 256 characters.
+	case utf8.RuneCountInString(password) > maxPasswordLen:
 		return "Password is too long."
 	default:
 		return ""
@@ -90,7 +102,10 @@ func parseYouTubeURL(raw string) (videoID string, ok bool) {
 		return "", false
 	}
 
-	host := strings.ToLower(strings.TrimPrefix(u.Hostname(), "www."))
+	// Lowercase before trimming, not after: url.Parse preserves the host's case,
+	// so trimming first leaves "WWW.YOUTUBE.COM" with its prefix intact and the
+	// switch below rejects a perfectly ordinary pasted link.
+	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 	switch host {
 	case "youtu.be":
 		id := strings.Trim(u.Path, "/")

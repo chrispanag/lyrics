@@ -204,12 +204,15 @@ func (c *HTTPClient) classify(resp *http.Response) error {
 	var body apiError
 	_ = json.Unmarshal(raw, &body)
 
+	// Detail is rendered to the end user by the registration handler, so it only
+	// ever carries a field Prelude meant as a message. The unparsed body stays
+	// out of it: when Prelude (or a proxy in front of it) answers with an HTML
+	// error page or a debug payload, echoing it would hand an anonymous caller
+	// up to 8 KB of upstream internals. The raw body still reaches the logs
+	// through the wrapped error below.
 	detail := body.Message
 	if detail == "" {
 		detail = body.Detail
-	}
-	if detail == "" {
-		detail = string(raw)
 	}
 
 	switch resp.StatusCode {
@@ -218,16 +221,27 @@ func (c *HTTPClient) classify(resp *http.Response) error {
 	case http.StatusBadRequest, http.StatusUnprocessableEntity:
 		// Prelude reports both "this email already exists" and "this password is
 		// too weak" as 400s on some endpoints, distinguished only by the body.
-		if containsAny(detail+body.Code, "already", "duplicate", "exists", "taken") {
+		// Classification reads the whole body, including the part never shown to
+		// the caller, so an unparsed error page still routes to the right branch.
+		if containsAny(detail+body.Code+string(raw), "already", "duplicate", "exists", "taken") {
 			return &Error{Kind: ErrDuplicateIdentifier, Detail: detail, Status: resp.StatusCode}
 		}
-		if containsAny(detail+body.Code, "password", "compliance", "compliancy", "weak") {
+		if containsAny(detail+body.Code+string(raw), "password", "compliance", "compliancy", "weak") {
 			return &Error{Kind: ErrWeakPassword, Detail: detail, Status: resp.StatusCode}
 		}
-		return fmt.Errorf("%w: %s (status %d)", ErrUpstream, detail, resp.StatusCode)
+		return fmt.Errorf("%w: %s (status %d)", ErrUpstream, orRaw(detail, raw), resp.StatusCode)
 	default:
-		return fmt.Errorf("%w: %s (status %d)", ErrUpstream, detail, resp.StatusCode)
+		return fmt.Errorf("%w: %s (status %d)", ErrUpstream, orRaw(detail, raw), resp.StatusCode)
 	}
+}
+
+// orRaw falls back to the unparsed body for the wrapped-error text, which is
+// logged as a cause rather than returned to the caller.
+func orRaw(detail string, raw []byte) string {
+	if detail != "" {
+		return detail
+	}
+	return string(raw)
 }
 
 func containsAny(haystack string, needles ...string) bool {

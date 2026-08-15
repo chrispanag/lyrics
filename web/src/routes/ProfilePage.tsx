@@ -2,9 +2,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { LogOut, Moon, Sun } from "lucide-react";
 
+import { errorMessage } from "@/api/client";
 import { useUpdateProfile } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
-import { Button, Field, Input, Spinner } from "@/components/ui";
+import { Button, ErrorMessage, Field, Input, Spinner } from "@/components/ui";
 import { buttonClasses } from "@/components/buttonStyles";
 import { cn } from "@/lib/cn";
 import { applyTheme, storeTheme, storedTheme, type Theme } from "@/lib/theme";
@@ -21,6 +22,7 @@ export function ProfilePage() {
 
   const [displayName, setDisplayName] = useState("");
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
   const [theme, setTheme] = useState<Theme>(storedTheme);
 
   useEffect(() => {
@@ -67,12 +69,22 @@ export function ProfilePage() {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    // The PATCH responds with the updated user, so handing it straight to the
-    // context saves a GET /me for a record we are already holding.
-    const saved = await updateProfile.mutateAsync({ display_name: displayName.trim() || null });
-    await reload(saved);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setError("");
+    try {
+      // The PATCH responds with the updated user, so handing it straight to the
+      // context saves a GET /me for a record we are already holding.
+      const updated = await updateProfile.mutateAsync({
+        display_name: displayName.trim() || null,
+      });
+      await reload(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (caught) {
+      // Without this the rejection is unhandled and the button simply returns
+      // to "Save changes", leaving no way to tell a failed save from a
+      // successful one.
+      setError(errorMessage(caught, "Your profile could not be saved."));
+    }
   };
 
   return (
@@ -91,6 +103,7 @@ export function ProfilePage() {
       </dl>
 
       <form onSubmit={onSubmit} className="space-y-4">
+        {error && <ErrorMessage>{error}</ErrorMessage>}
         <Field label="Display name" htmlFor="display-name" hint="Shown instead of your email">
           <Input
             id="display-name"

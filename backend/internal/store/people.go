@@ -40,10 +40,15 @@ func (s *Store) ListPeople(ctx context.Context, f PersonFilter) ([]Person, int, 
 
 	if q := strings.TrimSpace(f.Query); q != "" {
 		p := a.next(q)
+		// The prefix arm needs its wildcards escaped; the trigram arm and the
+		// ranking must see the query verbatim, so the two forms are bound
+		// separately rather than sharing one parameter.
+		prefix := a.next(escapeLike(q))
 		// Prefix match OR trigram similarity: prefix keeps typing responsive,
 		// similarity catches spelling drift once enough has been typed.
 		conds = append(conds, fmt.Sprintf(
-			"(p.normalized_name LIKE app_norm(%[1]s) || '%%' OR p.normalized_name %% app_norm(%[1]s))", p))
+			"(p.normalized_name LIKE app_norm(%[2]s) || '%%' ESCAPE '%[3]s' "+
+				"OR p.normalized_name %% app_norm(%[1]s))", p, prefix, likeEscape))
 		order = fmt.Sprintf("similarity(p.normalized_name, app_norm(%s)) DESC, p.name ASC", p)
 	}
 	if f.Role != "" {

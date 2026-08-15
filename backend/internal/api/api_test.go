@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/christos/lyrics/backend/internal/api"
 	"github.com/christos/lyrics/backend/internal/auth"
 	"github.com/christos/lyrics/backend/internal/config"
@@ -679,6 +681,72 @@ func TestPatchSemanticsPreserveOmittedFields(t *testing.T) {
 
 // The same tri-state rule applies to lists, where an omitted is_public would
 // otherwise silently republish or unpublish a list on an unrelated rename.
+// A song PATCH carrying one field must not blank the rest. This is the endpoint
+// where getting it wrong is destructive rather than merely annoying: the lyrics
+// body, every credit, and every genre all live on the same record, and the
+// response to the request that erased them is a 200.
+func TestSongPatchPreservesOmittedFields(t *testing.T) {
+	h := newHarness(t)
+	author, token := h.userAndToken("author@example.com", store.RoleContributor)
+
+	person, err := h.store.UpsertPerson(context.Background(), "Μίκης Θεοδωράκης")
+	if err != nil {
+		t.Fatalf("upsert person: %v", err)
+	}
+	genre, err := h.store.CreateGenre(context.Background(), "Έντεχνο")
+	if err != nil {
+		t.Fatalf("create genre: %v", err)
+	}
+
+	created, err := h.store.CreateSong(context.Background(), store.SongInput{
+		Title:    "Θάλασσα Πλατιά",
+		Lyrics:   "Μια μέρα στη θάλασσα",
+		Language: "el",
+		Notes:    ptr("A note worth keeping."),
+		Credits:  []store.Credit{{PersonID: person.ID, Role: store.CreditComposer}},
+		GenreIDs: []uuid.UUID{genre.ID},
+	}, author.ID)
+	if err != nil {
+		t.Fatalf("create song: %v", err)
+	}
+	path := "/api/v1/songs/" + created.ID.String()
+
+	resp := h.do("PATCH", path, token, map[string]any{"title": "Θάλασσα Πλατιά (edit)"})
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 200\nbody: %s", resp.StatusCode, body)
+	}
+
+	patched := decode[store.Song](t, resp)
+	if patched.Title != "Θάλασσα Πλατιά (edit)" {
+		t.Errorf("title = %q, want the patched value", patched.Title)
+	}
+	if patched.Lyrics != "Μια μέρα στη θάλασσα" {
+		t.Errorf("lyrics = %q, want them untouched", patched.Lyrics)
+	}
+	if patched.Notes == nil || *patched.Notes != "A note worth keeping." {
+		t.Errorf("notes = %v, want them untouched", patched.Notes)
+	}
+	if len(patched.Credits) != 1 {
+		t.Errorf("credits = %d, want the original 1 preserved", len(patched.Credits))
+	}
+	if len(patched.Genres) != 1 {
+		t.Errorf("genres = %d, want the original 1 preserved", len(patched.Genres))
+	}
+
+	// An explicit empty list is the one way to say "remove them all", and must
+	// still be distinguishable from omitting the key.
+	resp = h.do("PATCH", path, token, map[string]any{"credits": []any{}})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if cleared := decode[store.Song](t, resp); len(cleared.Credits) != 0 {
+		t.Errorf("credits = %d, want an explicit [] to clear them", len(cleared.Credits))
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
 func TestListPatchPreservesOmittedFields(t *testing.T) {
 	h := newHarness(t)
 	token := h.tokenFor("listpatcher@example.com", store.RoleUser)

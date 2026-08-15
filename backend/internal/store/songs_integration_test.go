@@ -599,6 +599,54 @@ func TestPagination(t *testing.T) {
 	}
 }
 
+// An explicit sort has to survive relevance mode. Search took a different code
+// path that never consulted the requested ordering, so picking "Title (A–Z)"
+// with a query in the box changed nothing at all — the control moved, the
+// request carried the parameter, and the same relevance-ranked page came back.
+func TestSearchHonorsExplicitSort(t *testing.T) {
+	st := testutil.NewStore(t)
+	seedCatalog(t, st)
+	ctx := context.Background()
+
+	// Both Greek songs mention the sea, but only one has it in the title — so
+	// relevance ranks that one first while newest-first ranks it last. The two
+	// orderings disagree, which is what makes the sort observable at all.
+	relevance, _, err := st.ListSongs(ctx, store.SongFilter{Query: "θαλασσα", Limit: 10})
+	if err != nil {
+		t.Fatalf("ListSongs: %v", err)
+	}
+	if got, want := titles(relevance), []string{"Θάλασσα Πλατιά", "Το Τραγούδι της Αγάπης"}; !equal(got, want) {
+		t.Fatalf("relevance order = %v, want %v", got, want)
+	}
+
+	newest, _, err := st.ListSongs(ctx, store.SongFilter{
+		Query: "θαλασσα", Sort: store.SortNewest, Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListSongs: %v", err)
+	}
+	if got, want := titles(newest), []string{"Το Τραγούδι της Αγάπης", "Θάλασσα Πλατιά"}; !equal(got, want) {
+		t.Errorf("newest-first order = %v, want %v", got, want)
+	}
+
+	// Snippets are what relevance mode adds, and reordering must not cost them.
+	if newest[0].Snippet == nil {
+		t.Error("search result lost its snippet when an explicit sort was applied")
+	}
+}
+
+func equal(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // ts_headline returns the source text verbatim rather than escaping it, so
 // markup in the lyrics reaches the snippet unchanged. The delimiters must
 // therefore not be HTML: if they were, a client rendering the snippet as

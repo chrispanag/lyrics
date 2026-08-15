@@ -36,13 +36,48 @@ func BuildTSQuery(raw string) string {
 		if !hasSearchableRune(field) {
 			continue
 		}
-		// Doubling is the SQL string-literal escape, applied here to the inner
-		// tsquery literal rather than to the outer statement (which is
-		// parameterized).
-		terms = append(terms, "'"+strings.ReplaceAll(field, "'", "''")+"':*")
+		terms = append(terms, "'"+escapeLexeme(field)+"':*")
 	}
 
 	return strings.Join(terms, " & ")
+}
+
+// escapeLexeme makes a raw term safe to place inside a quoted tsquery lexeme.
+//
+// Two characters are special inside those quotes and both must be doubled:
+//
+//   - `'` ends the lexeme, so an unescaped one lets the rest of the input be
+//     parsed as tsquery syntax.
+//   - `\` is tsquery's own escape character. A term ending in one — `q=a\` is
+//     enough — swallows the closing quote and makes to_tsquery raise
+//     "syntax error in tsquery". That error is not one translateErr
+//     classifies, so it surfaces as a 500 from the unauthenticated
+//     /songs endpoint: a one-character way for any guest to fault the search.
+//
+// Escaping rather than stripping keeps the term intact for matching. The text
+// search parser splits on both characters identically on the stored and the
+// query side, so `AC\DC` still finds `AC\DC`.
+func escapeLexeme(term string) string {
+	// Backslashes first: doubling quotes introduces no backslashes, but doubling
+	// backslashes after the quotes would leave the added ones unescaped.
+	term = strings.ReplaceAll(term, `\`, `\\`)
+	return strings.ReplaceAll(term, "'", "''")
+}
+
+// likeEscape is the ESCAPE character every LIKE in this package pairs with
+// escapeLike. Backslash is LIKE's conventional escape but is not the default —
+// a pattern using one must name it.
+const likeEscape = `\`
+
+// escapeLike neutralizes the LIKE wildcards in user input.
+//
+// Without it, a search for `%` matches every row and one for `_` matches any
+// single character, so a filter box silently stops filtering on exactly the
+// characters a user is most likely to paste by accident. This is not an
+// injection guard — the pattern is still bound as a parameter.
+func escapeLike(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
 }
 
 // hasSearchableRune reports whether a term contains anything the text search

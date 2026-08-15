@@ -38,6 +38,95 @@ type songRequest struct {
 	GenreIDs    []uuid.UUID     `json:"genre_ids"`
 }
 
+// songPatchRequest is the PATCH shape for a song: every field is optional, and
+// an absent one means "leave it alone".
+//
+// Without this the route decoded the same full songRequest that POST uses, so
+// `PATCH {"title": "Fixed typo"}` blanked the lyrics, dropped every credit and
+// genre, and reset the language to its default. Nothing failed and nothing
+// warned — the response was a 200 carrying the emptied song. It only stayed
+// invisible because the one client always sends the whole record.
+type songPatchRequest struct {
+	Title       *string          `json:"title"`
+	AltTitle    optionalString   `json:"alt_title"`
+	Lyrics      *string          `json:"lyrics"`
+	Language    *string          `json:"language"`
+	YouTubeURL  optionalString   `json:"youtube_url"`
+	ReleaseYear optionalInt      `json:"release_year"`
+	Notes       optionalString   `json:"notes"`
+	Credits     *[]creditRequest `json:"credits"`
+	GenreIDs    *[]uuid.UUID     `json:"genre_ids"`
+}
+
+// merge overlays the patch onto the stored song, producing the full payload
+// toInput already knows how to validate. Doing it this way keeps one validation
+// path for create and update rather than a second copy that can drift.
+func (p songPatchRequest) merge(existing *store.Song) songRequest {
+	req := songRequest{
+		Title:       existing.Title,
+		AltTitle:    existing.AltTitle,
+		Lyrics:      existing.Lyrics,
+		Language:    existing.Language,
+		YouTubeURL:  existing.YouTubeURL,
+		ReleaseYear: existing.ReleaseYear,
+		Notes:       existing.Notes,
+		Credits:     creditRequestsFor(existing.Credits),
+		GenreIDs:    genreIDsFor(existing.Genres),
+	}
+
+	if p.Title != nil {
+		req.Title = *p.Title
+	}
+	if p.Lyrics != nil {
+		req.Lyrics = *p.Lyrics
+	}
+	if p.Language != nil {
+		req.Language = *p.Language
+	}
+	// The optional* fields carry their own "was it present" flag, which is what
+	// separates "leave alone" from an explicit null meaning "clear it".
+	if p.AltTitle.Set {
+		req.AltTitle = p.AltTitle.Value
+	}
+	if p.YouTubeURL.Set {
+		req.YouTubeURL = p.YouTubeURL.Value
+	}
+	if p.Notes.Set {
+		req.Notes = p.Notes.Value
+	}
+	if p.ReleaseYear.Set {
+		req.ReleaseYear = p.ReleaseYear.Value
+	}
+	// A nil slice pointer is an absent key; an explicit `[]` is "remove them
+	// all", which a plain []T could not tell apart.
+	if p.Credits != nil {
+		req.Credits = *p.Credits
+	}
+	if p.GenreIDs != nil {
+		req.GenreIDs = *p.GenreIDs
+	}
+	return req
+}
+
+// creditRequestsFor restates stored credits in request form, by person ID so
+// the round trip cannot re-upsert or rename anyone.
+func creditRequestsFor(credits []store.Credit) []creditRequest {
+	out := make([]creditRequest, len(credits))
+	for i, c := range credits {
+		personID := c.PersonID
+		out[i] = creditRequest{PersonID: &personID, Role: string(c.Role), Position: c.Position}
+	}
+	return out
+}
+
+func genreIDsFor(genres []store.Genre) []uuid.UUID {
+	out := make([]uuid.UUID, len(genres))
+	for i, g := range genres {
+		out[i] = g.ID
+	}
+	return out
+}
+
 // toInput validates the payload and resolves credits into store rows, creating
 // people named inline as it goes.
 func (s *Server) toInput(r *http.Request, req songRequest) (store.SongInput, error) {
@@ -85,13 +174,23 @@ func (s *Server) toInput(r *http.Request, req songRequest) (store.SongInput, err
 		}
 	}
 
-	credits, creditProblems := s.resolveCredits(r, req.Credits)
-	for field, message := range creditProblems {
-		problems.add(field, message)
+	if len(req.GenreIDs) > maxGenreRefs {
+		problems.add("genre_ids", "Too many genres.")
 	}
+	checkCredits(req.Credits, problems)
 
 	if !problems.empty() {
 		return store.SongInput{}, httpx.Validation("The song could not be saved.").WithDetails(problems)
+	}
+
+	// Resolved only once the whole payload has been accepted. resolveCredits
+	// creates a `people` row for every name typed inline, and those writes are
+	// committed outside the song's transaction — so doing them during
+	// validation left a permanent person behind on every request the server
+	// then rejected, with no way for a non-admin to remove it.
+	credits, creditProblems := s.resolveCredits(r, req.Credits)
+	if !creditProblems.empty() {
+		return store.SongInput{}, httpx.Validation("The song could not be saved.").WithDetails(creditProblems)
 	}
 
 	return store.SongInput{
@@ -108,37 +207,65 @@ func (s *Server) toInput(r *http.Request, req songRequest) (store.SongInput, err
 	}, nil
 }
 
+// creditField names a credit by its index for the field-level error map.
+func creditField(i int) string { return "credits[" + strconv.Itoa(i) + "]" }
+
+// creditRole normalizes the requested role. The second result reports whether
+// it is one the schema accepts.
+func (c creditRequest) creditRole() (store.CreditRole, bool) {
+	role := store.CreditRole(strings.ToLower(strings.TrimSpace(c.Role)))
+	return role, role.Valid()
+}
+
+// checkCredits validates the shape of the credit list without touching the
+// database, so a payload that will be rejected never reaches the person upsert.
+func checkCredits(requested []creditRequest, problems validationErrors) {
+	if len(requested) > maxCredits {
+		problems.add("credits", "Too many credits.")
+		return
+	}
+
+	for i, c := range requested {
+		field := creditField(i)
+
+		if _, ok := c.creditRole(); !ok {
+			problems.add(field+".role", "Role must be artist, composer, lyricist, or performer.")
+			continue
+		}
+		if c.PersonID != nil {
+			continue
+		}
+		name := strings.TrimSpace(c.Name)
+		switch {
+		case name == "":
+			problems.add(field, "Either person_id or name is required.")
+		case utf8.RuneCountInString(name) > maxNameLen:
+			problems.add(field+".name", "Name is too long.")
+		}
+	}
+}
+
+// resolveCredits turns checked credits into store rows, creating the people
+// named inline as it goes. It assumes checkCredits has already passed, so the
+// only failure it can report is the upsert itself.
 func (s *Server) resolveCredits(r *http.Request, requested []creditRequest) ([]store.Credit, validationErrors) {
 	problems := validationErrors{}
 	credits := make([]store.Credit, 0, len(requested))
 
 	for i, c := range requested {
-		field := "credits[" + strconv.Itoa(i) + "]"
+		role, _ := c.creditRole()
 
-		role := store.CreditRole(strings.ToLower(strings.TrimSpace(c.Role)))
-		if !role.Valid() {
-			problems.add(field+".role", "Role must be artist, composer, lyricist, or performer.")
+		if c.PersonID != nil {
+			credits = append(credits, store.Credit{PersonID: *c.PersonID, Role: role, Position: c.Position})
 			continue
 		}
 
-		switch {
-		case c.PersonID != nil:
-			credits = append(credits, store.Credit{PersonID: *c.PersonID, Role: role, Position: c.Position})
-		case strings.TrimSpace(c.Name) != "":
-			name := strings.TrimSpace(c.Name)
-			if utf8.RuneCountInString(name) > maxNameLen {
-				problems.add(field+".name", "Name is too long.")
-				continue
-			}
-			person, err := s.store.UpsertPerson(r.Context(), name)
-			if err != nil {
-				problems.add(field+".name", "Could not be saved.")
-				continue
-			}
-			credits = append(credits, store.Credit{PersonID: person.ID, Role: role, Position: c.Position})
-		default:
-			problems.add(field, "Either person_id or name is required.")
+		person, err := s.store.UpsertPerson(r.Context(), strings.TrimSpace(c.Name))
+		if err != nil {
+			problems.add(creditField(i)+".name", "Could not be saved.")
+			continue
 		}
+		credits = append(credits, store.Credit{PersonID: person.ID, Role: role, Position: c.Position})
 	}
 	return credits, problems
 }
@@ -150,11 +277,20 @@ func (s *Server) handleListSongs(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
 	limit, offset := httpx.Pagination(q)
 
+	// Rejected rather than ignored: orderClause falls through to newest-first for
+	// anything it does not recognize, so a typo used to return a different
+	// ordering than the one asked for, with nothing to tell the client apart
+	// from a catalog that had changed.
+	sort := store.SongSort(strings.ToLower(strings.TrimSpace(q.Get("sort"))))
+	if !sort.Valid() {
+		return httpx.BadRequest("Sort must be relevance, title, newest, or oldest.")
+	}
+
 	filter := store.SongFilter{
 		Query:     strings.TrimSpace(q.Get("q")),
 		GenreSlug: strings.TrimSpace(q.Get("genre_slug")),
 		Language:  strings.ToLower(strings.TrimSpace(q.Get("language"))),
-		Sort:      store.SongSort(q.Get("sort")),
+		Sort:      sort,
 		Limit:     limit,
 		Offset:    offset,
 	}
@@ -246,21 +382,23 @@ func (s *Server) handleUpdateSong(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
-	owner, err := s.store.SongOwner(r.Context(), id)
+	// The whole song is loaded rather than just its owner: the patch is overlaid
+	// on it, so every field the caller omitted keeps the value it already had.
+	existing, err := s.store.GetSong(r.Context(), id)
 	if err != nil {
 		return storeError(err, "Song")
 	}
 
 	user := auth.MustFromContext(r.Context())
-	if !auth.CanEditSong(user, owner) {
+	if !auth.CanEditSong(user, existing.CreatedBy) {
 		return httpx.Forbidden("You can only edit songs you added.")
 	}
 
-	var req songRequest
-	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+	var patch songPatchRequest
+	if err := httpx.DecodeJSON(w, r, &patch); err != nil {
 		return err
 	}
-	input, err := s.toInput(r, req)
+	input, err := s.toInput(r, patch.merge(existing))
 	if err != nil {
 		return err
 	}

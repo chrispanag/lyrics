@@ -80,6 +80,19 @@ export function PersonAutocomplete({
           blurTimer.current = window.setTimeout(() => setOpen(false), 150);
         }}
         onKeyDown={(event) => {
+          // Enter is handled before the "nothing to pick" bail-out. This field
+          // sits inside the song form, so letting Enter through submitted the
+          // whole editor — which is never what someone typing a credit name
+          // means, and it happened on every keystroke path because `highlighted`
+          // resets to -1 as soon as the text changes.
+          if (event.key === "Enter") {
+            event.preventDefault();
+            const person = open && highlighted >= 0 ? suggestions[highlighted] : undefined;
+            if (person) select(person);
+            else setOpen(false);
+            return;
+          }
+
           if (!open || suggestions.length === 0) return;
 
           if (event.key === "ArrowDown") {
@@ -88,10 +101,6 @@ export function PersonAutocomplete({
           } else if (event.key === "ArrowUp") {
             event.preventDefault();
             setHighlighted((index) => (index - 1 + suggestions.length) % suggestions.length);
-          } else if (event.key === "Enter" && highlighted >= 0) {
-            event.preventDefault();
-            const person = suggestions[highlighted];
-            if (person) select(person);
           } else if (event.key === "Escape") {
             setOpen(false);
           }

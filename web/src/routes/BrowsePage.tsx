@@ -17,6 +17,21 @@ import { songCount } from "@/lib/format";
 
 const PAGE_SIZE = 20;
 
+const SORTS = ["relevance", "title", "newest", "oldest"] as const;
+
+/**
+ * Reads the page number from the URL, treating anything unusable as page one.
+ *
+ * `Number("abc")` is NaN, and every comparison against NaN is false — so a
+ * truncated or hand-edited link left both pagination buttons enabled, wrote
+ * `page=NaN` back on every click, and pinned the reader to the first page under
+ * a header reading "Page NaN of 3".
+ */
+function pageNumber(raw: string | null): number {
+  const parsed = Number(raw ?? "0");
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
 /**
  * Browse and search.
  *
@@ -31,17 +46,35 @@ export function BrowsePage() {
 
   const query = params.get("q") ?? "";
   const [draft, setDraft] = useState(query);
+
+  // The box is re-synced to the URL *during render*, not from an effect.
+  //
+  // An effect runs after the commit, which left `draft` and `debounced` holding
+  // the previous query for one render after a back/forward navigation — long
+  // enough for the push effect below to write that stale value straight back
+  // over the URL the browser had just restored. Because that write is
+  // `{ replace: true }`, the restored history entry was overwritten too, so
+  // pressing Back on a search appeared to do nothing at all.
+  const [syncedQuery, setSyncedQuery] = useState(query);
+  if (query !== syncedQuery) {
+    setSyncedQuery(query);
+    setDraft(query);
+  }
+
   const debounced = useDebounced(draft, 250);
 
   // Push the debounced input into the URL, replacing history so typing a
   // query does not fill the back stack with one entry per keystroke.
   //
-  // The guard is load-bearing. `setParams` is not referentially stable — its
+  // Both guards are load-bearing. `setParams` is not referentially stable — its
   // useCallback deps include the parsed params — so this effect re-runs after
-  // *any* param write, and without the guard it would clear `page` again on
-  // every one of them, making pagination impossible to advance.
+  // *any* param write, and without the second guard it would clear `page` again
+  // on every one of them, making pagination impossible to advance. The first
+  // guard keeps a debounce that has not yet caught up with the box from being
+  // mistaken for something the user typed.
   useEffect(() => {
-    if (debounced === (params.get("q") ?? "")) return;
+    if (debounced !== draft) return;
+    if (debounced === query) return;
 
     setParams(
       (previous) => {
@@ -53,18 +86,18 @@ export function BrowsePage() {
       },
       { replace: true },
     );
-  }, [debounced, params, setParams]);
+  }, [debounced, draft, query, setParams]);
 
-  // Keep the box in sync when navigation changes the URL underneath it.
-  useEffect(() => {
-    setDraft(params.get("q") ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.get("q")]);
-
-  const page = Number(params.get("page") ?? "0");
+  const page = pageNumber(params.get("page"));
   const genreSlug = params.get("genre_slug") ?? "";
   const language = params.get("language") ?? "";
-  const sort = (params.get("sort") ?? "") as SongFilters["sort"];
+  // Validated rather than cast: `as` laundered any URL text into the union, so
+  // a hand-edited or truncated link put an unknown value on the wire — which
+  // the API now rejects outright rather than silently reordering.
+  const sortParam = params.get("sort") ?? "";
+  const sort = (SORTS as readonly string[]).includes(sortParam)
+    ? (sortParam as SongFilters["sort"])
+    : undefined;
   // Song pages link every credit to `/?person=<id>`, so this has to be read
   // here — otherwise clicking an artist quietly lands on the unfiltered
   // catalog, which reads as "this artist is on every song".
@@ -78,7 +111,7 @@ export function BrowsePage() {
     person: personId || undefined,
     genre_slug: genreSlug || undefined,
     language: language || undefined,
-    sort: sort || (query ? "relevance" : "newest"),
+    sort: sort ?? (query ? "relevance" : "newest"),
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
   };
@@ -332,6 +365,11 @@ export function BrowsePage() {
                 className="flex-1"
                 onClick={() =>
                   updateParams((next) => {
+                    // `person` belongs here too: hasFilters and the filter-count
+                    // badge both count it, so leaving it behind made "Clear all"
+                    // close the sheet with the artist chip still showing and the
+                    // results still filtered.
+                    next.delete("person");
                     next.delete("genre_slug");
                     next.delete("language");
                     next.delete("sort");

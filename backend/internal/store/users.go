@@ -143,8 +143,13 @@ func (s *Store) ListUsers(ctx context.Context, f UserFilter) ([]User, int, error
 	a := &args{}
 	conds := []string{"TRUE"}
 	if q := strings.TrimSpace(f.Query); q != "" {
-		p := a.next("%" + strings.ToLower(q) + "%")
-		conds = append(conds, fmt.Sprintf("(email LIKE %[1]s OR lower(coalesce(display_name, '')) LIKE %[1]s)", p))
+		// Escaped before the surrounding wildcards are added, so a literal `%`
+		// or `_` typed into the admin search filters instead of matching
+		// everything.
+		p := a.next("%" + escapeLike(strings.ToLower(q)) + "%")
+		conds = append(conds, fmt.Sprintf(
+			"(email LIKE %[1]s ESCAPE '%[2]s' OR lower(coalesce(display_name, '')) LIKE %[1]s ESCAPE '%[2]s')",
+			p, likeEscape))
 	}
 	if f.Role != "" {
 		conds = append(conds, "role = "+a.next(string(f.Role)))

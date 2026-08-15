@@ -182,7 +182,11 @@ export function ListDetailPage() {
         )}
       </header>
 
-      {list.songs?.length === 0 ? (
+      {/* `songs` carries `omitempty` on the Go side, so an empty list arrives
+          with the key absent rather than as []. `undefined === 0` is false, so
+          the strict comparison rendered an empty <ul> instead of the empty
+          state — exactly the case the empty state exists for. */}
+      {(list.songs?.length ?? 0) === 0 ? (
         <EmptyState
           icon={<ListMusic className="size-12" />}
           title="This list is empty"

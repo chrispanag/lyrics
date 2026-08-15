@@ -45,7 +45,11 @@ func (s *Server) handleGetList(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	list, err := s.store.GetListWithSongs(r.Context(), id)
+	// The visibility check runs against the list row alone, before its songs are
+	// loaded. Fetching first would make a guest walking identifiers materialize
+	// every private list's full contents — lyrics bodies included — only to be
+	// told 404.
+	list, err := s.store.GetList(r.Context(), id)
 	if err != nil {
 		return storeError(err, "List")
 	}
@@ -58,7 +62,12 @@ func (s *Server) handleGetList(w http.ResponseWriter, r *http.Request) error {
 		return httpx.NotFound("List was not found.")
 	}
 
-	httpx.JSON(w, http.StatusOK, list)
+	full, err := s.store.GetListWithSongs(r.Context(), id)
+	if err != nil {
+		return storeError(err, "List")
+	}
+
+	httpx.JSON(w, http.StatusOK, full)
 	return nil
 }
 
@@ -236,6 +245,13 @@ func (s *Server) handleReorderList(w http.ResponseWriter, r *http.Request) error
 	if len(req.SongIDs) == 0 {
 		return httpx.Validation("The list could not be reordered.").
 			WithDetails(validationErrors{"song_ids": "At least one song is required."})
+	}
+	// ReorderList issues one UPDATE per id inside a single transaction, so an
+	// uncapped payload holds a pooled connection and an open transaction for as
+	// long as the write timeout allows.
+	if len(req.SongIDs) > maxReorderRefs {
+		return httpx.Validation("The list could not be reordered.").
+			WithDetails(validationErrors{"song_ids": "Too many songs in one request."})
 	}
 
 	if err := s.store.ReorderList(r.Context(), list.ID, req.SongIDs); err != nil {

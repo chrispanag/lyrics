@@ -113,9 +113,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     configureApi({
       tokenProvider: getToken,
-      onUnauthorized: () => setUser(null),
+      onUnauthorized: () => {
+        setUser(null);
+        // Same cleanup as an explicit sign-out. A revoked or expired session
+        // otherwise left the previous user's lists and list memberships in the
+        // cache, and the next sign-in only *invalidates* — which keeps stale
+        // data on screen while it refetches, showing one user another's lists.
+        queryClient.clear();
+      },
     });
-  }, [getToken]);
+  }, [getToken, queryClient]);
 
   // Restore an existing session on first paint.
   useEffect(() => {

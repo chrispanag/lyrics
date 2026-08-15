@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Nothing here writes to the repository, and the default token grant is often
+# write — which every third-party action in this workflow would inherit.
+permissions:
+  contents: read
+
 # A new push makes an in-flight run for the same branch obsolete.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

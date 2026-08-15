@@ -24,6 +24,14 @@ func TestBuildTSQuery(t *testing.T) {
 		// A single quote would terminate the lexeme and let the rest of the
 		// string be parsed as tsquery syntax, so it must be doubled.
 		{"single quote is escaped", "don't", `'don''t':*`},
+
+		// A backslash is tsquery's own escape character. Left alone, a term
+		// ending in one swallows the closing quote and makes to_tsquery raise
+		// a syntax error that nothing classifies — a 500 from the public
+		// /songs endpoint for a one-character query.
+		{"trailing backslash is escaped", `a\`, `'a\\':*`},
+		{"embedded backslash is escaped", `AC\DC`, `'AC\\DC':*`},
+		{"backslash and quote together", `a\'b`, `'a\\''b':*`},
 		// The bare `|` is dropped as an unusable term, so the surviving lexemes
 		// carry their quotes escaped and the operator never reaches the parser.
 		{"quote injection attempt", `x' | 'y`, `'x''':* & '''y':*`},

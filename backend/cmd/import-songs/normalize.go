@@ -299,6 +299,10 @@ func cleanCredits(in []credit, w *warnings) []resolvedCredit {
 	for _, c := range in {
 		name := normalizeText(c.Name)
 		if name == "" {
+			// Reported like every other adjustment in this file. Silently
+			// dropping it hid the export's own NULL-name bug behind a clean
+			// warning report while whole artists arrived with no credits.
+			w.add("credit with a blank name dropped (role %q)", strings.TrimSpace(c.Role))
 			continue // a blank name would fail the people CHECK
 		}
 		role, known := normalizeRole(c.Role)

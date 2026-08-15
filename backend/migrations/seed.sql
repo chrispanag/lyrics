@@ -82,7 +82,13 @@ WITH new_songs AS (
       'en', NULL, NULL, 1965, NULL
     )
   RETURNING id, title
-)
+),
+-- Both the credits and the genres attach to `new_songs`, so they must share one
+-- statement: a CTE is not visible to the next one, and reaching for `songs`
+-- instead would join on title across the whole catalog. A data-modifying CTE
+-- runs to completion whether or not the primary query reads its output, so
+-- nesting the credits here does not skip them.
+new_credits AS (
 INSERT INTO song_credits (song_id, person_id, role, position)
 SELECT s.id, p.id, c.role, c.position
 FROM new_songs s
@@ -104,11 +110,12 @@ JOIN (VALUES
   ('Feeling Good',           'Nina Simone',          'artist',    0)
 ) AS c(song_title, person_name, role, position) ON c.song_title = s.title
 JOIN people p ON p.normalized_name = app_norm(c.person_name)
-ON CONFLICT DO NOTHING;
-
+ON CONFLICT DO NOTHING
+RETURNING 1
+)
 INSERT INTO song_genres (song_id, genre_id)
 SELECT s.id, g.id
-FROM songs s
+FROM new_songs s
 JOIN (VALUES
   ('Το Τραγούδι της Αγάπης', 'entechno'),
   ('Θάλασσα Πλατιά',         'entechno'),

@@ -31,6 +31,7 @@ const ROLE_LABELS: Record<CreditRole, string> = {
 
 /** Reader font sizes, persisted so the choice survives navigation. */
 const FONT_SIZES = ["text-base", "text-lg", "text-xl", "text-2xl"] as const;
+const DEFAULT_FONT_SIZE = 1;
 const FONT_SIZE_KEY = "lyrics:font-size";
 
 export function SongDetailPage() {
@@ -44,8 +45,16 @@ export function SongDetailPage() {
   const [listSheetOpen, setListSheetOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [fontSizeIndex, setFontSizeIndex] = useState(() => {
-    const stored = Number(localStorage.getItem(FONT_SIZE_KEY));
-    return Number.isInteger(stored) && stored >= 0 && stored < FONT_SIZES.length ? stored : 1;
+    // The absent-key case has to be caught before Number(): localStorage returns
+    // null, Number(null) is 0, and 0 is a perfectly valid index — so the
+    // intended default of text-lg was unreachable and every first-time reader
+    // silently got the smallest size.
+    const raw = localStorage.getItem(FONT_SIZE_KEY);
+    if (raw === null) return DEFAULT_FONT_SIZE;
+    const stored = Number(raw);
+    return Number.isInteger(stored) && stored >= 0 && stored < FONT_SIZES.length
+      ? stored
+      : DEFAULT_FONT_SIZE;
   });
 
   const setFontSize = (index: number) => {
@@ -102,7 +111,15 @@ export function SongDetailPage() {
             </Link>
           )}
           {hasRole(user?.role, "admin") && (
-            <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
+            // The icon is the whole button, so without an explicit label a
+            // screen reader announces the one irreversible action on the page
+            // as an unnamed button.
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Delete song"
+              onClick={() => setConfirmDelete(true)}
+            >
               <Trash2 aria-hidden className="size-4 text-red-600" />
             </Button>
           )}
