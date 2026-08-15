@@ -12,13 +12,13 @@ func TestNormalizeLanguage(t *testing.T) {
 		want  string
 		exact bool
 	}{
-		{"", "el", true},        // absent, not wrong: falls back silently
+		{"", "el", true}, // absent, not wrong: falls back silently
 		{"el", "el", true},
 		{"EL", "el", true},
-		{"gr", "el", true},      // the common wrong code for Greek
+		{"gr", "el", true}, // the common wrong code for Greek
 		{"Greek", "el", true},
 		{"ελληνικά", "el", true},
-		{"en-US", "en", true},   // BCP-47 narrowed to its primary subtag
+		{"en-US", "en", true}, // BCP-47 narrowed to its primary subtag
 		{"el_GR", "el", true},
 		{"english", "en", true},
 		{"klingon", "el", false}, // unrecognized: reported, not stored
