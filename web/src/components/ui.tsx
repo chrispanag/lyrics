@@ -45,11 +45,18 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 
 // The layout the three field primitives share; the chrome they share with the
 // browse search box lives in fieldStyles.
-const fieldLayout = "w-full rounded-xl px-3";
+//
+// Padding is per-primitive rather than shared: the select has to reserve room
+// on the right for its chevron, and cn is a plain join — so a shared `px-3`
+// with a `pr-9` after it would leave both in the class list and let CSS source
+// order pick the winner.
+const fieldLayout = "w-full rounded-xl";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {
-    return <input ref={ref} className={cn(fieldChrome, fieldLayout, "h-11", className)} {...props} />;
+    return (
+      <input ref={ref} className={cn(fieldChrome, fieldLayout, "h-11 px-3", className)} {...props} />
+    );
   },
 );
 
@@ -57,13 +64,21 @@ export const Textarea = forwardRef<
   HTMLTextAreaElement,
   TextareaHTMLAttributes<HTMLTextAreaElement>
 >(function Textarea({ className, ...props }, ref) {
-  return <textarea ref={ref} className={cn(fieldChrome, fieldLayout, "py-2.5", className)} {...props} />;
+  return (
+    <textarea ref={ref} className={cn(fieldChrome, fieldLayout, "px-3 py-2.5", className)} {...props} />
+  );
 });
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
   function Select({ className, children, ...props }, ref) {
     return (
-      <select ref={ref} className={cn(fieldChrome, fieldLayout, "h-11", className)} {...props}>
+      <select
+        ref={ref}
+        // select-chevron draws the arrow the native control would; see the rule
+        // in styles/index.css for why that one is given up.
+        className={cn(fieldChrome, fieldLayout, "select-chevron h-11 appearance-none pl-3 pr-9", className)}
+        {...props}
+      >
         {children}
       </select>
     );

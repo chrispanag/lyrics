@@ -103,6 +103,20 @@ export function BrowsePage() {
   // catalog, which reads as "this artist is on every song".
   const personId = params.get("person") ?? "";
 
+  // The ordering actually in effect, which is what the sort picker shows.
+  //
+  // An absent `sort` is not "unsorted" — it is whichever default the listing
+  // falls back to, so the picker has to name it. Deriving both from one value
+  // is what keeps them from disagreeing: while the picker carried its own
+  // placeholder option, the no-query case offered "Newest first" twice, once as
+  // that placeholder and once as itself.
+  //
+  // Relevance is meaningless without a query — the API orders by newest for it
+  // either way — so a stale `sort=relevance` left over from a cleared search
+  // folds back to the default rather than labelling the list wrongly.
+  const requested = sort === "relevance" && !query ? undefined : sort;
+  const activeSort = requested ?? (query ? "relevance" : "newest");
+
   // Not memoized: react-query hashes query keys structurally, so a fresh object
   // each render produces the same hash and never re-runs the query. A useMemo
   // here would only add a dependency array to keep in sync.
@@ -111,7 +125,7 @@ export function BrowsePage() {
     person: personId || undefined,
     genre_slug: genreSlug || undefined,
     language: language || undefined,
-    sort: sort ?? (query ? "relevance" : "newest"),
+    sort: activeSort,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
   };
@@ -349,10 +363,10 @@ export function BrowsePage() {
               </label>
               <Select
                 id="filter-sort"
-                value={sort ?? ""}
+                value={activeSort}
                 onChange={(event) => setParam("sort", event.target.value || null)}
               >
-                <option value="">{query ? "Relevance" : "Newest first"}</option>
+                {query ? <option value="relevance">Relevance</option> : null}
                 <option value="title">Title (A–Z)</option>
                 <option value="newest">Newest first</option>
                 <option value="oldest">Oldest first</option>

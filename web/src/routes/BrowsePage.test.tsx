@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
@@ -124,6 +124,72 @@ describe("BrowsePage pagination", () => {
     await act(() => new Promise((resolve) => setTimeout(resolve, 500)));
     expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
     expect(offsets.at(-1)).toBe("20");
+  });
+});
+
+/*
+ * The picker names the ordering that is actually in effect, which is why it
+ * derives its value from the same expression the request does.
+ *
+ * An absent `sort` is not "unsorted": the listing falls back to relevance with
+ * a query and to newest without one. While the picker carried a placeholder
+ * option for that fallback, the no-query case offered "Newest first" twice —
+ * once as the placeholder, once as itself — and picking either did the same
+ * thing. Nothing failed; the menu just read as though it were broken.
+ */
+describe("BrowsePage sort picker", () => {
+  const openSortPicker = async () => {
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /filters/i }));
+    return screen.getByRole("combobox", { name: "Sort by" }) as HTMLSelectElement;
+  };
+
+  it("offers each ordering once and selects the default", async () => {
+    renderWithProviders(<BrowsePage />);
+
+    const sort = await openSortPicker();
+
+    expect(within(sort).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "Title (A–Z)",
+      "Newest first",
+      "Oldest first",
+    ]);
+    expect(sort.value).toBe("newest");
+  });
+
+  it("offers relevance only while there is something to rank against", async () => {
+    renderWithProviders(<BrowsePage />, { route: "/?q=αγάπη" });
+
+    const sort = await openSortPicker();
+
+    expect(within(sort).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "Relevance",
+      "Title (A–Z)",
+      "Newest first",
+      "Oldest first",
+    ]);
+    expect(sort.value).toBe("relevance");
+  });
+
+  // A shared link can outlive the search it was sorted by. Relevance without a
+  // query orders by newest either way, so the picker has to say newest rather
+  // than leave a label the listing no longer honors.
+  it("falls back to newest when a cleared search leaves sort=relevance behind", async () => {
+    let requestedSort: string | null = null;
+
+    server.use(
+      http.get(`${API}/api/v1/songs`, ({ request }) => {
+        requestedSort = new URL(request.url).searchParams.get("sort");
+        return HttpResponse.json(list([makeSong()]));
+      }),
+    );
+
+    renderWithProviders(<BrowsePage />, { route: "/?sort=relevance" });
+
+    const sort = await openSortPicker();
+
+    expect(sort.value).toBe("newest");
+    await waitFor(() => expect(requestedSort).toBe("newest"));
   });
 });
 
