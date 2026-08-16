@@ -4,7 +4,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { Layout } from "@/components/Layout";
 import { EmptyState, Spinner } from "@/components/ui";
-import { LoginPage, RegisterPage } from "@/routes/AuthPages";
+import { LoginPage, RegisterPage, VerifyEmailPage } from "@/routes/AuthPages";
 import { BrowsePage } from "@/routes/BrowsePage";
 import { ListDetailPage, ListsPage } from "@/routes/ListsPages";
 import { ProfilePage } from "@/routes/ProfilePage";
@@ -40,40 +40,63 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Holds an unverified account on the verification screen.
+ *
+ * The server refuses everything else it asks for, so any other page would
+ * render its own version of "something went wrong" — a list that will not load,
+ * an editor that cannot save — instead of the one thing left to do.
+ *
+ * Guests are untouched: the catalog is public, and `user` stays null while the
+ * session is still being restored, so this never delays a first paint.
+ */
+function VerificationGate({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const routerLocation = useLocation();
+
+  if (user && !user.email_verified_at && routerLocation.pathname !== "/verify-email") {
+    return <Navigate to="/verify-email" replace />;
+  }
+  return <>{children}</>;
+}
+
 export function App() {
   return (
-    <Routes>
-      {/* Auth screens sit outside the shell: they have no navigation. */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+    <VerificationGate>
+      <Routes>
+        {/* Auth screens sit outside the shell: they have no navigation. */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
 
-      <Route element={<Layout />}>
-        <Route index element={<BrowsePage />} />
-        <Route path="/songs/new" element={<SongEditorPage />} />
-        <Route path="/songs/:id" element={<SongDetailPage />} />
-        <Route path="/songs/:id/edit" element={<SongEditorPage />} />
-        <Route
-          path="/lists"
-          element={
-            <RequireAuth>
-              <ListsPage />
-            </RequireAuth>
-          }
-        />
-        <Route path="/lists/:id" element={<ListDetailPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/admin/users" element={<AdminUsersPage />} />
+        <Route element={<Layout />}>
+          <Route index element={<BrowsePage />} />
+          <Route path="/songs/new" element={<SongEditorPage />} />
+          <Route path="/songs/:id" element={<SongDetailPage />} />
+          <Route path="/songs/:id/edit" element={<SongEditorPage />} />
+          <Route
+            path="/lists"
+            element={
+              <RequireAuth>
+                <ListsPage />
+              </RequireAuth>
+            }
+          />
+          <Route path="/lists/:id" element={<ListDetailPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
 
-        <Route
-          path="*"
-          element={
-            <EmptyState
-              title="Page not found"
-              description="That link does not lead anywhere."
-            />
-          }
-        />
-      </Route>
-    </Routes>
+          <Route
+            path="*"
+            element={
+              <EmptyState
+                title="Page not found"
+                description="That link does not lead anywhere."
+              />
+            }
+          />
+        </Route>
+      </Routes>
+    </VerificationGate>
   );
 }

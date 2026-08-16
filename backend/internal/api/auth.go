@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/christos/lyrics/backend/internal/auth"
 	"github.com/christos/lyrics/backend/internal/httpx"
 	"github.com/christos/lyrics/backend/internal/prelude"
 	"github.com/christos/lyrics/backend/internal/store"
@@ -63,7 +64,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) error {
 			return httpx.Validation("Your account could not be created.").
 				WithDetails(validationErrors{"password": passwordRejectionMessage(err)}).WithCause(err)
 		default:
-			return httpx.Upstream("The authentication service is unavailable.").WithCause(err)
+			return authUnavailable(err)
 		}
 	}
 
@@ -77,7 +78,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) error {
 			return httpx.Validation("Your account could not be created.").
 				WithDetails(validationErrors{"password": passwordRejectionMessage(err)}).WithCause(err)
 		}
-		return httpx.Upstream("The authentication service is unavailable.").WithCause(err)
+		return authUnavailable(err)
 	}
 
 	role := store.RoleUser
@@ -118,6 +119,57 @@ func (s *Server) compensateFailedRegistration(preludeUserID, email string) {
 		return
 	}
 	slog.Info("rolled back partially created prelude user", "prelude_user_id", preludeUserID)
+}
+
+// EmailVerifyScope is the step-up scope that proves an address.
+//
+// Prelude runs the challenge — it emails the code and decides whether the one
+// the user typed is right — and signs the granted scope into the access token
+// when it completes. This endpoint's whole job is to read that grant and write
+// it down, because Prelude keeps no verified flag of its own to read later.
+const EmailVerifyScope = "email:verify"
+
+// handleVerifyEmail records an address proven by a completed step-up challenge.
+//
+// There is no request body and no code: the code went to Prelude, never here.
+// Trusting the caller is not what makes this safe — the grant is a claim inside
+// a signature only Prelude can produce, checked on the way in like every other
+// claim on the token.
+func (s *Server) handleVerifyEmail(w http.ResponseWriter, r *http.Request) error {
+	user := auth.MustFromContext(r.Context())
+
+	// Answering an already-verified account with its profile rather than an
+	// error keeps a double submission, or a second tab, from reporting a failure
+	// for something that has already succeeded.
+	if user.EmailVerified() {
+		httpx.JSON(w, http.StatusOK, user)
+		return nil
+	}
+
+	// 403 and never 401: the session is perfectly valid, it simply has not
+	// proven the address. A 401 would send the client off to refresh a token
+	// that is already fine, and land it back here having lost the grant.
+	if !auth.HasScope(r.Context(), EmailVerifyScope) {
+		return httpx.Forbidden("Confirm your email address before using your account.")
+	}
+
+	updated, err := s.store.MarkEmailVerified(r.Context(), user.ID)
+	if err != nil {
+		return storeError(err, "Account")
+	}
+
+	httpx.JSON(w, http.StatusOK, updated)
+	return nil
+}
+
+// authUnavailable is the answer for a Prelude failure the caller cannot act on.
+//
+// Every path through registration and verification ends here when the upstream
+// is unreachable or unwilling, and they say the same thing on purpose: which
+// call failed is a detail the user cannot use, and it reaches the logs as the
+// wrapped cause instead.
+func authUnavailable(err error) *httpx.APIError {
+	return httpx.Upstream("The authentication service is unavailable.").WithCause(err)
 }
 
 // passwordRejectionMessage surfaces Prelude's own explanation, which is the

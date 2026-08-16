@@ -61,16 +61,23 @@ func newHarness(t *testing.T, adminEmails ...string) *harness {
 	return &harness{t: t, server: httpServer, store: st, prelude: fake, issuer: issuer}
 }
 
-// userAndToken provisions a user at the given role and returns both the stored
-// record and a bearer token for it. Everything that mints a test principal goes
-// through here, so the provisioning details — the prelude ID scheme, the claims
-// on the token — cannot drift between the tests that need a user, the tests
-// that need a token, and the tests that need both.
+// sign mints a bearer token for a stored user. Every test principal is signed
+// here, so the claims a token carries cannot drift between the tests that
+// provision their user, the ones that register it over the API, and the ones
+// that only need a token.
+func (h *harness) sign(u *store.User) string {
+	h.t.Helper()
+
+	return h.issuer.Sign(h.t, testutil.TokenOptions{UserID: u.PreludeUserID, Email: u.Email})
+}
+
+// userAndToken provisions a verified user at the given role and returns both
+// the stored record and a bearer token for it.
 func (h *harness) userAndToken(email string, role store.Role) (*store.User, string) {
 	h.t.Helper()
 
 	u := h.user(email, role)
-	return u, h.issuer.Sign(h.t, testutil.TokenOptions{UserID: u.PreludeUserID, Email: u.Email})
+	return u, h.sign(u)
 }
 
 // tokenFor provisions a user at the given role and returns a bearer token.
@@ -150,8 +157,24 @@ func (h *harness) seedList(token string, body map[string]any) store.List {
 	return decode[store.List](h.t, resp)
 }
 
+// user provisions a verified account, which is the state every test that is not
+// about verification wants: an unverified principal is refused by everything
+// except reading its own profile.
 func (h *harness) user(email string, role store.Role) *store.User {
 	h.t.Helper()
+
+	u := h.unverifiedUser(email, role)
+	verified, err := h.store.MarkEmailVerified(context.Background(), u.ID)
+	if err != nil {
+		h.t.Fatalf("mark email verified: %v", err)
+	}
+	return verified
+}
+
+// unverifiedUser provisions an account that has not confirmed its address.
+func (h *harness) unverifiedUser(email string, role store.Role) *store.User {
+	h.t.Helper()
+
 	u, err := h.store.ProvisionUser(context.Background(), "usr_"+email, email, role)
 	if err != nil {
 		h.t.Fatalf("provision user: %v", err)
@@ -845,6 +868,139 @@ func TestRegistrationRateLimited(t *testing.T) {
 	}
 	if !limited {
 		t.Error("expected the registration endpoint to rate limit repeated attempts")
+	}
+}
+
+// signUp registers an account over the API and returns it with a bearer token —
+// the state a real user is in when the verification screen first renders.
+//
+// scopes go on the token, which is how a completed step-up challenge arrives:
+// pass EmailVerifyScope to play the part of a user who has just entered the
+// code Prelude emailed them.
+func (h *harness) signUp(email string, scopes ...string) (*store.User, string) {
+	h.t.Helper()
+
+	resp := h.do("POST", "/api/v1/auth/register", "", map[string]any{
+		"email": email, "password": "s3cret-password",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		h.t.Fatalf("register status = %d, want 201\nbody: %s", resp.StatusCode, body)
+	}
+	created := decode[store.User](h.t, resp)
+
+	// The Prelude identifier is not serialized, so the token has to be minted
+	// from the stored record rather than the response.
+	user, err := h.store.GetUser(context.Background(), created.ID)
+	if err != nil {
+		h.t.Fatalf("load registered user: %v", err)
+	}
+	return user, h.issuer.Sign(h.t, testutil.TokenOptions{
+		UserID: user.PreludeUserID, Email: user.Email, Scopes: scopes})
+}
+
+func TestEmailVerification(t *testing.T) {
+	const email = "verify.me@example.com"
+
+	t.Run("registration leaves the account unverified", func(t *testing.T) {
+		h := newHarness(t)
+
+		user, _ := h.signUp(email)
+		if user.EmailVerified() {
+			t.Error("a new account must start unverified")
+		}
+	})
+
+	// The grant is the whole proof. It is a claim inside a signature only
+	// Prelude can produce, which is why this endpoint can take the caller's
+	// word for nothing else — there is no code in the request at all.
+	t.Run("a granted scope confirms the address and opens the account", func(t *testing.T) {
+		h := newHarness(t)
+		_, token := h.signUp(email, api.EmailVerifyScope)
+
+		resp := h.do("POST", "/api/v1/auth/verify-email", token, nil)
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("status = %d, want 200\nbody: %s", resp.StatusCode, body)
+		}
+		if user := decode[store.User](t, resp); !user.EmailVerified() {
+			t.Error("the response should report the address as verified")
+		}
+
+		// The point of verifying: a route that was refused a moment ago works.
+		if resp := h.do("POST", "/api/v1/lists", token,
+			map[string]any{"name": "First List"}); resp.StatusCode != http.StatusCreated {
+			t.Errorf("create list after verifying = %d, want 201", resp.StatusCode)
+		}
+	})
+
+	// A session that never completed the challenge is the ordinary state of
+	// every signed-in visitor, so this must not read as a broken session: 403,
+	// because a 401 would send the client off to refresh a token that is fine.
+	t.Run("a token without the scope cannot verify", func(t *testing.T) {
+		h := newHarness(t)
+		_, token := h.signUp(email)
+
+		resp := h.do("POST", "/api/v1/auth/verify-email", token, nil)
+		if resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("status = %d, want 403", resp.StatusCode)
+		}
+
+		if me := decode[store.User](t, h.do("GET", "/api/v1/me", token, nil)); me.EmailVerified() {
+			t.Error("an ungranted request must not verify the address")
+		}
+	})
+
+	// A scope for something else is not a scope for this.
+	t.Run("an unrelated scope cannot verify", func(t *testing.T) {
+		h := newHarness(t)
+		_, token := h.signUp(email, "prld:pwd:write")
+
+		if resp := h.do("POST", "/api/v1/auth/verify-email", token, nil); resp.StatusCode != http.StatusForbidden {
+			t.Errorf("status = %d, want 403", resp.StatusCode)
+		}
+	})
+
+	// The grant outlives the request that spent it, and a second tab or a
+	// double submit must not be reported as a failure.
+	t.Run("verifying twice is idempotent", func(t *testing.T) {
+		h := newHarness(t)
+		user, token := h.signUp(email, api.EmailVerifyScope)
+
+		first := decode[store.User](t, h.do("POST", "/api/v1/auth/verify-email", token, nil))
+		second := decode[store.User](t, h.do("POST", "/api/v1/auth/verify-email", token, nil))
+
+		if !second.EmailVerified() {
+			t.Fatal("second call should still report the account as verified")
+		}
+		if !first.EmailVerifiedAt.Equal(*second.EmailVerifiedAt) {
+			t.Errorf("verification time moved: %v then %v",
+				first.EmailVerifiedAt, second.EmailVerifiedAt)
+		}
+		_ = user
+	})
+
+	// Registration makes no upstream verification call of any kind: the code is
+	// sent by Prelude to the browser's challenge, never by this API.
+	t.Run("registration does not talk to prelude about codes", func(t *testing.T) {
+		h := newHarness(t)
+		h.signUp(email)
+
+		for _, call := range h.prelude.Calls {
+			if call != "CreateUser" && call != "SetPassword" {
+				t.Errorf("unexpected prelude call during registration: %q", call)
+			}
+		}
+	})
+}
+
+// Guests are unaffected: verification gates an account, not the catalog.
+func TestGuestBrowsingIsUnaffectedByVerification(t *testing.T) {
+	h := newHarness(t)
+	h.seedSong(nil, "Public Song")
+
+	if resp := h.do("GET", "/api/v1/songs", "", nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("guest browse = %d, want 200", resp.StatusCode)
 	}
 }
 

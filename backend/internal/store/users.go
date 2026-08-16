@@ -10,11 +10,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const userColumns = `id, prelude_user_id, email, display_name, role, created_at, updated_at`
+const userColumns = `id, prelude_user_id, email, display_name, role, email_verified_at, created_at, updated_at`
 
 func scanUser(row pgx.Row, u *User) error {
 	return row.Scan(&u.ID, &u.PreludeUserID, &u.Email, &u.DisplayName, &u.Role,
-		&u.CreatedAt, &u.UpdatedAt)
+		&u.EmailVerifiedAt, &u.CreatedAt, &u.UpdatedAt)
 }
 
 // GetUserByPreludeID looks up the local record for an authenticated principal.

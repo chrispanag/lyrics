@@ -34,6 +34,9 @@ export function makeUser(overrides: Partial<User> = {}): User {
     email: "singer@example.com",
     display_name: null,
     role: "user",
+    // Verified by default: an unverified account is refused everywhere but the
+    // verification screen, so it is the exception a spec asks for explicitly.
+    email_verified_at: "2024-01-01T00:00:00Z",
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
     ...overrides,

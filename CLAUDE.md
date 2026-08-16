@@ -82,6 +82,43 @@ Verifying with a token from `POST /tokens` does **not** catch either issue,
 because the caller supplies the claims. To see a real token:
 `POST /v1/session/login/email/password` → `POST /v1/session/login/finalize`.
 
+### Email verification
+
+Sign-up proves the address with a Prelude **step-up challenge**, and the account
+is refused everything until it completes. Four parts hold that up, and none of
+them announce themselves when broken:
+
+- **The proof is a scope on a signed token, not a code this API ever sees.** The
+  browser opens an `email:verify` step-up; Prelude emails the code, checks it,
+  and adds the granted scope to the access token. `POST /auth/verify-email` has
+  no body — it reads the scope and writes `users.email_verified_at`. Moving the
+  code-checking here would mean either trusting the client's word or reaching
+  for the login-OTP endpoints, and the second is what the design exists to
+  avoid: an OTP *login* config would let anyone who can read a mailbox sign in
+  without the password. Verification must not buy a second way in.
+- **`grant_mode` must stay `session-bound`.** `single-use` binds the grant to
+  one token, and the client refreshes between finishing the challenge and
+  posting to this API — so the proof would be gone by the time it is read, and
+  the user would sit at a code form that accepts a correct code and then says
+  no. `recordVerification` forces a refresh first for the same reason, to be
+  sure the token it sends postdates the challenge.
+- **The gate's exemption list is `GET /me` plus `POST /auth/verify-email`.** It
+  is mounted as a group, so a route added to the wrong group stops needing
+  verification — silently, since it still works. `TestUnverifiedAccountIsGated`
+  walks the list with an *admin* principal, because the gate is not a role check
+  and must hold for the role that passes every other one.
+- **Just-in-time provisioning creates *unverified* users** — that path includes
+  the compensating case where the Prelude account exists but the local insert
+  failed, and those people never verified. The cost is that a database restored
+  from a backup older than an account re-gates it; the recovery is the code on
+  the verification screen. The migration backfills everyone who registered
+  before verification existed, because they were never asked for a code.
+
+The scope string lives in three places that cannot be made to share one: the
+Prelude application config, `EmailVerifyScope` (Go), and `EMAIL_VERIFY_SCOPE`
+(TypeScript). A mismatch reads as a challenge that completes and then verifies
+nothing.
+
 ### Frontend
 
 - **`BrowsePage`'s debounced-search effect needs its guard.** `setParams` is not
@@ -110,6 +147,17 @@ because the caller supplies the claims. To see a real token:
   is the trap next to it: a disabled query is not `isLoading`, so
   `ListDetailPage` has to hold its own skeleton while waiting, or it falls
   through to "not available" and tells the owner their list is gone.
+- **The verification gate wraps `<Routes>` and reads `user.email_verified_at`;
+  `VerifyEmailPage` waits for `loading` before deciding, and its
+  challenge-opening effect checks the same flag itself.** Three separate traps.
+  The gate deliberately does *not* wait for `loading` — `user` is null while the
+  session restores, which is the guest case, and blocking there would put a
+  spinner in front of every visitor's first paint. The page is the opposite: it
+  is reached by redirect and stays in the address bar, so deciding before the
+  session is restored turns a refresh into a bounce to `/login`. And the effect
+  needs its own check because hooks run before the redirects below them are
+  rendered — without it, a visitor who is already verified opens a challenge and
+  is emailed a code on their way past.
 - **The list drag handle needs `touch-none`, and must be the only drag
   activator.** Both halves fail silently, and only on a phone. Without
   `touch-none` the browser keeps the gesture for scrolling and the row simply
@@ -126,6 +174,10 @@ because the caller supplies the claims. To see a real token:
 - **Roles live in our Postgres, not in Prelude claims.** A promotion applies on
   the next request instead of the next token refresh. Prelude supports custom
   claims; using them here would make role changes lag by a token lifetime.
+- **Whether an address is verified lives in our Postgres**, like roles, because
+  Prelude exposes no verified flag on an identifier: `users.email_verified_at`
+  is the record. Nothing about the challenge itself is stored — it belongs to
+  the browser's session with Prelude.
 - **Registration goes through our backend.** The browser SDK can only *log in* —
   creating a user is a Management API call needing the API key, which must never
   reach a browser. `POST /auth/register` makes two upstream calls and **deletes

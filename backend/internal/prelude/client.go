@@ -31,6 +31,10 @@ var (
 )
 
 // Client talks to the Prelude Management API.
+//
+// Email verification is deliberately absent from this interface: it runs as a
+// step-up challenge between the browser and Prelude, and reaches this
+// application only as a scope on a signed access token.
 type Client interface {
 	CreateUser(ctx context.Context, email string, profile *Profile) (userID string, err error)
 	SetPassword(ctx context.Context, userID, password string) error

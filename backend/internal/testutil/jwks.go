@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,6 +91,10 @@ type TokenOptions struct {
 	OmitEmail bool
 	// Subject overrides `sub`.
 	Subject string
+	// Scopes are step-up grants, rendered as the space-delimited `scope` claim
+	// Prelude uses. Empty means no claim at all, which is what an ordinary
+	// session token looks like.
+	Scopes []string
 }
 
 // Sign mints a token with the issuer's key.
@@ -128,6 +133,9 @@ func (ti *TokenIssuer) Sign(t *testing.T, opts TokenOptions) string {
 	builder = builder.Claim("user_id", userIDClaim)
 	if !opts.OmitEmail {
 		builder = builder.Claim("email", opts.Email)
+	}
+	if len(opts.Scopes) > 0 {
+		builder = builder.Claim("scope", strings.Join(opts.Scopes, " "))
 	}
 
 	token, err := builder.Build()

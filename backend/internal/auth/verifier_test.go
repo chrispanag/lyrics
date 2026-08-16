@@ -191,6 +191,44 @@ func TestVerifyReportsMissingEmail(t *testing.T) {
 	}
 }
 
+// Step-up grants arrive as the `scope` claim, and reading them is what lets the
+// API confirm an email was proven in the browser. The claim is conventionally
+// one space-delimited string but is sometimes serialized as a list, and this
+// application cannot dictate which — a token whose grants were silently dropped
+// would present as a verification that never takes.
+//
+// Note this pins the parser against tokens minted here, not against Prelude:
+// only a live step-up can confirm the spelling Prelude actually sends.
+func TestVerifyReadsStepUpScopes(t *testing.T) {
+	ti := testutil.NewTokenIssuer(t)
+	v := newVerifier(t, ti)
+
+	t.Run("space-delimited claim", func(t *testing.T) {
+		token := ti.Sign(t, testutil.TokenOptions{Scopes: []string{"email:verify", "prld:pwd:write"}})
+
+		claims, err := v.Verify(context.Background(), token)
+		if err != nil {
+			t.Fatalf("Verify: %v", err)
+		}
+		if !claims.HasScope("email:verify") {
+			t.Errorf("Scopes = %v, want it to contain email:verify", claims.Scopes)
+		}
+		if claims.HasScope("email:verify:other") {
+			t.Error("a scope must not match by prefix")
+		}
+	})
+
+	t.Run("no claim at all", func(t *testing.T) {
+		claims, err := v.Verify(context.Background(), ti.Sign(t, testutil.TokenOptions{}))
+		if err != nil {
+			t.Fatalf("Verify: %v", err)
+		}
+		if len(claims.Scopes) != 0 {
+			t.Errorf("Scopes = %v, want none on an ordinary session token", claims.Scopes)
+		}
+	})
+}
+
 func TestNewVerifierFailsOnUnreachableJWKS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
