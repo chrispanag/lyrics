@@ -42,7 +42,7 @@ export function SortableSongList({
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     // Touch needs a hold instead: an immediate drag would swallow the flick
     // that scrolls the page. The tolerance lets a finger wobble during the hold
-    // without cancelling it.
+    // without canceling it.
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
@@ -52,7 +52,14 @@ export function SortableSongList({
     if (!over || active.id === over.id) return;
 
     const ids = songs.map((song) => song.id);
-    onReorder(arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))));
+    const from = ids.indexOf(String(active.id));
+    const to = ids.indexOf(String(over.id));
+    // A refetch landing between the lift and the drop can take a row out from
+    // under the drag. arrayMove reads the resulting -1 as "the last one" and
+    // would save an order nobody asked for, so nothing is saved instead.
+    if (from < 0 || to < 0) return;
+
+    onReorder(arrayMove(ids, from, to));
   };
 
   return (

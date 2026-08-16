@@ -74,12 +74,16 @@ func (s *Server) handleGetList(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	full, err := s.store.GetListWithSongs(r.Context(), list.ID)
+	// Only the songs are still missing: readableList already loaded the row, so
+	// re-reading it here would repeat the entry count the visibility check just
+	// paid for.
+	songs, err := s.store.SongsInList(r.Context(), list.ID)
 	if err != nil {
 		return storeError(err, "List")
 	}
+	list.Songs = songs
 
-	httpx.JSON(w, http.StatusOK, full)
+	httpx.JSON(w, http.StatusOK, list)
 	return nil
 }
 
