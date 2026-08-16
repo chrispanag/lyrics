@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -157,6 +159,16 @@ func TestRBACMatrix(t *testing.T) {
 
 	songID := h.seedSong(nil, "Existing Song")
 
+	// Owned by a fifth user so the copy row below exercises the stranger case
+	// for every role in the matrix.
+	sharerTok := h.tokenFor("sharer@example.com", store.RoleUser)
+	sharedList := h.do("POST", "/api/v1/lists", sharerTok,
+		map[string]any{"name": "Shared Picks", "is_public": true})
+	if sharedList.StatusCode != http.StatusCreated {
+		t.Fatalf("seed shared list status = %d, want 201", sharedList.StatusCode)
+	}
+	sharedListID := decode[store.List](t, sharedList).ID.String()
+
 	newSong := map[string]any{"title": "New Song", "lyrics": "la la", "language": "el"}
 
 	tests := []struct {
@@ -204,6 +216,13 @@ func TestRBACMatrix(t *testing.T) {
 			name: "delete a song", method: "DELETE", path: "/api/v1/songs/" + songID,
 			// Only the admin case actually deletes; it runs last.
 			guest: 401, user: 403, contributor: 403, admin: 204,
+		},
+		{
+			name: "copy a public list", method: "POST", path: "/api/v1/lists/" + sharedListID + "/copy",
+			body: map[string]any{},
+			// The list belongs to none of these roles, so each copies it as a
+			// stranger and the three copies land under different owners.
+			guest: 401, user: 201, contributor: 201, admin: 201,
 		},
 		{
 			name: "list all users", method: "GET", path: "/api/v1/admin/users",
@@ -389,6 +408,217 @@ func TestListVisibility(t *testing.T) {
 	// Another user still may not modify it.
 	if resp := h.do("PATCH", path, strangerTok, map[string]any{"name": "Hijacked"}); resp.StatusCode != 404 {
 		t.Errorf("stranger write = %d, want 404", resp.StatusCode)
+	}
+}
+
+// Order is the point of a list, and the drag-and-drop UI calls this endpoint on
+// every drop — so what it does with a partial, unknown or repeated id is worth
+// pinning rather than inferring from the songs that happen to come back.
+func TestReorderList(t *testing.T) {
+	h := newHarness(t)
+	token := h.tokenFor("curator@example.com", store.RoleUser)
+
+	resp := h.do("POST", "/api/v1/lists", token, map[string]any{"name": "In Order"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create list status = %d, want 201", resp.StatusCode)
+	}
+	path := "/api/v1/lists/" + decode[store.List](t, resp).ID.String()
+
+	// Added first to last, so every assertion below is about position rather
+	// than about insertion order.
+	songs := make([]string, 4)
+	for i := range songs {
+		songs[i] = h.seedSong(nil, fmt.Sprintf("Song %d", i))
+		if resp := h.do("PUT", path+"/songs/"+songs[i], token, nil); resp.StatusCode != 204 {
+			t.Fatalf("add song %d status = %d, want 204", i, resp.StatusCode)
+		}
+	}
+
+	// order reads back the list's current sequence as indices into `songs`.
+	order := func() []int {
+		t.Helper()
+		resp := h.do("GET", path, token, nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("read list status = %d, want 200", resp.StatusCode)
+		}
+		var got []int
+		for _, song := range decode[store.List](t, resp).Songs {
+			got = append(got, slices.Index(songs, song.ID.String()))
+		}
+		return got
+	}
+
+	reorder := func(ids ...string) *http.Response {
+		t.Helper()
+		return h.do("POST", path+"/reorder", token, map[string]any{"song_ids": ids})
+	}
+
+	t.Run("a full payload is applied verbatim", func(t *testing.T) {
+		if resp := reorder(songs[3], songs[1], songs[0], songs[2]); resp.StatusCode != 200 {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+		if got := order(); !slices.Equal(got, []int{3, 1, 0, 2}) {
+			t.Errorf("order = %v, want [3 1 0 2]", got)
+		}
+	})
+
+	// A client working from a stale page must not be able to drop the songs it
+	// never knew about — they go after the ordered ones, keeping their sequence.
+	t.Run("songs left out keep their relative order at the end", func(t *testing.T) {
+		if resp := reorder(songs[2], songs[0]); resp.StatusCode != 200 {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+		if got := order(); !slices.Equal(got, []int{2, 0, 3, 1}) {
+			t.Errorf("order = %v, want [2 0 3 1] (3 before 1, as they already were)", got)
+		}
+	})
+
+	t.Run("a song outside the list is rejected and changes nothing", func(t *testing.T) {
+		before := order()
+		stranger := h.seedSong(nil, "Not In This List")
+
+		if resp := reorder(songs[0], stranger, songs[1]); resp.StatusCode != 404 {
+			t.Errorf("status = %d, want 404", resp.StatusCode)
+		}
+		// The whole reorder runs in one transaction, so the ids that *were* in
+		// the list must not have been written either.
+		if got := order(); !slices.Equal(got, before) {
+			t.Errorf("order = %v, want %v unchanged", got, before)
+		}
+	})
+
+	t.Run("a repeated song is a validation error, not a missing one", func(t *testing.T) {
+		resp := reorder(songs[0], songs[1], songs[0])
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("status = %d, want 422", resp.StatusCode)
+		}
+	})
+
+	t.Run("an empty payload is refused", func(t *testing.T) {
+		if resp := reorder(); resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("status = %d, want 422", resp.StatusCode)
+		}
+	})
+
+	t.Run("only the owner may reorder", func(t *testing.T) {
+		strangerTok := h.tokenFor("meddler@example.com", store.RoleUser)
+		resp := h.do("POST", path+"/reorder", strangerTok,
+			map[string]any{"song_ids": []string{songs[0]}})
+		if resp.StatusCode != 404 {
+			t.Errorf("status = %d, want 404", resp.StatusCode)
+		}
+	})
+}
+
+// Copying is how a shared list becomes something its reader can change: the
+// copy belongs to whoever took it, keeps the curated order, and starts private.
+func TestCopyPublicList(t *testing.T) {
+	h := newHarness(t)
+
+	ownerTok := h.tokenFor("sharer@example.com", store.RoleUser)
+	stranger, strangerTok := h.userAndToken("taker@example.com", store.RoleUser)
+
+	resp := h.do("POST", "/api/v1/lists", ownerTok, map[string]any{
+		"name": "Rebetika Nights", "description": "For the long evenings.", "is_public": true,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create list status = %d, want 201", resp.StatusCode)
+	}
+	source := decode[store.List](t, resp)
+	path := "/api/v1/lists/" + source.ID.String()
+
+	first := h.seedSong(nil, "Πρώτο Τραγούδι")
+	second := h.seedSong(nil, "Δεύτερο Τραγούδι")
+	for _, songID := range []string{first, second} {
+		if resp := h.do("PUT", path+"/songs/"+songID, ownerTok, nil); resp.StatusCode != 204 {
+			t.Fatalf("add song status = %d, want 204", resp.StatusCode)
+		}
+	}
+	// Reordered before copying, so the assertion below tests that positions are
+	// carried over rather than that the entries happen to be inserted in order.
+	if resp := h.do("POST", path+"/reorder", ownerTok, map[string]any{
+		"song_ids": []string{second, first},
+	}); resp.StatusCode != 200 {
+		t.Fatalf("reorder status = %d, want 200", resp.StatusCode)
+	}
+
+	resp = h.do("POST", path+"/copy", strangerTok, map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("copy status = %d, want 201", resp.StatusCode)
+	}
+	copied := decode[store.List](t, resp)
+
+	switch {
+	case copied.ID == source.ID:
+		t.Error("copy reused the source's identifier")
+	case copied.OwnerID != stranger.ID:
+		t.Errorf("copy owner = %s, want %s", copied.OwnerID, stranger.ID)
+	case copied.Name != source.Name:
+		t.Errorf("copy name = %q, want %q", copied.Name, source.Name)
+	case copied.Description == nil || *copied.Description != "For the long evenings.":
+		t.Errorf("copy description = %v, want the source's", copied.Description)
+	case copied.IsPublic:
+		t.Error("copy is public; a copy must start private")
+	case copied.IsDefault:
+		t.Error("copy is marked default")
+	case copied.ItemCount != 2:
+		t.Errorf("copy item_count = %d, want 2", copied.ItemCount)
+	}
+
+	resp = h.do("GET", "/api/v1/lists/"+copied.ID.String(), strangerTok, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("read copy status = %d, want 200", resp.StatusCode)
+	}
+	full := decode[store.List](t, resp)
+	if len(full.Songs) != 2 {
+		t.Fatalf("copy holds %d songs, want 2", len(full.Songs))
+	}
+	if full.Songs[0].ID.String() != second || full.Songs[1].ID.String() != first {
+		t.Errorf("copy order = %v, want the source's curated order", []uuid.UUID{full.Songs[0].ID, full.Songs[1].ID})
+	}
+
+	// A second copy would collide with the first on the per-owner name index.
+	resp = h.do("POST", path+"/copy", strangerTok, map[string]any{})
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("second copy status = %d, want 409", resp.StatusCode)
+	}
+	resp = h.do("POST", path+"/copy", strangerTok, map[string]any{"name": "Rebetika Nights (again)"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("renamed copy status = %d, want 201", resp.StatusCode)
+	}
+
+	// Editing the copy leaves the original alone — the two share no rows.
+	if resp := h.do("DELETE", "/api/v1/lists/"+copied.ID.String()+"/songs/"+first, strangerTok, nil); resp.StatusCode != 204 {
+		t.Fatalf("remove from copy status = %d, want 204", resp.StatusCode)
+	}
+	if resp := h.do("GET", path, ownerTok, nil); decode[store.List](t, resp).ItemCount != 2 {
+		t.Error("editing the copy changed the source list")
+	}
+}
+
+// A private list must be no more copyable than it is readable, and must answer
+// the same way — 404 — so copying cannot be used to probe for identifiers.
+func TestCopyPrivateListIsNotFound(t *testing.T) {
+	h := newHarness(t)
+
+	ownerTok := h.tokenFor("private-owner@example.com", store.RoleUser)
+	strangerTok := h.tokenFor("prober@example.com", store.RoleUser)
+
+	resp := h.do("POST", "/api/v1/lists", ownerTok, map[string]any{"name": "Private Picks"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create list status = %d, want 201", resp.StatusCode)
+	}
+	path := "/api/v1/lists/" + decode[store.List](t, resp).ID.String() + "/copy"
+
+	if resp := h.do("POST", path, strangerTok, map[string]any{}); resp.StatusCode != 404 {
+		t.Errorf("stranger copy of private list = %d, want 404", resp.StatusCode)
+	}
+	if resp := h.do("POST", path, "", map[string]any{}); resp.StatusCode != 401 {
+		t.Errorf("guest copy = %d, want 401", resp.StatusCode)
+	}
+	// The owner duplicating their own list needs a free name, but is allowed.
+	if resp := h.do("POST", path, ownerTok, map[string]any{"name": "Private Picks Copy"}); resp.StatusCode != 201 {
+		t.Errorf("owner copy of own list = %d, want 201", resp.StatusCode)
 	}
 }
 

@@ -91,6 +91,23 @@ because the caller supplies the claims. To see a real token:
 - **Song pages link credits to `/?person=<id>`.** Browse must read that param,
   or clicking an artist lands on the unfiltered catalog with no error, reading
   as "this artist is on every song".
+- **Anything whose response depends on who is asking must wait for
+  `useAuth().loading`.** The Prelude session is restored asynchronously, so a
+  query that fires on mount goes out with no token and is answered as a guest.
+  For `GET /lists/{id}` that means a private list returns **404 to its own
+  owner** on every page load — and nothing recovers, because `apiFetch` retries
+  a 401 with a fresh token and this is deliberately not a 401. `useList` takes a
+  `ready` flag for exactly this. Note also that a disabled query is not
+  `isLoading`, so the page must hold its own skeleton while waiting or it falls
+  through to "not available".
+- **The list drag handle needs `touch-none`, and must be the only drag
+  activator.** Both halves fail silently, and only on a phone. Without
+  `touch-none` the browser keeps the gesture for scrolling and the row simply
+  never moves; make the whole row draggable instead and the page loses its
+  scroll gesture, so a long list becomes unreadable. Neither shows up on a
+  desktop, where a mouse has no such conflict. `SortableSongList` is pinned by a
+  keyboard-driven test, which is also the only way to drive dnd-kit in jsdom —
+  see `src/test/rects.ts` for why the rows need stubbed rectangles.
 
 ---
 

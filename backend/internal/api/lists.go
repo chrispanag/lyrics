@@ -105,6 +105,61 @@ func (s *Server) handleCreateList(w http.ResponseWriter, r *http.Request) error 
 	return nil
 }
 
+// handleCopyList duplicates a list the caller can read into a list they own,
+// which is what makes a shared list usable rather than only readable.
+//
+// The copy is an ordinary list from the moment it exists: its new owner renames,
+// reorders and edits it through the same endpoints as any other, and nothing
+// links it back to the original.
+func (s *Server) handleCopyList(w http.ResponseWriter, r *http.Request) error {
+	id, err := urlUUID(r, "id")
+	if err != nil {
+		return err
+	}
+
+	source, err := s.store.GetList(r.Context(), id)
+	if err != nil {
+		return storeError(err, "List")
+	}
+
+	// The same rule, and the same 404, as the read path — checked before the
+	// body is even decoded, so no reply distinguishes a private list from one
+	// that never existed.
+	user := auth.MustFromContext(r.Context())
+	if !source.IsPublic && source.OwnerID != user.ID {
+		return httpx.NotFound("List was not found.")
+	}
+
+	var req struct {
+		Name *string `json:"name"`
+	}
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		return err
+	}
+
+	// Names are unique per owner, so a caller taking a second copy — or copying
+	// their own list — supplies one. Omitting it keeps the original's.
+	name := source.Name
+	if req.Name != nil {
+		name = strings.TrimSpace(*req.Name)
+	}
+	if msg := nameProblem(name); msg != "" {
+		return httpx.Validation("The list could not be copied.").
+			WithDetails(validationErrors{"name": msg})
+	}
+
+	copied, err := s.store.CopyList(r.Context(), source.ID, user.ID, name)
+	if err != nil {
+		if store.IsConflict(err) {
+			return httpx.Conflict("You already have a list with that name.").WithCause(err)
+		}
+		return storeError(err, "List")
+	}
+
+	httpx.JSON(w, http.StatusCreated, copied)
+	return nil
+}
+
 // ownedList loads a list and confirms the caller owns it.
 func (s *Server) ownedList(r *http.Request) (*store.List, error) {
 	id, err := urlUUID(r, "id")
@@ -246,12 +301,23 @@ func (s *Server) handleReorderList(w http.ResponseWriter, r *http.Request) error
 		return httpx.Validation("The list could not be reordered.").
 			WithDetails(validationErrors{"song_ids": "At least one song is required."})
 	}
-	// ReorderList issues one UPDATE per id inside a single transaction, so an
-	// uncapped payload holds a pooled connection and an open transaction for as
-	// long as the write timeout allows.
+	// ReorderList sends the whole payload to PostgreSQL as one array, so an
+	// uncapped one holds a pooled connection and an open transaction for as long
+	// as the write timeout allows.
 	if len(req.SongIDs) > maxReorderRefs {
 		return httpx.Validation("The list could not be reordered.").
 			WithDetails(validationErrors{"song_ids": "Too many songs in one request."})
+	}
+	// A repeated id has no meaningful position and the store, which matches ids
+	// as a set, would report it as a song missing from the list — a 404 that
+	// describes the wrong problem. Rejecting it here names it as what it is.
+	seen := make(map[uuid.UUID]struct{}, len(req.SongIDs))
+	for _, songID := range req.SongIDs {
+		if _, duplicate := seen[songID]; duplicate {
+			return httpx.Validation("The list could not be reordered.").
+				WithDetails(validationErrors{"song_ids": "Each song may appear only once."})
+		}
+		seen[songID] = struct{}{}
 	}
 
 	if err := s.store.ReorderList(r.Context(), list.ID, req.SongIDs); err != nil {

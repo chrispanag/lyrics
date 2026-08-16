@@ -86,11 +86,20 @@ export function useLists(enabled: boolean) {
   });
 }
 
-export function useList(id: string | undefined) {
+/**
+ * A single list, once the caller's identity is settled.
+ *
+ * `ready` is not optional politeness: a private list answers 404 to anyone who
+ * is not its owner, so a request that goes out before the session has been
+ * restored carries no token, reads as a guest, and tells the owner their own
+ * list does not exist. Nothing recovers from it either — `apiFetch` retries a
+ * 401 with a fresh token, and this is deliberately not a 401.
+ */
+export function useList(id: string | undefined, ready = true) {
   return useQuery({
     queryKey: keys.list(id ?? ""),
     queryFn: () => apiFetch<SongList>(`/api/v1/lists/${id}`),
-    enabled: Boolean(id),
+    enabled: Boolean(id) && ready,
   });
 }
 
@@ -141,6 +150,26 @@ export function useCreateList() {
   });
 }
 
+/**
+ * Copies a list the caller can read into one they own.
+ *
+ * The name is optional — omitted, the server keeps the original's, which
+ * collides only when the caller already has a list by that name and answers 409.
+ * The body is still sent as `{}` rather than left off: the API rejects an empty
+ * request body outright.
+ */
+export function useCopyList() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name?: string }) =>
+      apiFetch<SongList>(`/api/v1/lists/${id}/copy`, {
+        method: "POST",
+        body: name === undefined ? {} : { name },
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.lists() }),
+  });
+}
+
 export function useUpdateList(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -148,6 +177,54 @@ export function useUpdateList(id: string) {
       apiFetch<SongList>(`/api/v1/lists/${id}`, { method: "PATCH", body: input }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: keys.lists() });
+      void queryClient.invalidateQueries({ queryKey: keys.list(id) });
+    },
+  });
+}
+
+/**
+ * Saves a new order for a list's songs.
+ *
+ * The reorder is applied to the cache before the request goes out: a drag that
+ * snapped back until the server answered would be unusable on a phone. A
+ * failure restores the order that was there and refetches, so the list on
+ * screen is never a guess the server disagreed with.
+ *
+ * What the server sends back is deliberately *not* written to the cache. Two
+ * quick drags produce two requests whose responses can land in either order,
+ * and the older one landing last would reinstate the order the user already
+ * moved on from. Since the client sends the complete order it wants, a success
+ * carries no information the optimistic write does not already hold.
+ */
+export function useReorderList(id: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (songIds: string[]) =>
+      apiFetch<SongList>(`/api/v1/lists/${id}/reorder`, {
+        method: "POST",
+        body: { song_ids: songIds },
+      }),
+    onMutate: async (songIds) => {
+      // An in-flight read would otherwise land after this write and undo it.
+      await queryClient.cancelQueries({ queryKey: keys.list(id) });
+
+      const previous = queryClient.getQueryData<SongList>(keys.list(id));
+      if (previous?.songs) {
+        const bySongId = new Map(previous.songs.map((song) => [song.id, song]));
+        queryClient.setQueryData<SongList>(keys.list(id), {
+          ...previous,
+          songs: songIds.map((songId) => bySongId.get(songId)).filter((song) => song !== undefined),
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, _songIds, context) => {
+      // The snapshot is the order from before *this* drag, which a later drag
+      // may already have superseded — so the refetch is what settles the list,
+      // and the rollback only keeps it from sitting on a rejected order in the
+      // meantime.
+      if (context?.previous) queryClient.setQueryData(keys.list(id), context.previous);
       void queryClient.invalidateQueries({ queryKey: keys.list(id) });
     },
   });

@@ -109,6 +109,18 @@ lint-backend: ## Lint the backend
 web: ## Run the web dev server
 	cd web && VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" npm run dev
 
+.PHONY: mobile
+# Same dev server, reached from a phone on the same network — Vite prints the
+# Network URL to open. Clearing VITE_API_BASE_URL (which .env sets to
+# localhost, i.e. the phone itself) is what sends API calls to this origin and
+# through the proxy in vite.config.ts.
+#
+# Sign-in will not work over such a URL: it is not a secure context, so the
+# browser withholds crypto.subtle, which the Prelude SDK needs. Browsing,
+# search and public lists do.
+mobile: ## Run the web dev server for testing from a phone on this network
+	cd web && VITE_API_BASE_URL= VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" npm run dev
+
 .PHONY: install
 install: ## Install frontend dependencies
 	cd web && npm install

@@ -30,6 +30,24 @@ Vite only exposes variables prefixed with `VITE_`, so `make web` maps
 
 `make help` lists every target.
 
+### Testing from a phone
+
+`make mobile` runs the same dev server and prints a `Network:` URL to open on
+any device on the network. It differs from `make web` in one way: it clears
+`VITE_API_BASE_URL`, so the app calls its own origin and Vite proxies `/api` to
+the API over loopback — one origin, as in production, and no CORS entry to add.
+
+Pointing a phone straight at `:8080` instead does not work: macOS blocks
+incoming connections to the unsigned binary `go run` builds, so the port answers
+on localhost and hangs from the network. Approving it in System Settings →
+Network → Firewall is only worth it to call the API without the app.
+
+**Signing in will fail there.** A `http://<ip>` page is not a secure context, so
+the browser withholds `crypto.subtle`, which the Prelude SDK needs to mint its
+device key. Browsing, search, song pages and public lists all work; for the
+signed-in surface, reach the dev server over HTTPS (a tunnel, or a locally
+trusted certificate).
+
 Without Prelude credentials the API refuses to start — see
 [Prelude setup](#prelude-setup). The database, migrations, seed data, and the
 whole backend test suite all work without them.
@@ -201,6 +219,7 @@ Two behaviors here are easy to break and are pinned by tests:
 |---|:-:|:-:|:-:|:-:|
 | Browse and search | ✓ | ✓ | ✓ | ✓ |
 | Create and manage lists | | ✓ | ✓ | ✓ |
+| Reorder, share and copy lists | | ✓ | ✓ | ✓ |
 | Add songs | | | ✓ | ✓ |
 | Edit **own** songs | | | ✓ | ✓ |
 | Edit and delete **any** song | | | | ✓ |
@@ -233,6 +252,7 @@ GET    /lists                            │ signed in
 POST   /lists                            │
 PATCH  /lists/{id}                       │
 DELETE /lists/{id}                       │
+POST   /lists/{id}/copy  (public or own) │
 PUT    /lists/{id}/songs/{songID}        │
 DELETE /lists/{id}/songs/{songID}        │
 POST   /lists/{id}/reorder               │
