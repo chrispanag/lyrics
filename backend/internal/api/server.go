@@ -90,6 +90,9 @@ func (s *Server) Routes() http.Handler {
 
 				r.Get("/lists", httpx.Handler(s.handleListLists))
 				r.Post("/lists", httpx.Handler(s.handleCreateList))
+				// Copying reads someone else's list and writes the caller's own,
+				// so the source's visibility is checked in the handler.
+				r.Post("/lists/{id}/copy", httpx.Handler(s.handleCopyList))
 				r.Patch("/lists/{id}", httpx.Handler(s.handleUpdateList))
 				r.Delete("/lists/{id}", httpx.Handler(s.handleDeleteList))
 				r.Put("/lists/{id}/songs/{songID}", httpx.Handler(s.handleAddSongToList))

@@ -1,6 +1,6 @@
 import { HttpResponse, http } from "msw";
 
-import type { Genre, ListResponse, Person, Song, User } from "@/lib/types";
+import type { Genre, ListResponse, Person, Song, SongList, User } from "@/lib/types";
 
 /** Base URL the client talks to under test. Exported so specs cannot drift from it. */
 export const API = "http://localhost:8080";
@@ -50,6 +50,22 @@ export function makePerson(overrides: Partial<Person> = {}): Person {
   };
 }
 
+export function makeList(overrides: Partial<SongList> = {}): SongList {
+  return {
+    id: "list-1",
+    owner_id: "user-1",
+    name: "Ρεμπέτικα",
+    description: null,
+    is_public: true,
+    is_default: false,
+    item_count: 0,
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+    songs: [],
+    ...overrides,
+  };
+}
+
 /**
  * Wraps rows in the API's list envelope.
  *
@@ -74,4 +90,6 @@ export const handlers = [
   http.get(`${API}/api/v1/people/:id`, () => HttpResponse.json(makePerson())),
   http.get(`${API}/api/v1/me`, () => HttpResponse.json(makeUser())),
   http.get(`${API}/api/v1/lists`, () => HttpResponse.json(list([]))),
+  // Asked for by the save sheet, to mark the lists a song is already in.
+  http.get(`${API}/api/v1/songs/:id/lists`, () => HttpResponse.json({ list_ids: [] })),
 ];

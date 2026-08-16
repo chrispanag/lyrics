@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { Route, Routes } from "react-router-dom";
@@ -12,6 +13,7 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
   return renderWithProviders(
     <Routes>
       <Route path="/songs/:id" element={<SongDetailPage />} />
+      <Route path="/login" element={<h1>Sign in</h1>} />
     </Routes>,
     { route: "/songs/song-1", ...options },
   );
@@ -91,6 +93,28 @@ describe("SongDetailPage", () => {
 
     expect(await screen.findByRole("button", { name: /play/i })).toBeInTheDocument();
     expect(container.querySelector("iframe")).toBeNull();
+  });
+
+  // Saving is the reason to hold an account, so a guest is invited into it
+  // rather than shown a page with the affordance missing.
+  it("offers saving to a guest and sends them to sign in", async () => {
+    const user = userEvent.setup();
+
+    renderDetail();
+
+    await user.click(await screen.findByRole("button", { name: /save to a list/i }));
+
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("opens the list sheet for a signed-in reader instead", async () => {
+    const user = userEvent.setup();
+
+    renderDetail({ user: makeUser({ id: "user-1" }) });
+
+    await user.click(await screen.findByRole("button", { name: /save to a list/i }));
+
+    expect(await screen.findByRole("dialog", { name: /save to list/i })).toBeInTheDocument();
   });
 
   it("reports a song that could not be loaded", async () => {
