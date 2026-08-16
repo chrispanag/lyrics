@@ -36,29 +36,19 @@ func (s *Store) GetList(ctx context.Context, id uuid.UUID) (*List, error) {
 	return &l, nil
 }
 
-// GetListWithSongs loads a list and its songs in curated order.
-func (s *Store) GetListWithSongs(ctx context.Context, id uuid.UUID) (*List, error) {
-	list, err := s.GetList(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	query := `
-		SELECT ` + songColumns + `
+// SongsInList loads a list's songs in curated order.
+//
+// The list row is not re-read: every caller has already loaded it to decide
+// whether it may be served at all, and listColumns counts entries with a
+// subquery, so fetching it twice costs a second scan of list_items for a row
+// that is already in hand.
+func (s *Store) SongsInList(ctx context.Context, listID uuid.UUID) ([]Song, error) {
+	return s.collectSongs(ctx, `
+		SELECT `+songColumns+`
 		FROM list_items li
 		JOIN songs s ON s.id = li.song_id
 		WHERE li.list_id = $1
-		ORDER BY li.position ASC, li.added_at ASC`
-
-	songs, err := s.collectSongs(ctx, query, []any{id}, false)
-	if err != nil {
-		return nil, err
-	}
-	if songs == nil {
-		songs = []Song{}
-	}
-	list.Songs = songs
-	return list, nil
+		ORDER BY li.position ASC, li.added_at ASC`, []any{listID}, false)
 }
 
 // CreateList adds a named list for a user.
@@ -79,6 +69,52 @@ func (s *Store) CreateList(ctx context.Context, ownerID uuid.UUID, name string, 
 		RETURNING `+listColumns, ownerID, name, description, isPublic), &l)
 	if err != nil {
 		return nil, fmt.Errorf("create list: %w", translateErr(err))
+	}
+	return &l, nil
+}
+
+// CopyList duplicates a list, entries included, under a new owner and name.
+//
+// Whether the source may be read at all is the caller's decision — this copies
+// whatever it is given. Visibility is deliberately not carried over: a copy
+// starts private, so republishing someone else's list is an explicit act by
+// whoever took the copy rather than a side effect of taking it.
+func (s *Store) CopyList(ctx context.Context, srcID, ownerID uuid.UUID, name string) (*List, error) {
+	name, err := requireName("list", name)
+	if err != nil {
+		return nil, err
+	}
+
+	var l List
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		// Selecting the description from the source rather than passing it in
+		// keeps the copy to a single statement, and makes a source deleted
+		// between the caller's read and this write insert nothing at all —
+		// pgx reports no rows, which translateErr turns into ErrNotFound.
+		var newID uuid.UUID
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO lists (owner_id, name, description, is_public)
+			SELECT $1, $2, src.description, false
+			FROM lists src
+			WHERE src.id = $3
+			RETURNING id`, ownerID, name, srcID).Scan(&newID); err != nil {
+			return fmt.Errorf("copy list: %w", translateErr(err))
+		}
+
+		// Positions are scoped to a list, so copying them verbatim reproduces
+		// the curated order without renumbering.
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO list_items (list_id, song_id, position)
+			SELECT $1, song_id, position FROM list_items WHERE list_id = $2`, newID, srcID); err != nil {
+			return fmt.Errorf("copy list items: %w", translateErr(err))
+		}
+
+		// Re-read instead of RETURNING from the insert above: listColumns counts
+		// entries, and at that point the copy still has none.
+		return scanList(tx.QueryRow(ctx, `SELECT `+listColumns+` FROM lists l WHERE l.id = $1`, newID), &l)
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &l, nil
 }
@@ -157,21 +193,33 @@ func (s *Store) RemoveSongFromList(ctx context.Context, listID, songID uuid.UUID
 // Songs omitted from the payload keep their existing entries and are pushed
 // after the ordered ones, so a client working from a stale page cannot silently
 // drop songs it did not know about.
+//
+// The ids must be distinct. They are matched as a set, so a repeated one is
+// indistinguishable here from one naming a song the list does not hold, and
+// comes back as ErrNotFound — which is why callers reject duplicates before
+// they get this far, where the payload can still be described accurately.
+// Dragging a song calls this on every drop, so the ordered songs are written by
+// one statement rather than one round trip each: a hundred-entry list used to
+// mean a hundred sequential updates holding a transaction open.
 func (s *Store) ReorderList(ctx context.Context, listID uuid.UUID, songIDs []uuid.UUID) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
-		for i, songID := range songIDs {
-			tag, err := tx.Exec(ctx, `
-				UPDATE list_items SET position = $3
-				WHERE list_id = $1 AND song_id = $2`, listID, songID, i)
-			if err != nil {
-				return fmt.Errorf("reorder list: %w", translateErr(err))
-			}
-			if tag.RowsAffected() == 0 {
-				return fmt.Errorf("%w: song %s is not in this list", ErrNotFound, songID)
-			}
+		// WITH ORDINALITY numbers the array from 1, and positions start at 0.
+		tag, err := tx.Exec(ctx, `
+			UPDATE list_items li SET position = ordered.pos - 1
+			FROM unnest($2::uuid[]) WITH ORDINALITY AS ordered(song_id, pos)
+			WHERE li.list_id = $1 AND li.song_id = ordered.song_id`, listID, songIDs)
+		if err != nil {
+			return fmt.Errorf("reorder list: %w", translateErr(err))
+		}
+		// One row per id, or some id names a song this list does not hold. Which
+		// one is no longer singled out, as the per-row loop could; the caller
+		// refetches either way, and the status it sees is unchanged.
+		if tag.RowsAffected() != int64(len(songIDs)) {
+			return fmt.Errorf("%w: %d of %d songs are in this list",
+				ErrNotFound, tag.RowsAffected(), len(songIDs))
 		}
 		// Push anything not mentioned to the end, preserving relative order.
-		_, err := tx.Exec(ctx, `
+		_, err = tx.Exec(ctx, `
 			UPDATE list_items SET position = $2 + position
 			WHERE list_id = $1 AND song_id <> ALL($3)`, listID, len(songIDs), songIDs)
 		if err != nil {

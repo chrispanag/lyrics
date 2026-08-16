@@ -23,6 +23,17 @@ export default defineConfig({
     // Bind on all interfaces so the dev server is reachable from a phone on
     // the same network — the mobile layout needs testing on real hardware.
     host: true,
+    // Forward the API through this server, so a phone talks to one origin and
+    // reaches the API over loopback. Two reasons that beats pointing the phone
+    // straight at :8080: the macOS firewall blocks incoming connections to the
+    // unsigned binary `go run` produces, so :8080 answers on localhost and
+    // hangs from the network; and one origin is how the app is deployed, so
+    // CORS stays out of the picture here exactly as it does in production.
+    //
+    // Only requests the client sends same-origin come through here, which is
+    // what `make mobile` arranges by clearing VITE_API_BASE_URL. `make web`
+    // keeps calling :8080 directly.
+    proxy: { "/api": "http://localhost:8080" },
   },
   test: {
     environment: "jsdom",

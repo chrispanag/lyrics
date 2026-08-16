@@ -35,39 +35,55 @@ func (s *Server) handleListLists(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// handleGetList serves a single list with its songs.
+// readableList loads a list the caller is allowed to see: a public one, or one
+// of their own. Anything else is reported as missing.
 //
-// This is the one read endpoint with a visibility rule: lists are private by
-// default, so a guest or another user may read it only once it is marked public.
-func (s *Server) handleGetList(w http.ResponseWriter, r *http.Request) error {
+// Lists are private by default, and this is the rule that keeps them so. It is
+// stated once because every endpoint that reads a list has to answer the same
+// way — 404 rather than 403, since confirming that a private list exists leaks
+// it to anyone walking identifiers — and a second copy is how one endpoint
+// starts answering differently from the rest.
+//
+// The check runs against the list row alone, before anything else is loaded:
+// fetching first would materialize a private list's whole contents, lyrics
+// bodies included, only to throw them away.
+func (s *Server) readableList(r *http.Request) (*store.List, error) {
 	id, err := urlUUID(r, "id")
+	if err != nil {
+		return nil, err
+	}
+
+	list, err := s.store.GetList(r.Context(), id)
+	if err != nil {
+		return nil, storeError(err, "List")
+	}
+
+	// Nil-safe on purpose: this serves the guest-reachable read as well as the
+	// endpoints that require a session.
+	user := auth.FromContext(r.Context())
+	if !list.IsPublic && (user == nil || user.ID != list.OwnerID) {
+		return nil, httpx.NotFound("List was not found.")
+	}
+	return list, nil
+}
+
+// handleGetList serves a single list with its songs.
+func (s *Server) handleGetList(w http.ResponseWriter, r *http.Request) error {
+	list, err := s.readableList(r)
 	if err != nil {
 		return err
 	}
 
-	// The visibility check runs against the list row alone, before its songs are
-	// loaded. Fetching first would make a guest walking identifiers materialize
-	// every private list's full contents — lyrics bodies included — only to be
-	// told 404.
-	list, err := s.store.GetList(r.Context(), id)
+	// Only the songs are still missing: readableList already loaded the row, so
+	// re-reading it here would repeat the entry count the visibility check just
+	// paid for.
+	songs, err := s.store.SongsInList(r.Context(), list.ID)
 	if err != nil {
 		return storeError(err, "List")
 	}
+	list.Songs = songs
 
-	user := auth.FromContext(r.Context())
-	isOwner := user != nil && user.ID == list.OwnerID
-	if !list.IsPublic && !isOwner {
-		// 404 rather than 403: confirming that a private list exists would leak
-		// its existence to anyone guessing identifiers.
-		return httpx.NotFound("List was not found.")
-	}
-
-	full, err := s.store.GetListWithSongs(r.Context(), id)
-	if err != nil {
-		return storeError(err, "List")
-	}
-
-	httpx.JSON(w, http.StatusOK, full)
+	httpx.JSON(w, http.StatusOK, list)
 	return nil
 }
 
@@ -102,6 +118,52 @@ func (s *Server) handleCreateList(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	httpx.JSON(w, http.StatusCreated, list)
+	return nil
+}
+
+// handleCopyList duplicates a list the caller can read into a list they own,
+// which is what makes a shared list usable rather than only readable.
+//
+// The copy is an ordinary list from the moment it exists: its new owner renames,
+// reorders and edits it through the same endpoints as any other, and nothing
+// links it back to the original.
+func (s *Server) handleCopyList(w http.ResponseWriter, r *http.Request) error {
+	// Resolved before the body is decoded, so nothing in the reply — not even a
+	// complaint about the payload — distinguishes a private list from one that
+	// never existed.
+	source, err := s.readableList(r)
+	if err != nil {
+		return err
+	}
+	user := auth.MustFromContext(r.Context())
+
+	var req struct {
+		Name *string `json:"name"`
+	}
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		return err
+	}
+
+	// Names are unique per owner, so a caller taking a second copy — or copying
+	// their own list — supplies one. Omitting it keeps the original's.
+	name := source.Name
+	if req.Name != nil {
+		name = strings.TrimSpace(*req.Name)
+	}
+	if msg := nameProblem(name); msg != "" {
+		return httpx.Validation("The list could not be copied.").
+			WithDetails(validationErrors{"name": msg})
+	}
+
+	copied, err := s.store.CopyList(r.Context(), source.ID, user.ID, name)
+	if err != nil {
+		if store.IsConflict(err) {
+			return httpx.Conflict("You already have a list with that name.").WithCause(err)
+		}
+		return storeError(err, "List")
+	}
+
+	httpx.JSON(w, http.StatusCreated, copied)
 	return nil
 }
 
@@ -246,23 +308,36 @@ func (s *Server) handleReorderList(w http.ResponseWriter, r *http.Request) error
 		return httpx.Validation("The list could not be reordered.").
 			WithDetails(validationErrors{"song_ids": "At least one song is required."})
 	}
-	// ReorderList issues one UPDATE per id inside a single transaction, so an
-	// uncapped payload holds a pooled connection and an open transaction for as
-	// long as the write timeout allows.
+	// ReorderList sends the whole payload to PostgreSQL as one array, so an
+	// uncapped one holds a pooled connection and an open transaction for as long
+	// as the write timeout allows.
 	if len(req.SongIDs) > maxReorderRefs {
 		return httpx.Validation("The list could not be reordered.").
 			WithDetails(validationErrors{"song_ids": "Too many songs in one request."})
+	}
+	// A repeated id has no meaningful position and the store, which matches ids
+	// as a set, would report it as a song missing from the list — a 404 that
+	// describes the wrong problem. Rejecting it here names it as what it is.
+	seen := make(map[uuid.UUID]struct{}, len(req.SongIDs))
+	for _, songID := range req.SongIDs {
+		if _, duplicate := seen[songID]; duplicate {
+			return httpx.Validation("The list could not be reordered.").
+				WithDetails(validationErrors{"song_ids": "Each song may appear only once."})
+		}
+		seen[songID] = struct{}{}
 	}
 
 	if err := s.store.ReorderList(r.Context(), list.ID, req.SongIDs); err != nil {
 		return storeError(err, "Song in this list")
 	}
 
-	updated, err := s.store.GetListWithSongs(r.Context(), list.ID)
-	if err != nil {
-		return storeError(err, "List")
-	}
-	httpx.JSON(w, http.StatusOK, updated)
+	// The list row as it was loaded, rather than a re-read with its songs: a
+	// drag calls this on every drop, and hydrating the reply would cost four
+	// more round trips and put every lyrics body of a long list back on the wire
+	// each time. Neither field a reorder can change is in that row — entries
+	// move, so the count holds, and the trigger that maintains updated_at fires
+	// on lists, not on list_items.
+	httpx.JSON(w, http.StatusOK, list)
 	return nil
 }
 

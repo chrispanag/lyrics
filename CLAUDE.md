@@ -103,6 +103,21 @@ because the caller supplies the claims. To see a real token:
   importing the module with no React in sight. The unauthorized *handler* stays
   in an effect on purpose: it needs React state, and no response can 401 before
   the first effects have flushed.
+- **`useList`'s `ready` flag is belt-and-braces now, but the skeleton beside it
+  is not.** The flag was the first fix for that 404 — gate the query until
+  `useAuth().loading` clears — and it is redundant since the provider moved to
+  import time, because the request carries a token either way. What still bites
+  is the trap next to it: a disabled query is not `isLoading`, so
+  `ListDetailPage` has to hold its own skeleton while waiting, or it falls
+  through to "not available" and tells the owner their list is gone.
+- **The list drag handle needs `touch-none`, and must be the only drag
+  activator.** Both halves fail silently, and only on a phone. Without
+  `touch-none` the browser keeps the gesture for scrolling and the row simply
+  never moves; make the whole row draggable instead and the page loses its
+  scroll gesture, so a long list becomes unreadable. Neither shows up on a
+  desktop, where a mouse has no such conflict. `SortableSongList` is pinned by a
+  keyboard-driven test, which is also the only way to drive dnd-kit in jsdom —
+  see `src/test/rects.ts` for why the rows need stubbed rectangles.
 
 ---
 

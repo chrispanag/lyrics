@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Check,
   ListPlus,
@@ -37,7 +37,8 @@ const FONT_SIZE_KEY = "lyrics:font-size";
 export function SongDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const location = useLocation();
+  const { user, loading: sessionLoading } = useAuth();
 
   const { data: song, isLoading, isError, error } = useSong(id);
   const deleteSong = useDeleteSong();
@@ -95,12 +96,28 @@ export function SongDetailPage() {
         <BackButton />
 
         <div className="flex items-center gap-1">
-          {user && (
-            <Button variant="ghost" size="sm" onClick={() => setListSheetOpen(true)}>
-              <ListPlus aria-hidden className="size-4" />
-              <span className="hidden sm:inline">Save</span>
-            </Button>
-          )}
+          {/* Shown to guests too, who are sent to sign in and returned here:
+              hiding it entirely leaves someone who wants to keep a song with
+              nothing to press and no hint that lists exist. The label is
+              spelled out for screen readers because the visible one is dropped
+              on small screens, where the icon is the whole button. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Save to a list"
+            // `user` is null until the session is restored, and acting on that
+            // sends someone who is already signed in to the sign-in screen and
+            // straight back — with the sheet they asked for never opening.
+            disabled={sessionLoading}
+            onClick={() =>
+              user
+                ? setListSheetOpen(true)
+                : navigate("/login", { state: { from: location.pathname } })
+            }
+          >
+            <ListPlus aria-hidden className="size-4" />
+            <span className="hidden sm:inline">Save</span>
+          </Button>
           {canEdit && (
             <Link
               to={`/songs/${song.id}/edit`}
