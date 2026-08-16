@@ -91,6 +91,18 @@ because the caller supplies the claims. To see a real token:
 - **Song pages link credits to `/?person=<id>`.** Browse must read that param,
   or clicking an artist lands on the unfiltered catalog with no error, reading
   as "this artist is on every song".
+- **The token provider is registered at import time by `auth/session`, and must
+  stay there.** React flushes child effects before parent ones, so a query
+  mounted under `AuthProvider` starts fetching before any effect of the
+  provider's has run. Registering from an effect therefore loses the race with
+  every query on the page: the request goes out with the module default, which
+  returns no token, and is answered as a guest. `GET /lists/{id}` was the
+  visible case — a private list returning **404 to its own owner** on every page
+  load, and nothing recovers, because `apiFetch` retries a 401 with a fresh
+  token and this is deliberately not a 401. `session.test.ts` pins it by
+  importing the module with no React in sight. The unauthorized *handler* stays
+  in an effect on purpose: it needs React state, and no response can 401 before
+  the first effects have flushed.
 
 ---
 

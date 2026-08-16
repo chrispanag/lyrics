@@ -1,23 +1,10 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { PrldSessionClient } from "@prelude.so/js-sdk/session";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { apiFetch, configureApi } from "@/api/client";
+import { apiFetch, setUnauthorizedHandler } from "@/api/client";
 import { AuthContext, type AuthContextValue } from "./context";
+import { getAccessToken, sessionClient } from "./session";
 import type { User } from "@/lib/types";
-
-const APP_ID = import.meta.env.VITE_PRELUDE_APP_ID ?? "";
-// Optional. The SDK key is a publishable client identifier, not a secret — it
-// is safe in the bundle, unlike the Management API key, which must stay
-// server-side.
-const SDK_KEY = import.meta.env.VITE_PRELUDE_SDK_KEY ?? "";
 
 /**
  * Turns a failed compliancy check into a sentence.
@@ -47,7 +34,11 @@ function describeCompliancy(result: { criteria: string; expected: number }): str
 }
 
 /**
- * Owns the Prelude session and exposes the local user.
+ * Drives the Prelude session and exposes the local user.
+ *
+ * The session itself lives in `./session`, outside React, because the API
+ * client needs a token before the first effect runs. What is left here is the
+ * part that genuinely is state: who is signed in, and whether we know yet.
  *
  * Authentication is split across two systems by design: Prelude holds
  * credentials and issues access tokens directly to the browser, while our API
@@ -59,40 +50,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
-
-  // The SDK client owns session storage and token refresh; it is created once
-  // and never re-created, since a second instance would keep its own cache.
-  const clientRef = useRef<PrldSessionClient | null>(null);
-  if (clientRef.current === null) {
-    clientRef.current = new PrldSessionClient({
-      domain: `${APP_ID}.session.prelude.dev`,
-      ...(SDK_KEY ? { sdkKey: SDK_KEY } : {}),
-    });
-  }
-  const client = clientRef.current;
-
-  /**
-   * Returns the current access token.
-   *
-   * `refresh()` is served from the SDK's cache when the token is still valid,
-   * so calling it per request is cheap. Tokens are never copied into
-   * application state or storage — the SDK is the single owner.
-   */
-  const getToken = useCallback(
-    async (forceRefresh?: boolean): Promise<string | null> => {
-      try {
-        if (forceRefresh) {
-          await client.invalidateCache();
-        }
-        const { user: session } = await client.refresh();
-        return session?.accessToken ?? null;
-      } catch {
-        // No session, or the refresh token has been revoked.
-        return null;
-      }
-    },
-    [client],
-  );
 
   const loadProfile = useCallback(async (): Promise<User | null> => {
     try {
@@ -109,27 +66,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [loadProfile],
   );
 
-  // Register the token provider before anything can issue a request.
+  // Only the reaction to a dead session is registered here — the token
+  // provider itself is registered by `./session` at import time, so that a
+  // query mounted under this provider cannot fetch before it exists. An effect
+  // is soon enough for this half: it needs React state, and no response can
+  // come back with a 401 before the first effects have flushed.
   useEffect(() => {
-    configureApi({
-      tokenProvider: getToken,
-      onUnauthorized: () => {
-        setUser(null);
-        // Same cleanup as an explicit sign-out. A revoked or expired session
-        // otherwise left the previous user's lists and list memberships in the
-        // cache, and the next sign-in only *invalidates* — which keeps stale
-        // data on screen while it refetches, showing one user another's lists.
-        queryClient.clear();
-      },
+    setUnauthorizedHandler(() => {
+      setUser(null);
+      // Same cleanup as an explicit sign-out. A revoked or expired session
+      // otherwise left the previous user's lists and list memberships in the
+      // cache, and the next sign-in only *invalidates* — which keeps stale
+      // data on screen while it refetches, showing one user another's lists.
+      queryClient.clear();
     });
-  }, [getToken, queryClient]);
+    return () => setUnauthorizedHandler(null);
+  }, [queryClient]);
 
   // Restore an existing session on first paint.
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const token = await getToken();
+      const token = await getAccessToken();
       if (cancelled) return;
 
       if (!token) {
@@ -148,20 +107,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [getToken, loadProfile]);
+  }, [loadProfile]);
 
   const login = useCallback(
     async (email: string, password: string) => {
-      await client.loginWithPassword({ identifier: email, password });
+      await sessionClient.loginWithPassword({ identifier: email, password });
       // The cache still holds the signed-out state until it is dropped.
-      await client.invalidateCache();
+      await sessionClient.invalidateCache();
 
       const profile = await loadProfile();
       setUser(profile);
       // Cached responses were fetched as a guest and may now differ.
       await queryClient.invalidateQueries();
     },
-    [client, loadProfile, queryClient],
+    [loadProfile, queryClient],
   );
 
   const register = useCallback(
@@ -192,19 +151,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await client.logout();
+      await sessionClient.logout();
     } finally {
       // Clear local state even if the revocation call failed, so the user is
       // not left looking at a signed-in UI they cannot use.
       setUser(null);
       queryClient.clear();
     }
-  }, [client, queryClient]);
+  }, [queryClient]);
 
   const validatePassword = useCallback(
     async (password: string) => {
       try {
-        const result = await client.validatePassword(password);
+        const result = await sessionClient.validatePassword(password);
         const messages = (result?.results ?? [])
           .filter((r) => !r.valid)
           .map(describeCompliancy);
@@ -215,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { valid: true, messages: [] };
       }
     },
-    [client],
+    [],
   );
 
   const value = useMemo<AuthContextValue>(
