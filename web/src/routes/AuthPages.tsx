@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Disc3 } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import { useAuth } from "@/auth/useAuth";
-import { Button, ErrorMessage, Field, Input } from "@/components/ui";
+import { Button, ErrorMessage, Field, Input, Spinner } from "@/components/ui";
 
 /** Shell shared by the sign-in and sign-up screens. */
 function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
@@ -133,7 +133,10 @@ export function RegisterPage() {
 
     try {
       await register({ email: email.trim(), password, displayName });
-      navigate("/", { replace: true });
+      // Straight to the code screen rather than home: the account is signed in
+      // but unverified, so the gate would bounce it here anyway — one flash
+      // later, and from a page that cannot load anything it asks for.
+      navigate("/verify-email", { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, "Your account could not be created. Please try again."));
       setFieldErrors(errorDetails(caught));
@@ -202,6 +205,207 @@ export function RegisterPage() {
           Sign in
         </Link>
       </p>
+    </AuthShell>
+  );
+}
+
+/** Digits in a Prelude code, mirroring the application's `code_size`. */
+const CODE_LENGTH = 6;
+
+/**
+ * Whether a thrown value is Prelude's "that code was wrong".
+ *
+ * Matched by name rather than by class so this page keeps no import from the
+ * SDK — the session lives behind the auth context, which is what lets the tests
+ * run without it.
+ */
+function isBadCode(caught: unknown): boolean {
+  return caught instanceof Error && caught.name === "BadCheckCodeError";
+}
+/** How long the resend button rests, so a stuck user cannot mail-bomb themselves. */
+const RESEND_COOLDOWN_SECONDS = 30;
+
+/**
+ * Confirms a new account's email address.
+ *
+ * Every signed-in but unverified visitor is routed here, whatever they asked
+ * for, because the API answers them with a 403 everywhere else. Sign-out is on
+ * the page for the one case that has no other exit: an address typed wrong,
+ * whose code can never arrive.
+ */
+export function VerifyEmailPage() {
+  const { user, loading, startEmailVerification, verifyEmail, resendVerificationCode, logout } =
+    useAuth();
+  const navigate = useNavigate();
+
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const [sending, setSending] = useState(true);
+  const started = useRef(false);
+
+  // The code is sent when this screen opens, not at registration: the challenge
+  // belongs to the browser's session with Prelude, so there is nobody to open
+  // it before the user gets here. The ref guards the double invocation React
+  // makes in development, which would otherwise open a second challenge and
+  // retire the code from the first.
+  useEffect(() => {
+    // Hooks run before the redirects below are rendered, so without this guard
+    // a visitor who is already verified — or not signed in at all — would open
+    // a challenge and be emailed a code on their way somewhere else.
+    if (!user || user.email_verified_at) return;
+    if (started.current) return;
+    started.current = true;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await startEmailVerification();
+      } catch (caught) {
+        // Let it be attempted again: the error below tells the user to ask for
+        // another code, and without this the guard would refuse to open one.
+        started.current = false;
+        if (!cancelled) {
+          setError(
+            errorMessage(caught, "We could not send a code just now. Try asking for another."),
+          );
+        }
+      } finally {
+        if (!cancelled) setSending(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [startEmailVerification, user]);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((seconds) => seconds - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
+  // Unlike the other two screens, this one is reached by redirect and kept in
+  // the address bar, so a refresh lands here while the session is still being
+  // restored. Waiting for that is what stops a reload from reading as signed
+  // out and bouncing to the login page.
+  if (loading) return <Spinner />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.email_verified_at) return <Navigate to="/" replace />;
+
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    setFieldErrors({});
+    setNotice("");
+    setSubmitting(true);
+
+    try {
+      await verifyEmail(code.trim());
+      navigate("/", { replace: true });
+    } catch (caught) {
+      // Prelude checks the code, so a wrong one arrives as one of its typed SDK
+      // errors rather than as a response from our API. Naming that case is what
+      // keeps the common mistake — a mistyped digit — from being reported as
+      // something the user cannot act on.
+      setError(
+        isBadCode(caught)
+          ? "That code is not correct. Check it and try again."
+          : errorMessage(caught, "That code could not be checked. Please try again."),
+      );
+      setFieldErrors(errorDetails(caught));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const onResend = async () => {
+    setError("");
+    setFieldErrors({});
+    setNotice("");
+    setResending(true);
+
+    try {
+      await resendVerificationCode();
+      setCooldown(RESEND_COOLDOWN_SECONDS);
+      setCode("");
+      setNotice("A new code is on its way. Use the one in the most recent email.");
+    } catch (caught) {
+      setError(errorMessage(caught, "We could not send a new code. Please try again shortly."));
+    } finally {
+      setResending(false);
+    }
+  };
+
+  return (
+    <AuthShell title="Check your email" subtitle={`We sent a ${CODE_LENGTH}-digit code to ${user.email}`}>
+      <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {notice && (
+          <p role="status" className="text-sm text-stone-600 dark:text-stone-300">
+            {notice}
+          </p>
+        )}
+
+        <Field label="Verification code" htmlFor="code" error={fieldErrors.code}>
+          <Input
+            id="code"
+            // A numeric keypad on a phone, and the code offered from the
+            // notification the mail app just raised.
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+            required
+            className="text-center text-lg tracking-[0.4em]"
+            value={code}
+            // Anything that is not a digit cannot be part of a code, and
+            // stripping it here means a pasted "Code: 123456" still works.
+            onChange={(event) =>
+              setCode(event.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))
+            }
+            aria-describedby={fieldErrors.code ? "code-error" : undefined}
+          />
+        </Field>
+
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full"
+          loading={submitting || sending}
+          disabled={code.length < CODE_LENGTH}
+        >
+          {sending ? "Sending code…" : "Verify email"}
+        </Button>
+      </form>
+
+      <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
+        <p>
+          No code yet?{" "}
+          <button
+            type="button"
+            onClick={onResend}
+            disabled={resending || cooldown > 0}
+            className="font-medium text-brand-600 hover:underline disabled:cursor-not-allowed disabled:text-stone-400 disabled:no-underline"
+          >
+            {cooldown > 0 ? `Send another in ${cooldown}s` : "Send another"}
+          </button>
+        </p>
+        <p>
+          Wrong address?{" "}
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="font-medium text-stone-500 hover:underline dark:text-stone-400"
+          >
+            Sign out
+          </button>
+        </p>
+      </div>
     </AuthShell>
   );
 }

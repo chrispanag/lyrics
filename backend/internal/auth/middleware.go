@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -15,7 +16,10 @@ import (
 
 type contextKey string
 
-const principalKey contextKey = "principal"
+const (
+	principalKey contextKey = "principal"
+	scopesKey    contextKey = "scopes"
+)
 
 // UserStore is the slice of the data layer the auth middleware needs. Narrowing
 // it to two methods keeps the middleware testable without a database.
@@ -46,6 +50,15 @@ func FromContext(ctx context.Context) *store.User {
 	return user
 }
 
+// HasScope reports whether the token on this request carries a step-up grant.
+//
+// The grant is short-lived and specific to the challenge that produced it, so
+// this answers "did the caller just prove something", not "who is the caller".
+func HasScope(ctx context.Context, scope string) bool {
+	scopes, _ := ctx.Value(scopesKey).([]string)
+	return slices.Contains(scopes, scope)
+}
+
 // MustFromContext returns the authenticated user, panicking if absent. Only
 // valid inside handlers mounted behind Authenticator.Required, where a missing
 // principal is a routing bug rather than a runtime condition.
@@ -70,31 +83,32 @@ func bearerToken(r *http.Request) string {
 	return strings.TrimSpace(token)
 }
 
-// resolve verifies a token and returns the matching local user, provisioning
-// one if this principal has never been seen here before.
-func (a *Authenticator) resolve(ctx context.Context, raw string) (*store.User, error) {
+// resolve verifies a token and returns the matching local user together with
+// the token's claims, provisioning the user if this principal has never been
+// seen here before.
+func (a *Authenticator) resolve(ctx context.Context, raw string) (*store.User, *Claims, error) {
 	claims, err := a.verifier.Verify(ctx, raw)
 	if err != nil {
 		if errors.Is(err, ErrInvalidToken) {
-			return nil, httpx.Unauthorized("Access token is invalid or has expired.").WithCause(err)
+			return nil, nil, httpx.Unauthorized("Access token is invalid or has expired.").WithCause(err)
 		}
 		// Reaching the JWKS failed: the token may well be fine.
-		return nil, httpx.Internal("Unable to verify credentials.").WithCause(err)
+		return nil, nil, httpx.Internal("Unable to verify credentials.").WithCause(err)
 	}
 
 	user, err := a.users.GetUserByPreludeID(ctx, claims.UserID)
 	if err == nil {
-		return user, nil
+		return user, claims, nil
 	}
 	if !store.IsNotFound(err) {
-		return nil, httpx.Internal("Unable to load your account.").WithCause(err)
+		return nil, nil, httpx.Internal("Unable to load your account.").WithCause(err)
 	}
 
 	// Just-in-time provisioning. This covers a user created directly in the
 	// Prelude dashboard, and a local database restored from a backup older than
 	// the account — both of which would otherwise present as a confusing 403.
 	if claims.Email == "" {
-		return nil, httpx.Internal("Account cannot be provisioned.").WithCause(
+		return nil, nil, httpx.Internal("Account cannot be provisioned.").WithCause(
 			errors.New("token has no email claim; configure an `email` custom claim " +
 				"for this Prelude application (see README: Prelude setup)"))
 	}
@@ -106,12 +120,12 @@ func (a *Authenticator) resolve(ctx context.Context, raw string) (*store.User, e
 
 	user, err = a.users.ProvisionUser(ctx, claims.UserID, claims.Email, role)
 	if err != nil {
-		return nil, httpx.Internal("Unable to provision your account.").WithCause(err)
+		return nil, nil, httpx.Internal("Unable to provision your account.").WithCause(err)
 	}
 
 	slog.Info("provisioned user on first authenticated request",
 		"user_id", user.ID, "role", user.Role)
-	return user, nil
+	return user, claims, nil
 }
 
 // Optional attaches a principal when one is present.
@@ -130,12 +144,18 @@ func (a *Authenticator) Optional(next http.Handler) http.Handler {
 			return
 		}
 
-		user, err := a.resolve(r.Context(), raw)
+		user, claims, err := a.resolve(r.Context(), raw)
 		if err != nil {
 			httpx.WriteError(w, r, err)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey, user)))
+
+		ctx := context.WithValue(r.Context(), principalKey, user)
+		// Scopes ride alongside the principal rather than on it: they belong to
+		// the token this request arrived with, not to the account, and the next
+		// request from the same user will usually carry none.
+		ctx = context.WithValue(ctx, scopesKey, claims.Scopes)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -145,6 +165,33 @@ func (a *Authenticator) Required(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if FromContext(r.Context()) == nil {
 			httpx.WriteError(w, r, httpx.Unauthorized("Authentication is required for this action."))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// RequireVerifiedEmail rejects a principal whose address has not been confirmed.
+//
+// It gates the authenticated groups as a whole rather than route by route, so
+// the exemptions are the ones written out at the mount point — read your own
+// profile, and finish verifying — and a route added later is gated by being
+// added, not left open by omission.
+//
+// An account reaches this point with a perfectly valid session: verification is
+// a property of the address, not of the credentials, so this is a 403 and never
+// a 401. Answering 401 would send the client off to refresh a token that is
+// already fine, and land it back here.
+func RequireVerifiedEmail(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := FromContext(r.Context())
+		if user == nil {
+			httpx.WriteError(w, r, httpx.Unauthorized("Authentication is required for this action."))
+			return
+		}
+		if !user.EmailVerified() {
+			httpx.WriteError(w, r, httpx.Forbidden(
+				"Confirm your email address before using your account."))
 			return
 		}
 		next.ServeHTTP(w, r)

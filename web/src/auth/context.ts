@@ -11,6 +11,17 @@ export interface AuthContextValue {
   login(email: string, password: string): Promise<void>;
   logout(): Promise<void>;
   /**
+   * Opens the email verification challenge and has Prelude send the code.
+   *
+   * Safe to call again: an unfinished challenge is reused rather than replaced,
+   * so a re-render does not silently invalidate the code already in the inbox.
+   */
+  startEmailVerification(): Promise<void>;
+  /** Submits the emailed code, then records the grant with our API. */
+  verifyEmail(code: string): Promise<void>;
+  /** Asks Prelude to send the code again for the challenge already open. */
+  resendVerificationCode(): Promise<void>;
+  /**
    * Re-reads the profile from our API, e.g. after a role change.
    *
    * A caller that already holds the updated user — a profile save responds with

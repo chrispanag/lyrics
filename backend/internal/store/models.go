@@ -66,9 +66,17 @@ type User struct {
 	Email         string    `json:"email"`
 	DisplayName   *string   `json:"display_name"`
 	Role          Role      `json:"role"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	// EmailVerifiedAt is null until the address is confirmed by completing the
+	// email:verify step-up challenge. Serialized as the timestamp rather than a
+	// derived boolean, so the client reads one field instead of two that could
+	// disagree.
+	EmailVerifiedAt *time.Time `json:"email_verified_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
+
+// EmailVerified reports whether the address has been confirmed.
+func (u User) EmailVerified() bool { return u.EmailVerifiedAt != nil }
 
 // Person is anyone credited on a song.
 type Person struct {

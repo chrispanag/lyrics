@@ -38,6 +38,9 @@ export function renderWithProviders(
     login: async () => {},
     logout: async () => {},
     reload: async () => {},
+    startEmailVerification: async () => {},
+    verifyEmail: async () => {},
+    resendVerificationCode: async () => {},
     validatePassword: async () => ({ valid: true, messages: [] }),
     ...auth,
   };

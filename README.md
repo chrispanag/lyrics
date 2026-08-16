@@ -143,7 +143,58 @@ tokens carry no email unless you map one. The API needs it for two things:
 Without the claim, existing users still work, but a first-time sign-in fails
 with `Account cannot be provisioned`.
 
-### 4. Bootstrap an admin
+### 4. Enable email verification — required for sign-up
+
+New accounts must confirm their address before the API will do anything for
+them. Prelude proves the address with a **step-up challenge**: it emails a
+six-digit code, checks the code itself, and signs the granted scope into the
+access token. Two things have to exist on the application.
+
+A step-up configuration declaring the scope, in `direct` mode so Prelude runs
+the challenge without calling back into anything of ours:
+
+```bash
+curl -X POST "https://api.prelude.dev/v2/session/apps/${PRELUDE_APP_ID}/config/stepup" \
+  -H "Authorization: Bearer ${PRELUDE_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "step_keys": [],
+    "allowed_scopes": [{
+      "scope": "email:verify",
+      "mode": "direct",
+      "direct": {
+        "identifier_types": ["email_address"],
+        "status": "review",
+        "granted_for": 600,
+        "grant_mode": "session-bound",
+        "steps": [{ "order": 1, "key": "verify_email", "expiration_duration": 600 }]
+      }
+    }]
+  }'
+```
+
+The scope name appears in three places that must agree: this configuration,
+`EMAIL_VERIFY_SCOPE` in `web/src/auth/AuthProvider.tsx`, and `EmailVerifyScope`
+in `backend/internal/api/auth.go`.
+
+`grant_mode: session-bound` is deliberate. A `single-use` grant rides on exactly
+one token, and the client refreshes between completing the challenge and telling
+the API about it — which would drop the proof on the floor. Session-bound keeps
+it for `granted_for` seconds, so any token minted in that window still carries
+it.
+
+**Not** an OTP *login* configuration. `POST /v2/session/apps/{id}/config/login/otp`
+would also send codes, but it does so by enabling passwordless sign-in for every
+account: anyone able to read a mailbox could then take over the account it
+belongs to, without the password. Verification must not buy that. The step-up
+route sends the same code and grants only the one scope.
+
+The `verify_email` step needs a way to deliver mail, so an application that has
+never sent anything may need Verify provisioned or funded on the Prelude
+account. A failure shows up as a non-2xx on `POST /v1/session/otp`, after
+`POST /v1/session/stepup/request` has already answered 200.
+
+### 5. Bootstrap an admin### 5. Bootstrap an admin
 
 ```dotenv
 ADMIN_EMAILS=you@example.com
@@ -185,6 +236,17 @@ in nor register again, permanently burning that address.
 **Roles live in this database, not in the token.** Prelude supports custom
 claims, but baking a role into a JWT means a promotion does not take effect
 until the token refreshes. Here it applies on the very next request.
+
+**Email verification runs server-side, and its outcome lives here too.**
+Registration signs the user in and emails them a six-digit code; until they
+enter it, the API answers every authenticated route with 403 except `GET /me`
+and the two verification endpoints, and the app holds them on the verification
+screen. The code is sent and checked by the Go API calling the same session
+endpoints the browser SDK would (`POST /v1/session/otp`, then
+`/v1/session/otp/check`) — a browser-side check could only be reported back as
+the client's own word for it, since an access token carries no claim saying how
+its session was established. The `X-Verification-Token` those calls turn on
+never leaves the server: it is the credential the code is submitted with.
 
 ### Search
 
@@ -246,9 +308,11 @@ GET    /genres
 GET    /lists/{id}                       public lists, or your own
 POST   /auth/register
 
-GET    /me                               ┐
-PATCH  /me                               │
-GET    /lists                            │ signed in
+GET    /me                               ┐ signed in, address not yet verified
+POST   /auth/verify-email                ┘ (no body; reads the step-up grant)
+
+PATCH  /me                               ┐
+GET    /lists                            │ signed in, address verified
 POST   /lists                            │
 PATCH  /lists/{id}                       │
 DELETE /lists/{id}                       │
@@ -314,7 +378,9 @@ make e2e
 The guest-browsing specs need only a running stack with seeded data. The
 signed-in spec talks directly to `<app_id>.session.prelude.dev` from the
 browser — the SDK owns the session and never routes through our API, so it
-cannot be stubbed. It skips itself unless you provide real credentials:
+cannot be stubbed. Its account must already be **verified**, or the run stops
+on the verification screen with a code only a human inbox can supply. It skips
+itself unless you provide real credentials:
 
 ```bash
 VITE_PRELUDE_APP_ID=... E2E_USER_EMAIL=... E2E_USER_PASSWORD=... make e2e

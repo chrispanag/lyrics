@@ -58,6 +58,12 @@ export interface User {
   email: string;
   display_name: string | null;
   role: Role;
+  /**
+   * When the address was confirmed with a one-time code, or null while it has
+   * not been. The server refuses everything but reading this profile and
+   * finishing verification until it is set, so this is what the app gates on.
+   */
+  email_verified_at: string | null;
   created_at: string;
   updated_at: string;
 }

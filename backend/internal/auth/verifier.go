@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,6 +29,16 @@ type Claims struct {
 	// to the local users table — never the email, which a user can change.
 	UserID string
 	Email  string
+	// Scopes are the step-up grants on this token. Prelude adds one when a
+	// challenge completes, which is how this application learns that something
+	// was proven in the browser without having to take the browser's word for
+	// it: the claim is inside a signature only Prelude can produce.
+	Scopes []string
+}
+
+// HasScope reports whether the token carries a step-up grant.
+func (c *Claims) HasScope(scope string) bool {
+	return slices.Contains(c.Scopes, scope)
 }
 
 // emailClaimNames are checked in order. Prelude's token contents are configured
@@ -154,5 +165,26 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 		}
 	}
 
+	claims.Scopes = scopesFrom(token)
+
 	return claims, nil
+}
+
+// scopesFrom reads the step-up grants off a token.
+//
+// Both spellings are accepted because the claim is an OAuth `scope` — which is
+// conventionally one space-delimited string, and is sometimes serialized as a
+// list instead. A token with neither simply carries no grants, which is the
+// ordinary case: only a session that has just completed a challenge has any.
+func scopesFrom(token jwt.Token) []string {
+	var single string
+	if err := token.Get("scope", &single); err == nil {
+		return strings.Fields(single)
+	}
+
+	var many []string
+	if err := token.Get("scope", &many); err == nil {
+		return many
+	}
+	return nil
 }

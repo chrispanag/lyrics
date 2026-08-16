@@ -81,11 +81,25 @@ func (s *Server) Routes() http.Handler {
 			// --- Registration -------------------------------------------------
 			r.Post("/auth/register", httpx.Handler(s.handleRegister))
 
-			// --- Authenticated ------------------------------------------------
+			// --- Signed in, address not yet confirmed -------------------------
+			//
+			// Everything an unverified account may do. The list is short on
+			// purpose: it is exactly what the verification screen needs — who
+			// am I, and record the challenge I just completed — and every other
+			// authenticated route sits behind RequireVerifiedEmail below.
+			// Sending and checking the code never reaches this API: that is
+			// between the browser and Prelude.
 			r.Group(func(r chi.Router) {
 				r.Use(s.authn.Required)
 
 				r.Get("/me", httpx.Handler(s.handleGetMe))
+				r.Post("/auth/verify-email", httpx.Handler(s.handleVerifyEmail))
+			})
+
+			// --- Authenticated ------------------------------------------------
+			r.Group(func(r chi.Router) {
+				r.Use(s.authn.Required, auth.RequireVerifiedEmail)
+
 				r.Patch("/me", httpx.Handler(s.handleUpdateMe))
 
 				r.Get("/lists", httpx.Handler(s.handleListLists))
@@ -103,7 +117,7 @@ func (s *Server) Routes() http.Handler {
 
 			// --- Contributor and above ----------------------------------------
 			r.Group(func(r chi.Router) {
-				r.Use(s.authn.Required, auth.RequireRole(store.RoleContributor))
+				r.Use(s.authn.Required, auth.RequireVerifiedEmail, auth.RequireRole(store.RoleContributor))
 
 				r.Post("/songs", httpx.Handler(s.handleCreateSong))
 				// Ownership is enforced inside the handler: a contributor may
@@ -115,7 +129,7 @@ func (s *Server) Routes() http.Handler {
 
 			// --- Admin only ---------------------------------------------------
 			r.Group(func(r chi.Router) {
-				r.Use(s.authn.Required, auth.RequireRole(store.RoleAdmin))
+				r.Use(s.authn.Required, auth.RequireVerifiedEmail, auth.RequireRole(store.RoleAdmin))
 
 				r.Delete("/songs/{id}", httpx.Handler(s.handleDeleteSong))
 				r.Patch("/people/{id}", httpx.Handler(s.handleUpdatePerson))
