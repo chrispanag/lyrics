@@ -38,7 +38,7 @@ export function SongDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, loading: sessionLoading } = useAuth();
 
   const { data: song, isLoading, isError, error } = useSong(id);
   const deleteSong = useDeleteSong();
@@ -105,6 +105,10 @@ export function SongDetailPage() {
             variant="ghost"
             size="sm"
             aria-label="Save to a list"
+            // `user` is null until the session is restored, and acting on that
+            // sends someone who is already signed in to the sign-in screen and
+            // straight back — with the sheet they asked for never opening.
+            disabled={sessionLoading}
             onClick={() =>
               user
                 ? setListSheetOpen(true)

@@ -201,6 +201,13 @@ export function useReorderList(id: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // One list's saves run in series. Unscoped mutations go out in parallel, so
+    // two quick drags race at the *server* as well as in the cache — and the
+    // first request committing last leaves the database holding the order the
+    // user already moved on from, silently, because the reply is discarded and
+    // nothing refetches. A scope defers only the request: onMutate still runs
+    // immediately, so the optimistic write stays instant.
+    scope: { id: `reorder-${id}` },
     mutationFn: (songIds: string[]) =>
       apiFetch<SongList>(`/api/v1/lists/${id}/reorder`, {
         method: "POST",
@@ -213,10 +220,15 @@ export function useReorderList(id: string) {
       const previous = queryClient.getQueryData<SongList>(keys.list(id));
       if (previous?.songs) {
         const bySongId = new Map(previous.songs.map((song) => [song.id, song]));
-        queryClient.setQueryData<SongList>(keys.list(id), {
-          ...previous,
-          songs: songIds.map((songId) => bySongId.get(songId)).filter((song) => song !== undefined),
-        });
+        const reordered = songIds.flatMap((songId) => bySongId.get(songId) ?? []);
+        // Applied only when the payload is a permutation of what is cached. An
+        // id that does not resolve, or a cached song the payload leaves out,
+        // would disappear from the list on screen while the server keeps it —
+        // it pushes anything omitted to the end — and nothing rewrites the
+        // cache on success to put it back.
+        if (reordered.length === songIds.length && reordered.length === previous.songs.length) {
+          queryClient.setQueryData<SongList>(keys.list(id), { ...previous, songs: reordered });
+        }
       }
       return { previous };
     },

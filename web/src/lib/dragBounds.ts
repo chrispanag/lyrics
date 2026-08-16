@@ -9,7 +9,7 @@ import type { Modifier } from "@dnd-kit/core";
  * also all the sortable strategy reads, so the freedom was never doing anything
  * except making the drag look broken.
  *
- * `transform.y` is the distance travelled from where the row started, so the
+ * `transform.y` is the distance traveled from where the row started, so the
  * bounds are the container's edges expressed in that same relative form.
  */
 export const verticalWithinList: Modifier = ({

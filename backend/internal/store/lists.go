@@ -36,29 +36,19 @@ func (s *Store) GetList(ctx context.Context, id uuid.UUID) (*List, error) {
 	return &l, nil
 }
 
-// GetListWithSongs loads a list and its songs in curated order.
-func (s *Store) GetListWithSongs(ctx context.Context, id uuid.UUID) (*List, error) {
-	list, err := s.GetList(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	query := `
-		SELECT ` + songColumns + `
+// SongsInList loads a list's songs in curated order.
+//
+// The list row is not re-read: every caller has already loaded it to decide
+// whether it may be served at all, and listColumns counts entries with a
+// subquery, so fetching it twice costs a second scan of list_items for a row
+// that is already in hand.
+func (s *Store) SongsInList(ctx context.Context, listID uuid.UUID) ([]Song, error) {
+	return s.collectSongs(ctx, `
+		SELECT `+songColumns+`
 		FROM list_items li
 		JOIN songs s ON s.id = li.song_id
 		WHERE li.list_id = $1
-		ORDER BY li.position ASC, li.added_at ASC`
-
-	songs, err := s.collectSongs(ctx, query, []any{id}, false)
-	if err != nil {
-		return nil, err
-	}
-	if songs == nil {
-		songs = []Song{}
-	}
-	list.Songs = songs
-	return list, nil
+		ORDER BY li.position ASC, li.added_at ASC`, []any{listID}, false)
 }
 
 // CreateList adds a named list for a user.
