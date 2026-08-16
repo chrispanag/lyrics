@@ -91,15 +91,25 @@ because the caller supplies the claims. To see a real token:
 - **Song pages link credits to `/?person=<id>`.** Browse must read that param,
   or clicking an artist lands on the unfiltered catalog with no error, reading
   as "this artist is on every song".
-- **Anything whose response depends on who is asking must wait for
-  `useAuth().loading`.** The Prelude session is restored asynchronously, so a
-  query that fires on mount goes out with no token and is answered as a guest.
-  For `GET /lists/{id}` that means a private list returns **404 to its own
-  owner** on every page load — and nothing recovers, because `apiFetch` retries
-  a 401 with a fresh token and this is deliberately not a 401. `useList` takes a
-  `ready` flag for exactly this. Note also that a disabled query is not
-  `isLoading`, so the page must hold its own skeleton while waiting or it falls
-  through to "not available".
+- **The token provider is registered at import time by `auth/session`, and must
+  stay there.** React flushes child effects before parent ones, so a query
+  mounted under `AuthProvider` starts fetching before any effect of the
+  provider's has run. Registering from an effect therefore loses the race with
+  every query on the page: the request goes out with the module default, which
+  returns no token, and is answered as a guest. `GET /lists/{id}` was the
+  visible case — a private list returning **404 to its own owner** on every page
+  load, and nothing recovers, because `apiFetch` retries a 401 with a fresh
+  token and this is deliberately not a 401. `session.test.ts` pins it by
+  importing the module with no React in sight. The unauthorized *handler* stays
+  in an effect on purpose: it needs React state, and no response can 401 before
+  the first effects have flushed.
+- **`useList`'s `ready` flag is belt-and-braces now, but the skeleton beside it
+  is not.** The flag was the first fix for that 404 — gate the query until
+  `useAuth().loading` clears — and it is redundant since the provider moved to
+  import time, because the request carries a token either way. What still bites
+  is the trap next to it: a disabled query is not `isLoading`, so
+  `ListDetailPage` has to hold its own skeleton while waiting, or it falls
+  through to "not available" and tells the owner their list is gone.
 - **The list drag handle needs `touch-none`, and must be the only drag
   activator.** Both halves fail silently, and only on a phone. Without
   `touch-none` the browser keeps the gesture for scrolling and the row simply

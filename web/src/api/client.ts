@@ -43,12 +43,22 @@ type TokenProvider = (forceRefresh?: boolean) => Promise<string | null>;
 let getToken: TokenProvider = async () => null;
 let onUnauthorized: (() => void) | null = null;
 
-export function configureApi(options: {
-  tokenProvider: TokenProvider;
-  onUnauthorized?: () => void;
-}): void {
-  getToken = options.tokenProvider;
-  onUnauthorized = options.onUnauthorized ?? null;
+/**
+ * Registers where access tokens come from.
+ *
+ * `auth/session` calls this at import time, not from a React effect — see the
+ * comment there for why the difference matters. It is separate from the
+ * unauthorized handler because the two become available at different moments:
+ * the token provider is a module singleton that exists before the first render,
+ * while reacting to a dead session needs React state that does not.
+ */
+export function setTokenProvider(provider: TokenProvider): void {
+  getToken = provider;
+}
+
+/** Registers what to do when a session turns out to be dead; null unregisters. */
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
 }
 
 export interface RequestOptions {

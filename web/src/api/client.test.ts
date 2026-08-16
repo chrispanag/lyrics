@@ -1,17 +1,27 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, apiFetch, configureApi, toQuery } from "./client";
+import {
+  ApiError,
+  apiFetch,
+  setTokenProvider,
+  setUnauthorizedHandler,
+  toQuery,
+} from "./client";
 import { API } from "@/test/handlers";
 import { server } from "@/test/server";
 
 afterEach(() => {
-  configureApi({ tokenProvider: async () => null });
+  // Both, every time. The registrations are module state, so a handler left
+  // behind by one test fires during another — and since only one test asserts
+  // on it, the leak would show up as a passing suite.
+  setTokenProvider(async () => null);
+  setUnauthorizedHandler(null);
 });
 
 describe("apiFetch", () => {
   it("attaches the bearer token", async () => {
-    configureApi({ tokenProvider: async () => "token-abc" });
+    setTokenProvider(async () => "token-abc");
 
     let seen: string | null = null;
     server.use(
@@ -26,7 +36,7 @@ describe("apiFetch", () => {
   });
 
   it("omits the header for anonymous requests even when signed in", async () => {
-    configureApi({ tokenProvider: async () => "token-abc" });
+    setTokenProvider(async () => "token-abc");
 
     let seen: string | null = "unset";
     server.use(
@@ -51,7 +61,7 @@ describe("apiFetch", () => {
       .mockResolvedValueOnce("stale-token")
       .mockResolvedValueOnce("fresh-token");
 
-    configureApi({ tokenProvider });
+    setTokenProvider(tokenProvider);
 
     const seen: (string | null)[] = [];
     server.use(
@@ -78,7 +88,8 @@ describe("apiFetch", () => {
 
   it("gives up after one retry and reports the session as lost", async () => {
     const onUnauthorized = vi.fn();
-    configureApi({ tokenProvider: async () => "dead-token", onUnauthorized });
+    setTokenProvider(async () => "dead-token");
+    setUnauthorizedHandler(onUnauthorized);
 
     let calls = 0;
     server.use(
@@ -134,7 +145,7 @@ describe("apiFetch", () => {
 
   it("does not retry a 403, which a fresh token would not fix", async () => {
     let calls = 0;
-    configureApi({ tokenProvider: async () => "token" });
+    setTokenProvider(async () => "token");
     server.use(
       http.post(`${API}/api/v1/songs`, () => {
         calls += 1;
