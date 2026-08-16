@@ -9,6 +9,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
+  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
@@ -19,7 +20,6 @@ import { GripVertical } from "lucide-react";
 
 import { SongCard } from "./SongCard";
 import { verticalWithinList } from "@/lib/dragBounds";
-import { move } from "@/lib/reorder";
 import type { Song } from "@/lib/types";
 
 /**
@@ -48,12 +48,11 @@ export function SortableSongList({
   );
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over) return;
+    // Dropped outside the list, or back where it started: no order to save.
+    if (!over || active.id === over.id) return;
+
     const ids = songs.map((song) => song.id);
-    const next = move(ids, String(active.id), String(over.id));
-    // move returns the array it was given when nothing changed — a drop back
-    // where the drag started costs no request.
-    if (next !== ids) onReorder(next);
+    onReorder(arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))));
   };
 
   return (

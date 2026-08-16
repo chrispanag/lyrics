@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash2 } from "lucide-react";
 
 import { ApiError, errorMessage } from "@/api/client";
@@ -135,6 +135,7 @@ export function ListsPage() {
 export function ListDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading: sessionLoading } = useAuth();
 
   // Held until the session is known: asked for a moment too early, a private
@@ -214,8 +215,10 @@ export function ListDetailPage() {
 
   const onSave = () => {
     if (!user) {
-      // Same shape RequireAuth uses, so signing in returns to this list.
-      navigate("/login", { state: { from: `/lists/${list.id}` } });
+      // Same shape RequireAuth uses, and read from the router for the same
+      // reason it gives: the route the visitor is on is the destination, and
+      // rebuilding it from an id drifts the day the route gains a segment.
+      navigate("/login", { state: { from: location.pathname } });
       return;
     }
     void saveCopy();

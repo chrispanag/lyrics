@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Check,
   ListPlus,
@@ -37,6 +37,7 @@ const FONT_SIZE_KEY = "lyrics:font-size";
 export function SongDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   const { data: song, isLoading, isError, error } = useSong(id);
@@ -107,7 +108,7 @@ export function SongDetailPage() {
             onClick={() =>
               user
                 ? setListSheetOpen(true)
-                : navigate("/login", { state: { from: `/songs/${song.id}` } })
+                : navigate("/login", { state: { from: location.pathname } })
             }
           >
             <ListPlus aria-hidden className="size-4" />

@@ -138,6 +138,18 @@ func (h *harness) seedSong(owner *store.User, title string) string {
 	return song.ID.String()
 }
 
+// seedList creates a list over the API and returns it, so the create-assert-
+// decode preamble lives here rather than at the head of every list test.
+func (h *harness) seedList(token string, body map[string]any) store.List {
+	h.t.Helper()
+
+	resp := h.do("POST", "/api/v1/lists", token, body)
+	if resp.StatusCode != http.StatusCreated {
+		h.t.Fatalf("seed list status = %d, want 201", resp.StatusCode)
+	}
+	return decode[store.List](h.t, resp)
+}
+
 func (h *harness) user(email string, role store.Role) *store.User {
 	h.t.Helper()
 	u, err := h.store.ProvisionUser(context.Background(), "usr_"+email, email, role)
@@ -162,12 +174,8 @@ func TestRBACMatrix(t *testing.T) {
 	// Owned by a fifth user so the copy row below exercises the stranger case
 	// for every role in the matrix.
 	sharerTok := h.tokenFor("sharer@example.com", store.RoleUser)
-	sharedList := h.do("POST", "/api/v1/lists", sharerTok,
-		map[string]any{"name": "Shared Picks", "is_public": true})
-	if sharedList.StatusCode != http.StatusCreated {
-		t.Fatalf("seed shared list status = %d, want 201", sharedList.StatusCode)
-	}
-	sharedListID := decode[store.List](t, sharedList).ID.String()
+	sharedListID := h.seedList(sharerTok,
+		map[string]any{"name": "Shared Picks", "is_public": true}).ID.String()
 
 	newSong := map[string]any{"title": "New Song", "lyrics": "la la", "language": "el"}
 
@@ -380,11 +388,7 @@ func TestListVisibility(t *testing.T) {
 	ownerTok := h.tokenFor("owner@example.com", store.RoleUser)
 	strangerTok := h.tokenFor("stranger@example.com", store.RoleUser)
 
-	resp := h.do("POST", "/api/v1/lists", ownerTok, map[string]any{"name": "Private Picks"})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create list status = %d, want 201", resp.StatusCode)
-	}
-	list := decode[store.List](t, resp)
+	list := h.seedList(ownerTok, map[string]any{"name": "Private Picks"})
 	path := "/api/v1/lists/" + list.ID.String()
 
 	if resp := h.do("GET", path, ownerTok, nil); resp.StatusCode != 200 {
@@ -418,11 +422,7 @@ func TestReorderList(t *testing.T) {
 	h := newHarness(t)
 	token := h.tokenFor("curator@example.com", store.RoleUser)
 
-	resp := h.do("POST", "/api/v1/lists", token, map[string]any{"name": "In Order"})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create list status = %d, want 201", resp.StatusCode)
-	}
-	path := "/api/v1/lists/" + decode[store.List](t, resp).ID.String()
+	path := "/api/v1/lists/" + h.seedList(token, map[string]any{"name": "In Order"}).ID.String()
 
 	// Added first to last, so every assertion below is about position rather
 	// than about insertion order.
@@ -518,13 +518,9 @@ func TestCopyPublicList(t *testing.T) {
 	ownerTok := h.tokenFor("sharer@example.com", store.RoleUser)
 	stranger, strangerTok := h.userAndToken("taker@example.com", store.RoleUser)
 
-	resp := h.do("POST", "/api/v1/lists", ownerTok, map[string]any{
+	source := h.seedList(ownerTok, map[string]any{
 		"name": "Rebetika Nights", "description": "For the long evenings.", "is_public": true,
 	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create list status = %d, want 201", resp.StatusCode)
-	}
-	source := decode[store.List](t, resp)
 	path := "/api/v1/lists/" + source.ID.String()
 
 	first := h.seedSong(nil, "Πρώτο Τραγούδι")
@@ -542,26 +538,34 @@ func TestCopyPublicList(t *testing.T) {
 		t.Fatalf("reorder status = %d, want 200", resp.StatusCode)
 	}
 
-	resp = h.do("POST", path+"/copy", strangerTok, map[string]any{})
+	resp := h.do("POST", path+"/copy", strangerTok, map[string]any{})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("copy status = %d, want 201", resp.StatusCode)
 	}
 	copied := decode[store.List](t, resp)
 
-	switch {
-	case copied.ID == source.ID:
+	// Seven independent properties, each checked on its own: a switch would
+	// report the first and hide the rest, which is the opposite of what a
+	// property list is for.
+	if copied.ID == source.ID {
 		t.Error("copy reused the source's identifier")
-	case copied.OwnerID != stranger.ID:
+	}
+	if copied.OwnerID != stranger.ID {
 		t.Errorf("copy owner = %s, want %s", copied.OwnerID, stranger.ID)
-	case copied.Name != source.Name:
+	}
+	if copied.Name != source.Name {
 		t.Errorf("copy name = %q, want %q", copied.Name, source.Name)
-	case copied.Description == nil || *copied.Description != "For the long evenings.":
+	}
+	if copied.Description == nil || *copied.Description != "For the long evenings." {
 		t.Errorf("copy description = %v, want the source's", copied.Description)
-	case copied.IsPublic:
+	}
+	if copied.IsPublic {
 		t.Error("copy is public; a copy must start private")
-	case copied.IsDefault:
+	}
+	if copied.IsDefault {
 		t.Error("copy is marked default")
-	case copied.ItemCount != 2:
+	}
+	if copied.ItemCount != 2 {
 		t.Errorf("copy item_count = %d, want 2", copied.ItemCount)
 	}
 
@@ -604,11 +608,7 @@ func TestCopyPrivateListIsNotFound(t *testing.T) {
 	ownerTok := h.tokenFor("private-owner@example.com", store.RoleUser)
 	strangerTok := h.tokenFor("prober@example.com", store.RoleUser)
 
-	resp := h.do("POST", "/api/v1/lists", ownerTok, map[string]any{"name": "Private Picks"})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create list status = %d, want 201", resp.StatusCode)
-	}
-	path := "/api/v1/lists/" + decode[store.List](t, resp).ID.String() + "/copy"
+	path := "/api/v1/lists/" + h.seedList(ownerTok, map[string]any{"name": "Private Picks"}).ID.String() + "/copy"
 
 	if resp := h.do("POST", path, strangerTok, map[string]any{}); resp.StatusCode != 404 {
 		t.Errorf("stranger copy of private list = %d, want 404", resp.StatusCode)
@@ -981,16 +981,12 @@ func TestListPatchPreservesOmittedFields(t *testing.T) {
 	h := newHarness(t)
 	token := h.tokenFor("listpatcher@example.com", store.RoleUser)
 
-	resp := h.do("POST", "/api/v1/lists", token, map[string]any{
+	list := h.seedList(token, map[string]any{
 		"name": "Original Name", "description": "Original description", "is_public": true,
 	})
-	if resp.StatusCode != 201 {
-		t.Fatalf("create status = %d, want 201", resp.StatusCode)
-	}
-	list := decode[store.List](t, resp)
 	path := "/api/v1/lists/" + list.ID.String()
 
-	resp = h.do("PATCH", path, token, map[string]any{"name": "Renamed"})
+	resp := h.do("PATCH", path, token, map[string]any{"name": "Renamed"})
 	if resp.StatusCode != 200 {
 		t.Fatalf("patch status = %d, want 200", resp.StatusCode)
 	}
@@ -1016,13 +1012,9 @@ func TestWhitespaceRenameIsRejected(t *testing.T) {
 	h := newHarness(t)
 	token := h.tokenFor("blanknamer@example.com", store.RoleUser)
 
-	resp := h.do("POST", "/api/v1/lists", token, map[string]any{"name": "Keeps Its Name"})
-	if resp.StatusCode != 201 {
-		t.Fatalf("create status = %d, want 201", resp.StatusCode)
-	}
-	list := decode[store.List](t, resp)
+	list := h.seedList(token, map[string]any{"name": "Keeps Its Name"})
 
-	resp = h.do("PATCH", "/api/v1/lists/"+list.ID.String(), token, map[string]any{"name": "   "})
+	resp := h.do("PATCH", "/api/v1/lists/"+list.ID.String(), token, map[string]any{"name": "   "})
 	if resp.StatusCode != 422 {
 		t.Fatalf("patch status = %d, want 422", resp.StatusCode)
 	}

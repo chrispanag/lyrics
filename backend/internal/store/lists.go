@@ -203,6 +203,11 @@ func (s *Store) RemoveSongFromList(ctx context.Context, listID, songID uuid.UUID
 // Songs omitted from the payload keep their existing entries and are pushed
 // after the ordered ones, so a client working from a stale page cannot silently
 // drop songs it did not know about.
+//
+// The ids must be distinct. They are matched as a set, so a repeated one is
+// indistinguishable here from one naming a song the list does not hold, and
+// comes back as ErrNotFound — which is why callers reject duplicates before
+// they get this far, where the payload can still be described accurately.
 // Dragging a song calls this on every drop, so the ordered songs are written by
 // one statement rather than one round trip each: a hundred-entry list used to
 // mean a hundred sequential updates holding a transaction open.

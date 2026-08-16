@@ -89,13 +89,14 @@ export function useLists(enabled: boolean) {
 /**
  * A single list, once the caller's identity is settled.
  *
- * `ready` is not optional politeness: a private list answers 404 to anyone who
- * is not its owner, so a request that goes out before the session has been
- * restored carries no token, reads as a guest, and tells the owner their own
- * list does not exist. Nothing recovers from it either — `apiFetch` retries a
- * 401 with a fresh token, and this is deliberately not a 401.
+ * `ready` is required rather than defaulted, because the default anyone would
+ * reach for is the broken one: a private list answers 404 to whoever is not its
+ * owner, so a request issued before the session has been restored carries no
+ * token, reads as a guest, and tells an owner their own list does not exist.
+ * Nothing recovers from it either — `apiFetch` retries a 401 with a fresh
+ * token, and this is deliberately not a 401.
  */
-export function useList(id: string | undefined, ready = true) {
+export function useList(id: string | undefined, ready: boolean) {
   return useQuery({
     queryKey: keys.list(id ?? ""),
     queryFn: () => apiFetch<SongList>(`/api/v1/lists/${id}`),
