@@ -3,9 +3,9 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * End-to-end configuration.
  *
- * These specs sign in for real, which means the browser talks directly to
- * `<app_id>.session.prelude.dev` — there is no way to fake that from the app
- * side, because the SDK owns the session and never routes through our API. So
+ * These specs sign in for real, which means the browser talks directly to the
+ * Prelude session domain — there is no way to fake that from the app side,
+ * because the SDK owns the session and never routes through our API. So
  * the suite requires real Prelude credentials and skips itself without them
  * rather than failing in CI for a missing secret. See README → Running the
  * end-to-end tests.

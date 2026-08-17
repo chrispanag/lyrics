@@ -104,10 +104,11 @@ lint-backend: ## Lint the backend
 # --- frontend ----------------------------------------------------------------
 
 .PHONY: web
-# Vite only exposes variables prefixed with VITE_, so the app ID is mapped
-# across here rather than duplicated in .env under two names.
+# Vite only exposes variables prefixed with VITE_, so the app ID and the session
+# domain are mapped across here rather than duplicated in .env under two names.
 web: ## Run the web dev server
-	cd web && VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" npm run dev
+	cd web && VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" \
+		VITE_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" npm run dev
 
 .PHONY: mobile
 # Same dev server, reached from a phone on the same network — Vite prints the
@@ -119,7 +120,8 @@ web: ## Run the web dev server
 # browser withholds crypto.subtle, which the Prelude SDK needs. Browsing,
 # search and public lists do.
 mobile: ## Run the web dev server for testing from a phone on this network
-	cd web && VITE_API_BASE_URL= VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" npm run dev
+	cd web && VITE_API_BASE_URL= VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" \
+		VITE_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" npm run dev
 
 .PHONY: install
 install: ## Install frontend dependencies
@@ -134,8 +136,11 @@ lint-web: ## Typecheck and lint the frontend
 	cd web && npm run typecheck && npm run lint
 
 .PHONY: e2e
+# Playwright starts its own `npm run dev`, so the session domain has to be mapped
+# here too: without it the browser signs in against the default host while the
+# API expects the custom issuer, and every signed-in spec fails on a valid login.
 e2e: ## Run the Playwright smoke suite (needs Prelude credentials, see README)
-	cd web && npm run e2e
+	cd web && VITE_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" npm run e2e
 
 # --- deployment --------------------------------------------------------------
 
