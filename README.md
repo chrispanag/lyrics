@@ -298,6 +298,13 @@ All routes are under `/api/v1`. Errors use
 `{"error": {"code", "message", "details"}}`; collections use
 `{"data": [...], "meta": {"total", "limit", "offset"}}`.
 
+Anything returning more than one song — browse, search, and a list's songs —
+omits `lyrics`: no such view renders the body, and it outweighs the rest of a
+page several times over. A search hit carries a highlighted `snippet` instead.
+`GET /songs/{id}` and the create/update responses include it. The field is
+absent rather than empty, so a song with no lyrics recorded stays
+distinguishable from one whose body simply was not asked for.
+
 ```
 GET    /health
 GET    /songs            ?q=&artist=&composer=&lyricist=&genre_slug=&language=
