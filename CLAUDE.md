@@ -1,7 +1,11 @@
-# Lyrics
+# Songfolio
 
-Multilingual song lyrics catalog (Greek + English). Go REST API + PostgreSQL,
-React/TypeScript frontend, authentication delegated to Prelude Auth.
+Multilingual song lyrics catalog (Greek + English), shipping as
+`songfolio.live`. Go REST API + PostgreSQL, React/TypeScript frontend,
+authentication delegated to Prelude Auth. Only the product name moved: the
+repository, the Go module (`github.com/christos/lyrics/backend`), the npm
+package (`lyrics-web`) and the App Platform app all still carry the `lyrics`
+name, so a half-rename never has to be untangled.
 
 Guests browse and search. Users build lists. Contributors add songs and edit
 their own. Admins do everything.

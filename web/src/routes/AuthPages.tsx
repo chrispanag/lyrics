@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { Disc3 } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import { useAuth } from "@/auth/useAuth";
 import { Button, ErrorMessage, Field, Input, Spinner } from "@/components/ui";
+import { Wordmark } from "@/components/Wordmark";
 
 /** Shell shared by the sign-in and sign-up screens. */
 function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-5 py-10">
       <div className="mb-8 text-center">
-        <Disc3 aria-hidden className="mx-auto size-10 text-brand-600" />
-        <h1 className="mt-3 text-2xl font-bold tracking-tight">{title}</h1>
+        {/* The wordmark sits above the heading rather than in it: these screens
+            are often a visitor's first, and the heading is the step they are on
+            ("Welcome back"), not what they are signing in to. */}
+        <Wordmark size="lg" />
+        <h1 className="mt-4 text-2xl font-bold tracking-tight">{title}</h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{subtitle}</p>
       </div>
       {children}

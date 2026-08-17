@@ -18,6 +18,9 @@
   --color-brand-300: oklch(0.8 0.11 45);
   --color-brand-400: oklch(0.72 0.15 42);
   --color-brand-500: oklch(0.65 0.18 40);
+  /* Changing this one also means re-converting it by hand into
+     `web/public/favicon.svg` — a favicon renders with no access to page CSS,
+     and nothing processes that file. Nothing warns when the two drift. */
   --color-brand-600: oklch(0.57 0.17 38);
   --color-brand-700: oklch(0.48 0.14 36);
   --color-brand-800: oklch(0.4 0.11 35);
