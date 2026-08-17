@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { errorDetails, errorMessage } from "@/api/client";
+import { RESET_UNCONFIGURED_ERROR } from "@/auth/context";
 import { useAuth } from "@/auth/useAuth";
-import { Button, ErrorMessage, Field, Input, Spinner } from "@/components/ui";
+import { buttonClasses } from "@/components/buttonStyles";
+import { Button, ErrorMessage, Field, Input, Notice, Spinner } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
 
 /** Shell shared by the sign-in and sign-up screens. */
@@ -91,6 +93,12 @@ export function LoginPage() {
         </Button>
       </form>
 
+      <p className="mt-4 text-center text-sm">
+        <Link to="/forgot-password" className="text-stone-500 hover:underline dark:text-stone-400">
+          Forgot your password?
+        </Link>
+      </p>
+
       <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
         No account?{" "}
         <Link to="/register" className="font-medium text-brand-600 hover:underline">
@@ -106,8 +114,91 @@ export function LoginPage() {
   );
 }
 
+/**
+ * Prelude's verdict on a password, checked on blur.
+ *
+ * On blur rather than on every keystroke because the rules live in Prelude, so
+ * each check is a network round trip. Shared by sign-up and password reset: both
+ * ask for a new password, and a rule either screen judged by itself would be the
+ * one the server then disagrees with.
+ */
+function usePasswordHints() {
+  const { validatePassword } = useAuth();
+  const [hints, setHints] = useState<string[]>([]);
+
+  const check = async (password: string) => {
+    if (!password) return;
+    const { messages } = await validatePassword(password);
+    setHints(messages);
+  };
+
+  return { hints, check };
+}
+
+/** The rules a typed password does not yet meet, in Prelude's own words. */
+function PasswordHints({ hints }: { hints: string[] }) {
+  if (hints.length === 0) return null;
+
+  return (
+    <ul className="space-y-1 text-xs text-stone-500 dark:text-stone-400">
+      {hints.map((hint) => (
+        <li key={hint}>• {hint}</li>
+      ))}
+    </ul>
+  );
+}
+
+/** How long the resend button rests, so a stuck user cannot mail-bomb themselves. */
+const RESEND_COOLDOWN_SECONDS = 30;
+
+/**
+ * The rest between one emailed code and the next.
+ *
+ * Owned here rather than by each screen that sends codes, so the wait cannot
+ * drift between them — and because a countdown is the same job wherever it is
+ * shown.
+ */
+function useResendCooldown() {
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((seconds) => seconds - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
+  const startCooldown = useCallback(() => setCooldown(RESEND_COOLDOWN_SECONDS), []);
+
+  return { cooldown, startCooldown };
+}
+
+/** "No code yet? Send another", showing the wait while the button rests. */
+function ResendCodeLink({
+  resending,
+  cooldown,
+  onResend,
+}: {
+  resending: boolean;
+  cooldown: number;
+  onResend: () => void;
+}) {
+  return (
+    <p>
+      No code yet?{" "}
+      <button
+        type="button"
+        onClick={onResend}
+        disabled={resending || cooldown > 0}
+        className="font-medium text-brand-600 hover:underline disabled:cursor-not-allowed disabled:text-stone-400 disabled:no-underline"
+      >
+        {cooldown > 0 ? `Send another in ${cooldown}s` : "Send another"}
+      </button>
+    </p>
+  );
+}
+
 export function RegisterPage() {
-  const { user, register, validatePassword } = useAuth();
+  const { user, register } = useAuth();
   const navigate = useNavigate();
 
   const [displayName, setDisplayName] = useState("");
@@ -115,18 +206,10 @@ export function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [passwordHints, setPasswordHints] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const passwordHints = usePasswordHints();
 
   if (user) return <Navigate to="/" replace />;
-
-  // Checking on blur rather than on every keystroke: the rules live in
-  // Prelude, so each check is a network round trip.
-  const checkPassword = async () => {
-    if (!password) return;
-    const { messages } = await validatePassword(password);
-    setPasswordHints(messages);
-  };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -184,18 +267,12 @@ export function RegisterPage() {
             required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            onBlur={checkPassword}
+            onBlur={() => passwordHints.check(password)}
             aria-describedby={fieldErrors.password ? "password-error" : undefined}
           />
         </Field>
 
-        {passwordHints.length > 0 && (
-          <ul className="space-y-1 text-xs text-stone-500 dark:text-stone-400">
-            {passwordHints.map((hint) => (
-              <li key={hint}>• {hint}</li>
-            ))}
-          </ul>
-        )}
+        <PasswordHints hints={passwordHints.hints} />
 
         <Button type="submit" size="lg" className="w-full" loading={submitting}>
           Create account
@@ -225,8 +302,326 @@ const CODE_LENGTH = 6;
 function isBadCode(caught: unknown): boolean {
   return caught instanceof Error && caught.name === "BadCheckCodeError";
 }
-/** How long the resend button rests, so a stuck user cannot mail-bomb themselves. */
-const RESEND_COOLDOWN_SECONDS = 30;
+
+/**
+ * Whether a thrown value is "this build has no OTP login configuration".
+ *
+ * Matched the same way and for the same reason as a bad code: `errorMessage`
+ * carries through only our API's own messages, so without this the one failure
+ * an operator can actually fix would read as the authentication service being
+ * down.
+ */
+function isUnconfigured(caught: unknown): boolean {
+  return caught instanceof Error && caught.name === RESET_UNCONFIGURED_ERROR;
+}
+
+/** Which of the three things the reset asks for is on screen. */
+type ResetStep = "email" | "code" | "password" | "done";
+
+/**
+ * Resets a forgotten password.
+ *
+ * The emailed code is a *login*, not a token this screen checks: Prelude opens
+ * step-up challenges only on sessions that already exist, so proving the mailbox
+ * is what produces the session, and a step-up on that session is what permits
+ * the password write. The visitor is therefore signed in from the moment the
+ * code is accepted, which is the trap this page has to be read with in mind —
+ * see the note above the render.
+ */
+export function ForgotPasswordPage() {
+  const {
+    startPasswordReset,
+    resendPasswordResetCode,
+    confirmPasswordResetCode,
+    changePassword,
+    signOutOtherDevices,
+  } = useAuth();
+
+  const [step, setStep] = useState<ResetStep>("email");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [othersSignedOut, setOthersSignedOut] = useState(false);
+  const passwordHints = usePasswordHints();
+  const { cooldown, startCooldown } = useResendCooldown();
+
+  // Clears what the previous attempt said, so a second submission is not judged
+  // against the first one's error.
+  const resetFeedback = () => {
+    setError("");
+    setNotice("");
+  };
+
+  const onSubmitEmail = async (event: FormEvent) => {
+    event.preventDefault();
+    resetFeedback();
+    setSubmitting(true);
+
+    try {
+      await startPasswordReset(email.trim());
+      // On to the code form whatever the address was. Prelude answers a dispatch
+      // for an address it does not know with the same silent success, and
+      // branching on anything here — a message, a different screen, a delay —
+      // would answer the one question this flow must not: which addresses have
+      // accounts. The code simply never arrives for the others.
+      setStep("code");
+    } catch (caught) {
+      setError(
+        isUnconfigured(caught)
+          ? "Password reset is not configured for this deployment."
+          : errorMessage(caught, "We could not send a code just now. Please try again."),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const onSubmitCode = async (event: FormEvent) => {
+    event.preventDefault();
+    resetFeedback();
+    setSubmitting(true);
+
+    try {
+      await confirmPasswordResetCode(code.trim());
+      setStep("password");
+    } catch (caught) {
+      // One message for every failure, deliberately — the same choice the
+      // sign-in screen makes about credentials, and for the same reason. An
+      // address with no account gets a code form and no code, so this step is
+      // where its attempt fails; distinguishing "wrong code" from anything else
+      // here would answer whether the address is registered, having taken care
+      // not to a step earlier. Uniform by construction rather than by matching
+      // Prelude's error names, which would leak the moment one of them differed
+      // for an unknown account.
+      //
+      // The cost is that a real fault — a step-up configuration that no longer
+      // grants outright, a Prelude outage — also reads as a wrong code, so the
+      // cause goes to the console for whoever has to find it. Nothing here is
+      // recoverable by the visitor beyond asking for another code, which the
+      // screen already offers.
+      console.error("Password reset code could not be checked:", caught);
+      setError("That code is not correct, or it has expired. Ask for another and try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const onResend = async () => {
+    resetFeedback();
+    setResending(true);
+
+    try {
+      await resendPasswordResetCode();
+      startCooldown();
+      setCode("");
+      setNotice("A new code is on its way. Use the one in the most recent email.");
+    } catch (caught) {
+      setError(errorMessage(caught, "We could not send a new code. Please try again shortly."));
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const onSubmitPassword = async (event: FormEvent) => {
+    event.preventDefault();
+    resetFeedback();
+    setSubmitting(true);
+
+    try {
+      await changePassword(password);
+      setStep("done");
+    } catch (caught) {
+      setError(
+        errorMessage(caught, "That password could not be saved. Please try another."),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Offered after the change rather than as a checkbox before it: this is the
+  // point where the choice can be acted on and its outcome reported, and a
+  // failure here must not read as a password that did not save — it did.
+  const onSignOutOthers = async () => {
+    resetFeedback();
+    setSubmitting(true);
+
+    try {
+      await signOutOtherDevices();
+      setOthersSignedOut(true);
+    } catch (caught) {
+      setError(
+        errorMessage(caught, "Your password was changed, but other devices could not be signed out."),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Deliberately no redirect for a signed-in visitor, unlike the sign-in and
+  // sign-up screens. The accepted code *is* a login, so from the password step
+  // onwards this page is being used by a signed-in user: sending them home on
+  // that basis would eject them one step short of the new password, leaving the
+  // account on the old one with a session opened by an emailed code.
+
+  if (step === "email") {
+    return (
+      <AuthShell title="Reset your password" subtitle="We will email you a code to get back in">
+        <form onSubmit={onSubmitEmail} className="space-y-4" noValidate>
+          {error && <ErrorMessage>{error}</ErrorMessage>}
+
+          <Field label="Email" htmlFor="email">
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              autoCapitalize="none"
+              autoFocus
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </Field>
+
+          <Button type="submit" size="lg" className="w-full" loading={submitting}>
+            Email me a code
+          </Button>
+        </form>
+
+        <p className="mt-6 text-center text-sm">
+          <Link to="/login" className="text-stone-500 hover:underline dark:text-stone-400">
+            Back to sign in
+          </Link>
+        </p>
+      </AuthShell>
+    );
+  }
+
+  if (step === "code") {
+    return (
+      <AuthShell
+        title="Check your email"
+        subtitle={`We sent a ${CODE_LENGTH}-digit code to ${email.trim()}`}
+      >
+        <form onSubmit={onSubmitCode} className="space-y-4" noValidate>
+          {error && <ErrorMessage>{error}</ErrorMessage>}
+          {notice && <Notice>{notice}</Notice>}
+
+          <Field label="Reset code" htmlFor="code">
+            <Input
+              id="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              required
+              className="text-center text-lg tracking-[0.4em]"
+              value={code}
+              onChange={(event) =>
+                setCode(event.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))
+              }
+            />
+          </Field>
+
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full"
+            loading={submitting}
+            disabled={code.length < CODE_LENGTH}
+          >
+            Continue
+          </Button>
+        </form>
+
+        <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
+          <ResendCodeLink resending={resending} cooldown={cooldown} onResend={onResend} />
+          <p>
+            Wrong address?{" "}
+            <button
+              type="button"
+              onClick={() => {
+                resetFeedback();
+                setCode("");
+                setStep("email");
+              }}
+              className="font-medium text-stone-500 hover:underline dark:text-stone-400"
+            >
+              Start over
+            </button>
+          </p>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  if (step === "password") {
+    return (
+      <AuthShell title="Choose a new password" subtitle="This replaces the one you forgot">
+        <form onSubmit={onSubmitPassword} className="space-y-4" noValidate>
+          {error && <ErrorMessage>{error}</ErrorMessage>}
+
+          <Field label="New password" htmlFor="new-password">
+            <Input
+              id="new-password"
+              type="password"
+              autoComplete="new-password"
+              autoFocus
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              onBlur={() => passwordHints.check(password)}
+            />
+          </Field>
+
+          <PasswordHints hints={passwordHints.hints} />
+
+          <Button type="submit" size="lg" className="w-full" loading={submitting}>
+            Save new password
+          </Button>
+        </form>
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell title="Password changed" subtitle="You are signed in with your new password">
+      {error && <ErrorMessage>{error}</ErrorMessage>}
+
+      <div className="space-y-4">
+        {othersSignedOut ? (
+          <Notice>Your other devices have been signed out.</Notice>
+        ) : (
+          <>
+            <p className="text-sm text-stone-500 dark:text-stone-400">
+              If you were signed in somewhere else, you can end those sessions now.
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              className="w-full"
+              loading={submitting}
+              onClick={onSignOutOthers}
+            >
+              Sign out my other devices
+            </Button>
+          </>
+        )}
+
+        {/* A Link borrowing the button chrome, not a Button inside a Link: an
+            anchor wrapping a button is invalid and loses keyboard handling. */}
+        <Link to="/" className={buttonClasses("primary", "lg", "w-full")}>
+          Continue to Songfolio
+        </Link>
+      </div>
+    </AuthShell>
+  );
+}
 
 /**
  * Confirms a new account's email address.
@@ -247,9 +642,9 @@ export function VerifyEmailPage() {
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
   const [sending, setSending] = useState(true);
   const started = useRef(false);
+  const { cooldown, startCooldown } = useResendCooldown();
 
   // The code is sent when this screen opens, not at registration: the challenge
   // belongs to the browser's session with Prelude, so there is nobody to open
@@ -286,12 +681,6 @@ export function VerifyEmailPage() {
       cancelled = true;
     };
   }, [startEmailVerification, user]);
-
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const timer = setTimeout(() => setCooldown((seconds) => seconds - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [cooldown]);
 
   // Unlike the other two screens, this one is reached by redirect and kept in
   // the address bar, so a refresh lands here while the session is still being
@@ -335,7 +724,7 @@ export function VerifyEmailPage() {
 
     try {
       await resendVerificationCode();
-      setCooldown(RESEND_COOLDOWN_SECONDS);
+      startCooldown();
       setCode("");
       setNotice("A new code is on its way. Use the one in the most recent email.");
     } catch (caught) {
@@ -349,11 +738,7 @@ export function VerifyEmailPage() {
     <AuthShell title="Check your email" subtitle={`We sent a ${CODE_LENGTH}-digit code to ${user.email}`}>
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {error && <ErrorMessage>{error}</ErrorMessage>}
-        {notice && (
-          <p role="status" className="text-sm text-stone-600 dark:text-stone-300">
-            {notice}
-          </p>
-        )}
+        {notice && <Notice>{notice}</Notice>}
 
         <Field label="Verification code" htmlFor="code" error={fieldErrors.code}>
           <Input
@@ -387,17 +772,7 @@ export function VerifyEmailPage() {
       </form>
 
       <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
-        <p>
-          No code yet?{" "}
-          <button
-            type="button"
-            onClick={onResend}
-            disabled={resending || cooldown > 0}
-            className="font-medium text-brand-600 hover:underline disabled:cursor-not-allowed disabled:text-stone-400 disabled:no-underline"
-          >
-            {cooldown > 0 ? `Send another in ${cooldown}s` : "Send another"}
-          </button>
-        </p>
+        <ResendCodeLink resending={resending} cooldown={cooldown} onResend={onResend} />
         <p>
           Wrong address?{" "}
           <button

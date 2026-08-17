@@ -2,10 +2,10 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { VerifyEmailPage } from "./AuthPages";
+import { ForgotPasswordPage, LoginPage, VerifyEmailPage } from "./AuthPages";
 import { App } from "@/App";
 import { ApiError } from "@/api/client";
-import type { AuthContextValue } from "@/auth/context";
+import { RESET_UNCONFIGURED_ERROR, type AuthContextValue } from "@/auth/context";
 import { makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 
@@ -173,6 +173,209 @@ describe("VerifyEmailPage", () => {
   });
 });
 
+describe("ForgotPasswordPage", () => {
+  /** Walks the flow as far as the given step, so each test starts where it tests. */
+  async function reachPasswordStep(auth: Partial<AuthContextValue> = {}) {
+    const view = renderWithProviders(<ForgotPasswordPage />, {
+      route: "/forgot-password",
+      auth,
+    });
+
+    await userEvent.type(screen.getByLabelText("Email"), "forgetful@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
+
+    await userEvent.type(await screen.findByLabelText("Reset code"), "123456");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await screen.findByLabelText("New password");
+    return view;
+  }
+
+  it("emails a code to the address given", async () => {
+    const startPasswordReset = vi.fn().mockResolvedValue(undefined);
+    renderWithProviders(<ForgotPasswordPage />, {
+      route: "/forgot-password",
+      auth: { startPasswordReset },
+    });
+
+    await userEvent.type(screen.getByLabelText("Email"), "  forgetful@example.com  ");
+    await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
+
+    await waitFor(() =>
+      expect(startPasswordReset).toHaveBeenCalledWith("forgetful@example.com"),
+    );
+    expect(await screen.findByLabelText("Reset code")).toBeInTheDocument();
+  });
+
+  it("submits the emailed code, then asks for a new password", async () => {
+    const confirmPasswordResetCode = vi.fn().mockResolvedValue(undefined);
+    await reachPasswordStep({ confirmPasswordResetCode });
+
+    expect(confirmPasswordResetCode).toHaveBeenCalledWith("123456");
+  });
+
+  it("will not submit a partial code", async () => {
+    const confirmPasswordResetCode = vi.fn();
+    renderWithProviders(<ForgotPasswordPage />, {
+      route: "/forgot-password",
+      auth: { confirmPasswordResetCode },
+    });
+
+    await userEvent.type(screen.getByLabelText("Email"), "forgetful@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
+    await userEvent.type(await screen.findByLabelText("Reset code"), "123");
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(confirmPasswordResetCode).not.toHaveBeenCalled();
+  });
+
+  // An address with no account is given a code form and no code, so its attempt
+  // fails at this step — which is why every failure here has to say the same
+  // thing. A message that distinguished a wrong code from anything else would
+  // answer whether the address is registered, after the step before it took care
+  // not to. Both cases are checked against one string on purpose: that is the
+  // property, and matching Prelude's error names instead would leak the moment
+  // one of them differed for an unknown account.
+  const SAME_CODE_FAILURE =
+    "That code is not correct, or it has expired. Ask for another and try again.";
+
+  it.each([
+    ["a mistyped digit", (() => {
+      const badCode = new Error("Bad check code");
+      badCode.name = "BadCheckCodeError";
+      return badCode;
+    })()],
+    ["an address with no account", new ApiError(404, "not_found", "No such user.")],
+    ["a step-up that stopped granting outright", new Error('Prelude answered with "review".')],
+  ])("reports %s the same way", async (_case, failure) => {
+    const confirmPasswordResetCode = vi.fn().mockRejectedValue(failure);
+    // The page logs the real cause for whoever has to find it; the assertion is
+    // that the *visitor* cannot tell these three apart.
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    renderWithProviders(<ForgotPasswordPage />, {
+      route: "/forgot-password",
+      auth: { confirmPasswordResetCode },
+    });
+
+    await userEvent.type(screen.getByLabelText("Email"), "nobody@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
+    await userEvent.type(await screen.findByLabelText("Reset code"), "000000");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText(SAME_CODE_FAILURE)).toBeInTheDocument();
+    expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it("saves the new password", async () => {
+    const changePassword = vi.fn().mockResolvedValue(undefined);
+    await reachPasswordStep({ changePassword });
+
+    await userEvent.type(screen.getByLabelText("New password"), "a-better-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
+
+    await waitFor(() => expect(changePassword).toHaveBeenCalledWith("a-better-secret"));
+    expect(await screen.findByText("Password changed")).toBeInTheDocument();
+  });
+
+  it("keeps a rejected password on the password form", async () => {
+    const changePassword = vi
+      .fn()
+      .mockRejectedValue(new ApiError(400, "invalid_password", "Use at least 8 characters."));
+    await reachPasswordStep({ changePassword });
+
+    await userEvent.type(screen.getByLabelText("New password"), "short");
+    await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
+
+    expect(await screen.findByText("Use at least 8 characters.")).toBeInTheDocument();
+    expect(screen.getByLabelText("New password")).toBeInTheDocument();
+  });
+
+  // The reset ends by asking, rather than deciding for them, what should happen
+  // to sessions opened before the password changed.
+  it("signs out other devices when asked to", async () => {
+    const signOutOtherDevices = vi.fn().mockResolvedValue(undefined);
+    await reachPasswordStep({ signOutOtherDevices });
+
+    await userEvent.type(screen.getByLabelText("New password"), "a-better-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Sign out my other devices" }),
+    );
+
+    await waitFor(() => expect(signOutOtherDevices).toHaveBeenCalled());
+    expect(await screen.findByRole("status")).toHaveTextContent(/other devices have been signed out/i);
+  });
+
+  // The password is already saved by the time this button exists, so a failure
+  // here must not read as a reset that did not happen.
+  it("does not report a failed sign-out as a failed reset", async () => {
+    const signOutOtherDevices = vi.fn().mockRejectedValue(new Error("revoke failed"));
+    await reachPasswordStep({ signOutOtherDevices });
+
+    await userEvent.type(screen.getByLabelText("New password"), "a-better-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Sign out my other devices" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Your password was changed, but other devices could not be signed out.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Password changed")).toBeInTheDocument();
+  });
+
+  it("can ask for another code, then rests", async () => {
+    const resendPasswordResetCode = vi.fn().mockResolvedValue(undefined);
+    renderWithProviders(<ForgotPasswordPage />, {
+      route: "/forgot-password",
+      auth: { resendPasswordResetCode },
+    });
+
+    await userEvent.type(screen.getByLabelText("Email"), "forgetful@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Send another" }));
+
+    await waitFor(() => expect(resendPasswordResetCode).toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: /Send another in \d+s/ })).toBeDisabled();
+  });
+
+  // The one failure an operator can fix, and the only one that would otherwise
+  // read as Prelude being down: a build that shipped without the login
+  // configuration to send a code through.
+  it("names an unconfigured deployment", async () => {
+    const unconfigured = new Error("VITE_PRELUDE_OTP_LOGIN_CONFIG_ID is empty.");
+    unconfigured.name = RESET_UNCONFIGURED_ERROR;
+    const startPasswordReset = vi.fn().mockRejectedValue(unconfigured);
+
+    renderWithProviders(<ForgotPasswordPage />, {
+      route: "/forgot-password",
+      auth: { startPasswordReset },
+    });
+
+    await userEvent.type(screen.getByLabelText("Email"), "forgetful@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
+
+    expect(
+      await screen.findByText("Password reset is not configured for this deployment."),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Reset code")).not.toBeInTheDocument();
+  });
+
+  it("offers the way in from the sign-in screen", () => {
+    renderWithProviders(<LoginPage />, { route: "/login" });
+
+    expect(screen.getByRole("link", { name: "Forgot your password?" })).toHaveAttribute(
+      "href",
+      "/forgot-password",
+    );
+  });
+});
+
 describe("verification gate", () => {
   // Every page an unverified account can reach answers 403, so without the gate
   // the app renders a catalog of empty shelves and blames the network.
@@ -186,5 +389,25 @@ describe("verification gate", () => {
     renderWithProviders(<App />, { user: makeUser(), route: "/" });
 
     expect(await screen.findByRole("searchbox")).toBeInTheDocument();
+  });
+
+  // Password reset signs the visitor in on its way to the password form, so the
+  // gate sees an unverified account sitting on a page that is not the
+  // verification screen. Bounced from there, the reset ends one step short of
+  // the new password — on a code form for a different challenge, which reads as
+  // the reset code having silently stopped working.
+  it("leaves an unverified account on the reset screen", async () => {
+    renderWithProviders(<App />, { user: unverified, route: "/forgot-password" });
+
+    expect(await screen.findByText("Reset your password")).toBeInTheDocument();
+  });
+
+  // The same flow seen from the other side: this page is reached by a signed-out
+  // visitor and finished by a signed-in one, so it must not send a signed-in
+  // visitor home the way the sign-in and sign-up screens do.
+  it("does not send a signed-in visitor away from the reset screen", async () => {
+    renderWithProviders(<App />, { user: makeUser(), route: "/forgot-password" });
+
+    expect(await screen.findByText("Reset your password")).toBeInTheDocument();
   });
 });

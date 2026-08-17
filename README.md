@@ -243,12 +243,89 @@ account: anyone able to read a mailbox could then take over the account it
 belongs to, without the password. Verification must not buy that. The step-up
 route sends the same code and grants only the one scope.
 
+Password reset is the one flow that does need such a configuration, because it
+has to mail a visitor who cannot sign in at all — see step 6. Verification still
+does not use it, and the two must not be merged: this one grants a scope to a
+session that already exists, that one produces the session.
+
 The `verify_email` step needs a way to deliver mail, so an application that has
 never sent anything may need Verify provisioned or funded on the Prelude
 account. A failure shows up as a non-2xx on `POST /v1/session/otp`, after
 `POST /v1/session/stepup/request` has already answered 200.
 
-### 6. Bootstrap an admin
+### 6. Enable password reset — required for "Forgot your password?"
+
+Prelude opens step-up challenges only on sessions that already exist, and somebody
+who has forgotten their password has none. The reset therefore mails a code
+through an **OTP login configuration**, signs the visitor in with it, and only
+then steps up for `prld:pwd:write` — Prelude's own scope for writing a password,
+which it consumes as the password is written.
+
+```bash
+curl -X POST "https://api.prelude.dev/v2/session/apps/${APP_ID}/config/login/otp" \
+  -H "Authorization: Bearer ${PRELUDE_API_KEY}" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "config_type": "otp",
+    "channel_type": "email",
+    "is_default": false,
+    "code_size": 6
+  }'
+```
+
+`is_default: false` is deliberate: it keeps an emailed code from being offered as
+an ordinary way to sign in. The reset names this configuration explicitly, so put
+the `lcfg_...` the call returns in `.env` —
+
+```dotenv
+PRELUDE_OTP_LOGIN_CONFIG_ID=lcfg_...
+```
+
+— which `make web` and `scripts/deploy-do.sh` map to
+`VITE_PRELUDE_OTP_LOGIN_CONFIG_ID`. The deploy refuses to run without it; a dev
+server started without it shows "Password reset is not configured for this
+deployment." on the first screen rather than failing as though Prelude were down.
+
+Then add `prld:pwd:write` to the step-up configuration from step 5. **`PUT`, not
+`POST`** — the create call answers `409 step_up_config_already_exists`, and the
+body replaces the whole configuration, so it has to carry the `email:verify`
+entry as well or sign-up verification stops working:
+
+```bash
+curl -X PUT "https://api.prelude.dev/v2/session/apps/${APP_ID}/config/stepup" \
+  -H "Authorization: Bearer ${PRELUDE_API_KEY}" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "jwks_url": "",
+    "step_keys": [],
+    "allowed_scopes": [
+      { "scope": "email:verify", "...": "exactly as in step 5" },
+      {
+        "scope": "prld:pwd:write",
+        "mode": "direct",
+        "direct": {
+          "identifier_types": ["email_address"],
+          "status": "continue",
+          "grant_mode": "session-bound",
+          "granted_for": 300
+        }
+      }
+    ]
+  }'
+```
+
+`status: continue` grants the scope without a challenge, which is what keeps the
+reset to a single code: the code just entered is the same proof a `review` here
+would ask for a second time, from the same mailbox. The cost is that any live
+session can then acquire the scope, so a *signed-in* "change password" screen
+must not be built on this entry alone — it would let a stolen session change the
+password with nothing re-proven. Give that flow `review` + `verify_email` (its own
+scope entry, or this one flipped and the reset paying for two codes).
+
+Reset does not touch this API: the code and the new password both go from the
+browser to Prelude, and the backend only ever answers `GET /me`.
+
+### 7. Bootstrap an admin
 
 ```dotenv
 ADMIN_EMAILS=you@example.com

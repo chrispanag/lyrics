@@ -4,7 +4,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { Layout } from "@/components/Layout";
 import { EmptyState, Spinner } from "@/components/ui";
-import { LoginPage, RegisterPage, VerifyEmailPage } from "@/routes/AuthPages";
+import { ForgotPasswordPage, LoginPage, RegisterPage, VerifyEmailPage } from "@/routes/AuthPages";
 import { BrowsePage } from "@/routes/BrowsePage";
 import { ListDetailPage, ListsPage } from "@/routes/ListsPages";
 import { ProfilePage } from "@/routes/ProfilePage";
@@ -41,6 +41,17 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * The screens an unverified account is left on rather than redirected away from.
+ *
+ * The verification screen is the obvious one. Password reset is here because its
+ * emailed code is a login: from the moment the code is accepted the visitor is a
+ * signed-in user, and an unverified account would be bounced out of the flow one
+ * step short of the new password — landing on a code form for a different
+ * challenge, which is indistinguishable from the reset code not working.
+ */
+const UNVERIFIED_ROUTES = new Set(["/verify-email", "/forgot-password"]);
+
+/**
  * Holds an unverified account on the verification screen.
  *
  * The server refuses everything else it asks for, so any other page would
@@ -54,7 +65,7 @@ function VerificationGate({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const routerLocation = useLocation();
 
-  if (user && !user.email_verified_at && routerLocation.pathname !== "/verify-email") {
+  if (user && !user.email_verified_at && !UNVERIFIED_ROUTES.has(routerLocation.pathname)) {
     return <Navigate to="/verify-email" replace />;
   }
   return <>{children}</>;
@@ -68,6 +79,7 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
         <Route element={<Layout />}>
           <Route index element={<BrowsePage />} />

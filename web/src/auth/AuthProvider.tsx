@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch, setUnauthorizedHandler } from "@/api/client";
-import { AuthContext, type AuthContextValue } from "./context";
-import { getAccessToken, sessionClient } from "./session";
+import { AuthContext, RESET_UNCONFIGURED_ERROR, type AuthContextValue } from "./context";
+import { OTP_LOGIN_CONFIG_ID, getAccessToken, sessionClient } from "./session";
 import type { User } from "@/lib/types";
 
 /**
@@ -14,6 +14,16 @@ import type { User } from "@/lib/types";
  * and only the two ends of the request can be kept in step from here.
  */
 const EMAIL_VERIFY_SCOPE = "email:verify";
+
+/**
+ * The step-up scope that permits writing a new password.
+ *
+ * Prelude's own reserved scope rather than one of ours, so unlike
+ * EMAIL_VERIFY_SCOPE it is not named in three places: no configuration invents
+ * it and our API never reads it. Prelude grants it, and consumes it as the
+ * password is written, so it cannot be spent twice.
+ */
+const PASSWORD_WRITE_SCOPE = "prld:pwd:write";
 
 /**
  * Turns a failed compliancy check into a sentence.
@@ -118,18 +128,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [loadProfile]);
 
+  // Everything that has to happen once Prelude has minted a session, whichever
+  // credential opened it. Password reset shares this: its emailed code is a
+  // login, and a flow that skipped any of these steps would leave the app half
+  // signed in — a token for the new user, a profile and a query cache still
+  // belonging to whoever was here before.
+  const completeSignIn = useCallback(async () => {
+    // The cache still holds the signed-out state until it is dropped.
+    await sessionClient.invalidateCache();
+
+    const profile = await loadProfile();
+    setUser(profile);
+    // Cached responses were fetched as a guest and may now differ.
+    await queryClient.invalidateQueries();
+  }, [loadProfile, queryClient]);
+
   const login = useCallback(
     async (email: string, password: string) => {
       await sessionClient.loginWithPassword({ identifier: email, password });
-      // The cache still holds the signed-out state until it is dropped.
-      await sessionClient.invalidateCache();
-
-      const profile = await loadProfile();
-      setUser(profile);
-      // Cached responses were fetched as a guest and may now differ.
-      await queryClient.invalidateQueries();
+      await completeSignIn();
     },
-    [loadProfile, queryClient],
+    [completeSignIn],
   );
 
   const register = useCallback(
@@ -234,6 +253,73 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [recordVerification],
   );
 
+  // Prelude has no anonymous step-up: a challenge is opened on a session, and
+  // somebody who has forgotten their password has none. The emailed code is
+  // therefore a *login* — the one channel that will mail a signed-out visitor
+  // anything — and the password write is authorized by a step-up on the session
+  // it produces. See CLAUDE.md, "Password reset", for what that costs.
+  const startPasswordReset = useCallback(async (email: string) => {
+    if (!OTP_LOGIN_CONFIG_ID) {
+      // Named so the screen can say *this* rather than "we could not send a
+      // code": errorMessage only surfaces our API's own messages, so an
+      // unnamed Error here would render as a Prelude outage and send whoever
+      // reads it looking for one. A build that lost the variable is the real
+      // cause, and the deploy script refuses to ship without it.
+      const unconfigured = new Error(
+        "Password reset is unconfigured: VITE_PRELUDE_OTP_LOGIN_CONFIG_ID is empty.",
+      );
+      unconfigured.name = RESET_UNCONFIGURED_ERROR;
+      throw unconfigured;
+    }
+    await sessionClient.startOTP({
+      identifier: { type: "email_address", value: email },
+      loginConfigId: OTP_LOGIN_CONFIG_ID,
+    });
+  }, []);
+
+  const resendPasswordResetCode = useCallback(async () => {
+    await sessionClient.retryOTP();
+  }, []);
+
+  const confirmPasswordResetCode = useCallback(
+    async (code: string) => {
+      // Prelude checks the code and finalizes a session from it; a wrong one
+      // throws here as a typed SDK error and never reaches our API.
+      await sessionClient.checkOTP({ code });
+      await completeSignIn();
+
+      const { status } = await sessionClient.requestStepUp({ scope: PASSWORD_WRITE_SCOPE });
+      if (status !== "continue") {
+        // The scope is configured to be granted outright, because the code just
+        // entered is the same proof a challenge here would ask for a second
+        // time. Anything else means the step-up configuration was changed, and
+        // saying so beats stranding the visitor at a password form that cannot
+        // save.
+        throw new Error(`Prelude answered the password step-up with "${status}".`);
+      }
+
+      // A granted-outright scope arrives with no challenge to complete, so
+      // nothing has refreshed the session — and the cached access token can
+      // still predate the grant. canChangePassword is that forced refresh, and
+      // it reads the scope off the new token, so a token that somehow lacks it
+      // fails here rather than as an opaque rejection of the password itself.
+      if (!(await sessionClient.canChangePassword())) {
+        throw new Error("The session did not receive permission to change the password.");
+      }
+    },
+    [completeSignIn],
+  );
+
+  const changePassword = useCallback(async (password: string) => {
+    await sessionClient.changePassword(password);
+    // Nothing local to reload: the password lives in Prelude, and our own record
+    // of this account is untouched by it.
+  }, []);
+
+  const signOutOtherDevices = useCallback(async () => {
+    await sessionClient.revokeSessions("others");
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await sessionClient.logout();
@@ -274,6 +360,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       startEmailVerification,
       verifyEmail,
       resendVerificationCode,
+      startPasswordReset,
+      resendPasswordResetCode,
+      confirmPasswordResetCode,
+      changePassword,
+      signOutOtherDevices,
     }),
     [
       user,
@@ -286,6 +377,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       startEmailVerification,
       verifyEmail,
       resendVerificationCode,
+      startPasswordReset,
+      resendPasswordResetCode,
+      confirmPasswordResetCode,
+      changePassword,
+      signOutOtherDevices,
     ],
   );
 

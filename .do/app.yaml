@@ -147,6 +147,13 @@ static_sites:
       - key: VITE_PRELUDE_SESSION_DOMAIN
         scope: BUILD_TIME
         value: SET_BY_DEPLOY_SCRIPT
+      # Which login configuration password reset mails its code through. Also an
+      # identifier rather than a secret, and required rather than optional: the
+      # deploy fails without it, because a build that silently lacks it ships a
+      # reset screen that can only apologize.
+      - key: VITE_PRELUDE_OTP_LOGIN_CONFIG_ID
+        scope: BUILD_TIME
+        value: SET_BY_DEPLOY_SCRIPT
 
 # Longest prefix wins, so /api reaches the service and everything else the
 # assets. preserve_path_prefix is load-bearing: the router mounts at /api/v1,

@@ -226,6 +226,20 @@ export function EmptyState({
   );
 }
 
+/**
+ * A short confirmation — the positive counterpart to ErrorMessage.
+ *
+ * `role="status"` rather than `role="alert"`: worth announcing when the reader
+ * reaches it, not worth interrupting them for.
+ */
+export function Notice({ children }: { children: ReactNode }) {
+  return (
+    <p role="status" className="text-sm text-stone-600 dark:text-stone-300">
+      {children}
+    </p>
+  );
+}
+
 export function ErrorMessage({ children }: { children: ReactNode }) {
   return (
     <div
