@@ -1,10 +1,11 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Disc3, ListMusic, Search, Shield, User as UserIcon } from "lucide-react";
+import { ListMusic, Search, Shield, User as UserIcon } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 
 import { useAuth } from "@/auth/useAuth";
 import { buttonClasses } from "@/components/buttonStyles";
 import { Spinner } from "@/components/ui";
+import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { hasRole } from "@/lib/types";
 
@@ -70,9 +71,8 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
 
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-stone-200 bg-white px-4 py-6 md:flex dark:border-stone-800 dark:bg-stone-900">
-      <NavLink to="/" className="mb-8 flex items-center gap-2 px-2">
-        <Disc3 aria-hidden className="size-7 text-brand-600" />
-        <span className="text-xl font-semibold tracking-tight">Songfolio</span>
+      <NavLink to="/" className="mb-8 flex px-2">
+        <Wordmark />
       </NavLink>
 
       <nav className="flex flex-col gap-1">
