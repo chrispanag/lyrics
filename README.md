@@ -28,7 +28,8 @@ make install && make web  # run the web app on :5173
 ```
 
 Vite only exposes variables prefixed with `VITE_`, so `make web` maps
-`PRELUDE_APP_ID` across for you — there is no second copy to keep in sync.
+`PRELUDE_APP_ID` and `PRELUDE_SESSION_DOMAIN` across for you — there is no second
+copy to keep in sync.
 
 `make help` lists every target.
 
@@ -59,7 +60,7 @@ whole backend test suite all work without them.
 ## Prelude setup
 
 Prelude owns credentials and sessions; this application owns authorization.
-Three things must be configured before the API will run.
+Everything below must be configured before the API will run.
 
 ### 1. Create the application and get the keys
 
@@ -71,7 +72,8 @@ PRELUDE_APP_ID=your-app-id
 PRELUDE_API_KEY=sk_live_...
 ```
 
-The app ID determines both the JWKS URL
+The app ID names the application to the Management API, and — until a custom
+domain is registered in the next step — determines both the JWKS URL
 (`https://<app_id>.session.prelude.dev/.well-known/jwks.json`) and the expected
 token issuer, so it must match exactly. The API fetches the key set at startup,
 which means a wrong value fails immediately rather than at the first login.
@@ -79,7 +81,57 @@ which means a wrong value fails immediately rather than at the first login.
 **The API key is server-side only.** It can create and delete users; it must
 never reach a browser.
 
-### 2. Enable password login
+### 2. Add a custom session domain — required in production
+
+Prelude Auth authenticates with cookies, and by default it serves them from
+`<app_id>.session.prelude.dev` — a third party to this site, which every modern
+browser is entitled to block. A subdomain of the site itself is first-party, so
+the cookies survive. Register it on the application:
+
+```bash
+curl -X POST "https://api.prelude.dev/v2/session/apps/${PRELUDE_APP_ID}/domains" \
+  -H "Authorization: Bearer ${PRELUDE_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"domain":"auth.songfolio.live"}'
+```
+
+The response carries the domain's `id` (`dom_…`) and the `cname_record` to point
+at. Add that CNAME at the DNS provider — **unproxied**: behind Cloudflare's proxy
+the record's target is hidden and TLS is terminated there, so Prelude can neither
+validate the record nor issue a certificate. Then ask it to check:
+
+```bash
+curl -X POST "https://api.prelude.dev/v2/session/apps/${PRELUDE_APP_ID}/domains/${DOMAIN_ID}/validate" \
+  -H "Authorization: Bearer ${PRELUDE_API_KEY}"
+```
+
+`status: active` means the certificate is issued and the host is serving;
+`GET .../domains/${DOMAIN_ID}` re-reads it. Both stacks then have to agree on
+that host, which is what the one setting is for:
+
+```dotenv
+PRELUDE_SESSION_DOMAIN=auth.songfolio.live
+```
+
+The API derives the JWKS URL and the expected `iss` from it; the frontend build
+derives the SDK's domain from the same value. That sharing is load-bearing,
+because **Prelude's issuer is per-host** — the custom domain's
+`/.well-known/oauth-authorization-server` advertises the custom domain, and the
+default host advertises the default. Point the two halves at different hosts and
+every token is rejected as *"Access token is invalid or has expired"*. Leaving
+the setting blank puts both back on the default host, which is how local
+development runs: `localhost` cannot be a subdomain of the deployed site anyway.
+
+Both hosts serve the same key set, so switching invalidates nothing signed
+earlier. It does sign everyone out — the refresh cookie is `__Host-`-prefixed and
+therefore host-scoped, so the browser will not send the old host's copy to the
+new one.
+
+If sign-in fails after the switch with that same message, the issuer did not
+follow the host after all: set `PRELUDE_ISSUER=<app_id>.session.prelude.dev`,
+which is a RUN_TIME value and so one env flip rather than a rebuild.
+
+### 3. Enable password login
 
 Every field is required — the API rejects a partial body.
 
@@ -108,7 +160,7 @@ codebase: a second copy would drift and start rejecting passwords Prelude would
 accept. The sign-up form asks Prelude to validate as you type, and surfaces its
 messages verbatim.
 
-### 3. Add the `email` custom claim — required
+### 4. Add the `email` custom claim — required
 
 ```bash
 curl -X POST "https://api.prelude.dev/v2/session/apps/${PRELUDE_APP_ID}/config/claims" \
@@ -145,7 +197,7 @@ tokens carry no email unless you map one. The API needs it for two things:
 Without the claim, existing users still work, but a first-time sign-in fails
 with `Account cannot be provisioned`.
 
-### 4. Enable email verification — required for sign-up
+### 5. Enable email verification — required for sign-up
 
 New accounts must confirm their address before the API will do anything for
 them. Prelude proves the address with a **step-up challenge**: it emails a
@@ -196,7 +248,7 @@ never sent anything may need Verify provisioned or funded on the Prelude
 account. A failure shows up as a non-2xx on `POST /v1/session/otp`, after
 `POST /v1/session/stepup/request` has already answered 200.
 
-### 5. Bootstrap an admin### 5. Bootstrap an admin
+### 6. Bootstrap an admin
 
 ```dotenv
 ADMIN_EMAILS=you@example.com
@@ -219,8 +271,8 @@ UPDATE users SET role = 'admin' WHERE email = 'you@example.com';
 ## Architecture
 
 ```
-Browser ──── loginWithPassword / refresh ────► <app_id>.session.prelude.dev
-   │                                                    (Prelude)
+Browser ──── loginWithPassword / refresh ────► auth.songfolio.live
+   │                                            (Prelude, custom domain)
    │  Authorization: Bearer <access token>
    ▼
  Go API ──── verify JWT against JWKS ───────► same domain
@@ -385,8 +437,8 @@ make e2e
 ```
 
 The guest-browsing specs need only a running stack with seeded data. The
-signed-in spec talks directly to `<app_id>.session.prelude.dev` from the
-browser — the SDK owns the session and never routes through our API, so it
+signed-in spec talks directly to the session domain from the browser — the SDK
+owns the session and never routes through our API, so it
 cannot be stubbed. Its account must already be **verified**, or the run stops
 on the verification screen with a code only a human inbox can supply. It skips
 itself unless you provide real credentials:

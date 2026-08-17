@@ -93,6 +93,13 @@ services:
       - key: PRELUDE_APP_ID
         scope: RUN_TIME
         value: SET_BY_DEPLOY_SCRIPT
+      # The host the browser authenticates against, and therefore the issuer this
+      # service expects. It must match the static site's build-time copy below —
+      # Prelude's issuer is per-host, so two different hosts means every token is
+      # rejected. Both are filled from the one PRELUDE_SESSION_DOMAIN in .env.
+      - key: PRELUDE_SESSION_DOMAIN
+        scope: RUN_TIME
+        value: SET_BY_DEPLOY_SCRIPT
       - key: PRELUDE_API_KEY
         scope: RUN_TIME
         type: SECRET
@@ -132,6 +139,12 @@ static_sites:
         scope: BUILD_TIME
         value: SET_BY_DEPLOY_SCRIPT
       - key: VITE_PRELUDE_SDK_KEY
+        scope: BUILD_TIME
+        value: SET_BY_DEPLOY_SCRIPT
+      # Same value as the API's PRELUDE_SESSION_DOMAIN, and BUILD_TIME because
+      # Vite inlines it: leave it out and the bundle keeps calling the default
+      # `<app_id>.session.prelude.dev` host, whose cookies are third-party.
+      - key: VITE_PRELUDE_SESSION_DOMAIN
         scope: BUILD_TIME
         value: SET_BY_DEPLOY_SCRIPT
 

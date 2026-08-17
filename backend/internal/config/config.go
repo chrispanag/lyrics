@@ -22,10 +22,17 @@ type Config struct {
 	PreludeAppID   string
 	PreludeAPIKey  string
 	PreludeAPIBase string
-	// PreludeJWKSURL and PreludeIssuer override the values derived from the app
-	// ID. Both are empty in normal operation; tests and offline development
-	// point them at a locally served key set, which is the only way to exercise
-	// the auth path without live Prelude credentials.
+	// PreludeSessionDomain is the host serving this application's Prelude session
+	// endpoints — a custom domain such as `auth.songfolio.live`, rather than the
+	// `<app_id>.session.prelude.dev` default. Both the JWKS URL and the expected
+	// issuer derive from it, deliberately from one value: Prelude's issuer is
+	// per-host, so a token obtained through the custom domain names that host in
+	// `iss`, and a verifier still expecting the default rejects every login.
+	PreludeSessionDomain string
+	// PreludeJWKSURL and PreludeIssuer override the values derived above. Both
+	// are empty in normal operation; tests and offline development point them at
+	// a locally served key set, which is the only way to exercise the auth path
+	// without live Prelude credentials.
 	PreludeJWKSURL  string
 	PreludeIssuer   string
 	AdminEmails     []string
@@ -34,12 +41,21 @@ type Config struct {
 	ShutdownTimeout time.Duration
 }
 
+// sessionHost is the host the browser authenticates against: the configured
+// custom domain, or the per-application default derived from the app ID.
+func (c Config) sessionHost() string {
+	if c.PreludeSessionDomain != "" {
+		return c.PreludeSessionDomain
+	}
+	return c.PreludeAppID + ".session.prelude.dev"
+}
+
 // JWKSURL is the endpoint serving the public keys that sign Prelude access tokens.
 func (c Config) JWKSURL() string {
 	if c.PreludeJWKSURL != "" {
 		return c.PreludeJWKSURL
 	}
-	return fmt.Sprintf("https://%s.session.prelude.dev/.well-known/jwks.json", c.PreludeAppID)
+	return fmt.Sprintf("https://%s/.well-known/jwks.json", c.sessionHost())
 }
 
 // Issuer is the expected `iss` claim on every Prelude access token.
@@ -47,7 +63,7 @@ func (c Config) Issuer() string {
 	if c.PreludeIssuer != "" {
 		return c.PreludeIssuer
 	}
-	return fmt.Sprintf("https://%s.session.prelude.dev", c.PreludeAppID)
+	return "https://" + c.sessionHost()
 }
 
 // IsBootstrapAdmin reports whether an email is listed in ADMIN_EMAILS. Comparison
@@ -68,17 +84,18 @@ func Load() (Config, error) {
 	var problems []string
 
 	cfg := Config{
-		Port:            envInt("PORT", 8080, &problems),
-		DatabaseURL:     os.Getenv("DATABASE_URL"),
-		PreludeAppID:    os.Getenv("PRELUDE_APP_ID"),
-		PreludeAPIKey:   os.Getenv("PRELUDE_API_KEY"),
-		PreludeAPIBase:  envString("PRELUDE_API_BASE", "https://api.prelude.dev"),
-		PreludeJWKSURL:  strings.TrimSpace(os.Getenv("PRELUDE_JWKS_URL")),
-		PreludeIssuer:   strings.TrimSpace(os.Getenv("PRELUDE_ISSUER")),
-		AdminEmails:     envCSVLower("ADMIN_EMAILS"),
-		CORSOrigins:     envCSV("CORS_ORIGINS"),
-		LogLevel:        envLevel("LOG_LEVEL", slog.LevelInfo, &problems),
-		ShutdownTimeout: 15 * time.Second,
+		Port:                 envInt("PORT", 8080, &problems),
+		DatabaseURL:          os.Getenv("DATABASE_URL"),
+		PreludeAppID:         os.Getenv("PRELUDE_APP_ID"),
+		PreludeAPIKey:        os.Getenv("PRELUDE_API_KEY"),
+		PreludeAPIBase:       envString("PRELUDE_API_BASE", "https://api.prelude.dev"),
+		PreludeSessionDomain: strings.TrimSpace(os.Getenv("PRELUDE_SESSION_DOMAIN")),
+		PreludeJWKSURL:       strings.TrimSpace(os.Getenv("PRELUDE_JWKS_URL")),
+		PreludeIssuer:        strings.TrimSpace(os.Getenv("PRELUDE_ISSUER")),
+		AdminEmails:          envCSVLower("ADMIN_EMAILS"),
+		CORSOrigins:          envCSV("CORS_ORIGINS"),
+		LogLevel:             envLevel("LOG_LEVEL", slog.LevelInfo, &problems),
+		ShutdownTimeout:      15 * time.Second,
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -89,6 +106,13 @@ func Load() (Config, error) {
 	}
 	if cfg.PreludeAPIKey == "" {
 		problems = append(problems, "PRELUDE_API_KEY is required (used to create users via the Management API)")
+	}
+	// A bare host, because both derived values add their own scheme and path. A
+	// scheme here would otherwise reach the verifier as `https://https://...`.
+	if strings.ContainsAny(cfg.PreludeSessionDomain, ":/") {
+		problems = append(problems, fmt.Sprintf(
+			"PRELUDE_SESSION_DOMAIN must be a bare host such as auth.songfolio.live, got %q",
+			cfg.PreludeSessionDomain))
 	}
 	if len(cfg.CORSOrigins) == 0 {
 		cfg.CORSOrigins = []string{"http://localhost:5173"}

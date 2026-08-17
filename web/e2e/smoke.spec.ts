@@ -6,9 +6,9 @@ import { expect, test } from "@playwright/test";
  * Split in two deliberately. The browsing half needs nothing but a running
  * stack, so it guards the guest experience on every run. The signed-in half
  * needs a real Prelude application, because `loginWithPassword` goes straight
- * from the browser to `<app_id>.session.prelude.dev` and cannot be stubbed
- * from the app side. Rather than fail CI over a missing secret, that half
- * skips itself and says why.
+ * from the browser to the session domain and cannot be stubbed from the app
+ * side. Rather than fail CI over a missing secret, that half skips itself and
+ * says why.
  */
 
 const hasPreludeCredentials = Boolean(

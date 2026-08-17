@@ -60,15 +60,20 @@ import sys
 
 import yaml
 
-# Which environment variable supplies each placeholder. The frontend's app id is
-# the same value as the backend's under a VITE_ name, because Vite only exposes
-# variables carrying that prefix.
+# Which environment variable supplies each placeholder. The frontend's app id and
+# session domain are the same values as the backend's under a VITE_ name, because
+# Vite only exposes variables carrying that prefix — and for the session domain
+# that shared source is load-bearing, not a convenience: the token issuer follows
+# whichever host the browser authenticates against, so the two copies disagreeing
+# means every login is rejected.
 SOURCES = {
     "PRELUDE_APP_ID": "PRELUDE_APP_ID",
     "PRELUDE_API_KEY": "PRELUDE_API_KEY",
+    "PRELUDE_SESSION_DOMAIN": "PRELUDE_SESSION_DOMAIN",
     "ADMIN_EMAILS": "ADMIN_EMAILS",
     "VITE_PRELUDE_APP_ID": "PRELUDE_APP_ID",
     "VITE_PRELUDE_SDK_KEY": "VITE_PRELUDE_SDK_KEY",
+    "VITE_PRELUDE_SESSION_DOMAIN": "PRELUDE_SESSION_DOMAIN",
 }
 
 # The session client works without an SDK key, so an empty one is not a failure.

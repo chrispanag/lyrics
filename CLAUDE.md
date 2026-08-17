@@ -74,6 +74,18 @@ invalid or has expired"*:
 - **`iss` is the bare host** (`<app_id>.session.prelude.dev`) while
   `/.well-known/oauth-authorization-server` advertises the `https://` form. The
   verifier compares hosts and accepts either.
+- **The issuer is per-host, so the session domain is one setting for both
+  stacks.** `PRELUDE_SESSION_DOMAIN` (`auth.songfolio.live`, registered so the
+  session cookies are first-party rather than blockable third-party ones) is what
+  the API derives its JWKS URL and expected `iss` from, and the same value
+  reaches the frontend build as `VITE_PRELUDE_SESSION_DOMAIN` to become the SDK's
+  `domain` — one `.env` entry mapped twice by `scripts/deploy-do.sh`, because the
+  two halves naming different hosts rejects every token while both hosts look
+  perfectly healthy on their own. Blank falls back to the app-id host, which is
+  what local development uses. Whether `iss` really follows the custom host was
+  **never confirmed against a real token** — the metadata on each host advertises
+  itself, which is the evidence. If sign-in breaks with the message above, pin
+  `PRELUDE_ISSUER` back to the app-id host: a RUN_TIME flip, no rebuild.
 - **`sub` and `user_id` are different identifiers.** `sub` is the `usr_…` id the
   Management API returns and that `users.prelude_user_id` stores; `user_id` is
   Prelude's internal UUID. **Join on `sub`.** Joining on `user_id` matches

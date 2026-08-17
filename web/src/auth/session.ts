@@ -8,6 +8,19 @@ const APP_ID = import.meta.env.VITE_PRELUDE_APP_ID ?? "";
 // server-side.
 const SDK_KEY = import.meta.env.VITE_PRELUDE_SDK_KEY ?? "";
 
+// The host this app authenticates against. A custom domain keeps the session
+// cookies first-party — `auth.songfolio.live` is a subdomain of the site, where
+// `<app_id>.session.prelude.dev` is a third party every modern browser is
+// entitled to block. It must name the same host the API expects to see in `iss`
+// (PRELUDE_SESSION_DOMAIN), because Prelude's issuer is per-host: point the two
+// at different hosts and every token verifies as invalid. The fallback covers an
+// unset variable — an environment that never registered a domain — rather than
+// being the local default; `localhost` is a third party to either host, so
+// development runs against the same one production does.
+const SESSION_DOMAIN =
+  (import.meta.env.VITE_PRELUDE_SESSION_DOMAIN ?? "").trim() ||
+  `${APP_ID}.session.prelude.dev`;
+
 /**
  * The Prelude session client.
  *
@@ -16,7 +29,7 @@ const SDK_KEY = import.meta.env.VITE_PRELUDE_SDK_KEY ?? "";
  * would disagree about who is signed in.
  */
 export const sessionClient = new PrldSessionClient({
-  domain: `${APP_ID}.session.prelude.dev`,
+  domain: SESSION_DOMAIN,
   ...(SDK_KEY ? { sdkKey: SDK_KEY } : {}),
 });
 
