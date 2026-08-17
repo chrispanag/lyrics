@@ -11,8 +11,15 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
   return (
     <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-5 py-10">
       <div className="mb-8 text-center">
-        <Disc3 aria-hidden className="mx-auto size-10 text-brand-600" />
-        <h1 className="mt-3 text-2xl font-bold tracking-tight">{title}</h1>
+        {/* The wordmark rides with the mark here and not in the page heading:
+            these screens are often a visitor's first, and the heading below is
+            the step they are on ("Welcome back"), not what they are signing
+            in to. */}
+        <div className="flex items-center justify-center gap-2">
+          <Disc3 aria-hidden className="size-8 text-brand-600" />
+          <span className="text-xl font-semibold tracking-tight">Songfolio</span>
+        </div>
+        <h1 className="mt-4 text-2xl font-bold tracking-tight">{title}</h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{subtitle}</p>
       </div>
       {children}

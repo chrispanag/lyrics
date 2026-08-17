@@ -1,7 +1,9 @@
-# Lyrics
+# Songfolio
 
 A multilingual song lyrics catalog: browse, search, and edit lyrics with rich
-metadata, and collect songs into personal lists.
+metadata, and collect songs into personal lists. It ships as
+[songfolio.live](https://songfolio.live); the repository, the Go module and the
+App Platform app are all still named `lyrics`.
 
 - **Backend** — Go REST API, PostgreSQL
 - **Frontend** — React + TypeScript, mobile-first

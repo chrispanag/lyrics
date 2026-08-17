@@ -72,7 +72,7 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-stone-200 bg-white px-4 py-6 md:flex dark:border-stone-800 dark:bg-stone-900">
       <NavLink to="/" className="mb-8 flex items-center gap-2 px-2">
         <Disc3 aria-hidden className="size-7 text-brand-600" />
-        <span className="text-xl font-semibold tracking-tight">Lyrics</span>
+        <span className="text-xl font-semibold tracking-tight">Songfolio</span>
       </NavLink>
 
       <nav className="flex flex-col gap-1">
