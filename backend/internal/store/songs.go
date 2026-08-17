@@ -38,19 +38,40 @@ type SongFilter struct {
 	Offset     int
 }
 
-// songColumns is the projection shared by every song read.
-const songColumns = `s.id, s.title, s.alt_title, s.lyrics, s.language, s.youtube_url,
+// songSummaryColumns is the projection every song read starts from: everything
+// but the body.
+//
+// Listings use it as-is. The lyrics of twenty songs outweigh the rest of a
+// browse page several times over, and no screen that shows more than one song
+// renders them — search ships a ts_headline excerpt instead, which is the
+// point of having one.
+const songSummaryColumns = `s.id, s.title, s.alt_title, s.language, s.youtube_url,
 	s.youtube_video_id, s.release_year, s.notes, s.created_by, s.updated_by,
 	s.created_at, s.updated_at`
 
-// songScanDest returns scan targets in songColumns order. Both the single-row
-// and the multi-row read go through it, so the projection and its destinations
-// cannot drift apart — a mismatch there does not fail to compile, it silently
-// lands values in the wrong fields wherever two columns share a type.
-func songScanDest(s *Song) []any {
-	return []any{&s.ID, &s.Title, &s.AltTitle, &s.Lyrics, &s.Language, &s.YouTubeURL,
+// songColumns is the full read: the summary with the body appended.
+//
+// Appended, rather than spliced into the middle, so that the two projections
+// compose in exactly the way their scan destinations do below — the full read
+// cannot gain or lose a column without the summary doing the same.
+const songColumns = songSummaryColumns + `, s.lyrics`
+
+// songSummaryScanDest returns scan targets in songSummaryColumns order, and
+// songScanDest appends the body exactly as the projection does.
+//
+// Both reads go through this pair, so a projection and its destinations cannot
+// drift apart — a mismatch there does not fail to compile, it silently lands
+// values in the wrong fields wherever two columns share a type. Keeping the
+// difference between the two an append at one end is what makes that structural
+// rather than a matter of reading both lists carefully.
+func songSummaryScanDest(s *Song) []any {
+	return []any{&s.ID, &s.Title, &s.AltTitle, &s.Language, &s.YouTubeURL,
 		&s.YouTubeVideoID, &s.ReleaseYear, &s.Notes, &s.CreatedBy, &s.UpdatedBy,
 		&s.CreatedAt, &s.UpdatedAt}
+}
+
+func songScanDest(s *Song) []any {
+	return append(songSummaryScanDest(s), &s.Lyrics)
 }
 
 // scanSong reads the songColumns projection in order.
@@ -213,7 +234,7 @@ func (s *Store) browseSongs(ctx context.Context, f SongFilter) ([]Song, int, err
 		WHERE %s
 		ORDER BY %s
 		LIMIT %s OFFSET %s`,
-		songColumns, where, orderClause(f.Sort), a.next(f.Limit), a.next(f.Offset))
+		songSummaryColumns, where, orderClause(f.Sort), a.next(f.Limit), a.next(f.Offset))
 
 	songs, err := s.collectSongs(ctx, query, a.values, false)
 	if err != nil {
@@ -272,7 +293,7 @@ func (s *Store) searchSongs(ctx context.Context, f SongFilter) ([]Song, int, err
 		weightArray, tsqParam, rawParam, where,
 		textRankWeight, trgmWeight,
 		searchOrderClause(f.Sort, ""),
-		a.next(f.Limit), a.next(f.Offset), songColumns, a.next(headlineOptions),
+		a.next(f.Limit), a.next(f.Offset), songSummaryColumns, a.next(headlineOptions),
 		searchOrderClause(f.Sort, "h."))
 
 	songs, err := s.collectSongs(ctx, query, a.values, true)
@@ -287,6 +308,9 @@ func (s *Store) countSongs(ctx context.Context, where string, values []any) (int
 }
 
 // collectSongs runs a song query and attaches credits and genres to the result.
+//
+// Every caller reads the summary projection, so the body is left nil rather
+// than blank — see Song.Lyrics for why the two are different answers.
 func (s *Store) collectSongs(ctx context.Context, query string, values []any, withRelevance bool) ([]Song, error) {
 	rows, err := s.pool.Query(ctx, query, values...)
 	if err != nil {
@@ -300,7 +324,7 @@ func (s *Store) collectSongs(ctx context.Context, query string, values []any, wi
 		var score *float64
 		var snippet *string
 
-		dest := songScanDest(&song)
+		dest := songSummaryScanDest(&song)
 		if withRelevance {
 			dest = append(dest, &score, &snippet)
 		}

@@ -96,7 +96,14 @@ export interface Song {
   id: string;
   title: string;
   alt_title: string | null;
-  lyrics: string;
+  /**
+   * The song body, present only on single-song reads.
+   *
+   * Browse, search and a list's songs project it away — nothing that shows more
+   * than one song renders it, and it dwarfs the rest of the payload. Absent is
+   * not the same as empty: a song may genuinely have no lyrics recorded.
+   */
+  lyrics?: string;
   language: string;
   youtube_url: string | null;
   youtube_video_id: string | null;

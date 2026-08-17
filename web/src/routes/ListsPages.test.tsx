@@ -13,6 +13,10 @@ import { server } from "@/test/server";
 /**
  * Serves each list by id, so a copy that navigates to its own page finds
  * something there rather than a 404 the spec would have to work around.
+ *
+ * Each list is held by reference and serialized per request, so a spec whose
+ * subject changes one edits it in place rather than registering a second
+ * handler that would have to repeat the id matching.
  */
 function serveLists(...lists: ReturnType<typeof makeList>[]) {
   server.use(
@@ -221,7 +225,9 @@ describe("ListDetailPage sharing", () => {
     );
   });
 
-  it("does not offer reordering to someone reading a shared list", async () => {
+  // Both owner affordances are withheld by the same condition, so they are
+  // asserted together rather than from two specs with the same fixture.
+  it("does not offer reordering or removal to someone reading a shared list", async () => {
     serveLists(
       makeList({
         id: "list-1",
@@ -235,6 +241,7 @@ describe("ListDetailPage sharing", () => {
 
     expect(await screen.findByText("First")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Reorder/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument();
   });
 
   it("shows the owner a link to share, and no copy of their own list", async () => {
@@ -274,5 +281,110 @@ describe("ListDetailPage sharing", () => {
     await user.click(screen.getByRole("button", { name: /publish and get a link/i }));
 
     await waitFor(() => expect(published).toBe(true));
+  });
+});
+
+/**
+ * Serves one list that a removal actually changes.
+ *
+ * Nothing is written to the cache ahead of the answer, so the row leaves the
+ * page only when the refetch that follows the DELETE returns a list without it.
+ * A fixed fixture would keep serving the song back and every assertion below
+ * would time out on a removal that had in fact worked.
+ */
+function serveRemovableList(list: ReturnType<typeof makeList>) {
+  serveLists(list);
+  const deleted: string[] = [];
+
+  server.use(
+    http.delete(`${API}/api/v1/lists/:id/songs/:songID`, ({ params }) => {
+      const songId = String(params.songID);
+      deleted.push(songId);
+      list.songs = (list.songs ?? []).filter((song) => song.id !== songId);
+      list.item_count = list.songs.length;
+      return new HttpResponse(null, { status: 204 });
+    }),
+  );
+
+  return deleted;
+}
+
+describe("ListDetailPage removal", () => {
+  it("lets the owner take a song out of their list", async () => {
+    const user = userEvent.setup();
+    const deleted = serveRemovableList(
+      makeList({
+        id: "list-1",
+        owner_id: "user-1",
+        item_count: 2,
+        songs: [
+          makeSong({ id: "song-1", title: "First" }),
+          makeSong({ id: "song-2", title: "Second" }),
+        ],
+      }),
+    );
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    await user.click(await screen.findByRole("button", { name: "Remove First from this list" }));
+
+    // Exactly one DELETE: the button disables itself while its own removal is
+    // in flight, and a second would 404 on a song the list no longer holds.
+    await waitFor(() => expect(deleted).toEqual(["song-1"]));
+    await waitFor(() => expect(screen.queryByText("First")).not.toBeInTheDocument());
+    expect(screen.getByText("Second")).toBeInTheDocument();
+  });
+
+  // A list of one has nothing to reorder, so it renders without the drag
+  // machinery — and that is the rendering that has to carry the removal too, or
+  // the last song in a list can never be taken out of it.
+  it("offers removal on a list of one, where there is nothing to reorder", async () => {
+    const user = userEvent.setup();
+    serveRemovableList(
+      makeList({
+        id: "list-1",
+        owner_id: "user-1",
+        item_count: 1,
+        songs: [makeSong({ id: "song-1", title: "Only" })],
+      }),
+    );
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    const remove = await screen.findByRole("button", { name: "Remove Only from this list" });
+    expect(screen.queryByRole("button", { name: /^Reorder/ })).not.toBeInTheDocument();
+
+    await user.click(remove);
+
+    expect(await screen.findByText(/this list is empty/i)).toBeInTheDocument();
+  });
+
+  // Nothing is removed from the page ahead of the answer, so a failure leaves
+  // the song where it is — and has to say so, or the tap reads as ignored.
+  it("keeps the song and reports the failure when the removal is refused", async () => {
+    const user = userEvent.setup();
+    serveLists(
+      makeList({
+        id: "list-1",
+        owner_id: "user-1",
+        item_count: 1,
+        songs: [makeSong({ id: "song-1", title: "First" })],
+      }),
+    );
+    server.use(
+      http.delete(`${API}/api/v1/lists/:id/songs/:songID`, () =>
+        HttpResponse.json(
+          { error: { code: "internal", message: "Something went wrong." } },
+          { status: 500 },
+        ),
+      ),
+    );
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    await user.click(await screen.findByRole("button", { name: "Remove First from this list" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/something went wrong/i);
+    expect(screen.getByText("First")).toBeInTheDocument();
   });
 });

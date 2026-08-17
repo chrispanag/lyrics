@@ -227,7 +227,7 @@ export function SongDetailPage() {
           </div>
         </div>
 
-        {song.lyrics.trim() ? (
+        {song.lyrics?.trim() ? (
           // whitespace-pre-line preserves the line and verse breaks that give
           // lyrics their shape, without needing any markup in the stored text.
           <p

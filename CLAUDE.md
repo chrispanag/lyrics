@@ -162,6 +162,15 @@ nothing.
   needs its own check because hooks run before the redirects below them are
   rendered — without it, a visitor who is already verified opens a challenge and
   is emailed a code on their way past.
+- **A list's rows are built by `SongRow`, whichever way the list is rendered.**
+  `ListDetailPage` serves the sortable list only to an owner with more than one
+  song; a list of one, every reader, and the wait for the drag chunk fall
+  through to the plain one. A per-row affordance wired into the sortable list
+  alone therefore reaches neither — which for removal meant the last song in a
+  list could not be taken out of it, visibly, but only ever on a list of one.
+  Add controls to `SongRow` and every rendering gets them. The drag handle is
+  passed in already rendered, which is what keeps dnd-kit inside the lazy chunk
+  while the row itself stays shared.
 - **The list drag handle needs `touch-none`, and must be the only drag
   activator.** Both halves fail silently, and only on a phone. Without
   `touch-none` the browser keeps the gesture for scrolling and the row simply

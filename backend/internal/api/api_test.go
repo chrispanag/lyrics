@@ -1107,8 +1107,10 @@ func TestSongPatchPreservesOmittedFields(t *testing.T) {
 	if patched.Title != "Θάλασσα Πλατιά (edit)" {
 		t.Errorf("title = %q, want the patched value", patched.Title)
 	}
-	if patched.Lyrics != "Μια μέρα στη θάλασσα" {
-		t.Errorf("lyrics = %q, want them untouched", patched.Lyrics)
+	// A PATCH answers with the whole song, body included — the client caches
+	// this response as the song, so a nil here would blank the page it came from.
+	if patched.Lyrics == nil || *patched.Lyrics != "Μια μέρα στη θάλασσα" {
+		t.Errorf("lyrics = %v, want them untouched", patched.Lyrics)
 	}
 	if patched.Notes == nil || *patched.Notes != "A note worth keeping." {
 		t.Errorf("notes = %v, want them untouched", patched.Notes)

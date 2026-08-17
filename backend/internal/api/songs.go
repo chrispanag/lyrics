@@ -61,11 +61,17 @@ type songPatchRequest struct {
 // merge overlays the patch onto the stored song, producing the full payload
 // toInput already knows how to validate. Doing it this way keeps one validation
 // path for create and update rather than a second copy that can drift.
+//
+// `existing` must come from a single-song read: a listing projects the body
+// away, and a PATCH that leaves lyrics alone would then write back the blank it
+// found. The deref is deliberately unguarded — the caller reads GetSong, and a
+// nil there is a wiring mistake worth a stack trace rather than a song quietly
+// emptied of its lyrics.
 func (p songPatchRequest) merge(existing *store.Song) songRequest {
 	req := songRequest{
 		Title:       existing.Title,
 		AltTitle:    existing.AltTitle,
-		Lyrics:      existing.Lyrics,
+		Lyrics:      *existing.Lyrics,
 		Language:    existing.Language,
 		YouTubeURL:  existing.YouTubeURL,
 		ReleaseYear: existing.ReleaseYear,

@@ -9,11 +9,12 @@ import {
   useDeleteList,
   useList,
   useLists,
+  useRemoveSongFromList,
   useReorderList,
   useUpdateList,
 } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
-import { SongCard } from "@/components/SongCard";
+import { SongRow } from "@/components/SongRow";
 import { Button, EmptyState, ErrorMessage, Field, Input, Sheet, Skeleton } from "@/components/ui";
 import { BackButton } from "@/components/BackButton";
 import { songCount } from "@/lib/format";
@@ -26,13 +27,26 @@ const SortableSongList = lazy(() =>
   import("@/components/SortableSongList").then((m) => ({ default: m.SortableSongList })),
 );
 
-/** The list as everyone but its owner sees it: read-only, in curated order. */
-function StaticSongList({ songs }: { songs: Song[] }) {
+/**
+ * The list without its drag machinery: how a reader sees it, and how an owner
+ * sees a list of one — where there is nothing to reorder but still something to
+ * remove. Hence `onRemove` is optional here and required on the sortable list;
+ * omitted, the rows are read-only.
+ */
+function StaticSongList({
+  songs,
+  onRemove,
+  pendingRemoval,
+}: {
+  songs: Song[];
+  onRemove?: (songId: string) => void;
+  pendingRemoval?: string;
+}) {
   return (
     <ul className="space-y-3">
       {songs.map((song) => (
         <li key={song.id}>
-          <SongCard song={song} />
+          <SongRow song={song} onRemove={onRemove} pendingRemoval={pendingRemoval} />
         </li>
       ))}
     </ul>
@@ -145,6 +159,7 @@ export function ListDetailPage() {
   const deleteList = useDeleteList();
   const copyList = useCopyList();
   const reorderList = useReorderList(id ?? "");
+  const removeSong = useRemoveSongFromList(id ?? "");
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -179,6 +194,12 @@ export function ListDetailPage() {
 
   const isOwner = user?.id === list.owner_id;
   const songs = list.songs ?? [];
+  const removeFromList = (songId: string) => removeSong.mutate(songId);
+  // Undefined for a reader, which is what leaves their rows read-only.
+  const onRemove = isOwner ? removeFromList : undefined;
+  // `variables` outlives the request it belongs to, so the row it names would
+  // stay disabled after the removal settled were this not held to the flight.
+  const pendingRemoval = removeSong.isPending ? removeSong.variables : undefined;
   // Built from the origin rather than read off window.location, so the link is
   // the canonical one whatever query or hash the current URL carries.
   const shareUrl = `${window.location.origin}/lists/${list.id}`;
@@ -314,16 +335,36 @@ export function ListDetailPage() {
              library. It doubles as the fallback while that chunk loads, which
              keeps the songs on screen instead of blanking the page. */
       isOwner && songs.length > 1 ? (
-        <Suspense fallback={<StaticSongList songs={songs} />}>
-          <SortableSongList songs={songs} onReorder={(songIds) => reorderList.mutate(songIds)} />
+        <Suspense
+          fallback={
+            <StaticSongList songs={songs} onRemove={onRemove} pendingRemoval={pendingRemoval} />
+          }
+        >
+          <SortableSongList
+            songs={songs}
+            onReorder={(songIds) => reorderList.mutate(songIds)}
+            // The unnarrowed callback: this branch is owner-only, and the
+            // prop is required, so the optional `onRemove` would need an
+            // assertion to be passed here.
+            onRemove={removeFromList}
+            pendingRemoval={pendingRemoval}
+          />
         </Suspense>
       ) : (
-        <StaticSongList songs={songs} />
+        <StaticSongList songs={songs} onRemove={onRemove} pendingRemoval={pendingRemoval} />
       )}
 
       {reorderList.isError && (
         <div className="mt-3">
           <ErrorMessage>The new order could not be saved.</ErrorMessage>
+        </div>
+      )}
+
+      {removeSong.isError && (
+        <div className="mt-3">
+          <ErrorMessage>
+            {errorMessage(removeSong.error, "The song could not be removed.")}
+          </ErrorMessage>
         </div>
       )}
 

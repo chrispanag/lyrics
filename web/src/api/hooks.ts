@@ -2,6 +2,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseQueryOptions,
 } from "@tanstack/react-query";
 
@@ -252,12 +253,24 @@ export function useDeleteList() {
 }
 
 /**
- * Adds or removes a song from a list.
+ * Marks everything that a song's membership of a list is visible through.
  *
- * Every affected key is invalidated rather than patched in place: the toggle
- * appears on the song page, the list page, and the lists index at once, and
- * hand-patching three caches is how they drift apart.
+ * Both mutations below write the same fact and so must unsettle the same
+ * readers of it — the toggle on a song page, the counts on the lists index, and
+ * the songs on the list's own page. Shared rather than stated twice, which is
+ * how two copies of a rule come to disagree without anything failing: whichever
+ * screen was forgotten simply goes stale.
+ *
+ * Nothing is patched in place. A cache written by hand in two shapes is the
+ * drift this avoids; a refetch settles the rows and the counts together.
  */
+function invalidateMembership(queryClient: QueryClient, listId: string, songId: string): void {
+  void queryClient.invalidateQueries({ queryKey: keys.songLists(songId) });
+  void queryClient.invalidateQueries({ queryKey: keys.lists() });
+  void queryClient.invalidateQueries({ queryKey: keys.list(listId) });
+}
+
+/** Adds or removes a song from a list, from the song's page. */
 export function useToggleSongInList(songId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -265,11 +278,29 @@ export function useToggleSongInList(songId: string) {
       apiFetch<void>(`/api/v1/lists/${listId}/songs/${songId}`, {
         method: present ? "DELETE" : "PUT",
       }),
-    onSuccess: (_data, { listId }) => {
-      void queryClient.invalidateQueries({ queryKey: keys.songLists(songId) });
-      void queryClient.invalidateQueries({ queryKey: keys.lists() });
-      void queryClient.invalidateQueries({ queryKey: keys.list(listId) });
-    },
+    onSuccess: (_data, { listId }) => invalidateMembership(queryClient, listId, songId),
+  });
+}
+
+/**
+ * Takes a song out of one list, from that list's own page.
+ *
+ * The same DELETE as `useToggleSongInList`, keyed the other way round: that one
+ * belongs to a song and is handed a list, this one belongs to a list and is
+ * handed a song. That is what lets the page hold a single mutation and pass one
+ * callback to every row — and what makes `variables` name the row whose removal
+ * is in flight, which a hook per row could not.
+ *
+ * `useReorderList` next door is optimistic because a drag that snaps back until
+ * the server replies is unusable on a phone; a row that lingers for one round
+ * trip is not, so this one waits for the answer.
+ */
+export function useRemoveSongFromList(listId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (songId: string) =>
+      apiFetch<void>(`/api/v1/lists/${listId}/songs/${songId}`, { method: "DELETE" }),
+    onSuccess: (_data, songId) => invalidateMembership(queryClient, listId, songId),
   });
 }
 

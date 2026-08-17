@@ -15,7 +15,7 @@ const songs = [
 
 describe("SortableSongList", () => {
   it("gives every song a named handle", () => {
-    renderWithProviders(<SortableSongList songs={songs} onReorder={vi.fn()} />);
+    renderWithProviders(<SortableSongList songs={songs} onReorder={vi.fn()} onRemove={vi.fn()} />);
 
     for (const title of ["First", "Second", "Third"]) {
       expect(screen.getByRole("button", { name: `Reorder ${title}` })).toBeInTheDocument();
@@ -30,7 +30,7 @@ describe("SortableSongList", () => {
     const onReorder = vi.fn();
 
     const { container } = renderWithProviders(
-      <SortableSongList songs={songs} onReorder={onReorder} />,
+      <SortableSongList songs={songs} onReorder={onReorder} onRemove={vi.fn()} />,
     );
     stubRowRects(container);
 
@@ -49,7 +49,7 @@ describe("SortableSongList", () => {
     const onReorder = vi.fn();
 
     const { container } = renderWithProviders(
-      <SortableSongList songs={songs} onReorder={onReorder} />,
+      <SortableSongList songs={songs} onReorder={onReorder} onRemove={vi.fn()} />,
     );
     stubRowRects(container);
 

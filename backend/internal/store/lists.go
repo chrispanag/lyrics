@@ -44,7 +44,7 @@ func (s *Store) GetList(ctx context.Context, id uuid.UUID) (*List, error) {
 // that is already in hand.
 func (s *Store) SongsInList(ctx context.Context, listID uuid.UUID) ([]Song, error) {
 	return s.collectSongs(ctx, `
-		SELECT `+songColumns+`
+		SELECT `+songSummaryColumns+`
 		FROM list_items li
 		JOIN songs s ON s.id = li.song_id
 		WHERE li.list_id = $1

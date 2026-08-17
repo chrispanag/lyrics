@@ -681,3 +681,89 @@ func TestSnippetDelimitersAreNotMarkup(t *testing.T) {
 		t.Error("highlight delimiters must not be HTML")
 	}
 }
+
+// Listings must not carry the lyrics body.
+//
+// No screen that shows more than one song renders it, and it outweighs
+// everything else in a page of twenty several times over — the list page paid
+// that cost on every removal, refetching every remaining song in full to redraw
+// a row of titles. Search is the shape to keep in view: it ships a ts_headline
+// excerpt precisely so the body does not have to travel.
+//
+// Absent is not blank. A song may genuinely have no lyrics recorded, so the
+// summary leaves nil and only a single-song read fills the field in — a
+// projection that returned "" instead would be indistinguishable from a song
+// whose lyrics nobody has typed yet.
+func TestListingsOmitLyricsAndSingleReadsKeepThem(t *testing.T) {
+	st := testutil.NewStore(t)
+	ctx := context.Background()
+	owner := seedUser(t, st, "curator@example.com", store.RoleUser)
+
+	const body = "Θα φύγω και θα γυρίσω"
+	created, err := st.CreateSong(ctx, store.SongInput{
+		Title:    "Χάρτινο το Φεγγαράκι",
+		Lyrics:   body,
+		Language: "el",
+	}, uuid.Nil)
+	if err != nil {
+		t.Fatalf("CreateSong: %v", err)
+	}
+	// Create answers through GetSong, so this is the single-song read as well
+	// as the write — the client caches it as the song and would blank the
+	// detail page if it arrived without a body.
+	if created.Lyrics == nil || *created.Lyrics != body {
+		t.Errorf("CreateSong lyrics = %v, want the body", created.Lyrics)
+	}
+
+	full, err := st.GetSong(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetSong: %v", err)
+	}
+	if full.Lyrics == nil || *full.Lyrics != body {
+		t.Errorf("GetSong lyrics = %v, want the body", full.Lyrics)
+	}
+
+	browsed, _, err := st.ListSongs(ctx, store.SongFilter{})
+	if err != nil {
+		t.Fatalf("ListSongs: %v", err)
+	}
+	if len(browsed) == 0 {
+		t.Fatal("expected the song in the browse listing")
+	}
+	if browsed[0].Lyrics != nil {
+		t.Errorf("browse lyrics = %q, want them projected away", *browsed[0].Lyrics)
+	}
+
+	// Search drops the body too, and the snippet is what replaces it.
+	found, _, err := st.ListSongs(ctx, store.SongFilter{Query: "φύγω"})
+	if err != nil {
+		t.Fatalf("ListSongs (search): %v", err)
+	}
+	if len(found) == 0 {
+		t.Fatal("expected a search hit")
+	}
+	if found[0].Lyrics != nil {
+		t.Errorf("search lyrics = %q, want them projected away", *found[0].Lyrics)
+	}
+	if found[0].Snippet == nil {
+		t.Error("search dropped the body without offering a snippet")
+	}
+
+	list, err := st.CreateList(ctx, owner.ID, "Αγαπημένα", nil, false)
+	if err != nil {
+		t.Fatalf("CreateList: %v", err)
+	}
+	if err := st.AddSongToList(ctx, list.ID, created.ID); err != nil {
+		t.Fatalf("AddSongToList: %v", err)
+	}
+	inList, err := st.SongsInList(ctx, list.ID)
+	if err != nil {
+		t.Fatalf("SongsInList: %v", err)
+	}
+	if len(inList) != 1 {
+		t.Fatalf("SongsInList returned %d songs, want 1", len(inList))
+	}
+	if inList[0].Lyrics != nil {
+		t.Errorf("list lyrics = %q, want them projected away", *inList[0].Lyrics)
+	}
+}

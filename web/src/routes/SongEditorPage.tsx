@@ -65,7 +65,9 @@ export function SongEditorPage() {
     hydratedFor.current = existing.id;
     setTitle(existing.title);
     setAltTitle(existing.alt_title ?? "");
-    setLyrics(existing.lyrics);
+    // This page reads a single song, so the body is there; the fallback is for
+    // the type, which allows for the listing projections that leave it out.
+    setLyrics(existing.lyrics ?? "");
     setLanguage(existing.language);
     setYoutubeUrl(existing.youtube_url ?? "");
     setReleaseYear(existing.release_year ? String(existing.release_year) : "");

@@ -107,10 +107,16 @@ type Credit struct {
 
 // Song is a catalog entry. Snippet and Score are populated only by search.
 type Song struct {
-	ID             uuid.UUID  `json:"id"`
-	Title          string     `json:"title"`
-	AltTitle       *string    `json:"alt_title"`
-	Lyrics         string     `json:"lyrics"`
+	ID       uuid.UUID `json:"id"`
+	Title    string    `json:"title"`
+	AltTitle *string   `json:"alt_title"`
+	// Lyrics is the song body, present only on single-song reads. Listings —
+	// browse, search and a list's songs — project it away: no screen showing
+	// more than one song renders the body, and a page of twenty carried more
+	// text than everything else in the response combined. Absent and empty are
+	// therefore different answers, which is why this is a pointer: a song may
+	// genuinely have no lyrics recorded, and that must not read as "not loaded".
+	Lyrics         *string    `json:"lyrics,omitempty"`
 	Language       string     `json:"language"`
 	YouTubeURL     *string    `json:"youtube_url"`
 	YouTubeVideoID *string    `json:"youtube_video_id"`
