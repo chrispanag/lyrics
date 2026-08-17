@@ -44,3 +44,18 @@ export function buttonClasses(
     className,
   );
 }
+
+/**
+ * The chrome shared by the icon controls that flank a song in a list — the drag
+ * handle on one side, the remove button on the other.
+ *
+ * They sit opposite each other on the same row, so their size and resting
+ * colour have to agree, and stating that twice is how it stops being true: the
+ * two had already drifted by a `transition-colors`. Deliberately not
+ * `buttonClasses`, whose padding is horizontal and whose ghost variant brings a
+ * grey hover that would have to be overridden — and `cn` is a plain join, so an
+ * override is a second class for the same property rather than a replacement.
+ * Each caller adds its own accent, cursor and disabled treatment.
+ */
+export const rowControlChrome =
+  "shrink-0 rounded-lg p-2 text-stone-400 transition-colors focus-visible:ring-2 focus-visible:outline-none";

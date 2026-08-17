@@ -18,23 +18,35 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 
-import { SongCard } from "./SongCard";
+import { rowControlChrome } from "./buttonStyles";
+import { SongRow } from "./SongRow";
+import { cn } from "@/lib/cn";
 import { verticalWithinList } from "@/lib/dragBounds";
 import type { Song } from "@/lib/types";
 
 /**
- * A list's songs, reorderable by its owner.
+ * A list's songs, reorderable and removable by its owner.
  *
  * Loaded on demand (see ListDetailPage) so that everyone who cannot reorder —
  * every guest, every reader of a shared list — is not made to download a drag
  * library to read one.
+ *
+ * `onRemove` is required rather than optional because only an owner is ever
+ * shown this list, and an owner always gets both affordances: made optional, a
+ * call site that forgets it renders rows that cannot be removed and says
+ * nothing about it. `SongRow`, which serves readers too, has to ask.
  */
 export function SortableSongList({
   songs,
   onReorder,
+  onRemove,
+  pendingRemoval,
 }: {
   songs: Song[];
   onReorder: (songIds: string[]) => void;
+  onRemove: (songId: string) => void;
+  /** The song whose removal is in flight, if any. */
+  pendingRemoval?: string;
 }) {
   const sensors = useSensors(
     // A few pixels of movement before a drag begins, so pressing the handle and
@@ -72,7 +84,12 @@ export function SortableSongList({
       <SortableContext items={songs.map((song) => song.id)} strategy={verticalListSortingStrategy}>
         <ul className="space-y-3">
           {songs.map((song) => (
-            <SortableRow key={song.id} song={song} />
+            <SortableRow
+              key={song.id}
+              song={song}
+              onRemove={onRemove}
+              pendingRemoval={pendingRemoval}
+            />
           ))}
         </ul>
       </SortableContext>
@@ -80,7 +97,15 @@ export function SortableSongList({
   );
 }
 
-function SortableRow({ song }: { song: Song }) {
+function SortableRow({
+  song,
+  onRemove,
+  pendingRemoval,
+}: {
+  song: Song;
+  onRemove: (songId: string) => void;
+  pendingRemoval?: string;
+}) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: song.id });
 
@@ -90,26 +115,31 @@ function SortableRow({ song }: { song: Song }) {
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={isDragging ? "relative z-10 opacity-80" : undefined}
     >
-      <div className="flex items-center gap-2">
-        {/* The handle is the only thing that starts a drag. Were the whole row
-            draggable, a phone would have no gesture left for scrolling the
-            page — and `touch-none` is what hands this element's gestures to the
-            drag library instead of the browser's scrolling, without which
-            dragging on touch silently does nothing at all. */}
-        <button
-          type="button"
-          ref={setActivatorNodeRef}
-          aria-label={`Reorder ${song.title}`}
-          className="shrink-0 cursor-grab touch-none rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-stone-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none active:cursor-grabbing dark:hover:bg-stone-800 dark:hover:text-stone-300"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical aria-hidden className="size-5" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <SongCard song={song} />
-        </div>
-      </div>
+      <SongRow
+        song={song}
+        onRemove={onRemove}
+        pendingRemoval={pendingRemoval}
+        handle={
+          /* The handle is the only thing that starts a drag. Were the whole row
+             draggable, a phone would have no gesture left for scrolling the
+             page — and `touch-none` is what hands this element's gestures to
+             the drag library instead of the browser's scrolling, without which
+             dragging on touch silently does nothing at all. */
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            aria-label={`Reorder ${song.title}`}
+            className={cn(
+              rowControlChrome,
+              "cursor-grab touch-none hover:bg-stone-100 hover:text-stone-600 focus-visible:ring-brand-500 active:cursor-grabbing dark:hover:bg-stone-800 dark:hover:text-stone-300",
+            )}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical aria-hidden className="size-5" />
+          </button>
+        }
+      />
     </li>
   );
 }
