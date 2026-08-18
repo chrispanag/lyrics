@@ -1,11 +1,11 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { Route, Routes } from "react-router-dom";
 
 import { SongDetailPage } from "./SongDetailPage";
-import { API, makeSong, makeUser } from "@/test/handlers";
+import { API, listById, makeList, makeSong, makeUser, notFound } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
@@ -118,17 +118,181 @@ describe("SongDetailPage", () => {
   });
 
   it("reports a song that could not be loaded", async () => {
-    server.use(
-      http.get(`${API}/api/v1/songs/:id`, () =>
-        HttpResponse.json(
-          { error: { code: "not_found", message: "Song was not found." } },
-          { status: 404 },
-        ),
-      ),
-    );
+    server.use(http.get(`${API}/api/v1/songs/:id`, () => notFound("Song was not found.")));
 
     renderDetail();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Song was not found.");
+  });
+});
+
+/*
+ * Reading a song from inside a list.
+ *
+ * The list is named by a query parameter rather than router state, so these
+ * specs drive it the way a shared link does: by the URL alone.
+ */
+describe("SongDetailPage inside a list", () => {
+  const inList = [
+    makeSong({ id: "song-1", title: "First" }),
+    makeSong({ id: "song-2", title: "Second" }),
+    makeSong({ id: "song-3", title: "Third" }),
+  ];
+
+  /**
+   * Serves list-1 with the given songs, and every song by id.
+   *
+   * Both are needed together: a spec that pages forward asks for a song the
+   * default handler would answer with the one it always returns, and the whole
+   * point is that the reader arrives at a different one. Only the songs half is
+   * local — a list by id is what every list spec needs, so it is shared.
+   */
+  function serveList(songs = inList) {
+    server.use(
+      listById(makeList({ id: "list-1", name: "Ρεμπέτικα", songs, item_count: songs.length })),
+      http.get(`${API}/api/v1/songs/:id`, ({ params }) => {
+        const found = inList.find((song) => song.id === params.id);
+        return found ? HttpResponse.json(found) : notFound("Song was not found.");
+      }),
+    );
+  }
+
+  it("shows the list a song is being read from and where it sits in it", async () => {
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    expect(await screen.findByRole("link", { name: "Ρεμπέτικα" })).toHaveAttribute(
+      "href",
+      "/lists/list-1",
+    );
+    expect(screen.getByText("2 of 3")).toBeInTheDocument();
+  });
+
+  // The context has to survive the step, or the second song is a dead end — which
+  // is the whole failure this exists to prevent.
+  it("steps to the next song and stays in the list", async () => {
+    const user = userEvent.setup();
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    await user.click(await screen.findByRole("link", { name: "Next song" }));
+
+    expect(await screen.findByRole("heading", { name: "Third" })).toBeInTheDocument();
+    expect(screen.getByText("3 of 3")).toBeInTheDocument();
+  });
+
+  it("steps back with the left arrow key", async () => {
+    const user = userEvent.setup();
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+    await screen.findByRole("heading", { name: "Second" });
+
+    await user.keyboard("{ArrowLeft}");
+
+    expect(await screen.findByRole("heading", { name: "First" })).toBeInTheDocument();
+  });
+
+  // An open sheet owns the arrow keys. The nav asks the DOM whether a modal is
+  // up rather than being handed a list of this page's sheets — a list the next
+  // sheet would not be on, and paging the song out from under an open one reads
+  // as a bug in the sheet.
+  it("leaves the arrow keys to an open sheet", async () => {
+    const user = userEvent.setup();
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=list-1", user: makeUser({ id: "user-1" }) });
+
+    await user.click(await screen.findByRole("button", { name: /save to a list/i }));
+    await screen.findByRole("dialog", { name: /save to list/i });
+
+    await user.keyboard("{ArrowRight}");
+
+    expect(screen.getByRole("heading", { name: "Second" })).toBeInTheDocument();
+  });
+
+  it("offers no step past either end of the list", async () => {
+    serveList();
+
+    renderDetail({ route: "/songs/song-1?list=list-1" });
+
+    expect(await screen.findByRole("link", { name: "Next song" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Previous song" })).not.toBeInTheDocument();
+  });
+
+  // The zones are what a phone gets instead of the arrows, and they carry the
+  // title because nothing about them is visible to read.
+  it("names the neighboring songs on its edge tap zones", async () => {
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    expect(await screen.findByRole("link", { name: "Previous: First" })).toHaveAttribute(
+      "href",
+      "/songs/song-1?list=list-1",
+    );
+    expect(screen.getByRole("link", { name: "Next: Third" })).toBeInTheDocument();
+  });
+
+  it("names them again where the lyrics end", async () => {
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    const footer = await screen.findByRole("navigation", { name: /more from this list/i });
+    expect(within(footer).getByRole("link", { name: "Previous First" })).toBeInTheDocument();
+    expect(within(footer).getByRole("link", { name: "Next Third" })).toBeInTheDocument();
+  });
+
+  // A list of one has nothing on either side, and the footer's border alone
+  // under the lyrics reads as a section that failed to load.
+  it("draws no footer on a list of one", async () => {
+    serveList([inList[1]!]);
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    expect(await screen.findByText("1 of 1")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: /more from this list/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  // A song taken out of the list in another tab, or a parameter typed by hand.
+  // The song was what was asked for and it is there; the navigation is what goes.
+  it("shows the song with no navigation when it is not in the list", async () => {
+    serveList([inList[0]!, inList[2]!]);
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: /song navigation/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the song with no navigation when the list cannot be read", async () => {
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=someone-elses-list" });
+
+    expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: /song navigation/i })).not.toBeInTheDocument();
+  });
+
+  // Nothing asks for a list when a song is opened from browse, where there is
+  // none — a request per song page for a list nobody named would be pure waste.
+  it("asks for no list when a song is opened on its own", async () => {
+    let requested = 0;
+    server.use(
+      http.get(`${API}/api/v1/lists/:id`, () => {
+        requested += 1;
+        return HttpResponse.json(makeList());
+      }),
+    );
+
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(requested).toBe(0);
   });
 });

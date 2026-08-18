@@ -84,6 +84,27 @@ export function list<T>(
   return { data, meta: { total: data.length, limit: 20, offset: 0, ...meta } };
 }
 
+/**
+ * Serves each of these lists by id, and a not-found envelope for any other.
+ *
+ * A handler rather than a `server.use` call, so this module stays free of the
+ * server it is loaded into — `server.ts` imports these handlers, and importing it
+ * back would close the circle. Each list is held by reference and serialized per
+ * request, so a spec whose subject changes one edits it in place rather than
+ * registering a second handler that would have to repeat the id matching.
+ */
+export function listById(...lists: SongList[]) {
+  return http.get(`${API}/api/v1/lists/:id`, ({ params }) => {
+    const found = lists.find((list) => list.id === params.id);
+    return found ? HttpResponse.json(found) : notFound("List was not found.");
+  });
+}
+
+/** The API's error envelope, which four specs had written out by hand. */
+export function notFound(message: string) {
+  return HttpResponse.json({ error: { code: "not_found", message } }, { status: 404 });
+}
+
 /** Default handlers. Individual tests override these with server.use(). */
 export const handlers = [
   http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list([makeSong()]))),
