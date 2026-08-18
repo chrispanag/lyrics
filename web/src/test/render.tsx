@@ -41,6 +41,11 @@ export function renderWithProviders(
     startEmailVerification: async () => {},
     verifyEmail: async () => {},
     resendVerificationCode: async () => {},
+    startPasswordReset: async () => {},
+    resendPasswordResetCode: async () => {},
+    confirmPasswordResetCode: async () => {},
+    changePassword: async () => {},
+    signOutOtherDevices: async () => {},
     validatePassword: async () => ({ valid: true, messages: [] }),
     ...auth,
   };

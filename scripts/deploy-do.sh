@@ -74,6 +74,7 @@ SOURCES = {
     "VITE_PRELUDE_APP_ID": "PRELUDE_APP_ID",
     "VITE_PRELUDE_SDK_KEY": "VITE_PRELUDE_SDK_KEY",
     "VITE_PRELUDE_SESSION_DOMAIN": "PRELUDE_SESSION_DOMAIN",
+    "VITE_PRELUDE_OTP_LOGIN_CONFIG_ID": "PRELUDE_OTP_LOGIN_CONFIG_ID",
 }
 
 # The session client works without an SDK key, so an empty one is not a failure.

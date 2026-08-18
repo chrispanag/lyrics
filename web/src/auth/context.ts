@@ -2,6 +2,17 @@ import { createContext } from "react";
 
 import type { User } from "@/lib/types";
 
+/**
+ * The `name` of the error `startPasswordReset` throws when no OTP login
+ * configuration was built in.
+ *
+ * Matched by name, the way the SDK's own errors are, and declared here rather
+ * than beside either end of it: the provider that throws it imports the Prelude
+ * SDK, and the screen that reads it must not — that is what lets the auth
+ * screens be tested without a session client.
+ */
+export const RESET_UNCONFIGURED_ERROR = "PasswordResetUnconfiguredError";
+
 export interface AuthContextValue {
   /** The signed-in user, or null for a guest. */
   user: User | null;
@@ -21,6 +32,31 @@ export interface AuthContextValue {
   verifyEmail(code: string): Promise<void>;
   /** Asks Prelude to send the code again for the challenge already open. */
   resendVerificationCode(): Promise<void>;
+  /**
+   * Emails a code to an address that has forgotten its password.
+   *
+   * Resolves the same way whether or not the address has an account — Prelude
+   * answers a dispatch for an unknown identifier with a silent 204 and creates
+   * nothing — so a caller must not treat this resolving as proof that an account
+   * exists, and must not branch on it. That is what keeps the screen from
+   * reporting which addresses are registered.
+   */
+  startPasswordReset(email: string): Promise<void>;
+  /** Asks Prelude to send the reset code again. */
+  resendPasswordResetCode(): Promise<void>;
+  /**
+   * Submits the emailed code, which signs the visitor in and acquires the scope
+   * that permits a password write.
+   *
+   * Resolving means `changePassword` can be called; the visitor is a signed-in
+   * user from this point on, which is why the reset screen must not send a
+   * signed-in visitor away.
+   */
+  confirmPasswordResetCode(code: string): Promise<void>;
+  /** Writes the new password. Only callable after the code was accepted. */
+  changePassword(password: string): Promise<void>;
+  /** Ends every session but this one, e.g. after a password reset. */
+  signOutOtherDevices(): Promise<void>;
   /**
    * Re-reads the profile from our API, e.g. after a role change.
    *

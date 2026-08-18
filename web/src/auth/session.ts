@@ -22,6 +22,21 @@ const SESSION_DOMAIN =
   `${APP_ID}.session.prelude.dev`;
 
 /**
+ * The email OTP login configuration password reset sends its code through.
+ *
+ * Reset has to name a configuration explicitly because this one is deliberately
+ * *not* the application's default: an emailed code is a way into the account, so
+ * it is reachable only from the screen that asks for one, and never offered
+ * beside the password field as a way to sign in. Prelude has no anonymous email
+ * channel other than a login configuration — step-up is only available to a
+ * session that already exists — which is why resetting a password starts by
+ * signing in with the code. See CLAUDE.md, "Password reset".
+ */
+export const OTP_LOGIN_CONFIG_ID = (
+  import.meta.env.VITE_PRELUDE_OTP_LOGIN_CONFIG_ID ?? ""
+).trim();
+
+/**
  * The Prelude session client.
  *
  * A module singleton rather than component state: it owns session storage and

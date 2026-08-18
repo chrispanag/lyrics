@@ -104,11 +104,15 @@ lint-backend: ## Lint the backend
 # --- frontend ----------------------------------------------------------------
 
 .PHONY: web
-# Vite only exposes variables prefixed with VITE_, so the app ID and the session
-# domain are mapped across here rather than duplicated in .env under two names.
+# Vite only exposes variables prefixed with VITE_, so the app ID, the session
+# domain and the OTP login configuration are mapped across here rather than
+# duplicated in .env under two names. Four places do this mapping — here, the
+# `mobile` target, docker-compose.yml (plus web/Dockerfile) and
+# scripts/deploy-do.sh — so a new variable has four to be added to.
 web: ## Run the web dev server
 	cd web && VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" \
-		VITE_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" npm run dev
+		VITE_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" \
+		VITE_PRELUDE_OTP_LOGIN_CONFIG_ID="$(PRELUDE_OTP_LOGIN_CONFIG_ID)" npm run dev
 
 .PHONY: mobile
 # Same dev server, reached from a phone on the same network — Vite prints the
@@ -121,7 +125,8 @@ web: ## Run the web dev server
 # search and public lists do.
 mobile: ## Run the web dev server for testing from a phone on this network
 	cd web && VITE_API_BASE_URL= VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" \
-		VITE_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" npm run dev
+		VITE_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" \
+		VITE_PRELUDE_OTP_LOGIN_CONFIG_ID="$(PRELUDE_OTP_LOGIN_CONFIG_ID)" npm run dev
 
 .PHONY: install
 install: ## Install frontend dependencies

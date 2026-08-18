@@ -111,7 +111,9 @@ them announce themselves when broken:
   code-checking here would mean either trusting the client's word or reaching
   for the login-OTP endpoints, and the second is what the design exists to
   avoid: an OTP *login* config would let anyone who can read a mailbox sign in
-  without the password. Verification must not buy a second way in.
+  without the password. Verification must not buy a second way in. (Password
+  reset does use one — it has no session to step up from. That is a different
+  trade, made deliberately; see "Password reset".)
 - **`grant_mode` must stay `session-bound`.** `single-use` binds the grant to
   one token, and the client refreshes between finishing the challenge and
   posting to this API — so the proof would be gone by the time it is read, and
@@ -134,6 +136,84 @@ The scope string lives in three places that cannot be made to share one: the
 Prelude application config, `EmailVerifyScope` (Go), and `EMAIL_VERIFY_SCOPE`
 (TypeScript). A mismatch reads as a challenge that completes and then verifies
 nothing.
+
+### Password reset
+
+The emailed code is a **login**, not a token this app checks. Prelude opens
+step-up challenges only on sessions that already exist (`/stepup/request` is
+authenticated, and the docs say so outright), so a visitor who has forgotten
+their password has nothing to step up from: proving the mailbox is what produces
+the session, and a step-up on that session is what permits the password write.
+Everything below follows from that one fact, and none of it announces itself.
+
+- **The visitor is signed in from the code step onwards, so the reset screen must
+  not send a signed-in visitor away.** The sign-in and sign-up screens redirect
+  on `user`; copying that here ejects people one step short of the new password,
+  leaving the account on the old one and a session opened by an emailed code.
+  `VerificationGate` is the same trap from the other side — `/forgot-password` is
+  in `UNVERIFIED_ROUTES` because an unverified account would otherwise be bounced
+  mid-flow to a code form for a *different* challenge, which reads exactly like
+  the reset code having stopped working. Both directions are pinned by tests.
+- **`prld:pwd:write` is configured `status: continue`, which is what keeps the
+  reset to one code** — a `review` here would email a second code proving the
+  same mailbox. The cost is real and belongs to whoever adds a *signed-in* change
+  password screen: with `continue`, any live session can acquire the scope, so a
+  stolen session could change the password with nothing re-proven. That flow
+  needs `review` + `verify_email`, not this entry. Flip this one and every reset
+  dead-ends at the code form — `confirmPasswordResetCode` throws on any status but
+  `continue`, and the code step shows its one uniform message. The real reason is
+  in the console, which is the only place it can be.
+- **A granted-outright scope refreshes nothing.** The SDK refreshes the session
+  when a *challenge* completes; `continue` has no challenge, so the cached access
+  token can still predate the grant and the password write answers 403.
+  `canChangePassword()` is that forced refresh — it is not a redundant check, and
+  removing it reintroduces a failure that looks like Prelude rejecting the
+  password.
+- **The step-up configuration is written with `PUT`.** `POST` answers
+  `409 step_up_config_already_exists`, and the body replaces the whole config —
+  so it must carry the `email:verify` entry too, or sign-up verification silently
+  stops working for everyone.
+- **Dispatch to an unknown address is a silent 204** that creates no user
+  (observed live). That is what lets the screen advance to the code form for any
+  address without leaking which ones are registered — so nothing may branch on
+  that call. The leak then moves to the *code* step, where an address with no
+  account necessarily fails: every failure there renders one string, and the
+  cause goes to `console.error` instead. Uniform by construction, not by matching
+  Prelude's error names — `isBadCode` would have leaked the moment an unknown
+  account produced anything but `BadCheckCodeError`, which was never observed
+  either way. The cost is that a genuine fault also reads as a wrong code, which
+  is the same trade `LoginPage` makes for credentials.
+- **"Send another" is the second place the same leak can reappear**, and it is
+  not a message this time. Only an address with a dispatch in flight has anything
+  to retry, so `retryOTP` failing for the others would answer what the email step
+  refused to — and so would a cooldown that never started, or a code field left
+  filled. Every observable of that handler is therefore identical whichever way
+  the call goes, cause to `console.error`; the same trade buys the same cost, a
+  genuine fault reading as a code on its way that never arrives.
+- **A failure *after* `checkOTP` succeeded ends the session.** By then the
+  visitor is signed in and the code is spent — the SDK drops the verification it
+  was checked against — so neither retyping the code nor asking for another can
+  revive the attempt. Left alone, the screen says the code was wrong while a live
+  session opened by that code sits behind it, and the advice it offers cannot
+  work. `confirmPasswordResetCode` therefore signs out before rethrowing, in a
+  nested `try` so a failed revocation cannot replace the cause the page logs.
+- **The grant lasts 300 seconds, and the password form can outlive it.** A
+  visitor who takes longer than that gets `ForbiddenError` from `changePassword`
+  with nothing whatsoever wrong with the password — reported as "try another" it
+  is advice no password satisfies. The page names that one case and offers the way
+  out ("Start again with a new code"), which is also why the password step has an
+  exit at all: the steps are state, not routes, so the back button is not one.
+- **A missing `VITE_PRELUDE_OTP_LOGIN_CONFIG_ID` is reported, not hidden.**
+  `errorMessage` only carries through our API's own messages, so an unnamed
+  `Error` would render as "we could not send a code" and send whoever reads it
+  hunting a Prelude outage. The provider throws with
+  `RESET_UNCONFIGURED_ERROR` as its `name` and the page matches on it, the way it
+  already matches `BadCheckCodeError`. The constant lives in `auth/context.ts`
+  because the page must not import `auth/session` — that module builds the SDK
+  client at import time, which is what keeps the auth screens testable.
+
+Never confirmed end to end: a correct code through to a written password. It
+needs a mailbox someone can read, exactly like email verification.
 
 ### Frontend
 
@@ -292,7 +372,18 @@ nothing.
 - The Management API key is server-side only. `VITE_PRELUDE_SDK_KEY` is a
   publishable client identifier and is safe in the bundle.
 - Vite only exposes `VITE_`-prefixed variables; `make web` maps `PRELUDE_APP_ID`
-  across rather than keeping a second copy in `.env`.
+  and `PRELUDE_OTP_LOGIN_CONFIG_ID` across rather than keeping a second copy in
+  `.env`. **Every mapping exists in four places** — `make web`, `make mobile`,
+  `docker-compose.yml` (whose build args must match `web/Dockerfile`'s `ARG`/`ENV`
+  pair) and `scripts/deploy-do.sh` — and a new variable is easy to add to only
+  some of them. Only the deploy script complains: the others build happily with
+  an empty value, so the failure is a screen that reports itself unconfigured on
+  one stack while working on another.
+- The Makefile reads `.env` from the directory it runs in, and a **git worktree
+  has none** — so `make web` there serves a build with every Prelude variable
+  empty. Sign-in and password reset then fail in ways that look like bugs in the
+  code being tested. Run the dev server with the values exported from the main
+  checkout's `.env`.
 - `ADMIN_EMAILS` applies **only at provisioning**. Adding an address later does
   not promote an existing account — change `users.role` directly, or use
   Admin → Users.
