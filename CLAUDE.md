@@ -183,6 +183,26 @@ Everything below follows from that one fact, and none of it announces itself.
   account produced anything but `BadCheckCodeError`, which was never observed
   either way. The cost is that a genuine fault also reads as a wrong code, which
   is the same trade `LoginPage` makes for credentials.
+- **"Send another" is the second place the same leak can reappear**, and it is
+  not a message this time. Only an address with a dispatch in flight has anything
+  to retry, so `retryOTP` failing for the others would answer what the email step
+  refused to — and so would a cooldown that never started, or a code field left
+  filled. Every observable of that handler is therefore identical whichever way
+  the call goes, cause to `console.error`; the same trade buys the same cost, a
+  genuine fault reading as a code on its way that never arrives.
+- **A failure *after* `checkOTP` succeeded ends the session.** By then the
+  visitor is signed in and the code is spent — the SDK drops the verification it
+  was checked against — so neither retyping the code nor asking for another can
+  revive the attempt. Left alone, the screen says the code was wrong while a live
+  session opened by that code sits behind it, and the advice it offers cannot
+  work. `confirmPasswordResetCode` therefore signs out before rethrowing, in a
+  nested `try` so a failed revocation cannot replace the cause the page logs.
+- **The grant lasts 300 seconds, and the password form can outlive it.** A
+  visitor who takes longer than that gets `ForbiddenError` from `changePassword`
+  with nothing whatsoever wrong with the password — reported as "try another" it
+  is advice no password satisfies. The page names that one case and offers the way
+  out ("Start again with a new code"), which is also why the password step has an
+  exit at all: the steps are state, not routes, so the back button is not one.
 - **A missing `VITE_PRELUDE_OTP_LOGIN_CONFIG_ID` is reported, not hidden.**
   `errorMessage` only carries through our API's own messages, so an unnamed
   `Error` would render as "we could not send a code" and send whoever reads it
@@ -353,8 +373,12 @@ needs a mailbox someone can read, exactly like email verification.
   publishable client identifier and is safe in the bundle.
 - Vite only exposes `VITE_`-prefixed variables; `make web` maps `PRELUDE_APP_ID`
   and `PRELUDE_OTP_LOGIN_CONFIG_ID` across rather than keeping a second copy in
-  `.env`. Both mappings have to be repeated in `scripts/deploy-do.sh`, and a new
-  one is easy to add in only one of the two places.
+  `.env`. **Every mapping exists in four places** — `make web`, `make mobile`,
+  `docker-compose.yml` (whose build args must match `web/Dockerfile`'s `ARG`/`ENV`
+  pair) and `scripts/deploy-do.sh` — and a new variable is easy to add to only
+  some of them. Only the deploy script complains: the others build happily with
+  an empty value, so the failure is a screen that reports itself unconfigured on
+  one stack while working on another.
 - The Makefile reads `.env` from the directory it runs in, and a **git worktree
   has none** — so `make web` there serves a build with every Prelude variable
   empty. Sign-in and password reset then fail in ways that look like bugs in the

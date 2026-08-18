@@ -253,6 +253,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [recordVerification],
   );
 
+  // Declared above the password reset rather than beside the other exits,
+  // because confirmPasswordResetCode names it in a dependency array: a `const`
+  // read during render has to already exist, whatever order the calls run in.
+  const logout = useCallback(async () => {
+    try {
+      await sessionClient.logout();
+    } finally {
+      // Clear local state even if the revocation call failed, so the user is
+      // not left looking at a signed-in UI they cannot use.
+      setUser(null);
+      queryClient.clear();
+    }
+  }, [queryClient]);
+
   // Prelude has no anonymous step-up: a challenge is opened on a session, and
   // somebody who has forgotten their password has none. The emailed code is
   // therefore a *login* — the one channel that will mail a signed-out visitor
@@ -286,28 +300,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Prelude checks the code and finalizes a session from it; a wrong one
       // throws here as a typed SDK error and never reaches our API.
       await sessionClient.checkOTP({ code });
-      await completeSignIn();
 
-      const { status } = await sessionClient.requestStepUp({ scope: PASSWORD_WRITE_SCOPE });
-      if (status !== "continue") {
-        // The scope is configured to be granted outright, because the code just
-        // entered is the same proof a challenge here would ask for a second
-        // time. Anything else means the step-up configuration was changed, and
-        // saying so beats stranding the visitor at a password form that cannot
-        // save.
-        throw new Error(`Prelude answered the password step-up with "${status}".`);
-      }
+      // Past this line the visitor is signed in and the code is spent — the SDK
+      // drops the verification it was checked against, so neither re-entering
+      // it nor asking for another can revive this attempt. A failure below
+      // would therefore leave a live session, opened by an emailed code, behind
+      // a screen telling the visitor their code was wrong and to try again:
+      // true of the screen, false of the session, and no way forward from
+      // either. Ending the session is what keeps the two the same story. The
+      // recovery is "Start over", which dispatches afresh; "Send another"
+      // retries the consumed verification and cannot revive this attempt.
+      try {
+        await completeSignIn();
 
-      // A granted-outright scope arrives with no challenge to complete, so
-      // nothing has refreshed the session — and the cached access token can
-      // still predate the grant. canChangePassword is that forced refresh, and
-      // it reads the scope off the new token, so a token that somehow lacks it
-      // fails here rather than as an opaque rejection of the password itself.
-      if (!(await sessionClient.canChangePassword())) {
-        throw new Error("The session did not receive permission to change the password.");
+        const { status } = await sessionClient.requestStepUp({ scope: PASSWORD_WRITE_SCOPE });
+        if (status !== "continue") {
+          // The scope is configured to be granted outright, because the code
+          // just entered is the same proof a challenge here would ask for a
+          // second time. Anything else means the step-up configuration was
+          // changed, and saying so beats stranding the visitor at a password
+          // form that cannot save.
+          throw new Error(`Prelude answered the password step-up with "${status}".`);
+        }
+
+        // A granted-outright scope arrives with no challenge to complete, so
+        // nothing has refreshed the session — and the cached access token can
+        // still predate the grant. canChangePassword is that forced refresh,
+        // and it reads the scope off the new token, so a token that somehow
+        // lacks it fails here rather than as an opaque rejection of the
+        // password itself.
+        if (!(await sessionClient.canChangePassword())) {
+          throw new Error("The session did not receive permission to change the password.");
+        }
+      } catch (caught) {
+        // Its own try: a revocation that also fails must not replace the cause
+        // the page is about to log, which is the only record of what happened.
+        try {
+          await logout();
+        } catch {
+          /* already failing; the original cause is the one worth reporting */
+        }
+        throw caught;
       }
     },
-    [completeSignIn],
+    [completeSignIn, logout],
   );
 
   const changePassword = useCallback(async (password: string) => {
@@ -319,17 +355,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOutOtherDevices = useCallback(async () => {
     await sessionClient.revokeSessions("others");
   }, []);
-
-  const logout = useCallback(async () => {
-    try {
-      await sessionClient.logout();
-    } finally {
-      // Clear local state even if the revocation call failed, so the user is
-      // not left looking at a signed-in UI they cannot use.
-      setUser(null);
-      queryClient.clear();
-    }
-  }, [queryClient]);
 
   const validatePassword = useCallback(
     async (password: string) => {

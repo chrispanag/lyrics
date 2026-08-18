@@ -250,23 +250,29 @@ describe("ForgotPasswordPage", () => {
   ])("reports %s the same way", async (_case, failure) => {
     const confirmPasswordResetCode = vi.fn().mockRejectedValue(failure);
     // The page logs the real cause for whoever has to find it; the assertion is
-    // that the *visitor* cannot tell these three apart.
+    // that the *visitor* cannot tell these three apart. Restored from a finally
+    // rather than the last line: nothing here restores mocks between tests, so a
+    // failing assertion would otherwise silence console.error for every test
+    // after this one — which is exactly what several of them assert about.
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    renderWithProviders(<ForgotPasswordPage />, {
-      route: "/forgot-password",
-      auth: { confirmPasswordResetCode },
-    });
+    try {
+      renderWithProviders(<ForgotPasswordPage />, {
+        route: "/forgot-password",
+        auth: { confirmPasswordResetCode },
+      });
 
-    await userEvent.type(screen.getByLabelText("Email"), "nobody@example.com");
-    await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
-    await userEvent.type(await screen.findByLabelText("Reset code"), "000000");
-    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+      await userEvent.type(screen.getByLabelText("Email"), "nobody@example.com");
+      await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
+      await userEvent.type(await screen.findByLabelText("Reset code"), "000000");
+      await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(await screen.findByText(SAME_CODE_FAILURE)).toBeInTheDocument();
-    expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
-    expect(logged).toHaveBeenCalled();
-    logged.mockRestore();
+      expect(await screen.findByText(SAME_CODE_FAILURE)).toBeInTheDocument();
+      expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
+      expect(logged).toHaveBeenCalled();
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it("saves the new password", async () => {
@@ -280,17 +286,61 @@ describe("ForgotPasswordPage", () => {
     expect(await screen.findByText("Password changed")).toBeInTheDocument();
   });
 
-  it("keeps a rejected password on the password form", async () => {
-    const changePassword = vi
+  // changePassword goes browser→Prelude, so a rejection is one of the SDK's
+  // typed errors and never an ApiError — errorMessage would render its fallback
+  // for every one of them, which is why these two are matched by name. Asserting
+  // against an ApiError here would pass while the real path said nothing.
+  it("keeps a rejected password on the password form and says why", async () => {
+    const invalid = new Error("Password does not meet compliancy requirements.");
+    invalid.name = "InvalidPasswordError";
+    const changePassword = vi.fn().mockRejectedValue(invalid);
+    const validatePassword = vi
       .fn()
-      .mockRejectedValue(new ApiError(400, "invalid_password", "Use at least 8 characters."));
-    await reachPasswordStep({ changePassword });
+      .mockResolvedValue({ valid: false, messages: ["Use at least 8 characters."] });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await userEvent.type(screen.getByLabelText("New password"), "short");
-    await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
+    try {
+      await reachPasswordStep({ changePassword, validatePassword });
 
-    expect(await screen.findByText("Use at least 8 characters.")).toBeInTheDocument();
-    expect(screen.getByLabelText("New password")).toBeInTheDocument();
+      await userEvent.type(screen.getByLabelText("New password"), "short");
+      await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
+
+      expect(
+        await screen.findByText("That password does not meet the requirements."),
+      ).toBeInTheDocument();
+      // The reasons come from the compliancy check rather than being paraphrased.
+      expect(await screen.findByText("• Use at least 8 characters.")).toBeInTheDocument();
+      expect(screen.getByLabelText("New password")).toBeInTheDocument();
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  // The step-up that permits the write is granted for five minutes, so a slow
+  // choice of password is refused with nothing wrong with the password. Told to
+  // try another, the visitor is sent round a loop that no password escapes — so
+  // this one failure has to be named, and there has to be a way out of the step.
+  it("names an expired reset rather than blaming the password", async () => {
+    const expired = new Error("Forbidden");
+    expired.name = "ForbiddenError";
+    const changePassword = vi.fn().mockRejectedValue(expired);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      await reachPasswordStep({ changePassword });
+
+      await userEvent.type(screen.getByLabelText("New password"), "a-better-secret");
+      await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
+
+      expect(
+        await screen.findByText("This reset has expired. Ask for a new code and start again."),
+      ).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: "Start again with a new code" }));
+      expect(await screen.findByLabelText("Email")).toBeInTheDocument();
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   // The reset ends by asking, rather than deciding for them, what should happen
@@ -342,6 +392,35 @@ describe("ForgotPasswordPage", () => {
 
     await waitFor(() => expect(resendPasswordResetCode).toHaveBeenCalled());
     expect(screen.getByRole("button", { name: /Send another in \d+s/ })).toBeDisabled();
+  });
+
+  // Only an address with an account has a dispatch to retry, so this button is
+  // the second place the flow could answer which addresses are registered — and
+  // every observable has to match, not just the message: an error, a cooldown
+  // that never started or a code field left filled would each be an oracle on
+  // its own. Checked against the successful case above, deliberately.
+  it("reports a failed resend exactly like a sent one", async () => {
+    const resendPasswordResetCode = vi.fn().mockRejectedValue(new Error("no such verification"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      renderWithProviders(<ForgotPasswordPage />, {
+        route: "/forgot-password",
+        auth: { resendPasswordResetCode },
+      });
+
+      await userEvent.type(screen.getByLabelText("Email"), "nobody@example.com");
+      await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
+      await userEvent.type(await screen.findByLabelText("Reset code"), "123456");
+      await userEvent.click(screen.getByRole("button", { name: "Send another" }));
+
+      expect(await screen.findByRole("status")).toHaveTextContent(/a new code is on its way/i);
+      expect(screen.getByRole("button", { name: /Send another in \d+s/ })).toBeDisabled();
+      expect(screen.getByLabelText("Reset code")).toHaveValue("");
+      expect(logged).toHaveBeenCalled();
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   // The one failure an operator can fix, and the only one that would otherwise

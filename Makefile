@@ -104,8 +104,11 @@ lint-backend: ## Lint the backend
 # --- frontend ----------------------------------------------------------------
 
 .PHONY: web
-# Vite only exposes variables prefixed with VITE_, so the app ID and the session
-# domain are mapped across here rather than duplicated in .env under two names.
+# Vite only exposes variables prefixed with VITE_, so the app ID, the session
+# domain and the OTP login configuration are mapped across here rather than
+# duplicated in .env under two names. Four places do this mapping — here, the
+# `mobile` target, docker-compose.yml (plus web/Dockerfile) and
+# scripts/deploy-do.sh — so a new variable has four to be added to.
 web: ## Run the web dev server
 	cd web && VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" \
 		VITE_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" \

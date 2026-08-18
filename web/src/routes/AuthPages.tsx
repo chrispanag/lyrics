@@ -315,7 +315,73 @@ function isUnconfigured(caught: unknown): boolean {
   return caught instanceof Error && caught.name === RESET_UNCONFIGURED_ERROR;
 }
 
-/** Which of the three things the reset asks for is on screen. */
+/**
+ * Whether Prelude rejected the password itself rather than the request.
+ *
+ * `changePassword` goes from the browser straight to Prelude, so nothing it
+ * throws is one of our API's errors and `errorMessage` renders its fallback for
+ * every case — the reason has to be recovered some other way.
+ */
+function isInvalidPassword(caught: unknown): boolean {
+  return caught instanceof Error && caught.name === "InvalidPasswordError";
+}
+
+/**
+ * Whether the permission to write a password has run out.
+ *
+ * `prld:pwd:write` is granted for five minutes, so a visitor who takes longer
+ * than that over the form is refused with nothing whatsoever wrong with the
+ * password they chose. Unnamed, it reads as "try another" — advice that no
+ * password can satisfy, offered indefinitely.
+ */
+function isExpiredGrant(caught: unknown): boolean {
+  return caught instanceof Error && caught.name === "ForbiddenError";
+}
+
+/**
+ * The emailed-code field, shared by the two screens that ask for one.
+ *
+ * Both want the same numeric keypad, the same one-time-code autofill, the same
+ * letter spacing and the same digit-stripping, and had drifted into verbatim
+ * copies of all four. Only the label differs: the code means a different thing
+ * on each screen.
+ */
+function CodeField({
+  label,
+  value,
+  error,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  error?: string;
+  onChange: (code: string) => void;
+}) {
+  return (
+    <Field label={label} htmlFor="code" error={error}>
+      <Input
+        id="code"
+        // A numeric keypad on a phone, and the code offered from the
+        // notification the mail app just raised.
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        autoFocus
+        required
+        className="text-center text-lg tracking-[0.4em]"
+        value={value}
+        // Anything that is not a digit cannot be part of a code, and stripping
+        // it here means a pasted "Code: 123456" still works — which is also why
+        // no caller trims what this produces.
+        onChange={(event) =>
+          onChange(event.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))
+        }
+        aria-describedby={error ? "code-error" : undefined}
+      />
+    </Field>
+  );
+}
+
+/** Which of the reset's four steps is on screen. */
 type ResetStep = "email" | "code" | "password" | "done";
 
 /**
@@ -356,6 +422,18 @@ export function ForgotPasswordPage() {
     setNotice("");
   };
 
+  // Back to the first step with nothing carried over but the address, which is
+  // the one thing worth retyping less. Reachable from both middle steps: the
+  // code expires, and so does the permission the code buys, so either can go
+  // stale while the visitor is looking at it — and the steps are state rather
+  // than routes, so the browser's back button is not an exit from them.
+  const startOver = () => {
+    resetFeedback();
+    setCode("");
+    setPassword("");
+    setStep("email");
+  };
+
   const onSubmitEmail = async (event: FormEvent) => {
     event.preventDefault();
     resetFeedback();
@@ -386,7 +464,7 @@ export function ForgotPasswordPage() {
     setSubmitting(true);
 
     try {
-      await confirmPasswordResetCode(code.trim());
+      await confirmPasswordResetCode(code);
       setStep("password");
     } catch (caught) {
       // One message for every failure, deliberately — the same choice the
@@ -410,18 +488,25 @@ export function ForgotPasswordPage() {
     }
   };
 
+  // Uniform in both directions, exactly like the code step and for the same
+  // reason: only an address with an account has a dispatch to retry, so an error
+  // here — or a cooldown that did not start, or a field that was not cleared —
+  // would answer the question the email step took care not to. Every observable
+  // is therefore the same whichever way this goes, and the cause goes to the
+  // console. The cost is the same one the code step pays: a genuine fault reads
+  // as a code on its way that never arrives.
   const onResend = async () => {
     resetFeedback();
     setResending(true);
 
     try {
       await resendPasswordResetCode();
+    } catch (caught) {
+      console.error("A new password reset code could not be sent:", caught);
+    } finally {
       startCooldown();
       setCode("");
       setNotice("A new code is on its way. Use the one in the most recent email.");
-    } catch (caught) {
-      setError(errorMessage(caught, "We could not send a new code. Please try again shortly."));
-    } finally {
       setResending(false);
     }
   };
@@ -435,9 +520,21 @@ export function ForgotPasswordPage() {
       await changePassword(password);
       setStep("done");
     } catch (caught) {
-      setError(
-        errorMessage(caught, "That password could not be saved. Please try another."),
-      );
+      // Nothing here arrives from our API, so errorMessage would render its
+      // fallback for every case — and by this step the visitor is signed in, so
+      // naming a cause gives nothing away. Two are worth naming: a grant that
+      // expired while they chose (nothing wrong with the password, and no
+      // password will do), and a password Prelude refused, whose reasons the
+      // compliancy check already renders as prose for the field's own hints.
+      console.error("The new password could not be saved:", caught);
+      if (isExpiredGrant(caught)) {
+        setError("This reset has expired. Ask for a new code and start again.");
+      } else if (isInvalidPassword(caught)) {
+        setError("That password does not meet the requirements.");
+        await passwordHints.check(password);
+      } else {
+        setError(errorMessage(caught, "That password could not be saved. Please try another."));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -512,20 +609,7 @@ export function ForgotPasswordPage() {
           {error && <ErrorMessage>{error}</ErrorMessage>}
           {notice && <Notice>{notice}</Notice>}
 
-          <Field label="Reset code" htmlFor="code">
-            <Input
-              id="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-              required
-              className="text-center text-lg tracking-[0.4em]"
-              value={code}
-              onChange={(event) =>
-                setCode(event.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))
-              }
-            />
-          </Field>
+          <CodeField label="Reset code" value={code} onChange={setCode} />
 
           <Button
             type="submit"
@@ -544,11 +628,7 @@ export function ForgotPasswordPage() {
             Wrong address?{" "}
             <button
               type="button"
-              onClick={() => {
-                resetFeedback();
-                setCode("");
-                setStep("email");
-              }}
+              onClick={startOver}
               className="font-medium text-stone-500 hover:underline dark:text-stone-400"
             >
               Start over
@@ -584,6 +664,16 @@ export function ForgotPasswordPage() {
             Save new password
           </Button>
         </form>
+
+        <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
+          <button
+            type="button"
+            onClick={startOver}
+            className="font-medium text-stone-500 hover:underline dark:text-stone-400"
+          >
+            Start again with a new code
+          </button>
+        </p>
       </AuthShell>
     );
   }
@@ -698,7 +788,7 @@ export function VerifyEmailPage() {
     setSubmitting(true);
 
     try {
-      await verifyEmail(code.trim());
+      await verifyEmail(code);
       navigate("/", { replace: true });
     } catch (caught) {
       // Prelude checks the code, so a wrong one arrives as one of its typed SDK
@@ -740,25 +830,12 @@ export function VerifyEmailPage() {
         {error && <ErrorMessage>{error}</ErrorMessage>}
         {notice && <Notice>{notice}</Notice>}
 
-        <Field label="Verification code" htmlFor="code" error={fieldErrors.code}>
-          <Input
-            id="code"
-            // A numeric keypad on a phone, and the code offered from the
-            // notification the mail app just raised.
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            autoFocus
-            required
-            className="text-center text-lg tracking-[0.4em]"
-            value={code}
-            // Anything that is not a digit cannot be part of a code, and
-            // stripping it here means a pasted "Code: 123456" still works.
-            onChange={(event) =>
-              setCode(event.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))
-            }
-            aria-describedby={fieldErrors.code ? "code-error" : undefined}
-          />
-        </Field>
+        <CodeField
+          label="Verification code"
+          value={code}
+          error={fieldErrors.code}
+          onChange={setCode}
+        />
 
         <Button
           type="submit"
