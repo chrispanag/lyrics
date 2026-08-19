@@ -1,9 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ListMusic } from "lucide-react";
 
 import { cardChrome, cardHover } from "./cardStyles";
-import { aboveTapZones, tapZoneLayer } from "./tapZoneStyles";
 import { cn } from "@/lib/cn";
 import type { ListPosition, ListStep } from "@/lib/listContext";
 
@@ -11,7 +10,7 @@ import type { ListPosition, ListStep } from "@/lib/listContext";
  * Moving through a list without leaving it.
  *
  * Three affordances for one movement, because they are reached in different
- * ways: the bar is there before the song is read, the zones are under the thumb
+ * ways: the bar is there before the song is read, the strips are under the thumb
  * while it is being read on a phone, and the footer is what the end of long
  * lyrics arrives at. Each is a <Link> rather than a button — the destination is
  * a URL, so opening a neighbor in a new tab, and everything else a browser does
@@ -49,7 +48,6 @@ export function ListSongNavBar({ position }: { position: ListPosition }) {
     <nav
       aria-label="Song navigation"
       className={cn(
-        aboveTapZones,
         cardChrome,
         "mb-5 flex items-center gap-2 bg-white px-3 py-1.5 dark:bg-stone-900",
       )}
@@ -100,34 +98,75 @@ function StepArrow({ step, back }: { step?: ListStep; back?: boolean }) {
   );
 }
 
+/** How long the mark stays before fading, and where having shown it is recorded. */
+const HINT_VISIBLE_MS = 3500;
+const HINT_SEEN_KEY = "lyrics:tap-hint-seen";
+
 /**
- * The left and right edges of a phone screen, as previous and next.
+ * The left and right edges of the lyrics, as previous and next.
  *
- * A story's gesture: the page is read with a thumb near the edge of the screen,
- * and that is where the next song is. Fixed to the viewport rather than placed in
- * the page, so a zone stays under the thumb however far down the lyrics the
- * reader has scrolled — which is what `aboveTapZones` on the page's own controls
- * is for, and the reason there is nothing here that keeps clear of them.
+ * A story's gesture, kept inside the one part of a song page that has nothing to
+ * press. These strips used to be fixed to the viewport and cover the whole of
+ * it, with every control on the page lifted above them one region at a time —
+ * an allowlist, and so a thing that had to be right in two places at once. Two
+ * failures came of that, both of them only on a phone. A near miss became a
+ * navigation: the gap between two buttons, or the few pixels under Back, paged
+ * the song instead of doing nothing. And a strip could take a slightly-off tap
+ * on a small control outright, because touch adjustment weighs every clickable
+ * candidate under the contact patch rather than the one point beneath its
+ * center — which is why it went wrong on a phone and never under a mouse.
+ *
+ * Scoped to the lyrics, nothing needs lifting and no allowlist has to be kept:
+ * the strips only ever lie over text. The cost is that a song with no lyrics has
+ * no strips, and a short one has a short pair — the bar above and the footer
+ * below are still there, and both say where they go, which is more than a strip
+ * ever did.
  *
  * Deliberately *without* `touch-none`, which the drag handle next door needs and
- * this must not have: it would hand this element's gestures to the drag library's
- * side of the fence, and a strip down each edge of the screen that cannot be
- * scrolled through makes a long song unreadable. A tap arrives as a click
- * without it.
+ * this must not have: it would hand this element's gestures to the drag
+ * library's side of the fence, and a strip down each edge of the lyrics that
+ * cannot be scrolled through makes a long song unreadable. A tap arrives as a
+ * click without it.
  *
  * Nothing is rendered at the ends of a list, so an edge tap there falls through
- * to the page rather than pressing a dead control.
+ * to the lyrics rather than pressing a dead control.
  */
 export function ListSongTapZones({ position }: { position: ListPosition }) {
+  const strips = useRef<HTMLDivElement>(null);
+  const hinting = useTapHint(strips);
+
   return (
-    <>
-      <TapZone step={position.previous} back />
-      <TapZone step={position.next} />
-    </>
+    <div
+      ref={strips}
+      // Reaching a page's worth of padding past the column on each side, so a
+      // strip ends at the edge of a phone screen rather than at the edge of the
+      // text.
+      //
+      // `pointer-events-none` here and `pointer-events-auto` on the strips: this
+      // box spans the full width of the lyrics, and left to take pointers it
+      // would swallow every tap and drag on the text — no selecting a line, no
+      // following a link a future lyrics view might put in one.
+      //
+      // `md:hidden` is also what keeps `useTapHint` from spending its one
+      // showing at a desk: a hidden element has no box, so it never comes into
+      // view and the hint below never fires.
+      className="pointer-events-none absolute -inset-x-4 inset-y-0 md:hidden"
+    >
+      <TapZone step={position.previous} back hinting={hinting} />
+      <TapZone step={position.next} hinting={hinting} />
+    </div>
   );
 }
 
-function TapZone({ step, back }: { step?: ListStep; back?: boolean }) {
+function TapZone({
+  step,
+  back,
+  hinting,
+}: {
+  step?: ListStep;
+  back?: boolean;
+  hinting: boolean;
+}) {
   if (!step) return null;
 
   const Icon = back ? ChevronLeft : ChevronRight;
@@ -135,32 +174,88 @@ function TapZone({ step, back }: { step?: ListStep; back?: boolean }) {
   return (
     <Link
       to={step.href}
-      // Named by where it goes rather than by which way it goes: a zone carries
+      // Named by where it goes rather than by which way it goes: a strip carries
       // no visible label of its own, and the title is what a reader wants to
       // know before pressing it.
       aria-label={`${back ? "Previous" : "Next"}: ${step.title}`}
       className={cn(
-        // The strip is the full height of the screen; its mark sits low in it,
-        // where a thumb rests and clear of the video — which paints above the
-        // zone by design, and would hide a mark placed at the middle of the
-        // screen on every song that has one. pb-24 clears the tab bar, the same
-        // allowance the page itself makes for it.
-        tapZoneLayer,
-        "fixed inset-y-0 flex w-12 select-none items-end justify-center pb-24",
-        "active:bg-stone-500/10 md:hidden dark:active:bg-white/10",
+        "pointer-events-auto absolute inset-y-0 flex w-12 select-none items-end justify-center",
+        "active:bg-stone-500/10 dark:active:bg-white/10",
         back ? "left-0" : "right-0",
       )}
     >
-      {/* The chevron carries its own backing: it floats over whatever the song
-          puts behind it, and a translucent gray on gray is a gesture nobody can
-          see — which is a gesture nobody finds. Opaque enough not to need a
-          backdrop filter, which would cost a blur pass per scrolled frame for
-          28px of decoration. */}
-      <span className="flex size-7 items-center justify-center rounded-full bg-stone-50/90 text-stone-500 shadow-sm dark:bg-stone-900/90 dark:text-stone-400">
-        <Icon aria-hidden className="size-5" />
+      {/* The mark that says the strip is there, and the only thing that does.
+          `sticky` puts it wherever in the lyrics the reader is when it plays,
+          rather than at the end of a strip that may be a screen and a half
+          long; `bottom-24` rests it in thumb reach and clear of the tab bar,
+          the same allowance the page itself makes for it.
+
+          It carries its own backing because it floats over the lyrics, and a
+          translucent gray on gray is a gesture nobody can see — which is a
+          gesture nobody finds. Opaque enough not to need a backdrop filter,
+          which would cost a blur pass per scrolled frame for 28px of
+          decoration. */}
+      <span
+        aria-hidden
+        className={cn(
+          "sticky bottom-24 flex size-7 items-center justify-center rounded-full bg-stone-50/90 text-stone-500 shadow-sm transition-opacity duration-700 dark:bg-stone-900/90 dark:text-stone-400",
+          hinting ? "opacity-100" : "opacity-0",
+        )}
+      >
+        <Icon className="size-5" />
       </span>
     </Link>
   );
+}
+
+/**
+ * Shows the mark once, the first time the strips are really on screen.
+ *
+ * A strip has no label and no chrome of its own, so something has to say that it
+ * is there. Shown on arrival at every song it would be a flash on every step,
+ * which is a decoration arguing with the reading surface it sits on; shown never,
+ * the gesture is found by accident or not at all. Once per device, then the
+ * lyrics are clean.
+ *
+ * It waits for the strips to come into view rather than for the page to mount,
+ * because the lyrics of a song with a video start below the fold: spent on
+ * arrival, the one showing there will ever be would play where nobody could see
+ * it. `rootMargin` holds it back a little further still — the mark rests about
+ * 124px up from the bottom of the viewport, so a sliver of strip peeking over
+ * that edge is not yet anywhere it can be read.
+ *
+ * Recorded when it is shown rather than when it finishes, so a reader who steps
+ * on mid-fade is not shown it again on the next song.
+ */
+function useTapHint(strips: RefObject<HTMLElement | null>): boolean {
+  const [hinting, setHinting] = useState(false);
+
+  useEffect(() => {
+    const element = strips.current;
+    if (!element) return;
+    if (localStorage.getItem(HINT_SEEN_KEY) !== null) return;
+
+    let fade: ReturnType<typeof setTimeout> | undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+
+        observer.disconnect();
+        localStorage.setItem(HINT_SEEN_KEY, "1");
+        setHinting(true);
+        fade = setTimeout(() => setHinting(false), HINT_VISIBLE_MS);
+      },
+      { rootMargin: "0px 0px -140px 0px" },
+    );
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(fade);
+    };
+  }, [strips]);
+
+  return hinting;
 }
 
 /**
@@ -180,10 +275,7 @@ export function ListSongNavFooter({ position }: { position: ListPosition }) {
   return (
     <nav
       aria-label="More from this list"
-      className={cn(
-        aboveTapZones,
-        "mt-10 grid gap-2 border-t border-stone-200 pt-5 sm:grid-cols-2 dark:border-stone-800",
-      )}
+      className="mt-10 grid gap-2 border-t border-stone-200 pt-5 sm:grid-cols-2 dark:border-stone-800"
     >
       <StepCard step={position.previous} back />
       <StepCard step={position.next} />

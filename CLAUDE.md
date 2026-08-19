@@ -271,18 +271,35 @@ needs a mailbox someone can read, exactly like email verification.
   desktop, where a mouse has no such conflict. `SortableSongList` is pinned by a
   keyboard-driven test, which is also the only way to drive dnd-kit in jsdom —
   see `src/test/rects.ts` for why the rows need stubbed rectangles.
-- **The song page's tap zones invert both halves of the rule above, and fail
-  just as quietly.** They are the phone's previous and next — two strips fixed
-  down the edges of the viewport, so a story's gesture pages through a list — and
-  they must *not* have `touch-none`, which would leave a strip down each side of
-  the screen that cannot be scrolled through and make a long song unreadable.
-  They also lie over whatever the page puts at those edges, so anything
-  interactive reaching the edge of the column has to be lifted with
-  `aboveTapZones` or it stops answering taps: Back, a credit, the play button.
-  Both failures are invisible on a desktop, where the zones are not rendered at
-  all. `components/tapZoneStyles.ts` holds the two layers together and records
-  which regions are deliberately left below them — the lyrics and the notes,
-  neither of which is interactive — and why the lyrics can never be lifted.
+- **The song page's tap strips belong inside the lyrics, and nowhere wider.**
+  They are the phone's previous and next — a story's gesture, paging through a
+  list — and a strip takes every tap in the box it is given. Given the viewport,
+  as the first version was, that box is the whole page: every control it reached
+  then had to be lifted above it one region at a time, and two things went wrong
+  that no amount of lifting fixes. A near miss became a navigation — the gap
+  between two buttons, the few pixels under Back — and a strip could take a
+  slightly-off tap on a small control outright, because touch adjustment weighs
+  every clickable candidate under the contact patch rather than the one point
+  beneath its center. Both only ever on a phone, which is why hit-testing single
+  points in a desktop browser said the lift was holding. Scoped to the lyrics,
+  the strips can only lie over text; the cost is that a song with no lyrics has
+  none, and the bar and footer are the way on there. Keep them in the lyrics box
+  — `SongDetailPage`'s spec asks for them `within` it — and keep the container
+  `pointer-events-none` with the strips themselves `auto`, or the box spanning
+  the column takes every tap and drag on the text with it.
+- **The strips must *not* have `touch-none`**, which inverts the drag handle's
+  rule above: with it, a strip down each edge of the lyrics cannot be scrolled
+  through, and a long song becomes unreadable. Invisible on a desktop, where the
+  strips are not rendered at all.
+- **The mark that says a strip is there is shown once per device, and waits to be
+  on screen before spending it.** It is the only visible sign of the gesture, so
+  the timing is the whole of it: fired on mount it plays below the fold on any
+  song whose lyrics start there, and a showing nobody sees is the same as none.
+  `useTapHint` waits for the strips to intersect the viewport, less a `rootMargin`
+  that covers where the mark rests — and `md:hidden` on the strips is what keeps a
+  desktop from spending the showing, since a hidden element never intersects at
+  all. jsdom has no IntersectionObserver: `src/test/intersection.ts` is a stub
+  that answers back, so a spec can say the lyrics have come into view.
 - **A song reached from a list carries `?list=<id>`, and every step keeps it.**
   Dropped anywhere along the way, the next song is a dead end: the page still
   renders, the reader is simply out of the list with nothing saying so. Which is

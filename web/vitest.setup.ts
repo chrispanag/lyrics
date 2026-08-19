@@ -2,11 +2,14 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
+import { StubIntersectionObserver, resetObservers } from "./src/test/intersection";
 import { server } from "./src/test/server";
 
-// jsdom implements neither of these, and the layout and theme code calls both
-// on mount — without stubs every component test throws before rendering.
+// jsdom implements none of these, and the layout, theme and song page call them
+// on mount — without stubs every component test throws before rendering. The
+// observer is the one that answers back: see src/test/intersection.ts.
 beforeAll(() => {
+  vi.stubGlobal("IntersectionObserver", StubIntersectionObserver);
   vi.stubGlobal(
     "matchMedia",
     vi.fn().mockImplementation((query: string) => ({
@@ -29,6 +32,7 @@ beforeAll(() => {
 
 afterEach(() => {
   cleanup();
+  resetObservers();
   server.resetHandlers();
   localStorage.clear();
 });
