@@ -100,7 +100,7 @@ export function listById(...lists: SongList[]) {
   });
 }
 
-/** The API's error envelope, which four specs had written out by hand. */
+/** The API's error envelope, which the specs had each written out by hand. */
 export function notFound(message: string) {
   return HttpResponse.json({ error: { code: "not_found", message } }, { status: 404 });
 }

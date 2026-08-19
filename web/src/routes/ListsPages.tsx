@@ -13,8 +13,9 @@ import {
   useReorderList,
   useUpdateList,
 } from "@/api/hooks";
+import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
-import { cardChrome } from "@/components/cardStyles";
+import { cardChrome, cardHover } from "@/components/cardStyles";
 import { SongRow } from "@/components/SongRow";
 import { Button, EmptyState, ErrorMessage, Field, Input, Sheet, Skeleton } from "@/components/ui";
 import { BackButton } from "@/components/BackButton";
@@ -115,7 +116,8 @@ export function ListsPage() {
               to={`/lists/${list.id}`}
               className={cn(
                 cardChrome,
-                "flex items-center justify-between gap-3 bg-white p-4 transition-colors hover:border-brand-300 dark:bg-stone-900",
+                cardHover,
+                "flex items-center justify-between gap-3 bg-white p-4 dark:bg-stone-900",
               )}
             >
               <div className="min-w-0">
@@ -248,10 +250,7 @@ export function ListDetailPage() {
 
   const onSave = () => {
     if (!user) {
-      // Same shape RequireAuth uses, and read from the router for the same
-      // reason it gives: the route the visitor is on is the destination, and
-      // rebuilding it from an id drifts the day the route gains a segment.
-      navigate("/login", { state: { from: location.pathname } });
+      navigate("/login", { state: returnTo(location) });
       return;
     }
     void saveCopy();

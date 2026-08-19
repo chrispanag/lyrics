@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import { RESET_UNCONFIGURED_ERROR } from "@/auth/context";
+import { returnDestination } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { buttonClasses } from "@/components/buttonStyles";
 import { Button, ErrorMessage, Field, Input, Notice, Spinner } from "@/components/ui";
@@ -35,8 +36,8 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Return the user to wherever they were headed before being asked to sign in.
-  const destination = (location.state as { from?: string } | null)?.from ?? "/";
+  // Wherever they were headed before being asked to sign in.
+  const destination = returnDestination(location.state);
 
   if (user) return <Navigate to={destination} replace />;
 

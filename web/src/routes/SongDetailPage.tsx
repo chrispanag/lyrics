@@ -19,12 +19,12 @@ import {
   useSongLists,
   useToggleSongInList,
 } from "@/api/hooks";
+import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
-import { ListSongNavBar, ListSongNavFooter, ListSongTapZones } from "@/components/ListSongNav";
+import { ListSongNavBar, ListSongNavFooter, ListSongTapStrips } from "@/components/ListSongNav";
 import { YouTubeFacade } from "@/components/YouTubeFacade";
 import { buttonClasses } from "@/components/buttonStyles";
 import { Button, ErrorMessage, Sheet, Skeleton } from "@/components/ui";
-import { aboveTapZones } from "@/components/tapZoneStyles";
 import { CREDIT_DISPLAY_ORDER } from "@/lib/credits";
 import { cn } from "@/lib/cn";
 import { LIST_PARAM, listPosition } from "@/lib/listContext";
@@ -114,7 +114,7 @@ export function SongDetailPage() {
 
   return (
     <article className="mx-auto max-w-2xl px-4 py-4">
-      <div className={cn(aboveTapZones, "mb-4 flex items-center justify-between gap-2")}>
+      <div className="mb-4 flex items-center justify-between gap-2">
         <BackButton />
 
         <div className="flex items-center gap-1">
@@ -132,9 +132,7 @@ export function SongDetailPage() {
             // straight back — with the sheet they asked for never opening.
             disabled={sessionLoading}
             onClick={() =>
-              user
-                ? setListSheetOpen(true)
-                : navigate("/login", { state: { from: location.pathname } })
+              user ? setListSheetOpen(true) : navigate("/login", { state: returnTo(location) })
             }
           >
             <ListPlus aria-hidden className="size-4" />
@@ -167,7 +165,7 @@ export function SongDetailPage() {
 
       {position && <ListSongNavBar position={position} />}
 
-      <header className={cn(aboveTapZones, "mb-5")}>
+      <header className="mb-5">
         <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">
           {song.title}
         </h1>
@@ -218,13 +216,13 @@ export function SongDetailPage() {
       </header>
 
       {song.youtube_video_id && (
-        <div className={cn(aboveTapZones, "mb-6")}>
+        <div className="mb-6">
           <YouTubeFacade videoId={song.youtube_video_id} title={song.title} />
         </div>
       )}
 
       <section aria-label="Lyrics">
-        <div className={cn(aboveTapZones, "mb-2 flex items-center justify-between")}>
+        <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Lyrics
           </h2>
@@ -251,21 +249,32 @@ export function SongDetailPage() {
           </div>
         </div>
 
-        {song.lyrics?.trim() ? (
-          // whitespace-pre-line preserves the line and verse breaks that give
-          // lyrics their shape, without needing any markup in the stored text.
-          <p
-            className={cn(
-              "whitespace-pre-line leading-loose text-stone-800 dark:text-stone-200",
-              FONT_SIZES[fontSizeIndex],
-            )}
-            style={{ fontFamily: "var(--font-lyrics)" }}
-          >
-            {song.lyrics}
-          </p>
-        ) : (
-          <p className="text-sm italic text-stone-500">No lyrics have been added yet.</p>
-        )}
+        {/* The one region of the page with nothing to press, which is why the
+            phone's tap strips live in here and nowhere else: they can only ever
+            lie over text, so no control on the page has to be lifted clear of
+            them and none can be added that quietly is not. Relative so they
+            have this box to measure themselves against. */}
+        <div className="relative">
+          {song.lyrics?.trim() ? (
+            // whitespace-pre-line preserves the line and verse breaks that give
+            // lyrics their shape, without needing any markup in the stored text.
+            <p
+              className={cn(
+                "whitespace-pre-line leading-loose text-stone-800 dark:text-stone-200",
+                FONT_SIZES[fontSizeIndex],
+              )}
+              style={{ fontFamily: "var(--font-lyrics)" }}
+            >
+              {song.lyrics}
+            </p>
+          ) : (
+            <p className="text-sm italic text-stone-500">No lyrics have been added yet.</p>
+          )}
+
+          {/* After the lyrics, so a screen reader reaches the song before the
+              ways out of it. */}
+          {position && <ListSongTapStrips position={position} />}
+        </div>
       </section>
 
       {song.notes && (
@@ -308,9 +317,6 @@ export function SongDetailPage() {
           </Button>
         </div>
       </Sheet>
-
-      {/* Last, so a screen reader reaches the song before the ways out of it. */}
-      {position && <ListSongTapZones position={position} />}
     </article>
   );
 }

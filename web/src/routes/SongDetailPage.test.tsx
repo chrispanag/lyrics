@@ -1,19 +1,37 @@
-import { screen, within } from "@testing-library/react";
+import { act, cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 
 import { SongDetailPage } from "./SongDetailPage";
+import { returnDestination } from "@/auth/returnTo";
 import { API, listById, makeList, makeSong, makeUser, notFound } from "@/test/handlers";
+import { intersectAll } from "@/test/intersection";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
+
+/**
+ * Stands in for the sign-in screen, showing where it would send the visitor back
+ * to. It reads the address with `returnDestination`, which is what the real
+ * screen reads it with, so the address it names here is the one a signed-in
+ * visitor lands on rather than a second opinion about it.
+ */
+function SignInStub() {
+  const { state } = useLocation();
+  return (
+    <div>
+      <h1>Sign in</h1>
+      <p>Return to {returnDestination(state)}</p>
+    </div>
+  );
+}
 
 function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
   return renderWithProviders(
     <Routes>
       <Route path="/songs/:id" element={<SongDetailPage />} />
-      <Route path="/login" element={<h1>Sign in</h1>} />
+      <Route path="/login" element={<SignInStub />} />
     </Routes>,
     { route: "/songs/song-1", ...options },
   );
@@ -222,18 +240,57 @@ describe("SongDetailPage inside a list", () => {
     expect(screen.queryByRole("link", { name: "Previous song" })).not.toBeInTheDocument();
   });
 
-  // The zones are what a phone gets instead of the arrows, and they carry the
+  // The strips are what a phone gets instead of the arrows, and they carry the
   // title because nothing about them is visible to read.
-  it("names the neighboring songs on its edge tap zones", async () => {
+  //
+  // Asked for inside the lyrics, which is the whole of the fix and not a detail
+  // of it: a strip lies over whatever shares its box, so the box it is given has
+  // to be the one part of the page with nothing to press. Anywhere wider and
+  // every control it reaches has to be lifted clear of it by hand — an allowlist
+  // that was silently wrong twice, and only ever on a phone.
+  it("puts the neighboring songs on strips over the lyrics, and names them", async () => {
     serveList();
 
     renderDetail({ route: "/songs/song-2?list=list-1" });
 
-    expect(await screen.findByRole("link", { name: "Previous: First" })).toHaveAttribute(
+    const lyrics = within(await screen.findByRole("region", { name: "Lyrics" }));
+    expect(lyrics.getByRole("link", { name: "Previous: First" })).toHaveAttribute(
       "href",
       "/songs/song-1?list=list-1",
     );
-    expect(screen.getByRole("link", { name: "Next: Third" })).toBeInTheDocument();
+    expect(lyrics.getByRole("link", { name: "Next: Third" })).toBeInTheDocument();
+
+    // And nothing else is in there with them, which is the same invariant from
+    // the side that regresses: a strip takes every tap in its box, so a control
+    // put in the lyrics is a control under a strip. Tripped by a link added
+    // anywhere in this section, which is a question worth being asked.
+    expect(lyrics.getAllByRole("link")).toHaveLength(2);
+  });
+
+  // A strip has nothing visible about it, so the mark is the only thing that
+  // says the gesture is there — and it is shown once, which makes when it plays
+  // the whole question. Held back until the strips are on screen, because the
+  // lyrics of a song with a video start below the fold and the one showing there
+  // will ever be would be spent where nobody could see it.
+  it("shows the paging mark when the lyrics come into view, once per device", async () => {
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    const mark = (await screen.findByRole("link", { name: "Next: Third" })).querySelector("[aria-hidden]");
+    expect(mark).toHaveClass("opacity-0");
+
+    act(() => intersectAll());
+    expect(mark).toHaveClass("opacity-100");
+
+    // The next song of the list, on the same device: the mark has done its job
+    // and the lyrics are left alone.
+    cleanup();
+    renderDetail({ route: "/songs/song-3?list=list-1" });
+
+    const again = (await screen.findByRole("link", { name: "Previous: Second" })).querySelector("[aria-hidden]");
+    act(() => intersectAll());
+    expect(again).toHaveClass("opacity-0");
   });
 
   it("names them again where the lyrics end", async () => {
@@ -277,6 +334,22 @@ describe("SongDetailPage inside a list", () => {
 
     expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: /song navigation/i })).not.toBeInTheDocument();
+  });
+
+  // The sign-in round trip is the one way out of this page that comes back to
+  // it, so it is the one that must carry the parameter. Sent away with the path
+  // alone, a guest who presses Save returns to the same song stripped of its
+  // list — the dead end this navigation exists to prevent, reached by the only
+  // control on the page that promises to bring them back.
+  it("keeps the list across the sign-in round trip", async () => {
+    const user = userEvent.setup();
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=list-1", user: null });
+
+    await user.click(await screen.findByRole("button", { name: "Save to a list" }));
+
+    expect(await screen.findByText("Return to /songs/song-2?list=list-1")).toBeInTheDocument();
   });
 
   // Nothing asks for a list when a song is opened from browse, where there is
