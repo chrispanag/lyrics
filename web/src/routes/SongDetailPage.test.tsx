@@ -5,23 +5,24 @@ import { describe, expect, it } from "vitest";
 import { Route, Routes, useLocation } from "react-router-dom";
 
 import { SongDetailPage } from "./SongDetailPage";
+import { returnDestination } from "@/auth/returnTo";
 import { API, listById, makeList, makeSong, makeUser, notFound } from "@/test/handlers";
-import { scrollIntoView } from "@/test/intersection";
+import { intersectAll } from "@/test/intersection";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
 /**
  * Stands in for the sign-in screen, showing where it would send the visitor back
- * to. That is what `AuthPages` does with the same state, so the address it names
- * here is the address a signed-in visitor lands on.
+ * to. It reads the address with `returnDestination`, which is what the real
+ * screen reads it with, so the address it names here is the one a signed-in
+ * visitor lands on rather than a second opinion about it.
  */
 function SignInStub() {
   const { state } = useLocation();
-  const from = (state as { from?: string } | null)?.from ?? "/";
   return (
     <div>
       <h1>Sign in</h1>
-      <p>Return to {from}</p>
+      <p>Return to {returnDestination(state)}</p>
     </div>
   );
 }
@@ -258,6 +259,12 @@ describe("SongDetailPage inside a list", () => {
       "/songs/song-1?list=list-1",
     );
     expect(lyrics.getByRole("link", { name: "Next: Third" })).toBeInTheDocument();
+
+    // And nothing else is in there with them, which is the same invariant from
+    // the side that regresses: a strip takes every tap in its box, so a control
+    // put in the lyrics is a control under a strip. Tripped by a link added
+    // anywhere in this section, which is a question worth being asked.
+    expect(lyrics.getAllByRole("link")).toHaveLength(2);
   });
 
   // A strip has nothing visible about it, so the mark is the only thing that
@@ -270,10 +277,10 @@ describe("SongDetailPage inside a list", () => {
 
     renderDetail({ route: "/songs/song-2?list=list-1" });
 
-    const mark = (await screen.findByRole("link", { name: "Next: Third" })).firstElementChild;
+    const mark = (await screen.findByRole("link", { name: "Next: Third" })).querySelector("[aria-hidden]");
     expect(mark).toHaveClass("opacity-0");
 
-    act(() => scrollIntoView());
+    act(() => intersectAll());
     expect(mark).toHaveClass("opacity-100");
 
     // The next song of the list, on the same device: the mark has done its job
@@ -281,8 +288,8 @@ describe("SongDetailPage inside a list", () => {
     cleanup();
     renderDetail({ route: "/songs/song-3?list=list-1" });
 
-    const again = (await screen.findByRole("link", { name: "Previous: Second" })).firstElementChild;
-    act(() => scrollIntoView());
+    const again = (await screen.findByRole("link", { name: "Previous: Second" })).querySelector("[aria-hidden]");
+    act(() => intersectAll());
     expect(again).toHaveClass("opacity-0");
   });
 
@@ -342,8 +349,7 @@ describe("SongDetailPage inside a list", () => {
 
     await user.click(await screen.findByRole("button", { name: "Save to a list" }));
 
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
-    expect(screen.getByText("Return to /songs/song-2?list=list-1")).toBeInTheDocument();
+    expect(await screen.findByText("Return to /songs/song-2?list=list-1")).toBeInTheDocument();
   });
 
   // Nothing asks for a list when a song is opened from browse, where there is

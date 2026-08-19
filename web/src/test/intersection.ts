@@ -4,7 +4,7 @@
  * A no-op stub would be enough to keep the tap strips from throwing on mount,
  * but the one thing worth pinning about their hint is that it waits for the
  * strips to be on screen before spending the single showing it gets. A spec
- * therefore needs a way to say that they are, which is `scrollIntoView()`.
+ * therefore needs a way to say that they are, which is `intersectAll()`.
  *
  * Nothing here measures anything: jsdom has no layout, so an entry is only ever
  * "visible" because a test said so.
@@ -15,17 +15,15 @@ type Callback = (entries: IntersectionObserverEntry[], observer: IntersectionObs
 const live = new Set<StubIntersectionObserver>();
 
 class StubIntersectionObserver implements IntersectionObserver {
+  // The three the interface demands and nothing reads. A margin held here would
+  // be a number a spec could believe was being applied to something.
   readonly root = null;
-  readonly rootMargin: string;
+  readonly rootMargin = "0px";
   readonly thresholds: readonly number[] = [0];
 
   private readonly targets = new Set<Element>();
 
-  constructor(
-    private readonly callback: Callback,
-    options?: IntersectionObserverInit,
-  ) {
-    this.rootMargin = options?.rootMargin ?? "0px";
+  constructor(private readonly callback: Callback) {
     live.add(this);
   }
 
@@ -60,12 +58,14 @@ class StubIntersectionObserver implements IntersectionObserver {
 
 export { StubIntersectionObserver };
 
-/** Tells everything currently being observed that it has come into view. */
-export function scrollIntoView(): void {
+/**
+ * Tells everything currently being observed that it has come into view.
+ *
+ * Everything, since one component observes: the day a second one does, this
+ * takes the element to report on. Unmounting is what empties the set — the
+ * hook's effect cleanup disconnects, and RTL's `cleanup()` runs first in the
+ * shared teardown — so nothing has to be reset between specs.
+ */
+export function intersectAll(): void {
   for (const observer of [...live]) observer.report();
-}
-
-/** Drops observers left behind by an unmounted tree. */
-export function resetObservers(): void {
-  live.clear();
 }

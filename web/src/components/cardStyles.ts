@@ -4,8 +4,9 @@
  *
  * Shared for the reason `rowControlChrome` next door is: five sites stated the
  * same border, and the brand hover twice character for character, and the copies
- * had already begun to drift — the lists index carries a partial version of the
- * accent below, and nothing failed to say so.
+ * had already begun to drift, and nothing failed to say so: the lists index had a
+ * partial version of the accent below, the border without the tint, until this
+ * module took it over.
  *
  * Split in two, and neither holds a background or padding: `cn` is a plain join,
  * so a caller cannot take a property back out. A step through a list wants no

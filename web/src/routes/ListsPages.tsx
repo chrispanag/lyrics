@@ -13,6 +13,7 @@ import {
   useReorderList,
   useUpdateList,
 } from "@/api/hooks";
+import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { cardChrome, cardHover } from "@/components/cardStyles";
 import { SongRow } from "@/components/SongRow";
@@ -249,10 +250,7 @@ export function ListDetailPage() {
 
   const onSave = () => {
     if (!user) {
-      // Same shape RequireAuth uses, and read from the router for the same
-      // reason it gives: the route the visitor is on is the destination, and
-      // rebuilding it from an id drifts the day the route gains a segment.
-      navigate("/login", { state: { from: location.pathname } });
+      navigate("/login", { state: returnTo(location) });
       return;
     }
     void saveCopy();

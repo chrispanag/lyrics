@@ -1,6 +1,7 @@
 import { lazy } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
+import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { Layout } from "@/components/Layout";
 import { EmptyState, Spinner } from "@/components/ui";
@@ -32,10 +33,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
   if (loading) return <Spinner />;
   if (!user) {
-    // Remember where they were going so sign-in can return them there. The
-    // router's location, not window.location, so a redirect mid-navigation
-    // records the destination rather than the page being left.
-    return <Navigate to="/login" replace state={{ from: routerLocation.pathname }} />;
+    return <Navigate to="/login" replace state={returnTo(routerLocation)} />;
   }
   return <>{children}</>;
 }

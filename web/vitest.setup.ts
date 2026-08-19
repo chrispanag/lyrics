@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
-import { StubIntersectionObserver, resetObservers } from "./src/test/intersection";
+import { StubIntersectionObserver } from "./src/test/intersection";
 import { server } from "./src/test/server";
 
 // jsdom implements none of these, and the layout, theme and song page call them
@@ -32,7 +32,6 @@ beforeAll(() => {
 
 afterEach(() => {
   cleanup();
-  resetObservers();
   server.resetHandlers();
   localStorage.clear();
 });

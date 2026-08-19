@@ -131,9 +131,14 @@ const HINT_SEEN_KEY = "lyrics:tap-hint-seen";
  * Nothing is rendered at the ends of a list, so an edge tap there falls through
  * to the lyrics rather than pressing a dead control.
  */
-export function ListSongTapZones({ position }: { position: ListPosition }) {
+export function ListSongTapStrips({ position }: { position: ListPosition }) {
   const strips = useRef<HTMLDivElement>(null);
   const hinting = useTapHint(strips);
+
+  // A list of one has nothing either side, and the same early return the footer
+  // makes. Without it this renders an empty box and starts an observer that can
+  // only spend the mark's one showing on a page with no strips to show it on.
+  if (!position.previous && !position.next) return null;
 
   return (
     <div
@@ -152,13 +157,13 @@ export function ListSongTapZones({ position }: { position: ListPosition }) {
       // view and the hint below never fires.
       className="pointer-events-none absolute -inset-x-4 inset-y-0 md:hidden"
     >
-      <TapZone step={position.previous} back hinting={hinting} />
-      <TapZone step={position.next} hinting={hinting} />
+      <TapStrip step={position.previous} back hinting={hinting} />
+      <TapStrip step={position.next} hinting={hinting} />
     </div>
   );
 }
 
-function TapZone({
+function TapStrip({
   step,
   back,
   hinting,
@@ -262,7 +267,7 @@ function useTapHint(strips: RefObject<HTMLElement | null>): boolean {
  * The songs on either side, named, where long lyrics end.
  *
  * The bar has scrolled away by the time a reader reaches here, and a phone's tap
- * zones say nothing about what they lead to. This is the one place with the room
+ * strips say nothing about what they lead to. This is the one place with the room
  * to name both.
  *
  * A list of one has neither, and the empty rule its border would draw under the
@@ -330,8 +335,10 @@ function StepCard({ step, back }: { step?: ListStep; back?: boolean }) {
 function useArrowKeyPaging(position: ListPosition): void {
   const navigate = useNavigate();
   // The hrefs rather than the steps: `position` is built during render, so it is
-  // a new object every time, and the listener would be torn down and rebuilt on
-  // every keystroke it did not handle.
+  // a new object every time and would rebuild the listener on every re-render
+  // the page has — changing the text size, a query settling. Two strings and
+  // `navigate` also keep what the listener holds for the life of the window down
+  // to what it reads.
   const previousHref = position.previous?.href;
   const nextHref = position.next?.href;
 

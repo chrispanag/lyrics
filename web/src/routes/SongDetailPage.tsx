@@ -19,8 +19,9 @@ import {
   useSongLists,
   useToggleSongInList,
 } from "@/api/hooks";
+import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
-import { ListSongNavBar, ListSongNavFooter, ListSongTapZones } from "@/components/ListSongNav";
+import { ListSongNavBar, ListSongNavFooter, ListSongTapStrips } from "@/components/ListSongNav";
 import { YouTubeFacade } from "@/components/YouTubeFacade";
 import { buttonClasses } from "@/components/buttonStyles";
 import { Button, ErrorMessage, Sheet, Skeleton } from "@/components/ui";
@@ -131,16 +132,7 @@ export function SongDetailPage() {
             // straight back — with the sheet they asked for never opening.
             disabled={sessionLoading}
             onClick={() =>
-              user
-                ? setListSheetOpen(true)
-                // The search string travels with the path, not just the path:
-                // `?list=` is what keeps a reader inside the list they came
-                // from, and returning them to the bare song after they sign in
-                // strands them exactly where this page's navigation exists to
-                // stop — silently, since the song still renders.
-                : navigate("/login", {
-                    state: { from: location.pathname + location.search },
-                  })
+              user ? setListSheetOpen(true) : navigate("/login", { state: returnTo(location) })
             }
           >
             <ListPlus aria-hidden className="size-4" />
@@ -281,7 +273,7 @@ export function SongDetailPage() {
 
           {/* After the lyrics, so a screen reader reaches the song before the
               ways out of it. */}
-          {position && <ListSongTapZones position={position} />}
+          {position && <ListSongTapStrips position={position} />}
         </div>
       </section>
 
@@ -325,7 +317,6 @@ export function SongDetailPage() {
           </Button>
         </div>
       </Sheet>
-
     </article>
   );
 }

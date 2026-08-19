@@ -282,8 +282,10 @@ needs a mailbox someone can read, exactly like email verification.
   every clickable candidate under the contact patch rather than the one point
   beneath its center. Both only ever on a phone, which is why hit-testing single
   points in a desktop browser said the lift was holding. Scoped to the lyrics,
-  the strips can only lie over text; the cost is that a song with no lyrics has
-  none, and the bar and footer are the way on there. Keep them in the lyrics box
+  the strips can only lie over text; the cost is that they are only as tall as
+  the lyrics, so a song with none has a strip barely worth aiming at and a list
+  of one renders none at all. The bar and the footer are the way on in both
+  cases. Keep them in the lyrics box
   — `SongDetailPage`'s spec asks for them `within` it — and keep the container
   `pointer-events-none` with the strips themselves `auto`, or the box spanning
   the column takes every tap and drag on the text with it.
@@ -296,9 +298,11 @@ needs a mailbox someone can read, exactly like email verification.
   the timing is the whole of it: fired on mount it plays below the fold on any
   song whose lyrics start there, and a showing nobody sees is the same as none.
   `useTapHint` waits for the strips to intersect the viewport, less a `rootMargin`
-  that covers where the mark rests — and `md:hidden` on the strips is what keeps a
-  desktop from spending the showing, since a hidden element never intersects at
-  all. jsdom has no IntersectionObserver: `src/test/intersection.ts` is a stub
+  that covers where the mark rests — and `md:hidden` on the box that holds them,
+  which is the element observed, is what keeps a desktop from spending the
+  showing, since a hidden element never intersects at all. Keep the class on the
+  box: moved onto the strips it still hides them and the observer starts firing
+  at a desk again. jsdom has no IntersectionObserver: `src/test/intersection.ts` is a stub
   that answers back, so a spec can say the lyrics have come into view.
 - **A song reached from a list carries `?list=<id>`, and every step keeps it.**
   Dropped anywhere along the way, the next song is a dead end: the page still
