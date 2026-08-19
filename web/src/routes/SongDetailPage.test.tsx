@@ -2,18 +2,34 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 
 import { SongDetailPage } from "./SongDetailPage";
 import { API, listById, makeList, makeSong, makeUser, notFound } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
+/**
+ * Stands in for the sign-in screen, showing where it would send the visitor back
+ * to. That is what `AuthPages` does with the same state, so the address it names
+ * here is the address a signed-in visitor lands on.
+ */
+function SignInStub() {
+  const { state } = useLocation();
+  const from = (state as { from?: string } | null)?.from ?? "/";
+  return (
+    <div>
+      <h1>Sign in</h1>
+      <p>Return to {from}</p>
+    </div>
+  );
+}
+
 function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
   return renderWithProviders(
     <Routes>
       <Route path="/songs/:id" element={<SongDetailPage />} />
-      <Route path="/login" element={<h1>Sign in</h1>} />
+      <Route path="/login" element={<SignInStub />} />
     </Routes>,
     { route: "/songs/song-1", ...options },
   );
@@ -277,6 +293,23 @@ describe("SongDetailPage inside a list", () => {
 
     expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: /song navigation/i })).not.toBeInTheDocument();
+  });
+
+  // The sign-in round trip is the one way out of this page that comes back to
+  // it, so it is the one that must carry the parameter. Sent away with the path
+  // alone, a guest who presses Save returns to the same song stripped of its
+  // list — the dead end this navigation exists to prevent, reached by the only
+  // control on the page that promises to bring them back.
+  it("keeps the list across the sign-in round trip", async () => {
+    const user = userEvent.setup();
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=list-1", user: null });
+
+    await user.click(await screen.findByRole("button", { name: "Save to a list" }));
+
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByText("Return to /songs/song-2?list=list-1")).toBeInTheDocument();
   });
 
   // Nothing asks for a list when a song is opened from browse, where there is

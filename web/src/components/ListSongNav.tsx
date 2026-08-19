@@ -152,7 +152,7 @@ function TapZone({ step, back }: { step?: ListStep; back?: boolean }) {
       )}
     >
       {/* The chevron carries its own backing: it floats over whatever the song
-          puts behind it, and a translucent grey on grey is a gesture nobody can
+          puts behind it, and a translucent gray on gray is a gesture nobody can
           see — which is a gesture nobody finds. Opaque enough not to need a
           backdrop filter, which would cost a blur pass per scrolled frame for
           28px of decoration. */}
@@ -260,6 +260,11 @@ function useArrowKeyPaging(position: ListPosition): void {
       const href = event.key === "ArrowLeft" ? previousHref : nextHref;
       if (!href) return;
 
+      // Claimed only once the key is actually being acted on, and every guard
+      // above has returned instead. A left or right arrow still scrolls the
+      // document sideways by default, so without this a song whose lyrics
+      // overflow the column pages *and* scrolls on one press.
+      event.preventDefault();
       navigate(href);
     };
 

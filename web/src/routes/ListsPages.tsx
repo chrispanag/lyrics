@@ -14,7 +14,7 @@ import {
   useUpdateList,
 } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
-import { cardChrome } from "@/components/cardStyles";
+import { cardChrome, cardHover } from "@/components/cardStyles";
 import { SongRow } from "@/components/SongRow";
 import { Button, EmptyState, ErrorMessage, Field, Input, Sheet, Skeleton } from "@/components/ui";
 import { BackButton } from "@/components/BackButton";
@@ -115,7 +115,8 @@ export function ListsPage() {
               to={`/lists/${list.id}`}
               className={cn(
                 cardChrome,
-                "flex items-center justify-between gap-3 bg-white p-4 transition-colors hover:border-brand-300 dark:bg-stone-900",
+                cardHover,
+                "flex items-center justify-between gap-3 bg-white p-4 dark:bg-stone-900",
               )}
             >
               <div className="min-w-0">

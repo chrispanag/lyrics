@@ -134,7 +134,14 @@ export function SongDetailPage() {
             onClick={() =>
               user
                 ? setListSheetOpen(true)
-                : navigate("/login", { state: { from: location.pathname } })
+                // The search string travels with the path, not just the path:
+                // `?list=` is what keeps a reader inside the list they came
+                // from, and returning them to the bare song after they sign in
+                // strands them exactly where this page's navigation exists to
+                // stop — silently, since the song still renders.
+                : navigate("/login", {
+                    state: { from: location.pathname + location.search },
+                  })
             }
           >
             <ListPlus aria-hidden className="size-4" />
