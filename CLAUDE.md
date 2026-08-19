@@ -271,6 +271,30 @@ needs a mailbox someone can read, exactly like email verification.
   desktop, where a mouse has no such conflict. `SortableSongList` is pinned by a
   keyboard-driven test, which is also the only way to drive dnd-kit in jsdom —
   see `src/test/rects.ts` for why the rows need stubbed rectangles.
+- **The song page's tap zones invert both halves of the rule above, and fail
+  just as quietly.** They are the phone's previous and next — two strips fixed
+  down the edges of the viewport, so a story's gesture pages through a list — and
+  they must *not* have `touch-none`, which would leave a strip down each side of
+  the screen that cannot be scrolled through and make a long song unreadable.
+  They also lie over whatever the page puts at those edges, so anything
+  interactive reaching the edge of the column has to be lifted with
+  `aboveTapZones` or it stops answering taps: Back, a credit, the play button.
+  Both failures are invisible on a desktop, where the zones are not rendered at
+  all. `components/tapZoneStyles.ts` holds the two layers together and records
+  which regions are deliberately left below them — the lyrics and the notes,
+  neither of which is interactive — and why the lyrics can never be lifted.
+- **A song reached from a list carries `?list=<id>`, and every step keeps it.**
+  Dropped anywhere along the way, the next song is a dead end: the page still
+  renders, the reader is simply out of the list with nothing saying so. Which is
+  why `lib/listContext.ts` builds every destination — a `ListPosition` hands the
+  navigation steps that already carry their `href`, so no component below it can
+  forget the parameter, and only `SongCard` (whose row passes `listId`) composes
+  one itself. Steps are **pushed, not replaced**: the back gesture — and
+  `BackButton`, which is the same thing — walks back through the songs a reader
+  came through and reaches the list at the end of them. Replacing instead would
+  collapse the trail to one entry and send the first press to the list, which is
+  the same two controls behaving differently; the list's name in the bar is the
+  press that skips the trail.
 
 ---
 

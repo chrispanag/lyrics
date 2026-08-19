@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Check,
   ListPlus,
@@ -11,13 +11,23 @@ import {
 } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
-import { useDeleteSong, useLists, useSong, useSongLists, useToggleSongInList } from "@/api/hooks";
+import {
+  useDeleteSong,
+  useList,
+  useLists,
+  useSong,
+  useSongLists,
+  useToggleSongInList,
+} from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
+import { ListSongNavBar, ListSongNavFooter, ListSongTapZones } from "@/components/ListSongNav";
 import { YouTubeFacade } from "@/components/YouTubeFacade";
 import { buttonClasses } from "@/components/buttonStyles";
 import { Button, ErrorMessage, Sheet, Skeleton } from "@/components/ui";
+import { aboveTapZones } from "@/components/tapZoneStyles";
 import { CREDIT_DISPLAY_ORDER } from "@/lib/credits";
 import { cn } from "@/lib/cn";
+import { LIST_PARAM, listPosition } from "@/lib/listContext";
 import { canEditSong, hasRole, type Credit, type CreditRole } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { songCount } from "@/lib/format";
@@ -38,10 +48,21 @@ export function SongDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const [params] = useSearchParams();
   const { user, loading: sessionLoading } = useAuth();
 
   const { data: song, isLoading, isError, error } = useSong(id);
   const deleteSong = useDeleteSong();
+
+  // The list this song is being read from, if it is being read from one. Held
+  // until the session is known for the reason ListDetailPage documents: asked
+  // for a moment too early, a private list answers 404 to its own owner.
+  //
+  // Nothing here reports a failure. A list the reader may not see, or one this
+  // song has since left, leaves the page with no navigation on it — which is the
+  // page as it was before there was any, and the song is what was asked for.
+  const listId = params.get(LIST_PARAM) ?? undefined;
+  const { data: contextList } = useList(listId, !sessionLoading);
 
   const [listSheetOpen, setListSheetOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -89,10 +110,11 @@ export function SongDetailPage() {
   }
 
   const creditsByRole = groupCredits(song.credits);
+  const position = contextList ? listPosition(contextList, song.id) : null;
 
   return (
     <article className="mx-auto max-w-2xl px-4 py-4">
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className={cn(aboveTapZones, "mb-4 flex items-center justify-between gap-2")}>
         <BackButton />
 
         <div className="flex items-center gap-1">
@@ -143,7 +165,9 @@ export function SongDetailPage() {
         </div>
       </div>
 
-      <header className="mb-5">
+      {position && <ListSongNavBar position={position} />}
+
+      <header className={cn(aboveTapZones, "mb-5")}>
         <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">
           {song.title}
         </h1>
@@ -194,13 +218,13 @@ export function SongDetailPage() {
       </header>
 
       {song.youtube_video_id && (
-        <div className="mb-6">
+        <div className={cn(aboveTapZones, "mb-6")}>
           <YouTubeFacade videoId={song.youtube_video_id} title={song.title} />
         </div>
       )}
 
       <section aria-label="Lyrics">
-        <div className="mb-2 flex items-center justify-between">
+        <div className={cn(aboveTapZones, "mb-2 flex items-center justify-between")}>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Lyrics
           </h2>
@@ -253,6 +277,8 @@ export function SongDetailPage() {
         </section>
       )}
 
+      {position && <ListSongNavFooter position={position} />}
+
       {user && (
         <AddToListSheet
           songId={song.id}
@@ -282,6 +308,9 @@ export function SongDetailPage() {
           </Button>
         </div>
       </Sheet>
+
+      {/* Last, so a screen reader reaches the song before the ways out of it. */}
+      {position && <ListSongTapZones position={position} />}
     </article>
   );
 }

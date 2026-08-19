@@ -20,11 +20,14 @@ import type { Song } from "@/lib/types";
  */
 export function SongRow({
   song,
+  listId,
   handle,
   onRemove,
   pendingRemoval,
 }: {
   song: Song;
+  /** The list these rows belong to, so opening a song keeps the reader in it. */
+  listId: string;
   handle?: ReactNode;
   /** Omitted for anyone who may not change the list, leaving the row read-only. */
   onRemove?: (songId: string) => void;
@@ -35,7 +38,7 @@ export function SongRow({
     <div className="flex items-center gap-2">
       {handle}
       <div className="min-w-0 flex-1">
-        <SongCard song={song} />
+        <SongCard song={song} listId={listId} />
       </div>
       {/* Opposite the handle rather than beside it: the two are the row's only
           controls, and a removal one slip away from the grip is a removal that

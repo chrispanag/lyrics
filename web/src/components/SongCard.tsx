@@ -3,7 +3,10 @@ import { Link } from "react-router-dom";
 import { Youtube } from "lucide-react";
 
 import { Snippet } from "./Snippet";
+import { cardChrome, cardHover } from "./cardStyles";
+import { cn } from "@/lib/cn";
 import { creditLine } from "@/lib/credits";
+import { songHref } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
 
 /**
@@ -11,14 +14,28 @@ import type { Song } from "@/lib/types";
  * box, and each card otherwise re-runs creditLine (copy + sort + Set) and
  * parseSegments (a full scan of the snippet) for a `song` that has not changed.
  * Song objects come from the query cache, so their identity is stable.
+ *
+ * `listId` is passed by the rows of a list and by nothing else: it is what keeps
+ * a reader inside the list they opened the song from, rather than dropping them
+ * onto a song with no way on to the next one.
  */
-export const SongCard = memo(function SongCard({ song }: { song: Song }) {
+export const SongCard = memo(function SongCard({
+  song,
+  listId,
+}: {
+  song: Song;
+  listId?: string;
+}) {
   const credits = creditLine(song.credits);
 
   return (
     <Link
-      to={`/songs/${song.id}`}
-      className="block rounded-2xl border border-stone-200 bg-white p-4 transition-colors hover:border-brand-300 hover:bg-brand-50/40 active:bg-brand-50 dark:border-stone-800 dark:bg-stone-900 dark:hover:border-brand-800 dark:hover:bg-stone-800/60"
+      to={songHref(song.id, listId)}
+      className={cn(
+        cardChrome,
+        cardHover,
+        "block bg-white p-4 active:bg-brand-50 dark:bg-stone-900",
+      )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

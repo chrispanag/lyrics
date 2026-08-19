@@ -14,9 +14,11 @@ import {
   useUpdateList,
 } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
+import { cardChrome } from "@/components/cardStyles";
 import { SongRow } from "@/components/SongRow";
 import { Button, EmptyState, ErrorMessage, Field, Input, Sheet, Skeleton } from "@/components/ui";
 import { BackButton } from "@/components/BackButton";
+import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
 import type { Song } from "@/lib/types";
 
@@ -35,10 +37,12 @@ const SortableSongList = lazy(() =>
  */
 function StaticSongList({
   songs,
+  listId,
   onRemove,
   pendingRemoval,
 }: {
   songs: Song[];
+  listId: string;
   onRemove?: (songId: string) => void;
   pendingRemoval?: string;
 }) {
@@ -46,7 +50,12 @@ function StaticSongList({
     <ul className="space-y-3">
       {songs.map((song) => (
         <li key={song.id}>
-          <SongRow song={song} onRemove={onRemove} pendingRemoval={pendingRemoval} />
+          <SongRow
+            song={song}
+            listId={listId}
+            onRemove={onRemove}
+            pendingRemoval={pendingRemoval}
+          />
         </li>
       ))}
     </ul>
@@ -104,7 +113,10 @@ export function ListsPage() {
           <li key={list.id}>
             <Link
               to={`/lists/${list.id}`}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white p-4 transition-colors hover:border-brand-300 dark:border-stone-800 dark:bg-stone-900"
+              className={cn(
+                cardChrome,
+                "flex items-center justify-between gap-3 bg-white p-4 transition-colors hover:border-brand-300 dark:bg-stone-900",
+              )}
             >
               <div className="min-w-0">
                 <h2 className="flex items-center gap-2 truncate font-semibold">
@@ -337,11 +349,17 @@ export function ListDetailPage() {
       isOwner && songs.length > 1 ? (
         <Suspense
           fallback={
-            <StaticSongList songs={songs} onRemove={onRemove} pendingRemoval={pendingRemoval} />
+            <StaticSongList
+              songs={songs}
+              listId={list.id}
+              onRemove={onRemove}
+              pendingRemoval={pendingRemoval}
+            />
           }
         >
           <SortableSongList
             songs={songs}
+            listId={list.id}
             onReorder={(songIds) => reorderList.mutate(songIds)}
             // The unnarrowed callback: this branch is owner-only, and the
             // prop is required, so the optional `onRemove` would need an
@@ -351,7 +369,12 @@ export function ListDetailPage() {
           />
         </Suspense>
       ) : (
-        <StaticSongList songs={songs} onRemove={onRemove} pendingRemoval={pendingRemoval} />
+        <StaticSongList
+          songs={songs}
+          listId={list.id}
+          onRemove={onRemove}
+          pendingRemoval={pendingRemoval}
+        />
       )}
 
       {reorderList.isError && (

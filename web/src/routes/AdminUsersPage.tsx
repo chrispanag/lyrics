@@ -4,7 +4,9 @@ import { Navigate } from "react-router-dom";
 import { errorMessage } from "@/api/client";
 import { useSetUserRole, useUsers } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
+import { cardChrome } from "@/components/cardStyles";
 import { ErrorMessage, Input, Select, Skeleton, Spinner } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { useDebounced } from "@/lib/useDebounced";
 import { ROLES, hasRole, type Role } from "@/lib/types";
 
@@ -69,7 +71,10 @@ export function AdminUsersPage() {
         {data?.data.map((row) => (
           <li
             key={row.id}
-            className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between dark:border-stone-800 dark:bg-stone-900"
+            className={cn(
+              cardChrome,
+              "flex flex-col gap-3 bg-white p-4 sm:flex-row sm:items-center sm:justify-between dark:bg-stone-900",
+            )}
           >
             <div className="min-w-0">
               <p className="truncate font-medium">{row.display_name ?? row.email}</p>

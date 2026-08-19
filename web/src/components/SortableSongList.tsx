@@ -38,11 +38,14 @@ import type { Song } from "@/lib/types";
  */
 export function SortableSongList({
   songs,
+  listId,
   onReorder,
   onRemove,
   pendingRemoval,
 }: {
   songs: Song[];
+  /** The list being shown, which its rows carry into the songs they open. */
+  listId: string;
   onReorder: (songIds: string[]) => void;
   onRemove: (songId: string) => void;
   /** The song whose removal is in flight, if any. */
@@ -87,6 +90,7 @@ export function SortableSongList({
             <SortableRow
               key={song.id}
               song={song}
+              listId={listId}
               onRemove={onRemove}
               pendingRemoval={pendingRemoval}
             />
@@ -99,10 +103,12 @@ export function SortableSongList({
 
 function SortableRow({
   song,
+  listId,
   onRemove,
   pendingRemoval,
 }: {
   song: Song;
+  listId: string;
   onRemove: (songId: string) => void;
   pendingRemoval?: string;
 }) {
@@ -117,6 +123,7 @@ function SortableRow({
     >
       <SongRow
         song={song}
+        listId={listId}
         onRemove={onRemove}
         pendingRemoval={pendingRemoval}
         handle={

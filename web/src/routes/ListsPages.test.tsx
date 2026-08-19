@@ -5,7 +5,7 @@ import { Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { ListDetailPage } from "./ListsPages";
-import { API, makeList, makeSong, makeUser } from "@/test/handlers";
+import { API, listById, makeList, makeSong, makeUser } from "@/test/handlers";
 import { stubRowRects } from "@/test/rects";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
@@ -13,20 +13,9 @@ import { server } from "@/test/server";
 /**
  * Serves each list by id, so a copy that navigates to its own page finds
  * something there rather than a 404 the spec would have to work around.
- *
- * Each list is held by reference and serialized per request, so a spec whose
- * subject changes one edits it in place rather than registering a second
- * handler that would have to repeat the id matching.
  */
 function serveLists(...lists: ReturnType<typeof makeList>[]) {
-  server.use(
-    http.get(`${API}/api/v1/lists/:id`, ({ params }) => {
-      const found = lists.find((l) => l.id === params.id);
-      return found
-        ? HttpResponse.json(found)
-        : HttpResponse.json({ error: { code: "not_found", message: "List was not found." } }, { status: 404 });
-    }),
-  );
+  server.use(listById(...lists));
 }
 
 function renderDetail(
