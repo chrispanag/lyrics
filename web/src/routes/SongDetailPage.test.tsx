@@ -1,4 +1,4 @@
-import { act, cleanup, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
@@ -240,57 +240,166 @@ describe("SongDetailPage inside a list", () => {
     expect(screen.queryByRole("link", { name: "Previous song" })).not.toBeInTheDocument();
   });
 
-  // The strips are what a phone gets instead of the arrows, and they carry the
-  // title because nothing about them is visible to read.
-  //
-  // Asked for inside the lyrics, which is the whole of the fix and not a detail
-  // of it: a strip lies over whatever shares its box, so the box it is given has
-  // to be the one part of the page with nothing to press. Anywhere wider and
-  // every control it reaches has to be lifted clear of it by hand — an allowlist
-  // that was silently wrong twice, and only ever on a phone.
-  it("puts the neighboring songs on strips over the lyrics, and names them", async () => {
+  /**
+   * A one-finger gesture, in the client coordinates that decide whether it is a
+   * swipe: where it starts across the screen, and how far and which way it went.
+   *
+   * jsdom lays nothing out, so none of this is measured — the coordinates are
+   * the whole of what the listener reads, and `window.innerWidth` is the 1024
+   * jsdom reports. Dispatched on an element inside the song rather than on the
+   * article itself, because the gesture is read across the whole page and has to
+   * arrive by bubbling for that to be true.
+   *
+   * `fingers` is how many touches the move reports: a second one landing partway
+   * through is a pinch, and the movement is no longer a swipe.
+   */
+  function swipe(
+    target: Element,
+    fromX: number,
+    toX: number,
+    { dy = 4, fingers = 1 }: { dy?: number; fingers?: number } = {},
+  ) {
+    const at = (clientX: number, clientY: number) => ({ clientX, clientY });
+    const moved = at(toX, 400 + dy);
+    fireEvent.touchStart(target, { touches: [at(fromX, 400)] });
+    fireEvent.touchMove(target, {
+      touches: fingers > 1 ? [moved, at(toX + 40, 300)] : [moved],
+    });
+    fireEvent.touchEnd(target, { changedTouches: [moved] });
+  }
+
+  /**
+   * The middle song of the list, open, with the lyrics a thumb would be over.
+   *
+   * Every swipe spec starts here: it has a song on either side, so a gesture
+   * read the wrong way round is a different song rather than nothing at all.
+   */
+  async function openSecond(options: Parameters<typeof renderDetail>[0] = {}) {
     serveList();
+    renderDetail({ route: "/songs/song-2?list=list-1", ...options });
+    await screen.findByRole("heading", { name: "Second" });
+    return screen.getByRole("region", { name: "Lyrics" });
+  }
 
-    renderDetail({ route: "/songs/song-2?list=list-1" });
+  /** That the gesture was not read as a swipe: the reader has not moved. */
+  function stillOnSecond() {
+    expect(screen.getByRole("heading", { name: "Second" })).toBeInTheDocument();
+  }
 
-    const lyrics = within(await screen.findByRole("region", { name: "Lyrics" }));
-    expect(lyrics.getByRole("link", { name: "Previous: First" })).toHaveAttribute(
-      "href",
-      "/songs/song-1?list=list-1",
-    );
-    expect(lyrics.getByRole("link", { name: "Next: Third" })).toBeInTheDocument();
+  // Left is onward, the way a page turns. This is what replaced the tap strips
+  // that used to stand in for the arrows on a phone: a swipe is a movement
+  // rather than a press, so it cannot take a tap meant for something else, and
+  // the page carries no invisible targets to keep controls clear of.
+  it("steps on with a swipe left across the song", async () => {
+    swipe(await openSecond(), 500, 380);
 
-    // And nothing else is in there with them, which is the same invariant from
-    // the side that regresses: a strip takes every tap in its box, so a control
-    // put in the lyrics is a control under a strip. Tripped by a link added
-    // anywhere in this section, which is a question worth being asked.
-    expect(lyrics.getAllByRole("link")).toHaveLength(2);
+    expect(await screen.findByRole("heading", { name: "Third" })).toBeInTheDocument();
   });
 
-  // A strip has nothing visible about it, so the mark is the only thing that
+  it("steps back with a swipe right", async () => {
+    swipe(await openSecond(), 500, 620);
+
+    expect(await screen.findByRole("heading", { name: "First" })).toBeInTheDocument();
+  });
+
+  // Both screen edges are already spoken for — back and forward in Safari, the
+  // system's back gesture on Android — so a gesture that starts there would page
+  // the list *and* leave the page in the same movement.
+  it("leaves a swipe that starts at the screen edge to the browser", async () => {
+    const lyrics = await openSecond();
+
+    swipe(lyrics, 8, 300);
+    swipe(lyrics, 1020, 700);
+
+    stillOnSecond();
+  });
+
+  // Reading a song is vertical scrolling, which is this gesture with the axes
+  // swapped, so the two are told apart by which way the finger actually went.
+  it("leaves a drag that went mostly up or down alone", async () => {
+    swipe(await openSecond(), 500, 400, { dy: -260 });
+
+    stillOnSecond();
+  });
+
+  // A second finger means a pinch, and the page belongs to it. One landing
+  // inside the song is already dropped by its own touchstart; this is the other
+  // one — a finger that goes down outside the article, where the only sign of it
+  // is the touch count on the moves of the finger that is still here.
+  it("drops the gesture when a second finger joins it", async () => {
+    swipe(await openSecond(), 500, 380, { fingers: 2 });
+
+    stillOnSecond();
+  });
+
+  // A long press and a drag sideways ends exactly where a swipe ends and means
+  // the opposite of leaving. Compared against how the gesture started rather
+  // than simply read, so a selection made earlier and left on the page cannot
+  // quietly kill every swipe after it — which is why the selection is made
+  // *during* the gesture here.
+  it("leaves a movement that selected text alone", async () => {
+    const lyrics = await openSecond();
+    const line = screen.getByText(/Στης θάλασσας τα βάθη/);
+
+    fireEvent.touchStart(lyrics, { touches: [{ clientX: 500, clientY: 400 }] });
+    window.getSelection()?.selectAllChildren(line);
+    fireEvent.touchEnd(lyrics, { changedTouches: [{ clientX: 380, clientY: 404 }] });
+
+    stillOnSecond();
+  });
+
+  // An open sheet owns the gestures over it, as it owns the arrow keys: paging
+  // the song out from under one reads as a bug in the sheet. The sheet is fixed
+  // over the page but rendered inside it, so its touches reach the listener and
+  // have to be turned away by hand.
+  it("leaves the swipe to an open sheet", async () => {
+    const user = userEvent.setup();
+    await openSecond({ user: makeUser({ id: "user-1" }) });
+
+    await user.click(screen.getByRole("button", { name: /save to a list/i }));
+    const sheet = await screen.findByRole("dialog", { name: /save to list/i });
+
+    swipe(sheet, 500, 380);
+
+    stillOnSecond();
+  });
+
+  // Belt and braces, and the safe way round: a swipe that begins on a control
+  // does nothing, rather than a control being unreachable under the gesture,
+  // which is exactly how the tap strips went wrong. Swiping *back* here, so a
+  // guard that failed would be visible as the previous song rather than as the
+  // one the control itself leads to.
+  it("does not read a swipe that started on a control", async () => {
+    await openSecond();
+
+    swipe(screen.getByRole("link", { name: "Next song" }), 500, 620);
+
+    stillOnSecond();
+  });
+
+  // The swipe has nothing visible about it, so the mark is the only thing that
   // says the gesture is there — and it is shown once, which makes when it plays
-  // the whole question. Held back until the strips are on screen, because the
-  // lyrics of a song with a video start below the fold and the one showing there
-  // will ever be would be spent where nobody could see it.
-  it("shows the paging mark when the lyrics come into view, once per device", async () => {
-    serveList();
+  // the whole question. Gated on the mark really being on screen: at a desk it
+  // is display:none, so it never comes into view and the one showing is not
+  // spent on a machine that has no gesture to explain.
+  it("shows the swipe mark when it comes into view, once per device", async () => {
+    await openSecond();
 
-    renderDetail({ route: "/songs/song-2?list=list-1" });
-
-    const mark = (await screen.findByRole("link", { name: "Next: Third" })).querySelector("[aria-hidden]");
+    const mark = screen.getByText("Swipe through the list");
     expect(mark).toHaveClass("opacity-0");
 
     act(() => intersectAll());
     expect(mark).toHaveClass("opacity-100");
 
-    // The next song of the list, on the same device: the mark has done its job
-    // and the lyrics are left alone.
+    // The next song of the list, on the same device: the mark has done its job,
+    // and is not built at all rather than left invisible over the lyrics.
     cleanup();
+    serveList();
     renderDetail({ route: "/songs/song-3?list=list-1" });
+    await screen.findByRole("heading", { name: "Third" });
 
-    const again = (await screen.findByRole("link", { name: "Previous: Second" })).querySelector("[aria-hidden]");
     act(() => intersectAll());
-    expect(again).toHaveClass("opacity-0");
+    expect(screen.queryByText("Swipe through the list")).not.toBeInTheDocument();
   });
 
   it("names them again where the lyrics end", async () => {

@@ -5,15 +5,17 @@ import { ChevronLeft, ChevronRight, ListMusic } from "lucide-react";
 import { cardChrome, cardHover } from "./cardStyles";
 import { cn } from "@/lib/cn";
 import type { ListPosition, ListStep } from "@/lib/listContext";
+import { modalIsOpen } from "@/lib/modal";
+import { startsClearOfEdges, swipeDirection } from "@/lib/swipe";
 
 /*
  * Moving through a list without leaving it.
  *
- * Three affordances for one movement, because they are reached in different
- * ways: the bar is there before the song is read, the strips are under the thumb
- * while it is being read on a phone, and the footer is what the end of long
- * lyrics arrives at. Each is a <Link> rather than a button — the destination is
- * a URL, so opening a neighbor in a new tab, and everything else a browser does
+ * Three ways through one list, because they are reached differently: the bar is
+ * there before the song is read, the swipe is under the thumb while it is being
+ * read on a phone, and the footer is what the end of long lyrics arrives at. The
+ * two that can be pressed are <Link>s rather than buttons — the destination is a
+ * URL, so opening a neighbor in a new tab, and everything else a browser does
  * with links, comes for free.
  *
  * Nothing here builds an address. A step arrives with its own href (see
@@ -100,175 +102,274 @@ function StepArrow({ step, back }: { step?: ListStep; back?: boolean }) {
 
 /** How long the mark stays before fading, and where having shown it is recorded. */
 const HINT_VISIBLE_MS = 3500;
-const HINT_SEEN_KEY = "lyrics:tap-hint-seen";
+const HINT_SEEN_KEY = "lyrics:swipe-hint-seen";
+
+// Anything that owns the raw input landing on it. The two gestures below ask
+// different questions of the same idea — a field owns its arrow keys for the
+// caret, while every control owns a press — so the inner set is named once and
+// the wider one is built from it. Written twice, a field-like thing added to one
+// list and missed on the other fails silently, and typing in it pages the song.
+const FIELDS = 'input, textarea, select, [contenteditable]';
+const INTERACTIVE = `a, button, label, iframe, [role="button"], ${FIELDS}`;
 
 /**
- * The left and right edges of the lyrics, as previous and next.
+ * The swipe that pages through the list, and the one mark that says it is there.
  *
- * A story's gesture, kept inside the one part of a song page that has nothing to
- * press. These strips used to be fixed to the viewport and cover the whole of
- * it, with every control on the page lifted above them one region at a time —
- * an allowlist, and so a thing that had to be right in two places at once. Two
- * failures came of that, both of them only on a phone. A near miss became a
- * navigation: the gap between two buttons, or the few pixels under Back, paged
- * the song instead of doing nothing. And a strip could take a slightly-off tap
- * on a small control outright, because touch adjustment weighs every clickable
- * candidate under the contact patch rather than the one point beneath its
- * center — which is why it went wrong on a phone and never under a mouse.
+ * A story's gesture, read across the whole song rather than on a region of it —
+ * which is the pivot away from what used to be here. The first version of this
+ * was a pair of tap strips: invisible boxes down the edges of the page, then
+ * down the edges of the lyrics, standing in for previous and next. A strip takes
+ * every press in the box it is given, so each one had to be kept clear of every
+ * control on the page — and it went wrong twice, both times only on a phone. A
+ * near miss became a navigation, and a slightly-off tap on a small control was
+ * taken outright, because touch adjustment weighs every clickable candidate
+ * under the contact patch rather than the one point beneath its center.
  *
- * Scoped to the lyrics, nothing needs lifting and no allowlist has to be kept:
- * the strips only ever lie over text. The cost is that a song with no lyrics has
- * no strips, and a short one has a short pair — the bar above and the footer
- * below are still there, and both say where they go, which is more than a strip
- * ever did.
+ * A swipe cannot fail that way, and that is the whole reason for it: it is read
+ * from a movement of 60px or more, so it is not something a press can be
+ * mistaken for. Nothing is laid over the page, nothing has to be lifted clear of
+ * anything, and there is no allowlist to keep right in two places. The song page
+ * is back to having no invisible targets on it at all.
  *
- * Deliberately *without* `touch-none`, which the drag handle next door needs and
- * this must not have: it would hand this element's gestures to the drag
- * library's side of the fence, and a strip down each edge of the lyrics that
- * cannot be scrolled through makes a long song unreadable. A tap arrives as a
- * click without it.
- *
- * Nothing is rendered at the ends of a list, so an edge tap there falls through
- * to the lyrics rather than pressing a dead control.
+ * The gesture stays out of the browser's way rather than fighting it, which is
+ * `lib/swipe`'s two rules: it must start clear of both screen edges, which
+ * belong to Safari's back and forward and to Android's back, and it must be
+ * decidedly horizontal, since reading a song is the same gesture with the axes
+ * swapped.
  */
-export function ListSongTapStrips({ position }: { position: ListPosition }) {
-  const strips = useRef<HTMLDivElement>(null);
-  const hinting = useTapHint(strips);
+export function ListSongSwipe({
+  position,
+  surface,
+}: {
+  position: ListPosition;
+  surface: RefObject<HTMLElement | null>;
+}) {
+  const hint = useRef<HTMLDivElement>(null);
+  useSwipePaging(position, surface);
+  const hinting = useSwipeHint(hint);
 
-  // A list of one has nothing either side, and the same early return the footer
-  // makes. Without it this renders an empty box and starts an observer that can
-  // only spend the mark's one showing on a page with no strips to show it on.
+  // Nothing left to draw: a reader past their one showing has already been told,
+  // and a list of one has nowhere to swipe to. Both after the hooks, which is
+  // what keeps this honest rather than conditional — and the gesture is
+  // installed by one of them, so it outlives the mark by design. Rendering a
+  // spent mark anyway would leave an invisible fixed box over every song page
+  // for good, which is the shape of thing this page has just got rid of.
+  if (hinting === null) return null;
   if (!position.previous && !position.next) return null;
 
   return (
     <div
-      ref={strips}
-      // Reaching a page's worth of padding past the column on each side, so a
-      // strip ends at the edge of a phone screen rather than at the edge of the
-      // text.
+      ref={hint}
+      aria-hidden
+      // Fixed, because the gesture is the whole song and not a part of it: a
+      // mark that has to be scrolled to is a mark for something nobody has found
+      // yet. bottom-24 rests it in thumb reach and clear of the tab bar, the
+      // same allowance the page itself makes for it.
       //
-      // `pointer-events-none` here and `pointer-events-auto` on the strips: this
-      // box spans the full width of the lyrics, and left to take pointers it
-      // would swallow every tap and drag on the text — no selecting a line, no
-      // following a link a future lyrics view might put in one.
-      //
-      // `md:hidden` is also what keeps `useTapHint` from spending its one
-      // showing at a desk: a hidden element has no box, so it never comes into
-      // view and the hint below never fires.
-      className="pointer-events-none absolute -inset-x-4 inset-y-0 md:hidden"
+      // `md:hidden` is also what keeps the single showing from being spent at a
+      // desk, where the arrows and the footer are the way through and there is
+      // no swipe to explain: a hidden element has no box, so it never comes into
+      // view and `useSwipeHint` never fires. Which matters most on the machines
+      // that are both — a tablet in landscape spends nothing, and has the mark
+      // waiting when it is turned.
+      className="pointer-events-none fixed inset-x-0 bottom-24 z-30 flex justify-center md:hidden"
     >
-      <TapStrip step={position.previous} back hinting={hinting} />
-      <TapStrip step={position.next} hinting={hinting} />
+      {/* Opaque and inverted, because it floats over the lyrics: a translucent
+          gray on gray is a gesture nobody can see, which is a gesture nobody
+          finds. Only the arrows a reader actually has are drawn, so the ends of
+          a list do not promise a step that is not there. */}
+      <span
+        className={cn(
+          "flex items-center gap-1.5 rounded-full bg-stone-800/95 px-3 py-1.5 text-xs font-medium text-stone-100 shadow-lg transition-opacity duration-700",
+          "dark:bg-stone-100/95 dark:text-stone-800",
+          hinting ? "opacity-100" : "opacity-0",
+        )}
+      >
+        {position.previous && <ChevronLeft className="size-4" />}
+        Swipe through the list
+        {position.next && <ChevronRight className="size-4" />}
+      </span>
     </div>
   );
 }
 
-function TapStrip({
-  step,
-  back,
-  hinting,
-}: {
-  step?: ListStep;
-  back?: boolean;
-  hinting: boolean;
-}) {
-  if (!step) return null;
+/**
+ * Reads a swipe across the song, and takes the step it asks for.
+ *
+ * Every listener is passive and nothing here calls `preventDefault`: the gesture
+ * is read after the movement rather than taken from it. That is what leaves a
+ * long song's vertical scroll completely alone — the failure `touch-none` would
+ * have caused, and one that a desktop, where a mouse has no such conflict, never
+ * shows.
+ *
+ * The gesture is claimed or dropped at the moment the finger goes down, where
+ * all four of its guards therefore live.
+ */
+function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement | null>): void {
+  const navigate = useNavigate();
+  // The hrefs rather than the steps, for the reason `useArrowKeyPaging` gives
+  // below: `position` is rebuilt on every render, so holding it would rebuild
+  // these listeners on every re-render the page has.
+  const previousHref = position.previous?.href;
+  const nextHref = position.next?.href;
 
-  const Icon = back ? ChevronLeft : ChevronRight;
+  useEffect(() => {
+    const element = surface.current;
+    if (!element) return;
+    if (!previousHref && !nextHref) return;
 
-  return (
-    <Link
-      to={step.href}
-      // Named by where it goes rather than by which way it goes: a strip carries
-      // no visible label of its own, and the title is what a reader wants to
-      // know before pressing it.
-      aria-label={`${back ? "Previous" : "Next"}: ${step.title}`}
-      className={cn(
-        "pointer-events-auto absolute inset-y-0 flex w-12 select-none items-end justify-center",
-        "active:bg-stone-500/10 dark:active:bg-white/10",
-        back ? "left-0" : "right-0",
-      )}
-    >
-      {/* The mark that says the strip is there, and the only thing that does.
-          `sticky` puts it wherever in the lyrics the reader is when it plays,
-          rather than at the end of a strip that may be a screen and a half
-          long; `bottom-24` rests it in thumb reach and clear of the tab bar,
-          the same allowance the page itself makes for it.
+    /** Where the finger went down, or null when this touch is not a candidate. */
+    let from: { x: number; y: number; at: number; collapsed: boolean } | null = null;
 
-          It carries its own backing because it floats over the lyrics, and a
-          translucent gray on gray is a gesture nobody can see — which is a
-          gesture nobody finds. Opaque enough not to need a backdrop filter,
-          which would cost a blur pass per scrolled frame for 28px of
-          decoration. */}
-      <span
-        aria-hidden
-        className={cn(
-          "sticky bottom-24 flex size-7 items-center justify-center rounded-full bg-stone-50/90 text-stone-500 shadow-sm transition-opacity duration-700 dark:bg-stone-900/90 dark:text-stone-400",
-          hinting ? "opacity-100" : "opacity-0",
-        )}
-      >
-        <Icon className="size-5" />
-      </span>
-    </Link>
-  );
+    const forget = () => {
+      from = null;
+    };
+
+    const onStart = (event: TouchEvent) => {
+      from = null;
+
+      // A second finger is a pinch or a zoom, and the page belongs to that.
+      const touch = event.touches.length === 1 ? event.touches[0] : undefined;
+      if (!touch) return;
+      if (!startsClearOfEdges(touch.clientX, window.innerWidth)) return;
+
+      // An open sheet owns the gestures over it, as it owns the arrow keys, and
+      // for the same reason: paging the song out from under one reads as a bug
+      // in the sheet. Asked of the DOM rather than of this page, so the next
+      // sheet is covered without anyone having to add it to a list.
+      if (modalIsOpen()) return;
+
+      // Belt and braces, and deliberately the safe way round: a swipe that
+      // starts on a control does nothing, rather than a control being
+      // unreachable under the gesture — the inversion of the tap strips this
+      // replaced. Browsers already drop the click a moving touch would have
+      // synthesized, so this rarely has anything to do.
+      if (event.target instanceof Element && event.target.closest(INTERACTIVE)) return;
+
+      from = {
+        x: touch.clientX,
+        y: touch.clientY,
+        at: event.timeStamp,
+        collapsed: selectionIsCollapsed(),
+      };
+    };
+
+    const onMove = (event: TouchEvent) => {
+      // A second finger arriving partway through, which the gesture above was
+      // only ever the beginning of.
+      if (event.touches.length > 1) forget();
+    };
+
+    const onEnd = (event: TouchEvent) => {
+      const start = from;
+      from = null;
+      if (!start) return;
+
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+
+      // The movement selected text: a long press and a drag sideways, which ends
+      // exactly where a swipe ends and means the opposite of leaving. Compared
+      // against how the gesture started rather than simply read, so a selection
+      // made earlier and left on the page cannot quietly kill every swipe after
+      // it.
+      if (start.collapsed && !selectionIsCollapsed()) return;
+
+      const direction = swipeDirection(
+        touch.clientX - start.x,
+        touch.clientY - start.y,
+        event.timeStamp - start.at,
+      );
+      if (!direction) return;
+
+      // Nothing at this end of the list, so the swipe is simply over. Nothing
+      // has to be undone: the event was never claimed.
+      const href = direction === "next" ? nextHref : previousHref;
+      if (!href) return;
+
+      navigate(href);
+    };
+
+    element.addEventListener("touchstart", onStart, { passive: true });
+    element.addEventListener("touchmove", onMove, { passive: true });
+    element.addEventListener("touchend", onEnd, { passive: true });
+    element.addEventListener("touchcancel", forget, { passive: true });
+
+    return () => {
+      element.removeEventListener("touchstart", onStart);
+      element.removeEventListener("touchmove", onMove);
+      element.removeEventListener("touchend", onEnd);
+      element.removeEventListener("touchcancel", forget);
+    };
+  }, [navigate, nextHref, previousHref, surface]);
+}
+
+/** Whether nothing on the page is selected. A missing selection is none. */
+function selectionIsCollapsed(): boolean {
+  const selection = window.getSelection();
+  return !selection || selection.isCollapsed;
 }
 
 /**
- * Shows the mark once, the first time the strips are really on screen.
+ * Shows the mark once, the first time it is really on screen.
  *
- * A strip has no label and no chrome of its own, so something has to say that it
- * is there. Shown on arrival at every song it would be a flash on every step,
- * which is a decoration arguing with the reading surface it sits on; shown never,
- * the gesture is found by accident or not at all. Once per device, then the
- * lyrics are clean.
+ * A swipe has nothing visible about it, so something has to say that it is
+ * there. Shown on arrival at every song it would be a flash on every step, which
+ * is a decoration arguing with the reading surface it sits on; shown never, the
+ * gesture is found by accident or not at all. Once per device, and then the page
+ * is left alone.
  *
- * It waits for the strips to come into view rather than for the page to mount,
- * because the lyrics of a song with a video start below the fold: spent on
- * arrival, the one showing there will ever be would play where nobody could see
- * it. `rootMargin` holds it back a little further still — the mark rests about
- * 124px up from the bottom of the viewport, so a sliver of strip peeking over
- * that edge is not yet anywhere it can be read.
+ * The observer is what asks whether the mark is on screen *at all*, which is the
+ * question that matters: the mark is fixed, so on a phone it is in view the
+ * moment it is rendered, and at a desk `md:hidden` gives it no box to be in view
+ * with. That is the whole reason this is not a timer — a timer would spend the
+ * one showing on a screen that never displayed it, and the reader who turns a
+ * tablet to portrait afterwards would never be told about the gesture at all.
  *
  * Recorded when it is shown rather than when it finishes, so a reader who steps
  * on mid-fade is not shown it again on the next song.
+ *
+ * Answers null once that showing is spent, which is the caller's cue to render
+ * nothing at all: there is then nothing to observe and nothing to draw.
  */
-function useTapHint(strips: RefObject<HTMLElement | null>): boolean {
+function useSwipeHint(mark: RefObject<HTMLElement | null>): boolean | null {
+  // Read at render rather than inside the effect, the same lazy read the
+  // reader's font size makes, because the answer decides whether there is
+  // anything to render at all — and it cannot change under a mounted page, since
+  // this hook is the only writer.
+  const [unspent] = useState(() => localStorage.getItem(HINT_SEEN_KEY) === null);
   const [hinting, setHinting] = useState(false);
 
   useEffect(() => {
-    const element = strips.current;
-    if (!element) return;
-    if (localStorage.getItem(HINT_SEEN_KEY) !== null) return;
+    const element = mark.current;
+    if (!element || !unspent) return;
 
     let fade: ReturnType<typeof setTimeout> | undefined;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
 
-        observer.disconnect();
-        localStorage.setItem(HINT_SEEN_KEY, "1");
-        setHinting(true);
-        fade = setTimeout(() => setHinting(false), HINT_VISIBLE_MS);
-      },
-      { rootMargin: "0px 0px -140px 0px" },
-    );
+      observer.disconnect();
+      localStorage.setItem(HINT_SEEN_KEY, "1");
+      setHinting(true);
+      fade = setTimeout(() => setHinting(false), HINT_VISIBLE_MS);
+    });
     observer.observe(element);
 
     return () => {
       observer.disconnect();
       clearTimeout(fade);
     };
-  }, [strips]);
+  }, [mark, unspent]);
 
-  return hinting;
+  return unspent ? hinting : null;
 }
 
 /**
  * The songs on either side, named, where long lyrics end.
  *
- * The bar has scrolled away by the time a reader reaches here, and a phone's tap
- * strips say nothing about what they lead to. This is the one place with the room
- * to name both.
+ * The bar has scrolled away by the time a reader reaches here, and the swipe that
+ * replaced it says nothing about what it leads to. This is the one place with the
+ * room to name both.
  *
  * A list of one has neither, and the empty rule its border would draw under the
  * lyrics reads as a section that failed to load. The bar stays in that case: "1
@@ -348,13 +449,8 @@ function useArrowKeyPaging(position: ListPosition): void {
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
 
       const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        target.closest("input, textarea, select, [contenteditable]")
-      ) {
-        return;
-      }
-      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      if (target instanceof HTMLElement && target.closest(FIELDS)) return;
+      if (modalIsOpen()) return;
 
       const href = event.key === "ArrowLeft" ? previousHref : nextHref;
       if (!href) return;

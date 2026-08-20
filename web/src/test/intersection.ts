@@ -1,10 +1,10 @@
 /*
  * A controllable IntersectionObserver, since jsdom has none.
  *
- * A no-op stub would be enough to keep the tap strips from throwing on mount,
- * but the one thing worth pinning about their hint is that it waits for the
- * strips to be on screen before spending the single showing it gets. A spec
- * therefore needs a way to say that they are, which is `intersectAll()`.
+ * A no-op stub would be enough to keep the song page from throwing on mount, but
+ * the one thing worth pinning about the swipe's mark is that it waits until it is
+ * really on screen before spending the single showing it gets. A spec therefore
+ * needs a way to say that it is, which is `intersectAll()`.
  *
  * Nothing here measures anything: jsdom has no layout, so an entry is only ever
  * "visible" because a test said so.

@@ -271,39 +271,63 @@ needs a mailbox someone can read, exactly like email verification.
   desktop, where a mouse has no such conflict. `SortableSongList` is pinned by a
   keyboard-driven test, which is also the only way to drive dnd-kit in jsdom —
   see `src/test/rects.ts` for why the rows need stubbed rectangles.
-- **The song page's tap strips belong inside the lyrics, and nowhere wider.**
-  They are the phone's previous and next — a story's gesture, paging through a
-  list — and a strip takes every tap in the box it is given. Given the viewport,
-  as the first version was, that box is the whole page: every control it reached
-  then had to be lifted above it one region at a time, and two things went wrong
-  that no amount of lifting fixes. A near miss became a navigation — the gap
-  between two buttons, the few pixels under Back — and a strip could take a
-  slightly-off tap on a small control outright, because touch adjustment weighs
-  every clickable candidate under the contact patch rather than the one point
-  beneath its center. Both only ever on a phone, which is why hit-testing single
-  points in a desktop browser said the lift was holding. Scoped to the lyrics,
-  the strips can only lie over text; the cost is that they are only as tall as
-  the lyrics, so a song with none has a strip barely worth aiming at and a list
-  of one renders none at all. The bar and the footer are the way on in both
-  cases. Keep them in the lyrics box
-  — `SongDetailPage`'s spec asks for them `within` it — and keep the container
-  `pointer-events-none` with the strips themselves `auto`, or the box spanning
-  the column takes every tap and drag on the text with it.
-- **The strips must *not* have `touch-none`**, which inverts the drag handle's
-  rule above: with it, a strip down each edge of the lyrics cannot be scrolled
-  through, and a long song becomes unreadable. Invisible on a desktop, where the
-  strips are not rendered at all.
-- **The mark that says a strip is there is shown once per device, and waits to be
-  on screen before spending it.** It is the only visible sign of the gesture, so
-  the timing is the whole of it: fired on mount it plays below the fold on any
-  song whose lyrics start there, and a showing nobody sees is the same as none.
-  `useTapHint` waits for the strips to intersect the viewport, less a `rootMargin`
-  that covers where the mark rests — and `md:hidden` on the box that holds them,
-  which is the element observed, is what keeps a desktop from spending the
-  showing, since a hidden element never intersects at all. Keep the class on the
-  box: moved onto the strips it still hides them and the observer starts firing
-  at a desk again. jsdom has no IntersectionObserver: `src/test/intersection.ts` is a stub
-  that answers back, so a spec can say the lyrics have come into view.
+- **The phone's way through a list is a swipe, and it is deliberately not a tap
+  target.** Two versions of it were: invisible strips down the edges of the
+  viewport, then down the edges of the lyrics, standing in for previous and next.
+  A strip takes every press in the box it is given, so every control inside that
+  box had to be lifted clear of it by hand — an allowlist, and so a thing that
+  had to be right in two places at once. It was wrong twice, both times only on a
+  phone: a near miss became a navigation (the gap between two buttons, the few
+  pixels under Back), and a strip could take a slightly-off tap on a small
+  control outright, because touch adjustment weighs every clickable candidate
+  under the contact patch rather than the one point beneath its center. Neither
+  reproduces by hit-testing single points in a desktop browser, which is why both
+  looked fixed. A swipe cannot fail that way — 60px of travel is not something a
+  press is mistaken for — so nothing is laid over the page and there is no
+  allowlist to keep. **Do not reintroduce an invisible target here.**
+- **The swipe must start clear of both screen edges, and `lib/swipe.ts` is where
+  that number lives.** The edges belong to the browser: back and forward in
+  Safari, the system's back gesture on Android. Read there as well, one movement
+  would page the list *and* leave the page. The other rule in that module is that
+  the gesture must be decidedly horizontal, since reading a song is the same
+  gesture with the axes swapped. Both numbers are pinned **from both sides** —
+  a guard narrower than the browser's own edge zone or wider than a thumb, an
+  axis rule loose enough to read a diagonal drag or tight enough to refuse a real
+  swipe, each fail a spec. That is deliberate and worth keeping: with only the
+  cases either side of the line, the edge guard could quietly shrink from 44 to
+  13 with the whole suite green.
+- **Every touch listener is passive and nothing calls `preventDefault`.** The
+  gesture is read after the movement rather than taken from it, which is what
+  leaves a long song's vertical scroll alone — the failure `touch-none` would
+  cause, inverting the drag handle's rule above, and invisible on a desktop where
+  a mouse has no such conflict. The gesture is also claimed or dropped at the
+  moment the finger goes down, which is where all four of its guards live: one
+  finger only, clear of the edges, no open sheet, and not starting on a control.
+  "A sheet is open" is `lib/modal.ts` — one question for the swipe and the arrow
+  keys both, asked of the DOM rather than of a page, so the next sheet is covered
+  without being added to a list. `Sheet` is the only writer of the pair of
+  attributes it looks for, and says so where it writes them; a move to `<dialog>`
+  and `showModal()` has to be answered there. That last one is belt
+  and braces and deliberately the safe way round — a swipe over a control does
+  nothing, rather than a control being unreachable under the gesture, which is
+  precisely how the strips went wrong.
+- **The mark that says the swipe is there is shown once per device, and waits to
+  be on screen before spending it.** It is the only visible sign of the gesture,
+  so the timing is the whole of it, and `useSwipeHint` asks an
+  IntersectionObserver rather than a timer for one reason: `md:hidden` gives the
+  mark no box at a desk, a hidden element never intersects, and so the single
+  showing is not spent on a machine with no gesture to explain — most of all on
+  the machines that are both, where a tablet in landscape spends nothing and has
+  the mark waiting when it is turned. **Keep `md:hidden` on the observed box, not
+  on the pill inside it**: moved in, it still hides the mark, but the box keeps
+  its box, so the observer fires at a desk and spends the showing where nobody
+  can see it. Keep the mark `fixed` too — that is what makes "on screen" and "on
+  a phone" the same question, with nothing to scroll to. Past that showing the
+  mark is not rendered at all, rather than left invisible over the page, which is
+  the shape of thing the strips were. The key is `lyrics:swipe-hint-seen` — the strips' key was already spent on real
+  devices, so reusing it would have meant nobody who saw the old hint ever learned
+  the new gesture. jsdom has no IntersectionObserver: `src/test/intersection.ts`
+  is a stub that answers back, so a spec can say the mark has come into view.
 - **A song reached from a list carries `?list=<id>`, and every step keeps it.**
   Dropped anywhere along the way, the next song is a dead end: the page still
   renders, the reader is simply out of the list with nothing saying so. Which is

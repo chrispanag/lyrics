@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Check,
@@ -21,7 +21,7 @@ import {
 } from "@/api/hooks";
 import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
-import { ListSongNavBar, ListSongNavFooter, ListSongTapStrips } from "@/components/ListSongNav";
+import { ListSongNavBar, ListSongNavFooter, ListSongSwipe } from "@/components/ListSongNav";
 import { YouTubeFacade } from "@/components/YouTubeFacade";
 import { buttonClasses } from "@/components/buttonStyles";
 import { Button, ErrorMessage, Sheet, Skeleton } from "@/components/ui";
@@ -63,6 +63,15 @@ export function SongDetailPage() {
   // page as it was before there was any, and the song is what was asked for.
   const listId = params.get(LIST_PARAM) ?? undefined;
   const { data: contextList } = useList(listId, !sessionLoading);
+
+  // The song, as the surface the paging swipe is read across. The whole of it
+  // rather than a region: a swipe is a movement and not a press, so it needs no
+  // box of its own to be safe in — and a song with no lyrics still has somewhere
+  // to make the gesture. It stops where the song stops, though, so a very short
+  // one leaves empty page below that pages nothing; the tab bar's own strip
+  // beneath it is not the song, and reading a swipe there would page a list from
+  // a press aimed at Browse.
+  const surface = useRef<HTMLElement>(null);
 
   const [listSheetOpen, setListSheetOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -113,7 +122,7 @@ export function SongDetailPage() {
   const position = contextList ? listPosition(contextList, song.id) : null;
 
   return (
-    <article className="mx-auto max-w-2xl px-4 py-4">
+    <article ref={surface} className="mx-auto max-w-2xl px-4 py-4">
       <div className="mb-4 flex items-center justify-between gap-2">
         <BackButton />
 
@@ -163,7 +172,12 @@ export function SongDetailPage() {
         </div>
       </div>
 
-      {position && <ListSongNavBar position={position} />}
+      {position && (
+        <>
+          <ListSongNavBar position={position} />
+          <ListSongSwipe position={position} surface={surface} />
+        </>
+      )}
 
       <header className="mb-5">
         <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">
@@ -249,32 +263,21 @@ export function SongDetailPage() {
           </div>
         </div>
 
-        {/* The one region of the page with nothing to press, which is why the
-            phone's tap strips live in here and nowhere else: they can only ever
-            lie over text, so no control on the page has to be lifted clear of
-            them and none can be added that quietly is not. Relative so they
-            have this box to measure themselves against. */}
-        <div className="relative">
-          {song.lyrics?.trim() ? (
-            // whitespace-pre-line preserves the line and verse breaks that give
-            // lyrics their shape, without needing any markup in the stored text.
-            <p
-              className={cn(
-                "whitespace-pre-line leading-loose text-stone-800 dark:text-stone-200",
-                FONT_SIZES[fontSizeIndex],
-              )}
-              style={{ fontFamily: "var(--font-lyrics)" }}
-            >
-              {song.lyrics}
-            </p>
-          ) : (
-            <p className="text-sm italic text-stone-500">No lyrics have been added yet.</p>
-          )}
-
-          {/* After the lyrics, so a screen reader reaches the song before the
-              ways out of it. */}
-          {position && <ListSongTapStrips position={position} />}
-        </div>
+        {song.lyrics?.trim() ? (
+          // whitespace-pre-line preserves the line and verse breaks that give
+          // lyrics their shape, without needing any markup in the stored text.
+          <p
+            className={cn(
+              "whitespace-pre-line leading-loose text-stone-800 dark:text-stone-200",
+              FONT_SIZES[fontSizeIndex],
+            )}
+            style={{ fontFamily: "var(--font-lyrics)" }}
+          >
+            {song.lyrics}
+          </p>
+        ) : (
+          <p className="text-sm italic text-stone-500">No lyrics have been added yet.</p>
+        )}
       </section>
 
       {song.notes && (
