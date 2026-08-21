@@ -447,6 +447,32 @@ func TestRenamingPersonReindexesSongs(t *testing.T) {
 	}
 }
 
+// A rename leaves the slug alone so shared filter links keep working, which is
+// what let a rename walk one genre onto another's name — creating two genres
+// that read identically in the browse filter and the song editor, with nothing
+// to say which songs were behind which. Creating cannot reach this: the slug is
+// derived from the name, so two genres named alike collide there.
+func TestRenamingGenreOntoAnotherIsRefused(t *testing.T) {
+	st := testutil.NewStore(t)
+	ctx := context.Background()
+
+	rock, err := st.CreateGenre(ctx, "Rock")
+	if err != nil {
+		t.Fatalf("CreateGenre: %v", err)
+	}
+	if _, err := st.CreateGenre(ctx, "Ρεμπέτικο"); err != nil {
+		t.Fatalf("CreateGenre: %v", err)
+	}
+
+	_, err = st.UpdateGenre(ctx, rock.ID, "Ρεμπέτικο")
+	if err == nil {
+		t.Fatal("renamed a genre onto a name another genre already holds")
+	}
+	if !store.IsConflict(err) {
+		t.Errorf("UpdateGenre error = %v, want a conflict the handler can answer 409 with", err)
+	}
+}
+
 // The upsert is what stops two contributors typing the same artist from
 // fragmenting that artist's catalog across duplicate rows.
 func TestUpsertPersonDeduplicates(t *testing.T) {

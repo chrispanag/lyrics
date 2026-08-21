@@ -22,7 +22,10 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Browse", icon: Search },
   { to: "/lists", label: "Lists", icon: ListMusic, authOnly: true },
   { to: "/profile", label: "Profile", icon: UserIcon },
-  { to: "/admin/users", label: "Admin", icon: Shield, adminOnly: true },
+  // The console's own section rather than one of its screens: a NavLink matches
+  // on prefix, so this stays lit while an admin moves between users and genres,
+  // and `/admin` redirects to the first of them.
+  { to: "/admin", label: "Admin", icon: Shield, adminOnly: true },
 ];
 
 /**

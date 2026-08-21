@@ -24,7 +24,7 @@ import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongNavFooter, ListSongSwipe } from "@/components/ListSongNav";
 import { YouTubeFacade } from "@/components/YouTubeFacade";
 import { buttonClasses } from "@/components/buttonStyles";
-import { Button, ErrorMessage, Sheet, Skeleton } from "@/components/ui";
+import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton } from "@/components/ui";
 import { CREDIT_DISPLAY_ORDER } from "@/lib/credits";
 import { cn } from "@/lib/cn";
 import { LIST_PARAM, listPosition } from "@/lib/listContext";
@@ -299,27 +299,16 @@ export function SongDetailPage() {
         />
       )}
 
-      <Sheet open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete this song?">
-        <p className="text-sm text-stone-600 dark:text-stone-400">
-          “{song.title}” will be removed for everyone, along with its place in any lists. This
-          cannot be undone.
-        </p>
-        <div className="mt-5 flex gap-2">
-          <Button variant="secondary" className="flex-1" onClick={() => setConfirmDelete(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="danger"
-            className="flex-1"
-            loading={deleteSong.isPending}
-            onClick={() => {
-              deleteSong.mutate(song.id, { onSuccess: () => navigate("/") });
-            }}
-          >
-            Delete
-          </Button>
-        </div>
-      </Sheet>
+      <ConfirmSheet
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title="Delete this song?"
+        pending={deleteSong.isPending}
+        onConfirm={() => deleteSong.mutate(song.id, { onSuccess: () => navigate("/") })}
+      >
+        “{song.title}” will be removed for everyone, along with its place in any lists. This cannot
+        be undone.
+      </ConfirmSheet>
     </article>
   );
 }

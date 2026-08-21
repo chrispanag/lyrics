@@ -5,8 +5,10 @@ import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { Layout } from "@/components/Layout";
 import { EmptyState, Spinner } from "@/components/ui";
+import { hasRole } from "@/lib/types";
 import { ForgotPasswordPage, LoginPage, RegisterPage, VerifyEmailPage } from "@/routes/AuthPages";
 import { BrowsePage } from "@/routes/BrowsePage";
+import { ADMIN_TABS } from "@/routes/adminTabs";
 import { ListDetailPage, ListsPage } from "@/routes/ListsPages";
 import { ProfilePage } from "@/routes/ProfilePage";
 import { SongDetailPage } from "@/routes/SongDetailPage";
@@ -17,8 +19,16 @@ import { SongDetailPage } from "@/routes/SongDetailPage";
 const SongEditorPage = lazy(() =>
   import("@/routes/SongEditorPage").then((m) => ({ default: m.SongEditorPage })),
 );
+// All three come from one module and so share one chunk, which is what makes
+// moving between the console's screens cost no second request.
+const AdminConsole = lazy(() =>
+  import("@/routes/AdminPages").then((m) => ({ default: m.AdminConsole })),
+);
 const AdminUsersPage = lazy(() =>
-  import("@/routes/AdminUsersPage").then((m) => ({ default: m.AdminUsersPage })),
+  import("@/routes/AdminPages").then((m) => ({ default: m.AdminUsersPage })),
+);
+const AdminGenresPage = lazy(() =>
+  import("@/routes/AdminPages").then((m) => ({ default: m.AdminGenresPage })),
 );
 
 /**
@@ -35,6 +45,30 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   if (!user) {
     return <Navigate to="/login" replace state={returnTo(routerLocation)} />;
   }
+  return <>{children}</>;
+}
+
+/**
+ * Requires an admin before rendering.
+ *
+ * Wraps the console's layout route rather than each screen inside it, so a
+ * screen added there is admin-only by its position in the tree instead of by
+ * someone remembering the wrapper. Kept out of the pages themselves for the
+ * same reason it is not a check inside them: the console's chunk is then never
+ * downloaded by anyone who cannot open it. The wait on `loading` is not
+ * optional either — `user` is null while the session is being restored, so
+ * deciding before it settles turns a refresh on an admin screen into a bounce
+ * to the catalog.
+ *
+ * A visitor who is not an admin is sent to the catalog rather than to sign in
+ * the way `RequireAuth` does — being asked to sign in is an answer about what
+ * exists here, and the server enforces every one of these routes regardless.
+ */
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) return <Spinner />;
+  if (!hasRole(user?.role, "admin")) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -94,7 +128,22 @@ export function App() {
           />
           <Route path="/lists/:id" element={<ListDetailPage />} />
           <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/admin/users" element={<AdminUsersPage />} />
+          {/* One guarded section, not two guarded screens. The navigation
+              carries a single entry and points at `/admin` itself, so that
+              entry stays lit on every screen inside — which is what the index
+              redirect is for, the section needing a screen to open on. */}
+          <Route
+            path="/admin"
+            element={
+              <RequireAdmin>
+                <AdminConsole />
+              </RequireAdmin>
+            }
+          >
+            <Route index element={<Navigate to={ADMIN_TABS[0].to} replace />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="genres" element={<AdminGenresPage />} />
+          </Route>
 
           <Route
             path="*"

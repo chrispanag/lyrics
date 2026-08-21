@@ -325,3 +325,57 @@ export function Sheet({
     </div>
   );
 }
+
+/**
+ * A sheet that asks before something irreversible happens.
+ *
+ * Three screens had this character for character — a song, a list, and a genre
+ * — down to the `flex-1` on both buttons and the muted paragraph above them.
+ * Stated three times, the next spacing or dark-mode change lands on one of them
+ * and nothing reports that the other two have drifted, which is the failure
+ * `cardStyles` records happening across five sites.
+ *
+ * `children` is the sentence rather than a prop, because what each one has to
+ * say differs in more than wording: one counts the songs that lose a label,
+ * another promises the songs are untouched. `error` is here because a refusal
+ * has to be readable without the sheet closing on it — the delete that can be
+ * refused is the one that needed it, and the other two get it for free.
+ */
+export function ConfirmSheet({
+  open,
+  onClose,
+  title,
+  children,
+  confirmLabel = "Delete",
+  pending,
+  error,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  confirmLabel?: string;
+  pending?: boolean;
+  error?: string;
+  onConfirm: () => void;
+}) {
+  return (
+    <Sheet open={open} onClose={onClose} title={title}>
+      <div className="text-sm text-stone-600 dark:text-stone-400">{children}</div>
+      {error && (
+        <div className="mt-4">
+          <ErrorMessage>{error}</ErrorMessage>
+        </div>
+      )}
+      <div className="mt-5 flex gap-2">
+        <Button variant="secondary" className="flex-1" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button variant="danger" className="flex-1" loading={pending} onClick={onConfirm}>
+          {confirmLabel}
+        </Button>
+      </div>
+    </Sheet>
+  );
+}

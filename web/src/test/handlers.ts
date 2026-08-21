@@ -53,6 +53,18 @@ export function makePerson(overrides: Partial<Person> = {}): Person {
   };
 }
 
+export function makeGenre(overrides: Partial<Genre> = {}): Genre {
+  return {
+    id: "genre-1",
+    name: "Ρεμπέτικο",
+    slug: "rempetiko",
+    song_count: 0,
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
 export function makeList(overrides: Partial<SongList> = {}): SongList {
   return {
     id: "list-1",
@@ -100,9 +112,24 @@ export function listById(...lists: SongList[]) {
   });
 }
 
-/** The API's error envelope, which the specs had each written out by hand. */
+/**
+ * The API's error envelope, which the specs had each written out by hand.
+ *
+ * `notFound` came first and is the common case by far; the general form exists
+ * because the envelope is the same shape whatever the status, and a spec that
+ * writes one out by hand is a spec that can get the shape wrong while appearing
+ * to test a refusal. Every route spec goes through here.
+ *
+ * `client.test.ts` is the one deliberate exception and should stay one: the
+ * shape of the envelope is what it is testing, so building it from the helper
+ * that the code under test is checked against would assert nothing.
+ */
+export function apiError(status: number, code: string, message: string) {
+  return HttpResponse.json({ error: { code, message } }, { status });
+}
+
 export function notFound(message: string) {
-  return HttpResponse.json({ error: { code: "not_found", message } }, { status: 404 });
+  return apiError(404, "not_found", message);
 }
 
 /** Default handlers. Individual tests override these with server.use(). */

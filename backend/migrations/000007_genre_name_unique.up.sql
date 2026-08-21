@@ -1,0 +1,16 @@
+-- Two genres could hold the same display name.
+--
+-- `slug` has always been unique, and every path that *creates* a genre derives
+-- the slug from the name — so two genres named alike collide there and are
+-- refused. A rename does not: `UpdateGenre` leaves the slug alone on purpose,
+-- so existing filter links keep working, which is exactly what let a rename
+-- walk a genre onto a name another one already had. The result was two
+-- indistinguishable chips in the browse filter and two indistinguishable
+-- options in the song editor, with nothing to say which songs were behind
+-- which.
+--
+-- Nothing can already violate this: the rename path is the only way to reach
+-- it, and it had no interface until the admin console gained one. Folding is
+-- left to the slug, which is the folded identity already — this only has to
+-- stop two rows from displaying the same string.
+CREATE UNIQUE INDEX genres_name_key ON genres (name);
