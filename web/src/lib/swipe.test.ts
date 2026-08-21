@@ -43,6 +43,17 @@ describe("swipeDirection", () => {
     expect(swipeDirection(-40, 0, 120)).toBeNull();
   });
 
+  // Where "too short" begins, for the same reason the edge guard has a case: a
+  // travel that drifts down reintroduces exactly what this gesture replaced the
+  // tap strips to be rid of — at 45px the short drag a press carries with it
+  // pages the song — while one that climbs past a comfortable thumb refuses
+  // swipes that were plainly meant. Without this the number is free to move:
+  // every case either side of it passes with the travel at 45.
+  it("draws the line between a drag and a swipe at 60px across", () => {
+    expect(swipeDirection(-59, 0, 200)).toBeNull();
+    expect(swipeDirection(-60, 0, 200)).toBe("next");
+  });
+
   // Reading is vertical scrolling, which is this gesture with the axes swapped.
   it("ignores a drag that went mostly up or down", () => {
     expect(swipeDirection(-80, 60, 200)).toBeNull();
@@ -65,5 +76,15 @@ describe("swipeDirection", () => {
   // A finger resting on the lyrics and wandering before it lifts.
   it("ignores a movement that took too long to be a flick", () => {
     expect(swipeDirection(-200, 0, 4000)).toBeNull();
+  });
+
+  // Where that stops being a flick, pinned from both sides like the rest: a cap
+  // that drifts up is the resting finger above going unnoticed — at 3000ms it
+  // pages the song on the way up — and one that drifts down refuses the
+  // deliberate, unhurried swipe someone reading one-handed actually makes.
+  // Every case either side of it passes with the cap at 3000.
+  it("draws the line between a flick and a finger that lingered at 800ms", () => {
+    expect(swipeDirection(-200, 0, 800)).toBe("next");
+    expect(swipeDirection(-200, 0, 801)).toBeNull();
   });
 });

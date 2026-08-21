@@ -236,7 +236,7 @@ needs a mailbox someone can read, exactly like email verification.
   importing the module with no React in sight. The unauthorized *handler* stays
   in an effect on purpose: it needs React state, and no response can 401 before
   the first effects have flushed.
-- **`useList`'s `ready` flag is belt-and-braces now, but the skeleton beside it
+- **`useList`'s `ready` flag is belt-and-suspenders now, but the skeleton beside it
   is not.** The flag was the first fix for that 404 — gate the query until
   `useAuth().loading` clears — and it is redundant since the provider moved to
   import time, because the request carries a token either way. What still bites
@@ -300,17 +300,28 @@ needs a mailbox someone can read, exactly like email verification.
   gesture is read after the movement rather than taken from it, which is what
   leaves a long song's vertical scroll alone — the failure `touch-none` would
   cause, inverting the drag handle's rule above, and invisible on a desktop where
-  a mouse has no such conflict. The gesture is also claimed or dropped at the
-  moment the finger goes down, which is where all four of its guards live: one
-  finger only, clear of the edges, no open sheet, and not starting on a control.
-  "A sheet is open" is `lib/modal.ts` — one question for the swipe and the arrow
+  a mouse has no such conflict. The gesture is claimed or dropped at the moment
+  the finger goes down, which is where four of its six guards live: one finger
+  only, clear of the edges, no open sheet, and not starting on a control. "A
+  sheet is open" is `lib/modal.ts` — one question for the swipe and the arrow
   keys both, asked of the DOM rather than of a page, so the next sheet is covered
   without being added to a list. `Sheet` is the only writer of the pair of
   attributes it looks for, and says so where it writes them; a move to `<dialog>`
-  and `showModal()` has to be answered there. That last one is belt
-  and braces and deliberately the safe way round — a swipe over a control does
+  and `showModal()` has to be answered there. The control guard is belt
+  and suspenders and deliberately the safe way round — a swipe over a control does
   nothing, rather than a control being unreachable under the gesture, which is
   precisely how the strips went wrong.
+- **The other two guards cannot be asked at touchdown, and one of them is a
+  comparison rather than a question.** A second finger arriving partway through
+  is read on the move. A movement that **changed what is selected** is read at
+  the end, against the selected *text* recorded when the finger went down — not
+  by asking whether anything is selected now. That weaker form looks equivalent
+  and is not: it catches the long press that drags sideways, but a drag on a
+  selection *handle* starts with something already selected, so it sails through
+  and pages the song, destroying the selection and the reader's place in the list
+  in one movement. Comparing also means a selection left on the page from earlier
+  cannot quietly kill every swipe after it. Both directions are pinned, and the
+  weak form fails the extend spec.
 - **The mark that says the swipe is there is shown once per device, and waits to
   be on screen before spending it.** It is the only visible sign of the gesture,
   so the timing is the whole of it, and `useSwipeHint` asks an
@@ -328,6 +339,16 @@ needs a mailbox someone can read, exactly like email verification.
   devices, so reusing it would have meant nobody who saw the old hint ever learned
   the new gesture. jsdom has no IntersectionObserver: `src/test/intersection.ts`
   is a stub that answers back, so a spec can say the mark has come into view.
+  Two smaller traps in the same hook: the mark is held in **state, set from a ref
+  callback**, because a `RefObject` is the same object on every render and so
+  would never re-run the effect — on a list that gains a second song while it is
+  open the mark then renders with no observer ever made, and that reader has the
+  one showing neither spent nor delivered. And the mark is dropped a further
+  `HINT_FADE_MS` after the fade *starts*, which is what makes "not rendered at
+  all" true rather than aspirational: unmounting with the fade cuts it instead of
+  playing it, and never unmounting leaves the invisible box the sentence above
+  promises there is none of, since stepping to a cached song does not remount
+  the page.
 - **A song reached from a list carries `?list=<id>`, and every step keeps it.**
   Dropped anywhere along the way, the next song is a dead end: the page still
   renders, the reader is simply out of the list with nothing saying so. Which is

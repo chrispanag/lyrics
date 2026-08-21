@@ -1,13 +1,13 @@
 import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Route, Routes, useLocation } from "react-router-dom";
 
 import { SongDetailPage } from "./SongDetailPage";
 import { returnDestination } from "@/auth/returnTo";
 import { API, listById, makeList, makeSong, makeUser, notFound } from "@/test/handlers";
-import { intersectAll } from "@/test/intersection";
+import { intersectAll, observedElements } from "@/test/intersection";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
@@ -348,6 +348,49 @@ describe("SongDetailPage inside a list", () => {
     stillOnSecond();
   });
 
+  // The same movement from the other side, and the case a guard that only asked
+  // "is anything selected now" let through: a reader who already has a word
+  // selected and drags a handle sideways to grow it is not leaving either. What
+  // is compared is *what* is selected, so both are refused — otherwise this one
+  // pages the song and takes the selection and the reader's place in the list
+  // with it.
+  it("leaves a movement that extended an existing selection alone", async () => {
+    const lyrics = await openSecond();
+    const line = screen.getByText(/Στης θάλασσας τα βάθη/);
+    const text = line.firstChild as Text;
+    const selection = window.getSelection();
+
+    /** A selection of the first `to` characters of the line, as a handle drag makes. */
+    const select = (to: number) => {
+      const range = document.createRange();
+      range.setStart(text, 0);
+      range.setEnd(text, to);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    };
+
+    // Already selected when the finger goes down, which is what tells this case
+    // apart from the one above.
+    select(5);
+    fireEvent.touchStart(lyrics, { touches: [{ clientX: 500, clientY: 400 }] });
+    select(15);
+    fireEvent.touchEnd(lyrics, { changedTouches: [{ clientX: 380, clientY: 404 }] });
+
+    stillOnSecond();
+  });
+
+  // A selection made earlier and simply left on the page is the other half of
+  // that comparison: it must not quietly kill every swipe after it, which is why
+  // what is selected is compared rather than merely read.
+  it("still reads a swipe over a selection the reader left behind", async () => {
+    const lyrics = await openSecond();
+    window.getSelection()?.selectAllChildren(screen.getByText(/Στης θάλασσας τα βάθη/));
+
+    swipe(lyrics, 500, 380);
+
+    expect(await screen.findByRole("heading", { name: "Third" })).toBeInTheDocument();
+  });
+
   // An open sheet owns the gestures over it, as it owns the arrow keys: paging
   // the song out from under one reads as a bug in the sheet. The sheet is fixed
   // over the page but rendered inside it, so its touches reach the listener and
@@ -364,7 +407,7 @@ describe("SongDetailPage inside a list", () => {
     stillOnSecond();
   });
 
-  // Belt and braces, and the safe way round: a swipe that begins on a control
+  // Belt and suspenders, and the safe way round: a swipe that begins on a control
   // does nothing, rather than a control being unreachable under the gesture,
   // which is exactly how the tap strips went wrong. Swiping *back* here, so a
   // guard that failed would be visible as the previous song rather than as the
@@ -400,6 +443,112 @@ describe("SongDetailPage inside a list", () => {
 
     act(() => intersectAll());
     expect(screen.queryByText("Swipe through the list")).not.toBeInTheDocument();
+  });
+
+  // The gesture has to outlive the mark, and only the order of two lines makes
+  // that true: the component that installs the swipe is the same one that draws
+  // the mark, and it renders nothing at all once the single showing is spent — so
+  // the hook runs above that early return. Every phone that has already been
+  // shown the mark is in this state permanently, which is why it is pinned:
+  // moving the hook below the return, or making the component conditional at its
+  // call site, would take paging away from all of them with nothing else failing.
+  it("still pages the list on a device that has already seen the mark", async () => {
+    localStorage.setItem("lyrics:swipe-hint-seen", "1");
+
+    const lyrics = await openSecond();
+    expect(screen.queryByText("Swipe through the list")).not.toBeInTheDocument();
+
+    swipe(lyrics, 500, 380);
+
+    expect(await screen.findByRole("heading", { name: "Third" })).toBeInTheDocument();
+  });
+
+  // Every touch listener is passive and nothing calls `preventDefault`: the
+  // gesture is read after the movement rather than taken from it, which is what
+  // leaves a long song's vertical scroll alone. A listener registered
+  // `{ passive: false }` — the natural way to add a drag-follow animation later —
+  // kills scrolling on every phone, and neither jsdom, which has no scrolling,
+  // nor a desktop mouse, which has no such conflict, would show it. The
+  // registration is the only readable form of the rule.
+  it("reads every touch passively, so a long song still scrolls", async () => {
+    const registered: { type: string; on: Element; options?: boolean | AddEventListenerOptions }[] =
+      [];
+    const original = Element.prototype.addEventListener;
+    const spy = vi
+      .spyOn(Element.prototype, "addEventListener")
+      .mockImplementation(function (this: Element, type, listener, options) {
+        registered.push({ type, on: this, options });
+        return original.call(this, type, listener, options);
+      });
+
+    try {
+      await openSecond();
+
+      // Only what landed on the song itself: React delegates every browser
+      // event, touches included, on the root container it owns. Scoping to the
+      // surface also says where these belong — pointed at a part of the page
+      // instead, the gesture would quietly narrow to it.
+      const article = screen.getByRole("article");
+      const touches = registered.filter(
+        ({ type, on }) => on === article && type.startsWith("touch"),
+      );
+
+      // Distinct types, because the listeners are torn down and put back as the
+      // list query settles and the addresses either side arrive. What matters is
+      // that all four are here and that every registration of them is passive.
+      expect([...new Set(touches.map(({ type }) => type))].sort()).toEqual([
+        "touchcancel",
+        "touchend",
+        "touchmove",
+        "touchstart",
+      ]);
+      for (const { options } of touches) {
+        expect(options).toMatchObject({ passive: true });
+      }
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  // Past its showing the mark is not rendered at all, rather than left invisible
+  // over the page, which is the shape of thing the tap strips were. Stepping to a
+  // song already in the query cache does not tear the page down, so a mark that
+  // merely went transparent would sit over every song for the rest of the
+  // session. Dropped after the fade rather than with it, so the fade is seen.
+  it("drops the mark once the fade has run, rather than leaving it invisible", async () => {
+    await openSecond();
+
+    // Installed before the showing starts, so the dwell and the fade below are
+    // scheduled on these rather than on the clock openSecond needed.
+    vi.useFakeTimers();
+    try {
+      act(() => intersectAll());
+      expect(screen.getByText("Swipe through the list")).toHaveClass("opacity-100");
+
+      // HINT_VISIBLE_MS, and then the duration-700 the pill fades over.
+      act(() => vi.advanceTimersByTime(3500));
+      expect(screen.getByText("Swipe through the list")).toHaveClass("opacity-0");
+
+      act(() => vi.advanceTimersByTime(700));
+      expect(screen.queryByText("Swipe through the list")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Which element is watched is the whole of the rule: `md:hidden` has to sit on
+  // the observed box rather than on the pill inside it. Moved inward the mark is
+  // still hidden at a desk — but the box keeps its box, so the observer fires
+  // there and spends the one showing on a machine with no gesture to explain, and
+  // the reader who later picks up a phone is never told. jsdom applies no CSS, so
+  // the class is the only way to say this.
+  it("watches the box that has no box at a desk, not the pill inside it", async () => {
+    await openSecond();
+
+    const observed = observedElements();
+    expect(observed).toHaveLength(1);
+    expect(observed[0]).toHaveClass("md:hidden");
+    expect(observed[0]).toContainElement(screen.getByText("Swipe through the list"));
   });
 
   it("names them again where the lyrics end", async () => {

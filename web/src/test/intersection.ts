@@ -44,6 +44,11 @@ class StubIntersectionObserver implements IntersectionObserver {
     return [];
   }
 
+  /** What it has been given, for the spec that asks which element that is. */
+  observed(): Element[] {
+    return [...this.targets];
+  }
+
   /** Reports every observed element as visible, the way scrolling to it would. */
   report(): void {
     const entries = [...this.targets].map(
@@ -68,4 +73,19 @@ export { StubIntersectionObserver };
  */
 export function intersectAll(): void {
   for (const observer of [...live]) observer.report();
+}
+
+/**
+ * Everything currently being watched, whichever observer is watching it.
+ *
+ * For the one rule about the swipe mark that only its markup can carry:
+ * `md:hidden` has to sit on the box that is observed rather than on the pill
+ * inside it, because a hidden element has no box and so never comes into view —
+ * which is what keeps the single showing from being spent at a desk. Moved
+ * inward the mark is still invisible there, but the box still has a box, and the
+ * showing goes to a machine with no gesture to explain. jsdom applies no CSS, so
+ * which element carries the class is the only readable form of that.
+ */
+export function observedElements(): Element[] {
+  return [...live].flatMap((observer) => observer.observed());
 }

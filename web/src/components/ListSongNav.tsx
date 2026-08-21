@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ListMusic } from "lucide-react";
 
@@ -104,6 +104,16 @@ function StepArrow({ step, back }: { step?: ListStep; back?: boolean }) {
 const HINT_VISIBLE_MS = 3500;
 const HINT_SEEN_KEY = "lyrics:swipe-hint-seen";
 
+/**
+ * How long the fade takes, which is `duration-700` on the pill below.
+ *
+ * The mark is dropped after this rather than at the same moment, so the fade is
+ * seen rather than cut — and a value that drifts under the class shortens the
+ * fade to itself, which is the one frame of the mark a reader is most likely to
+ * be watching.
+ */
+const HINT_FADE_MS = 700;
+
 // Anything that owns the raw input landing on it. The two gestures below ask
 // different questions of the same idea — a field owns its arrow keys for the
 // caret, while every control owns a press — so the inner set is named once and
@@ -144,9 +154,8 @@ export function ListSongSwipe({
   position: ListPosition;
   surface: RefObject<HTMLElement | null>;
 }) {
-  const hint = useRef<HTMLDivElement>(null);
   useSwipePaging(position, surface);
-  const hinting = useSwipeHint(hint);
+  const [hinting, markMounted] = useSwipeHint();
 
   // Nothing left to draw: a reader past their one showing has already been told,
   // and a list of one has nowhere to swipe to. Both after the hooks, which is
@@ -159,7 +168,7 @@ export function ListSongSwipe({
 
   return (
     <div
-      ref={hint}
+      ref={markMounted}
       aria-hidden
       // Fixed, because the gesture is the whole song and not a part of it: a
       // mark that has to be scrolled to is a mark for something nobody has found
@@ -194,6 +203,20 @@ export function ListSongSwipe({
 }
 
 /**
+ * The addresses either side, apart from the steps that carry them.
+ *
+ * Both gestures below hold these rather than `position`, which is built during
+ * render and so is a new object every time: holding it would rebuild their
+ * listeners on every re-render the page has — a query settling, the reader
+ * changing the text size. Two strings and `navigate` are also the whole of what
+ * either listener reads, which keeps what it holds for the life of the window
+ * down to that.
+ */
+function stepHrefs(position: ListPosition): { previousHref?: string; nextHref?: string } {
+  return { previousHref: position.previous?.href, nextHref: position.next?.href };
+}
+
+/**
  * Reads a swipe across the song, and takes the step it asks for.
  *
  * Every listener is passive and nothing here calls `preventDefault`: the gesture
@@ -202,16 +225,15 @@ export function ListSongSwipe({
  * have caused, and one that a desktop, where a mouse has no such conflict, never
  * shows.
  *
- * The gesture is claimed or dropped at the moment the finger goes down, where
- * all four of its guards therefore live.
+ * Four of its guards live at the moment the finger goes down, which is where a
+ * gesture is claimed or dropped: one finger only, clear of both screen edges, no
+ * open sheet, and not starting on a control. Two more cannot be answered there —
+ * a second finger arriving partway through, and a movement that changed what is
+ * selected — so each is read where it happens.
  */
 function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement | null>): void {
   const navigate = useNavigate();
-  // The hrefs rather than the steps, for the reason `useArrowKeyPaging` gives
-  // below: `position` is rebuilt on every render, so holding it would rebuild
-  // these listeners on every re-render the page has.
-  const previousHref = position.previous?.href;
-  const nextHref = position.next?.href;
+  const { previousHref, nextHref } = stepHrefs(position);
 
   useEffect(() => {
     const element = surface.current;
@@ -219,7 +241,7 @@ function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement |
     if (!previousHref && !nextHref) return;
 
     /** Where the finger went down, or null when this touch is not a candidate. */
-    let from: { x: number; y: number; at: number; collapsed: boolean } | null = null;
+    let from: { x: number; y: number; at: number; selected: string } | null = null;
 
     const forget = () => {
       from = null;
@@ -239,7 +261,7 @@ function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement |
       // sheet is covered without anyone having to add it to a list.
       if (modalIsOpen()) return;
 
-      // Belt and braces, and deliberately the safe way round: a swipe that
+      // Belt and suspenders, and deliberately the safe way round: a swipe that
       // starts on a control does nothing, rather than a control being
       // unreachable under the gesture — the inversion of the tap strips this
       // replaced. Browsers already drop the click a moving touch would have
@@ -250,7 +272,7 @@ function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement |
         x: touch.clientX,
         y: touch.clientY,
         at: event.timeStamp,
-        collapsed: selectionIsCollapsed(),
+        selected: selectedText(),
       };
     };
 
@@ -268,12 +290,15 @@ function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement |
       const touch = event.changedTouches[0];
       if (!touch) return;
 
-      // The movement selected text: a long press and a drag sideways, which ends
-      // exactly where a swipe ends and means the opposite of leaving. Compared
-      // against how the gesture started rather than simply read, so a selection
-      // made earlier and left on the page cannot quietly kill every swipe after
-      // it.
-      if (start.collapsed && !selectionIsCollapsed()) return;
+      // The movement changed what is selected: a long press and a drag
+      // sideways, which ends exactly where a swipe ends and means the opposite
+      // of leaving. Compared against how the gesture started rather than simply
+      // read, so a selection made earlier and left on the page cannot quietly
+      // kill every swipe after it — and so that dragging a handle to *extend* a
+      // selection, which starts with one already there, is refused too. Asking
+      // only whether anything is selected now would take the first and miss the
+      // second.
+      if (selectedText() !== start.selected) return;
 
       const direction = swipeDirection(
         touch.clientX - start.x,
@@ -304,10 +329,9 @@ function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement |
   }, [navigate, nextHref, previousHref, surface]);
 }
 
-/** Whether nothing on the page is selected. A missing selection is none. */
-function selectionIsCollapsed(): boolean {
-  const selection = window.getSelection();
-  return !selection || selection.isCollapsed;
+/** What is selected on the page, as text. Nothing selected is "". */
+function selectedText(): string {
+  return window.getSelection()?.toString() ?? "";
 }
 
 /**
@@ -329,39 +353,55 @@ function selectionIsCollapsed(): boolean {
  * Recorded when it is shown rather than when it finishes, so a reader who steps
  * on mid-fade is not shown it again on the next song.
  *
- * Answers null once that showing is spent, which is the caller's cue to render
- * nothing at all: there is then nothing to observe and nothing to draw.
+ * Answers null once that showing is over — before it starts on a device that has
+ * already had it, and again after the fade has run — which is the caller's cue to
+ * render nothing at all: there is then nothing to observe and nothing to draw.
+ *
+ * Hands back the callback to attach to the mark rather than taking a ref, which
+ * is what lets the observer be set up whenever the mark actually arrives. See the
+ * state it is held in below.
  */
-function useSwipeHint(mark: RefObject<HTMLElement | null>): boolean | null {
+function useSwipeHint(): [boolean | null, (element: HTMLElement | null) => void] {
   // Read at render rather than inside the effect, the same lazy read the
   // reader's font size makes, because the answer decides whether there is
   // anything to render at all — and it cannot change under a mounted page, since
   // this hook is the only writer.
   const [unspent] = useState(() => localStorage.getItem(HINT_SEEN_KEY) === null);
   const [hinting, setHinting] = useState(false);
+  const [over, setOver] = useState(false);
+  // Held in state rather than a ref, because the effect below has to run when the
+  // mark arrives — and it can arrive later than the first render, on a list that
+  // gains a second song while it is open. A ref is the same object throughout, so
+  // the effect would never run again: no observer would ever be made, and that
+  // reader would have the showing neither spent nor delivered.
+  const [mark, setMark] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    const element = mark.current;
-    if (!element || !unspent) return;
+    if (!mark || !unspent) return;
 
     let fade: ReturnType<typeof setTimeout> | undefined;
+    let done: ReturnType<typeof setTimeout> | undefined;
     const observer = new IntersectionObserver((entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
 
       observer.disconnect();
       localStorage.setItem(HINT_SEEN_KEY, "1");
       setHinting(true);
-      fade = setTimeout(() => setHinting(false), HINT_VISIBLE_MS);
+      fade = setTimeout(() => {
+        setHinting(false);
+        done = setTimeout(() => setOver(true), HINT_FADE_MS);
+      }, HINT_VISIBLE_MS);
     });
-    observer.observe(element);
+    observer.observe(mark);
 
     return () => {
       observer.disconnect();
       clearTimeout(fade);
+      clearTimeout(done);
     };
   }, [mark, unspent]);
 
-  return unspent ? hinting : null;
+  return [unspent && !over ? hinting : null, setMark];
 }
 
 /**
@@ -435,13 +475,7 @@ function StepCard({ step, back }: { step?: ListStep; back?: boolean }) {
  */
 function useArrowKeyPaging(position: ListPosition): void {
   const navigate = useNavigate();
-  // The hrefs rather than the steps: `position` is built during render, so it is
-  // a new object every time and would rebuild the listener on every re-render
-  // the page has — changing the text size, a query settling. Two strings and
-  // `navigate` also keep what the listener holds for the life of the window down
-  // to what it reads.
-  const previousHref = position.previous?.href;
-  const nextHref = position.next?.href;
+  const { previousHref, nextHref } = stepHrefs(position);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
