@@ -1,10 +1,10 @@
 /*
  * A controllable IntersectionObserver, since jsdom has none.
  *
- * A no-op stub would be enough to keep the tap strips from throwing on mount,
- * but the one thing worth pinning about their hint is that it waits for the
- * strips to be on screen before spending the single showing it gets. A spec
- * therefore needs a way to say that they are, which is `intersectAll()`.
+ * A no-op stub would be enough to keep the song page from throwing on mount, but
+ * the one thing worth pinning about the swipe's mark is that it waits until it is
+ * really on screen before spending the single showing it gets. A spec therefore
+ * needs a way to say that it is, which is `intersectAll()`.
  *
  * Nothing here measures anything: jsdom has no layout, so an entry is only ever
  * "visible" because a test said so.
@@ -44,6 +44,11 @@ class StubIntersectionObserver implements IntersectionObserver {
     return [];
   }
 
+  /** What it has been given, for the spec that asks which element that is. */
+  observed(): Element[] {
+    return [...this.targets];
+  }
+
   /** Reports every observed element as visible, the way scrolling to it would. */
   report(): void {
     const entries = [...this.targets].map(
@@ -68,4 +73,19 @@ export { StubIntersectionObserver };
  */
 export function intersectAll(): void {
   for (const observer of [...live]) observer.report();
+}
+
+/**
+ * Everything currently being watched, whichever observer is watching it.
+ *
+ * For the one rule about the swipe mark that only its markup can carry:
+ * `md:hidden` has to sit on the box that is observed rather than on the pill
+ * inside it, because a hidden element has no box and so never comes into view —
+ * which is what keeps the single showing from being spent at a desk. Moved
+ * inward the mark is still invisible there, but the box still has a box, and the
+ * showing goes to a machine with no gesture to explain. jsdom applies no CSS, so
+ * which element carries the class is the only readable form of that.
+ */
+export function observedElements(): Element[] {
+  return [...live].flatMap((observer) => observer.observed());
 }

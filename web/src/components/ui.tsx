@@ -297,6 +297,9 @@ export function Sheet({
         aria-hidden
       />
       <div
+        // These two attributes are the whole of how a sheet announces itself:
+        // `lib/modal.ts` looks for exactly this pair, and both the arrow keys
+        // and the paging swipe stand down while it answers.
         role="dialog"
         aria-modal="true"
         aria-label={title}
