@@ -42,9 +42,16 @@ export const SongCard = memo(function SongCard({
           <h3 className="truncate font-semibold text-stone-900 dark:text-stone-100">
             {song.title}
           </h3>
-          {credits && (
-            <p className="mt-0.5 truncate text-sm text-stone-500 dark:text-stone-400">{credits}</p>
-          )}
+          {/* Always rendered: an empty <p> has no line box, so a song with
+              nobody credited would sit a line shorter than the cards around it.
+              `min-h-lh` holds the line open from the element's own line height
+              rather than restating text-sm's — on an engine without the unit it
+              is dropped, and the card is merely uneven again. Only this empty
+              slot is reserved: the snippet and the genre row below are content
+              of varying size, and a card's height still follows them. */}
+          <p className="mt-0.5 min-h-lh truncate text-sm text-stone-500 dark:text-stone-400">
+            {credits}
+          </p>
         </div>
         {song.youtube_video_id && (
           <Youtube aria-label="Has a video" className="size-5 shrink-0 text-stone-400" />
