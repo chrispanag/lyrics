@@ -65,6 +65,27 @@ pointed at the cause, and each is pinned by a test that names the failure.
   term) is the only recall mechanism for Greek inflection. Do not "improve" this
   by switching to a stemmed configuration without handling both languages.
 
+### Genres
+
+- **`genres.name` is unique, and that index is the only thing holding it.** The
+  slug is unique too and every path that *creates* a genre derives the slug from
+  the name, so two genres named alike collide there — but `UpdateGenre` leaves
+  the slug alone on purpose, so bookmarked filter links keep working, and that
+  is exactly what let a rename walk one genre onto another's name. The result
+  reads as a display bug and is not one: two identical chips in the browse
+  filter, two identical options in the song editor, and no way to tell which
+  songs are behind which. Folding stays with the slug, which is the folded
+  identity already; the index only has to stop two rows displaying the same
+  string. Pinned by `TestRenamingGenreOntoAnotherIsRefused`.
+- **A rename or a delete has to unsettle four query keys, and the easy one to
+  forget is `["list"]`.** A song carries its genres inside its own payload and
+  `SongCard` renders them, so a renamed genre keeps its old name on every cached
+  song page, song row and list page — and after a delete, a label the genre no
+  longer has. A genre is nowhere named on a list, which is why that key goes
+  missing: it is two hops down, in `songs[].genres`. Creating one needs none of
+  this, since a new genre is on no songs, and that asymmetry is the whole reason
+  `invalidateGenres` is written down beside `invalidateGenreList`.
+
 ### Prelude tokens
 
 Two properties of a real access token contradict both the docs and the app's own
@@ -224,6 +245,15 @@ needs a mailbox someone can read, exactly like email verification.
 - **Song pages link credits to `/?person=<id>`.** Browse must read that param,
   or clicking an artist lands on the unfiltered catalog with no error, reading
   as "this artist is on every song".
+- **Browse's filter chips are keyed on what is in the URL, never on the filter
+  being found.** A genre can be deleted from the admin console while someone
+  holds a link filtered by it, and the request still answers — with no songs,
+  since the filter is an `EXISTS` on a slug that now matches nothing. Rendering
+  the chip only when the genre resolves leaves that reader on an empty catalog
+  with a lit filter button, a badge counting the filter, and nothing to press to
+  clear it; the only way out is the filter sheet's "Clear all". The artist chip
+  had this right first — `activePerson?.name ?? "Artist"` — and the genre chip
+  now falls back to the raw slug the same way.
 - **The token provider is registered at import time by `auth/session`, and must
   stay there.** React flushes child effects before parent ones, so a query
   mounted under `AuthProvider` starts fetching before any effect of the
@@ -254,6 +284,35 @@ needs a mailbox someone can read, exactly like email verification.
   needs its own check because hooks run before the redirects below them are
   rendered — without it, a visitor who is already verified opens a challenge and
   is emailed a code on their way past.
+- **The admin console is a guarded section, not a pair of guarded screens.**
+  `RequireAdmin` wraps the `/admin` layout route, whose element is the console's
+  own chrome around an `<Outlet/>`, so a screen added below it is admin-only by
+  position — the wrapper is not something the next screen can be written
+  without. Written per route instead, as it first was, a forgotten wrapper
+  renders that screen for everybody and the server refusing its writes is all
+  that says so. Being outside the pages also keeps the console's chunk off the
+  machine of anyone who cannot open it, and the heading comes from the tab that
+  matches the address so a screen's name is written once rather than in the
+  route, the tab, and a title prop. Two smaller traps in the same place. The
+  navigation carries one entry and it names the *section*: a `NavLink` matches
+  on prefix, so an entry naming a screen — as it did, `/admin/users` — goes dark
+  the moment an admin opens the other one, and the console then still works
+  while no longer saying where the reader is. `/admin` therefore needs the index
+  redirect, being a section with no screen of its own. And the gate waits for
+  `loading` where the verification gate deliberately does not — `user` is null
+  while the session restores, which for an admin screen is not the guest case
+  but a reload, and deciding then bounces an admin off their own page. The
+  section's screens live in `routes/adminTabs.ts` rather than in the console
+  itself, because `App.tsx` opens `/admin` on the first of them and importing
+  that list from the console's own module would pull its chunk into the bundle
+  every visitor downloads.
+- **A screen that reads `isLoading` and a length must read `isError` too.** Both
+  admin screens shipped without it and both said the same wrong thing: a failed
+  request has no rows, so "No users matched." and "No genres yet" stood in for a
+  fault — and on the genres screen the advice that follows is to add the genres
+  that already exist, each of which is then refused as a duplicate slug for
+  reasons the screen cannot explain. `BrowsePage`, `SongDetailPage` and
+  `ListDetailPage` all branch on `isError`; anything listing rows must.
 - **A list's rows are built by `SongRow`, whichever way the list is rendered.**
   `ListDetailPage` serves the sortable list only to an owner with more than one
   song; a list of one, every reader, and the wait for the drag chunk fall

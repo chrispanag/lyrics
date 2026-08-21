@@ -198,6 +198,12 @@ func (s *Server) handleUpdateGenre(w http.ResponseWriter, r *http.Request) error
 
 	genre, err := s.store.UpdateGenre(r.Context(), id, name)
 	if err != nil {
+		// Named the way the person handler names it: the generic conflict
+		// reads "Genre already exists.", which is confusing advice when the
+		// genre being renamed plainly does.
+		if store.IsConflict(err) {
+			return httpx.Conflict("Another genre already uses that name.").WithCause(err)
+		}
 		return storeError(err, "Genre")
 	}
 	httpx.JSON(w, http.StatusOK, genre)

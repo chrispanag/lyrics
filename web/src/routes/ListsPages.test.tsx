@@ -5,7 +5,7 @@ import { Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { ListDetailPage } from "./ListsPages";
-import { API, listById, makeList, makeSong, makeUser } from "@/test/handlers";
+import { API, apiError, listById, makeList, makeSong, makeUser } from "@/test/handlers";
 import { stubRowRects } from "@/test/rects";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
@@ -26,6 +26,9 @@ function renderDetail(
     <Routes>
       <Route path="/lists/:id" element={<ListDetailPage />} />
       <Route path="/login" element={<h1>Sign in</h1>} />
+      {/* Where a deleted list leaves its owner. Stubbed so that landing is
+          something a spec can see. */}
+      <Route path="/lists" element={<h1>Your lists</h1>} />
     </Routes>,
     { route, ...options },
   );
@@ -97,10 +100,7 @@ describe("ListDetailPage sharing", () => {
         const body = (await request.json()) as { name?: string };
         sentName = body.name;
         if (body.name === undefined) {
-          return HttpResponse.json(
-            { error: { code: "conflict", message: "You already have a list with that name." } },
-            { status: 409 },
-          );
+          return apiError(409, "conflict", "You already have a list with that name.");
         }
         return HttpResponse.json(copy, { status: 201 });
       }),
@@ -362,10 +362,7 @@ describe("ListDetailPage removal", () => {
     );
     server.use(
       http.delete(`${API}/api/v1/lists/:id/songs/:songID`, () =>
-        HttpResponse.json(
-          { error: { code: "internal", message: "Something went wrong." } },
-          { status: 500 },
-        ),
+        apiError(500, "internal", "Something went wrong."),
       ),
     );
 
@@ -375,5 +372,50 @@ describe("ListDetailPage removal", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/something went wrong/i);
     expect(screen.getByText("First")).toBeInTheDocument();
+  });
+});
+
+// The confirmation is `ConfirmSheet`, shared with the song and genre deletes.
+// Neither of the two older sheets had a spec when it was extracted, so this and
+// its counterpart in SongDetailPage are what keep the shared component honest.
+describe("ListDetailPage deletion", () => {
+  it("asks before deleting a list, and deletes the one it named", async () => {
+    serveLists(makeList({ id: "list-1", owner_id: "user-1", name: "Ρεμπέτικα" }));
+    let deleted = "";
+    server.use(
+      http.delete(`${API}/api/v1/lists/:id`, ({ params }) => {
+        deleted = String(params.id);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    await userEvent.click(await screen.findByRole("button", { name: /Delete list/ }));
+    expect(screen.getByText(/The songs themselves are not affected/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(deleted).toBe("list-1"));
+    expect(await screen.findByRole("heading", { name: "Your lists" })).toBeInTheDocument();
+  });
+
+  it("does nothing to a list the confirmation was dismissed for", async () => {
+    serveLists(makeList({ id: "list-1", owner_id: "user-1", name: "Ρεμπέτικα" }));
+    let requested = false;
+    server.use(
+      http.delete(`${API}/api/v1/lists/:id`, () => {
+        requested = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    await userEvent.click(await screen.findByRole("button", { name: /Delete list/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByText(/The songs themselves are not affected/)).not.toBeInTheDocument();
+    expect(requested).toBe(false);
   });
 });

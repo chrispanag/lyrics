@@ -233,8 +233,17 @@ export function BrowsePage() {
                   {activePerson?.name ?? "Artist"}
                 </Chip>
               )}
-              {activeGenre && (
-                <Chip onRemove={() => setParam("genre_slug", null)}>{activeGenre.name}</Chip>
+              {/* Keyed on the slug in the URL rather than on the genre being
+                  found, the way the artist chip above already is. A genre can
+                  be deleted from the admin console while someone holds a link
+                  filtered by it: the request still answers, with no songs, so
+                  waiting for a name that will never arrive leaves that reader
+                  on an empty catalog with a lit filter button and nothing to
+                  press to clear it. */}
+              {genreSlug && (
+                <Chip onRemove={() => setParam("genre_slug", null)}>
+                  {activeGenre?.name ?? genreSlug}
+                </Chip>
               )}
               {language && (
                 <Chip onRemove={() => setParam("language", null)}>

@@ -79,6 +79,66 @@ export function useGenres() {
   });
 }
 
+/** The chips themselves, which is all a brand new genre can be seen in. */
+function invalidateGenreList(queryClient: QueryClient): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: keys.genres() });
+}
+
+/**
+ * Unsettles everything a genre's *name* is visible through.
+ *
+ * A rename or a delete does not only change the chip list: a song carries its
+ * genres embedded in its own payload, and `SongCard` renders them, so every
+ * cached song row, song page and list page still holds the old name — or a
+ * label the genre no longer has. All four keys are needed; the list is the one
+ * easily forgotten, since a genre is nowhere named on a list and is two hops
+ * down inside one, in `songs[].genres`.
+ *
+ * Creating needs none of this — a brand new genre is on no songs — which is why
+ * that path invalidates the chips alone. The asymmetry is stated here rather
+ * than per hook because that is how one half of it comes to be forgotten.
+ *
+ * The promise is returned, and every caller returns it from `onSuccess`, so a
+ * mutation settles when the caches do. Voided in one place and returned in
+ * another, the same action closes its sheet at two different moments — before
+ * the screen has caught up on one path and after it on the other, for no reason
+ * a reader of either could see.
+ */
+function invalidateGenres(queryClient: QueryClient): Promise<unknown> {
+  return Promise.all([
+    invalidateGenreList(queryClient),
+    queryClient.invalidateQueries({ queryKey: ["songs"] }),
+    queryClient.invalidateQueries({ queryKey: ["song"] }),
+    queryClient.invalidateQueries({ queryKey: ["list"] }),
+  ]);
+}
+
+export function useCreateGenre() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) =>
+      apiFetch<Genre>("/api/v1/genres", { method: "POST", body: { name } }),
+    onSuccess: () => invalidateGenreList(queryClient),
+  });
+}
+
+export function useUpdateGenre() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      apiFetch<Genre>(`/api/v1/genres/${id}`, { method: "PATCH", body: { name } }),
+    onSuccess: () => invalidateGenres(queryClient),
+  });
+}
+
+export function useDeleteGenre() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`/api/v1/genres/${id}`, { method: "DELETE" }),
+    onSuccess: () => invalidateGenres(queryClient),
+  });
+}
+
 export function useLists(enabled: boolean) {
   return useQuery({
     queryKey: keys.lists(),

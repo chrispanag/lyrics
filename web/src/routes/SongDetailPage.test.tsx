@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -32,6 +32,9 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
     <Routes>
       <Route path="/songs/:id" element={<SongDetailPage />} />
       <Route path="/login" element={<SignInStub />} />
+      {/* Where a deleted song leaves the reader, since the song they were on is
+          gone. Stubbed so that landing is something a spec can see. */}
+      <Route path="/" element={<h1>Catalog</h1>} />
     </Routes>,
     { route: "/songs/song-1", ...options },
   );
@@ -625,5 +628,51 @@ describe("SongDetailPage inside a list", () => {
 
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
     expect(requested).toBe(0);
+  });
+});
+
+// The confirmation is `ConfirmSheet`, shared with the list and genre deletes.
+// Neither of the two older sheets had a spec when it was extracted, so this and
+// its counterpart in ListsPages are what keep the shared component honest — a
+// change to its buttons or its wiring would otherwise land silently on three
+// screens at once.
+describe("SongDetailPage deletion", () => {
+  it("asks before deleting a song, and deletes the one it named", async () => {
+    let deleted = "";
+    server.use(
+      http.delete(`${API}/api/v1/songs/:id`, ({ params }) => {
+        deleted = String(params.id);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderDetail({ user: makeUser({ role: "admin" }) });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Delete song" }));
+    expect(screen.getByText(/will be removed for everyone/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(deleted).toBe("song-1"));
+    // And the reader does not stay on the song that no longer exists.
+    expect(await screen.findByRole("heading", { name: "Catalog" })).toBeInTheDocument();
+  });
+
+  it("does nothing to a song the confirmation was dismissed for", async () => {
+    let requested = false;
+    server.use(
+      http.delete(`${API}/api/v1/songs/:id`, () => {
+        requested = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    renderDetail({ user: makeUser({ role: "admin" }) });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Delete song" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByText(/will be removed for everyone/)).not.toBeInTheDocument();
+    expect(requested).toBe(false);
   });
 });

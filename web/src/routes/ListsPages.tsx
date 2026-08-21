@@ -17,7 +17,16 @@ import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { cardChrome, cardHover } from "@/components/cardStyles";
 import { SongRow } from "@/components/SongRow";
-import { Button, EmptyState, ErrorMessage, Field, Input, Sheet, Skeleton } from "@/components/ui";
+import {
+  Button,
+  ConfirmSheet,
+  EmptyState,
+  ErrorMessage,
+  Field,
+  Input,
+  Sheet,
+  Skeleton,
+} from "@/components/ui";
 import { BackButton } from "@/components/BackButton";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
@@ -465,26 +474,17 @@ export function ListDetailPage() {
         </form>
       </Sheet>
 
-      <Sheet open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete this list?">
-        <p className="text-sm text-stone-600 dark:text-stone-400">
-          “{list.name}” will be removed. The songs themselves are not affected.
-        </p>
-        <div className="mt-5 flex gap-2">
-          <Button variant="secondary" className="flex-1" onClick={() => setConfirmDelete(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="danger"
-            className="flex-1"
-            loading={deleteList.isPending}
-            onClick={() =>
-              deleteList.mutate(list.id, { onSuccess: () => navigate("/lists", { replace: true }) })
-            }
-          >
-            Delete
-          </Button>
-        </div>
-      </Sheet>
+      <ConfirmSheet
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title="Delete this list?"
+        pending={deleteList.isPending}
+        onConfirm={() =>
+          deleteList.mutate(list.id, { onSuccess: () => navigate("/lists", { replace: true }) })
+        }
+      >
+        “{list.name}” will be removed. The songs themselves are not affected.
+      </ConfirmSheet>
     </div>
   );
 }

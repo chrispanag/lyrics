@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { BrowsePage } from "./BrowsePage";
-import { API, list, makeSong, makeUser } from "@/test/handlers";
+import { API, apiError, list, makeSong, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
@@ -64,10 +64,7 @@ describe("BrowsePage", () => {
   it("surfaces an API failure instead of rendering an empty list", async () => {
     server.use(
       http.get(`${API}/api/v1/songs`, () =>
-        HttpResponse.json(
-          { error: { code: "internal_error", message: "Something went wrong." } },
-          { status: 500 },
-        ),
+        apiError(500, "internal_error", "Something went wrong."),
       ),
     );
 
@@ -228,5 +225,30 @@ describe("BrowsePage artist filter", () => {
     // A chip showing a raw UUID would be worse than showing none at all.
     expect(await screen.findByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /remove filter/i })).toBeInTheDocument();
+  });
+});
+
+// A genre can be deleted from the admin console while a reader holds a link
+// filtered by it. The songs request still answers — with nothing, since the
+// filter is an EXISTS on a slug that now matches nothing — so a chip rendered
+// only when the genre resolves leaves that reader on an empty catalog with a lit
+// filter button and no way to clear it. Reverting to `activeGenre &&` reads as a
+// null-safety tidy-up, which is why this is pinned from the outside.
+describe("BrowsePage filter chips", () => {
+  it("can clear a filter whose genre no longer exists", async () => {
+    // The catalog knows nothing of `rok`: the genre behind it is gone.
+    server.use(
+      http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list([]))),
+      http.get(`${API}/api/v1/genres`, () => HttpResponse.json(list([]))),
+    );
+
+    renderWithProviders(<BrowsePage />, { route: "/?genre_slug=rok" });
+
+    // Labeled with the slug from the address, there being no name to show.
+    expect(await screen.findByText("rok")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove filter" }));
+
+    expect(screen.queryByText("rok")).not.toBeInTheDocument();
   });
 });
