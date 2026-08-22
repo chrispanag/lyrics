@@ -7,6 +7,7 @@ import { useGenres, usePerson, useSongs } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { StickyHeader } from "@/components/Layout";
 import { buttonClasses } from "@/components/buttonStyles";
+import { PageTitle } from "@/components/PageTitle";
 import { SearchField } from "@/components/SearchField";
 import { SongCard } from "@/components/SongCard";
 import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Skeleton } from "@/components/ui";
@@ -176,6 +177,11 @@ export function BrowsePage() {
 
   return (
     <>
+      {/* The query rather than a fixed "Browse" when there is one: filter state
+          lives in the URL, so a search is a history entry and a bookmark, and
+          those are exactly the two places a row of identical "Songfolio"
+          entries is useless. */}
+      <PageTitle name={query ? `Search: ${query}` : "Browse"} />
       <StickyHeader>
         <div className="mx-auto max-w-3xl px-4 py-3">
           <div className="flex items-center gap-2">

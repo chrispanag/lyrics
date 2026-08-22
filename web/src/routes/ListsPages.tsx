@@ -16,6 +16,7 @@ import {
 import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { cardChrome, cardHover } from "@/components/cardStyles";
+import { PageTitle } from "@/components/PageTitle";
 import { SongRow } from "@/components/SongRow";
 import {
   Button,
@@ -94,6 +95,7 @@ export function ListsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
+      <PageTitle name="Your lists" />
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Your lists</h1>
         <Button size="sm" onClick={() => setCreating(true)}>
@@ -198,6 +200,9 @@ export function ListDetailPage() {
   if (sessionLoading || isLoading) {
     return (
       <div className="mx-auto max-w-2xl space-y-3 px-4 py-6">
+        {/* Nameless on purpose while the list is in flight — the alternative is
+            a tab reading "undefined — Songfolio" on the way in. */}
+        <PageTitle />
         <Skeleton className="h-8 w-1/2" />
         <Skeleton className="h-24 w-full" />
       </div>
@@ -207,6 +212,7 @@ export function ListDetailPage() {
   if (isError || !list) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
+        <PageTitle name="List not available" />
         <ErrorMessage>This list is not available.</ErrorMessage>
         <Link to="/lists" className="mt-4 inline-block text-sm text-brand-600 hover:underline">
           Back to lists
@@ -267,6 +273,7 @@ export function ListDetailPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-4">
+      <PageTitle name={list.name} />
       <BackButton className="mb-4" />
 
       <header className="mb-5">

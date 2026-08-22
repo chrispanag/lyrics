@@ -1,0 +1,10 @@
+# This file exists mostly so the path stops answering with the app's own
+# index.html. Every unmatched path falls through to the SPA catchall, so a
+# crawler asking for /robots.txt was handed an HTML document with a 200 — read
+# as "no rules", which is what this file says too, but only by accident.
+#
+# No Sitemap line: there is no sitemap. Generating one means enumerating songs
+# from the API, and the pages it would list are client-rendered anyway.
+
+User-agent: *
+Allow: /

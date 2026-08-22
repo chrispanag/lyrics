@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Songfolio">
+  <!-- Source for the 1200x630 link-preview card (public/og-card.png). See
+       icon-square.svg for why this comment sits inside the root element.
+
+       Text is rendered to a raster rather than shipped as SVG on purpose: no
+       scraper renders SVG for og:image, and several refuse the type outright.
+       That also means the font is resolved once, at generation time, by
+       whatever rasterizes this file — so the stack below has to name faces
+       that exist on the generating machine, not on the reader's. Look at the
+       PNG after regenerating; a missing font degrades to a default silently
+       rather than failing.
+
+       1200x630 is the 1.91:1 both Open Graph and Twitter crop to. Keep the
+       mark and the name inside the middle band: several clients crop this card
+       to a square thumbnail in compact layouts. -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c6481c" />
+      <stop offset="1" stop-color="#a33b14" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#ground)" />
+
+  <!-- An oversized off-center record, bled off two edges. Low enough contrast
+       to stay behind the text at thumbnail size. -->
+  <g opacity="0.09">
+    <circle cx="1040" cy="470" r="300" fill="none" stroke="#fff" stroke-width="64" />
+    <circle cx="1040" cy="470" r="150" fill="none" stroke="#fff" stroke-width="64" />
+  </g>
+
+  <!-- The mark, drawn to match public/favicon.svg rather than the lucide glyph. -->
+  <circle cx="124" cy="178" r="44" fill="none" stroke="#fff" stroke-width="9" opacity="0.45" />
+  <circle cx="124" cy="178" r="16" fill="#fff" />
+
+  <!-- The face and the fill are set once and inherited. The stack in particular
+       is the attribute most likely to be edited — it is the one thing here that
+       has to name faces present on the generating machine — and four copies of
+       it is four chances for a line of copy to quietly render in something
+       else. Everything that genuinely differs per line stays on the line. -->
+  <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif" fill="#ffffff">
+    <text x="196" y="205" font-size="76" font-weight="700" letter-spacing="-1.5">Songfolio</text>
+
+    <text x="80" y="352" font-size="42" opacity="0.86">A Greek and English song lyrics catalog:</text>
+    <text x="80" y="410" font-size="42" opacity="0.86">browse, search, and collect songs into lists.</text>
+
+    <text x="80" y="556" font-size="30" font-weight="600" letter-spacing="2" opacity="0.6">SONGFOLIO.LIVE</text>
+  </g>
+</svg>

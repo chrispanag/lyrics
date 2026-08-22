@@ -577,6 +577,90 @@ written password needs a mailbox someone can read.
   `SongEditorPage.test.tsx`: a fix that kept `?list=` while still duplicating
   the entry passes that spec's every assertion about the address.
 
+### Head assets
+
+- **A missing file under `public/` does not 404 — it serves the app.** Every
+  unmatched path is a React Router route, by `catchall_document` on App Platform
+  and `try_files` under nginx, so `/favicon.ico` answered `200 text/html` with
+  `index.html` in it. That is worse than a 404 in the one way that matters: the
+  client succeeded, so it has nothing to fall back to, and anything that does
+  not read SVG favicons (crawlers, feed readers, link-preview bots) showed no
+  icon at all while `/favicon.svg` sat there working. The same swallowed
+  `/apple-touch-icon.png`, `/manifest.json` and `/robots.txt`. **Deleting one
+  of the four `<link>`s in `index.html` therefore breaks nothing visibly** —
+  check the content type, not the status.
+- **The rasters come from `icons/icon-square.svg`, not from
+  `public/favicon.svg`.** The favicon has `rx="7"` and is transparent outside
+  that radius; iOS composites its own mask over an opaque square, so
+  rasterizing it puts dark wedges in the corners of the home-screen icon —
+  invisible anywhere but an actual phone. `icons/generate.mjs` renders every
+  PNG and the ICO from the tracked sources beside it; `sharp` and `png-to-ico`
+  are installed ad hoc rather than added to `web/package.json`, because nothing
+  in the build invokes them and every `npm ci` (including the Dockerfile's)
+  would pay for them.
+- **Two things about those SVG sources are load-bearing and neither is about the
+  drawing.** A double hyphen is illegal inside an XML comment, so the brand
+  token is named `color-brand-600` without its leading dashes; and the comment
+  sits *inside* the root element, because libvips sniffs for `<svg` near the
+  start of the file and a comment block above it makes the file unreadable as
+  an image. A browser tolerates both, which is why `public/favicon.svg` carried
+  the first one for months without anyone noticing. librsvg refuses the file
+  outright.
+- **The brand color is written by hand in four SVG sources, and `make icons`
+  refuses to run if they disagree.** There is nothing to derive from: the ramp
+  exists only as `oklch()` custom properties in `index.css`, and neither a
+  static SVG nor the manifest can read those without build tooling this project
+  does not have. The first attempt at mitigating that was a prose inventory of
+  which files hold the value — which is exactly what had already gone stale
+  (`index.css` named `favicon.svg` alone, and was wrong within a release), so a
+  second list would have been the same bet twice. `assertBrand` in
+  `icons/generate.mjs` holds the values instead and exits non-zero naming the
+  file that drifted. It cannot see `index.css`, so it catches the four copies
+  diverging from each other rather than from the ramp — which is the failure
+  that actually happens, someone updating two of four. The manifest is **not**
+  a carrier: its colors are the stone grounds.
+- **The manifest's `theme_color`/`background_color` are the *dark* ground, and
+  one value is all it gets.** `index.html` declares two media-scoped
+  `theme-color` metas and Chrome honors those at runtime, but the manifest paints
+  the launch splash before any of that is read. Light was the first choice and is
+  the wrong one: it flashes white into a near-black app on every cold start for
+  anyone whose device is dark. Dark loses less in reverse — the light theme is
+  off-white, so the transition reads as the screen waking rather than as a flash.
+- **`manifest.json` carries an explicit `id`.** Without it, identity is derived
+  from `start_url`, so changing that later makes Chrome treat the app as a new
+  one: existing installs are orphaned rather than updated, and a second copy
+  appears alongside. Adding it afterwards does not repair those installs.
+- **The manifest is `manifest.json`, not the spec's `site.webmanifest`.** nginx
+  ships no mime type for `.webmanifest` (it goes out as
+  `application/octet-stream`), and on App Platform the type is stamped at upload
+  with no knob in `.do/app.yaml` to override it. So the spec extension means
+  patching the one stack where the problem is observable and leaving the stack
+  that actually serves users unverifiable — the two "need to agree", and that is
+  how they quietly stop. Every mime table knows `.json`, and a browser parses a
+  manifest regardless of its media type, so the rename makes both stacks agree
+  by construction and needs no nginx `location` at all. Had one been needed, it
+  could not have been a `types { }` block: `types` does not merge across levels
+  any more than `add_header` does, so declaring one in the server block strips
+  the content type off every other file.
+- **`lang` is two halves and shipping one of them is worse than shipping
+  neither.** `<html lang>` said `el`, which had screen readers pronouncing the
+  entire English interface as Greek. Flipping it to `en` is only correct
+  *because* `SongDetailPage` now marks the song's own `lang={song.language}` on
+  the title and the lyrics — the catalog's actual content, and mostly Greek.
+  Flip one without the other and the bug moves rather than closes: the chrome
+  gets its right voice and the lyrics, which are the reason the site exists,
+  get the wrong one.
+- **Titles come from `PageTitle`, which works because React 19 hoists a
+  `<title>` out of the tree.** No effect, no library, and it unwinds on unmount
+  — which is what stops the editor's name sticking to the song page it pops
+  back to. Two shells cover most of the app in one line each: `AuthShell` names
+  every auth screen from the `title` it already takes, so the steps of a reset
+  are distinguishable in history despite being state rather than routes, and
+  `AdminConsole` names itself from the tab matching the address, the same single
+  source its heading uses. Pages that fetch a record render `<PageTitle />` with
+  no name while in flight, on purpose: the alternative is a tab reading
+  `undefined — Songfolio`.
+
 ---
 
 ## Decisions worth not reversing
@@ -619,6 +703,22 @@ written password needs a mailbox someone can read.
 - **Credit filters are `EXISTS` subqueries, not joins.** A join multiplies a song
   by its matching credits, and two credit filters then union instead of
   intersecting.
+- **The manifest declares `display: standalone`,** so an installed copy runs
+  without browser chrome. That is a navigation decision as much as a cosmetic
+  one: it takes away the browser's Back button and, on iOS, the OS edge-swipe.
+  What makes it safe is already in place and should stay — `Layout` renders a
+  bottom tab bar on phones, and `BackButton` covers both pages a reader
+  navigates *into*. Note this does **not** make `lib/swipe.ts`'s edge guard
+  redundant: it is moot only inside an installed window, and most readers arrive
+  in a browser, where the guard is the whole reason a page swipe does not also
+  trigger Safari's back gesture. Those numbers are pinned from both sides
+  precisely so they cannot quietly shrink.
+- **No service worker, so there is no automatic install prompt on Android.**
+  Both platforms can install from a menu with the manifest alone, but Chrome's
+  `beforeinstallprompt` additionally wants a service worker with a non-empty
+  fetch handler. Adding one is not a small step: it runs straight into
+  `index.html must never be cached`, which is what points at the current asset
+  hashes, and a stale copy pins the browser to a deleted bundle.
 
 ---
 

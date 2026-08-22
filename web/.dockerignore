@@ -1,6 +1,10 @@
 node_modules
 dist
 coverage
+# Icon *sources* and their generator. The rendered assets live in public/ and
+# are tracked; nothing in the build re-renders them, so these would only ride
+# along in the context.
+icons
 playwright-report
 test-results
 .env

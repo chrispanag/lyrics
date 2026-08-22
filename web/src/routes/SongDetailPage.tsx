@@ -22,6 +22,7 @@ import {
 import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongNavFooter, ListSongSwipe } from "@/components/ListSongNav";
+import { PageTitle } from "@/components/PageTitle";
 import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { buttonClasses } from "@/components/buttonStyles";
@@ -120,6 +121,9 @@ function SongArticle() {
   if (isLoading) {
     return (
       <div className="mx-auto max-w-2xl space-y-4 px-4 py-6">
+        {/* Nameless while the song is in flight, rather than a tab that flashes
+            "undefined — Songfolio" on every step through a list. */}
+        <PageTitle />
         <Skeleton className="h-8 w-2/3" />
         <Skeleton className="h-4 w-1/3" />
         <Skeleton className="h-64 w-full" />
@@ -130,6 +134,7 @@ function SongArticle() {
   if (isError || !song) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
+        <PageTitle name="Song not available" />
         <ErrorMessage>{errorMessage(error, "This song could not be loaded.")}</ErrorMessage>
         <Link to="/" className="mt-4 inline-block text-sm text-brand-600 hover:underline">
           Back to browse
@@ -143,6 +148,10 @@ function SongArticle() {
 
   return (
     <article ref={surface} className="mx-auto max-w-2xl px-4 py-4">
+      {/* The song alone, not the song and its artist: a tab strip truncates
+          hard, and the title is what a reader is looking for among ten of
+          these. */}
+      <PageTitle name={song.title} />
       <div className="mb-4 flex items-center justify-between gap-2">
         <BackButton />
 
@@ -199,7 +208,9 @@ function SongArticle() {
         </>
       )}
 
-      <header className="mb-5">
+      {/* The song's own language, like the lyrics below — a Greek title is
+          content too, and it is what a screen reader announces first. */}
+      <header className="mb-5" lang={song.language}>
         <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">
           {song.title}
         </h1>
@@ -280,7 +291,15 @@ function SongArticle() {
         {song.lyrics?.trim() ? (
           // whitespace-pre-line preserves the line and verse breaks that give
           // lyrics their shape, without needing any markup in the stored text.
+          //
+          // `lang` is the other half of `<html lang="en">`. The document
+          // declares the language of the chrome, which is English; this is the
+          // one place the catalog's actual content lives, and it is mostly
+          // Greek. Without it a screen reader reads Greek lyrics in an English
+          // voice — the same defect `lang="el"` used to cause in the other
+          // direction, moved onto the text the site exists for.
           <p
+            lang={song.language}
             className={cn(
               "whitespace-pre-line leading-loose text-stone-800 dark:text-stone-200",
               FONT_SIZES[fontSizeIndex],
