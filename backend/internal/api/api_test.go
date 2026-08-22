@@ -748,6 +748,77 @@ func TestYouTubeURLIsCanonicalized(t *testing.T) {
 	}
 }
 
+// The catalog holds links this API would refuse: the importer stores youtube_url
+// verbatim and sets the id only when it parses, so its rows can carry a URL no
+// write path here accepts. Every field on such a song was then uneditable —
+// merge fills the omitted link in from the stored song and validation answered
+// 422 naming a field the caller never sent, so fixing a typo in the lyrics meant
+// clearing the link as well.
+func TestPatchKeepsAnUnparseableStoredYouTubeURL(t *testing.T) {
+	h := newHarness(t)
+	token := h.tokenFor("contrib@example.com", store.RoleContributor)
+
+	resp := h.do("POST", "/api/v1/songs", token, map[string]any{
+		"title": "Imported", "lyrics": "first take",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
+	}
+	song := decode[store.Song](t, resp)
+
+	// Stand in for the importer, which is the only writer that can produce this
+	// row: a URL that does not parse, and so no id beside it.
+	const stored = "https://youtube.com/watch?feature=share"
+	if _, err := h.store.Pool().Exec(context.Background(),
+		`UPDATE songs SET youtube_url = $1, youtube_video_id = NULL WHERE id = $2`,
+		stored, song.ID); err != nil {
+		t.Fatalf("plant the imported row: %v", err)
+	}
+	path := "/api/v1/songs/" + song.ID.String()
+
+	// Both halves of the trap, and they fail for different reasons: a patch that
+	// leaves the link out has it filled in by merge, while the editor hydrates
+	// the field from the stored value and sends the whole record every save.
+	for _, tc := range []struct {
+		name  string
+		title string
+		body  map[string]any
+	}{
+		{"omitting the link", "Lyrics fixed", map[string]any{"title": "Lyrics fixed"}},
+		{"resending it unchanged", "Fixed again", map[string]any{"title": "Fixed again", "youtube_url": stored}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := h.do("PATCH", path, token, tc.body)
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+			}
+
+			patched := decode[store.Song](t, resp)
+			if patched.Title != tc.title {
+				t.Errorf("title = %q, want %q", patched.Title, tc.title)
+			}
+			// Carried through exactly as stored: there is no id to canonicalize
+			// from, so anything else here would be rewriting the catalog.
+			if patched.YouTubeURL == nil || *patched.YouTubeURL != stored {
+				t.Errorf("youtube_url = %v, want it left at %q", patched.YouTubeURL, stored)
+			}
+			if patched.YouTubeVideoID != nil {
+				t.Errorf("youtube_video_id = %v, want it still absent", patched.YouTubeVideoID)
+			}
+		})
+	}
+
+	// The exemption is for the value already stored, not for bad links in
+	// general — a link the caller actually chose is still refused.
+	t.Run("a different unrecognizable link is still refused", func(t *testing.T) {
+		resp := h.do("PATCH", path, token, map[string]any{"youtube_url": "https://vimeo.com/123"})
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("status = %d, want 422", resp.StatusCode)
+		}
+	})
+}
+
 func TestRegistration(t *testing.T) {
 	t.Run("creates the account and the local record", func(t *testing.T) {
 		h := newHarness(t)
