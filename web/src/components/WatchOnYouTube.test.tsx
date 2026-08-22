@@ -16,4 +16,15 @@ describe("WatchOnYouTube", () => {
     // Without noreferrer the opened tab is told which song page sent it.
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
+
+  // The one link in the app that opens elsewhere, so the one that has to say so:
+  // a reader who cannot see the new tab appear has nothing else to tell them
+  // Back will not bring them back to the song.
+  it("announces that it leaves for a new tab", () => {
+    render(<WatchOnYouTube videoId="dQw4w9WgXcQ" />);
+
+    expect(
+      screen.getByRole("link", { name: "Watch on YouTube (opens in a new tab)" }),
+    ).toBeInTheDocument();
+  });
 });

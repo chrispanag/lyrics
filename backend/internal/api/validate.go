@@ -84,6 +84,14 @@ var youTubeIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 // tracking-laden and malformed links at the boundary. The extracted ID is stored
 // alongside the URL because the ID is the part that has been validated: the UI
 // builds its link out of it and never renders the stored URL as an href.
+//
+// The editor's live preview mirrors this function in TypeScript — extractVideoId
+// in web/src/routes/SongEditorPage.tsx — because the preview is the only
+// confirmation a contributor gets that a pasted link was recognized. The two
+// cannot be made to share one implementation, so a host or a path shape added
+// here and not there reads as the field refusing a link this function would
+// have saved, and one added there and not here as a preview the save then
+// contradicts. Silent both ways round: change both.
 func parseYouTubeURL(raw string) (videoID string, ok bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

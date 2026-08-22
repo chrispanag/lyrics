@@ -262,6 +262,17 @@ needs a mailbox someone can read, exactly like email verification.
   song page, watched or not, and that is the cost the link actually removes —
   along with the deferred-player state that had to be kept honest. A song page
   now loads nothing from YouTube at all.
+- **The link is parsed in two places that cannot be made to share one**, like
+  the email-verification scope above: `parseYouTubeURL` (Go) is the authority,
+  and `extractVideoId` (TypeScript) is a deliberate mirror of it because the
+  editor's preview is the only confirmation a contributor gets that a pasted
+  link was recognized. So the two disagreeing is a verdict the save then
+  contradicts, and it is silent in both directions — a host on the server's list
+  and not the client's leaves the field dark on a link that saves fine, and one
+  on the client's alone previews a link the save refuses. `m.youtube.com` and
+  `music.youtube.com` are the ones a host check written from memory drops, and
+  they previewed only by accident before the mirror. Add a host or a path shape
+  to both, or to neither.
 - **Browse's filter chips are keyed on what is in the URL, never on the filter
   being found.** A genre can be deleted from the admin console while someone
   holds a link filtered by it, and the request still answers — with no songs,
