@@ -245,6 +245,23 @@ needs a mailbox someone can read, exactly like email verification.
 - **Song pages link credits to `/?person=<id>`.** Browse must read that param,
   or clicking an artist lands on the unfiltered catalog with no error, reading
   as "this artist is on every song".
+- **A song's video is read from `youtube_video_id`, and `youtube_url` is never
+  rendered as an href.** The two columns look interchangeable and are not: the
+  API writes them together, having parsed one from the other, but the catalog
+  importer stores whatever the old database held and sets the id only when it
+  parses. So a URL is validated text on one write path out of two, while an id
+  is eleven characters of `[A-Za-z0-9_-]` or it is absent. `WatchOnYouTube`
+  therefore takes the id and builds the link, which is the same idiom the search
+  snippets use — a wrong destination is impossible by construction, not filtered.
+  Gating on the URL instead also disagrees with `SongCard`'s badge, which reads
+  the id: the card says there is no video and the page offers one. What the link
+  replaced was **not an embed but a click-to-load facade**, and the difference
+  matters to anyone tempted to bring it back as the cheaper option: the player
+  was already deferred to a press, so the megabyte was never being spent. What
+  the facade did spend was a request to `i.ytimg.com` for a thumbnail on every
+  song page, watched or not, and that is the cost the link actually removes —
+  along with the deferred-player state that had to be kept honest. A song page
+  now loads nothing from YouTube at all.
 - **Browse's filter chips are keyed on what is in the URL, never on the filter
   being found.** A genre can be deleted from the admin console while someone
   holds a link filtered by it, and the request still answers — with no songs,

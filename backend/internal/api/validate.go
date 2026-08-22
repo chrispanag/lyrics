@@ -80,9 +80,10 @@ var youTubeIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 // parseYouTubeURL extracts a video ID from the URL shapes users actually paste:
 // a full watch link, a youtu.be short link, an embed link, or a bare ID.
 //
-// Returns ("", false) when the input is not recognizably YouTube. Storing the
-// extracted ID alongside the URL lets the frontend build an embed without
-// re-parsing, and rejects tracking-laden or malformed links at the boundary.
+// Returns ("", false) when the input is not recognizably YouTube, which rejects
+// tracking-laden and malformed links at the boundary. The extracted ID is stored
+// alongside the URL because the ID is the part that has been validated: the UI
+// builds its link out of it and never renders the stored URL as an href.
 func parseYouTubeURL(raw string) (videoID string, ok bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

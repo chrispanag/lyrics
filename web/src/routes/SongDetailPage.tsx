@@ -22,7 +22,7 @@ import {
 import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongNavFooter, ListSongSwipe } from "@/components/ListSongNav";
-import { YouTubeFacade } from "@/components/YouTubeFacade";
+import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { buttonClasses } from "@/components/buttonStyles";
 import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton } from "@/components/ui";
 import { CREDIT_DISPLAY_ORDER } from "@/lib/credits";
@@ -101,7 +101,6 @@ export function SongDetailPage() {
       <div className="mx-auto max-w-2xl space-y-4 px-4 py-6">
         <Skeleton className="h-8 w-2/3" />
         <Skeleton className="h-4 w-1/3" />
-        <Skeleton className="aspect-video w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
     );
@@ -229,12 +228,6 @@ export function SongDetailPage() {
         )}
       </header>
 
-      {song.youtube_video_id && (
-        <div className="mb-6">
-          <YouTubeFacade videoId={song.youtube_video_id} title={song.title} />
-        </div>
-      )}
-
       <section aria-label="Lyrics">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
@@ -279,6 +272,14 @@ export function SongDetailPage() {
           <p className="text-sm italic text-stone-500">No lyrics have been added yet.</p>
         )}
       </section>
+
+      {/* Below the lyrics rather than above them: the video is somewhere else
+          to go once the song has been read, and a block between the credits and
+          the first line is what the facade did wrong. Gated on the id, not the
+          URL — see WatchOnYouTube for why the URL is not the field to trust. */}
+      {song.youtube_video_id && (
+        <WatchOnYouTube videoId={song.youtube_video_id} className="mt-6" />
+      )}
 
       {song.notes && (
         <section className="mt-8 rounded-2xl bg-stone-100 p-4 dark:bg-stone-900">

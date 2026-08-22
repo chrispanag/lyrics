@@ -101,9 +101,14 @@ describe("SongDetailPage", () => {
     expect(await screen.findByRole("link", { name: /edit/i })).toBeInTheDocument();
   });
 
-  // The facade exists so a song page does not pull a megabyte of player code
-  // for the majority of visits that never press play.
-  it("shows a YouTube thumbnail rather than an iframe until play is pressed", async () => {
+  // The video leaves the page entirely: no player, no thumbnail, nothing that
+  // loads from YouTube before someone asks for it.
+  //
+  // The fixture sets only the id, which is also the gate: `youtube_url` is
+  // stored unvalidated by the catalog importer, so the page must not reach for
+  // it. A page that regressed to reading the URL would fail here rather than
+  // quietly rendering whatever the old database held.
+  it("links out to the video in a new tab instead of embedding it", async () => {
     server.use(
       http.get(`${API}/api/v1/songs/:id`, () =>
         HttpResponse.json(makeSong({ youtube_video_id: "dQw4w9WgXcQ" })),
@@ -112,8 +117,31 @@ describe("SongDetailPage", () => {
 
     const { container } = renderDetail();
 
-    expect(await screen.findByRole("button", { name: /play/i })).toBeInTheDocument();
+    const link = await screen.findByRole("link", { name: /watch on youtube/i });
+    expect(link).toHaveAttribute("href", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    expect(link).toHaveAttribute("target", "_blank");
     expect(container.querySelector("iframe")).toBeNull();
+  });
+
+  // The other half of the gate, and the half that catches the URL being read
+  // back: the fixture here carries a `youtube_url` and no id, which is
+  // exactly the row the catalog importer leaves behind when the old database
+  // held a link it could not parse. Offering a link there would send a reader
+  // to whatever that text is, under a label promising YouTube — and the spec
+  // above cannot see it, since a page reading either field passes that one.
+  it("offers no video link when the song has no video id", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(
+          makeSong({ youtube_url: "https://example.com/not-a-video", youtube_video_id: null }),
+        ),
+      ),
+    );
+
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
   });
 
   // Saving is the reason to hold an account, so a guest is invited into it
