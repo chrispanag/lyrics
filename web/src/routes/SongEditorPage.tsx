@@ -6,7 +6,7 @@ import { errorDetails, errorMessage } from "@/api/client";
 import { useCreateSong, useGenres, useSong, useUpdateSong } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { PersonAutocomplete, type PersonSelection } from "@/components/PersonAutocomplete";
-import { YouTubeFacade } from "@/components/YouTubeFacade";
+import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { Button, Chip, ErrorMessage, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
 import {
   CREDIT_ROLES,
@@ -322,11 +322,11 @@ export function SongEditorPage() {
           />
         </Field>
 
-        {videoId && (
-          <div className="overflow-hidden rounded-2xl">
-            <YouTubeFacade videoId={videoId} title={title || "Preview"} />
-          </div>
-        )}
+        {/* The only confirmation that a pasted link was recognized, now that
+            there is no thumbnail to show. The href is built from the extracted
+            id rather than the raw field, so a link that would not parse has
+            nothing to open. */}
+        {videoId && <WatchOnYouTube href={`https://www.youtube.com/watch?v=${videoId}`} />}
 
         <Field label="Lyrics" htmlFor="lyrics" error={fieldErrors.lyrics}>
           <Textarea

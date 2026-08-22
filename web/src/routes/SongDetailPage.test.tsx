@@ -101,18 +101,27 @@ describe("SongDetailPage", () => {
     expect(await screen.findByRole("link", { name: /edit/i })).toBeInTheDocument();
   });
 
-  // The facade exists so a song page does not pull a megabyte of player code
-  // for the majority of visits that never press play.
-  it("shows a YouTube thumbnail rather than an iframe until play is pressed", async () => {
+  // The video leaves the page entirely: no player, no thumbnail, nothing that
+  // loads from YouTube before someone asks for it. The link is keyed on
+  // `youtube_url` — the field the button actually reads — because a fixture
+  // setting only the id would render nothing and the spec would blame the page.
+  it("links out to the video in a new tab instead of embedding it", async () => {
     server.use(
       http.get(`${API}/api/v1/songs/:id`, () =>
-        HttpResponse.json(makeSong({ youtube_video_id: "dQw4w9WgXcQ" })),
+        HttpResponse.json(
+          makeSong({
+            youtube_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            youtube_video_id: "dQw4w9WgXcQ",
+          }),
+        ),
       ),
     );
 
     const { container } = renderDetail();
 
-    expect(await screen.findByRole("button", { name: /play/i })).toBeInTheDocument();
+    const link = await screen.findByRole("link", { name: /watch on youtube/i });
+    expect(link).toHaveAttribute("href", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    expect(link).toHaveAttribute("target", "_blank");
     expect(container.querySelector("iframe")).toBeNull();
   });
 
