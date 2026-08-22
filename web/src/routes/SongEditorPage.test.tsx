@@ -40,7 +40,7 @@ function renderEditor(options: Parameters<typeof renderWithProviders>[1] = {}) {
       <Route path="/lists/:id" element={<h1>List page</h1>} />
       <Route path="/" element={<h1>Catalog</h1>} />
     </Routes>,
-    { user: makeUser({ id: "user-1", role: "admin" }), ...options },
+    { user: makeUser({ role: "admin" }), ...options },
   );
 }
 
@@ -97,6 +97,17 @@ describe("SongEditorPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Cancel" }));
 
     expect(await screen.findByText("Address: /songs/song-1")).toBeInTheDocument();
+  });
+
+  // The other half of that fallback, and the half with no song to name: the add
+  // form deep-linked into a fresh tab has neither a page behind it nor an id, so
+  // the catalog is where canceling has to land.
+  it("sends a deep-linked cancel on the add form to the catalog", async () => {
+    renderEditor({ route: "/songs/new" });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(await screen.findByRole("heading", { name: "Catalog" })).toBeInTheDocument();
   });
 
   // Adding a song is the one save that does not go back — the reader has to land

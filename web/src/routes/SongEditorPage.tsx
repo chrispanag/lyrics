@@ -117,7 +117,7 @@ export function SongEditorPage() {
   // The server enforces this too; the redirect just avoids showing a form that
   // is guaranteed to be rejected.
   if (isEdit && existing && !canEditSong(user, existing)) {
-    return <Navigate to={`/songs/${existing.id}`} replace />;
+    return <Navigate to={songHref(existing.id)} replace />;
   }
 
   /**

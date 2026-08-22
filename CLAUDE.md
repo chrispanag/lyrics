@@ -434,7 +434,7 @@ needs a mailbox someone can read, exactly like email verification.
   "default"` is what identifies; and adding a song has to land the reader on
   what they created rather than on the catalog they opened the form from, which
   is the `isEdit` branch and nothing to do with the key — an in-app `/songs/new`
-  has a perfectly ordinary key and a page behind it, which is why *cancelling*
+  has a perfectly ordinary key and a page behind it, which is why *canceling*
   there does pop. Both navigate with `replace`, so Back cannot return to a form
   already saved. Pinned from both sides, address *and* trail, in
   `SongEditorPage.test.tsx`: a fix that kept `?list=` while still duplicating
