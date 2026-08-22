@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Route, Routes, useLocation } from "react-router-dom";
 
 import { SongDetailPage } from "./SongDetailPage";
@@ -9,6 +9,7 @@ import { returnDestination } from "@/auth/returnTo";
 import { API, listById, makeList, makeSong, makeUser, notFound } from "@/test/handlers";
 import { intersectAll, observedElements } from "@/test/intersection";
 import { renderWithProviders } from "@/test/render";
+import { scrollDown, setScrollY } from "@/test/scroll";
 import { server } from "@/test/server";
 
 /**
@@ -26,6 +27,14 @@ function SignInStub() {
     </div>
   );
 }
+
+// `scrollDown()` leaves the window at an offset that outlives the render, and
+// `StickyHeader` reads its starting point at mount — so every spec in this file
+// starts from the top, not just the ones that scroll. Reset in one describe
+// instead, a spec added after that one mounts a header that is already scrolled
+// and a later `scrollDown()` is no movement at all: the assertion passes without
+// having asked the header to move.
+beforeEach(() => setScrollY(0));
 
 function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
   return renderWithProviders(
@@ -641,6 +650,25 @@ describe("SongDetailPage inside a list", () => {
     expect(await screen.findByText("Return to /songs/song-2?list=list-1")).toBeInTheDocument();
   });
 
+  // The search box and the paging keys are now on the same page, and the box
+  // wins while it has the caret: `useArrowKeyPaging` stands down for a focused
+  // field, which is also what lets the results panel keep focus in the field
+  // rather than on rows an arrow key could be pressed against.
+  it("does not page the list while the reader is typing in the search box", async () => {
+    const user = userEvent.setup();
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+    await screen.findByRole("heading", { name: "Second" });
+
+    await user.type(
+      screen.getByRole("combobox", { name: /search songs/i }),
+      "τρ{ArrowRight}{ArrowLeft}",
+    );
+
+    expect(screen.getByRole("heading", { name: "Second" })).toBeInTheDocument();
+  });
+
   // Nothing asks for a list when a song is opened from browse, where there is
   // none — a request per song page for a list nobody named would be pure waste.
   it("asks for no list when a song is opened on its own", async () => {
@@ -702,5 +730,48 @@ describe("SongDetailPage deletion", () => {
 
     expect(screen.queryByText(/will be removed for everyone/)).not.toBeInTheDocument();
     expect(requested).toBe(false);
+  });
+});
+
+/*
+ * The search box above the song.
+ *
+ * What the box itself does is pinned in `SongSearch.test.tsx`, and the header's
+ * hide-on-a-phone rule in `Layout.test.tsx`, where the component both pages share
+ * lives. Left here are the two things that only exist once the box is on this
+ * page: it has to survive the states the song does not, and its open results have
+ * to hold the header still.
+ */
+describe("SongDetailPage search", () => {
+  // Searching again is the way off a song that will not load. The alternative is
+  // the browser's Back, and a shared link has nothing behind it.
+  it("keeps the search box on a song that could not be loaded", async () => {
+    server.use(http.get(`${API}/api/v1/songs/:id`, () => notFound("Song was not found.")));
+
+    renderDetail();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Song was not found.");
+    expect(screen.getByRole("combobox", { name: /search songs/i })).toBeInTheDocument();
+  });
+
+  // The results hang off the header, so a header that slid away would take them
+  // with it — and on iOS the scroll that focusing a field causes is exactly the
+  // movement that would set that off, mid-query.
+  it("holds the header still while the results are up", async () => {
+    const user = userEvent.setup();
+
+    // Read as an element rather than by role: inside the app's <main> a <header>
+    // is no banner, and this spec renders the page without that shell.
+    const { container } = renderDetail();
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    const header = container.querySelector("header");
+
+    await user.type(screen.getByRole("combobox", { name: /search songs/i }), "θα");
+    await screen.findByRole("listbox");
+    scrollDown();
+
+    // `toHaveClass` rather than a search of the class string, which would also be
+    // true of a header this spec had failed to find at all.
+    expect(header).not.toHaveClass("max-md:-translate-y-full");
   });
 });

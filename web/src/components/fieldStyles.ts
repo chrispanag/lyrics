@@ -2,7 +2,8 @@
  * Form-field chrome, in its own module so it can be shared with inputs that are
  * not the <Input> primitive.
  *
- * The browse search box needs its own height and corner radius, and cn() is a
+ * The search box (`SearchField`, carried by both the catalog's header and the
+ * one above a song) needs its own height and corner radius, and cn() is a
  * plain join rather than tailwind-merge — so it cannot pass overrides through
  * <Input> without both values landing in the class list and CSS source order
  * deciding the winner. Sharing the chrome instead of the whole recipe is what
