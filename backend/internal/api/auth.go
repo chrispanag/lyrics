@@ -100,7 +100,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) error {
 		// row cannot be re-keyed onto this new account without handing over
 		// whatever it holds, and it cannot be deleted without discarding somebody
 		// else's lists.
-		if errors.Is(err, store.ErrEmailTaken) {
+		if store.IsEmailTaken(err) {
 			s.compensateFailedRegistration(preludeUserID, email)
 			slog.Error("local row holds this address under another prelude account",
 				"prelude_user_id", preludeUserID, "error", err)

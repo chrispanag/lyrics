@@ -897,12 +897,10 @@ func TestSignInWhenAnotherAccountHoldsTheAddress(t *testing.T) {
 	})
 
 	resp := h.do("GET", "/api/v1/me", token, nil)
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusConflict {
-		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("status = %d, want 409\nbody: %s", resp.StatusCode, body)
 	}
-
-	body, _ := io.ReadAll(resp.Body)
 	if !strings.Contains(string(body), "another account") {
 		t.Errorf("body = %s, want it to name the address being held elsewhere", body)
 	}

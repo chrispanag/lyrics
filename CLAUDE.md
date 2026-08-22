@@ -487,8 +487,8 @@ needs a mailbox someone can read, exactly like email verification.
   500 to an account with nothing wrong with it. **The row is never re-keyed onto
   the new id**, which is the repair that suggests itself and is not one: the
   address would inherit the old row's lists *and its role*. The address stays
-  unusable until someone deals with the stale row by hand — a support matter,
-  and the honest end of a story with no safe automatic ending.
+  unusable until someone deals with the stale row by hand — a support matter with
+  no safe automatic ending.
 - **Queries are hand-written against pgx, not generated.** Most of the surface is
   dynamic — composable filters, blended relevance ranking — which generators
   model poorly.
