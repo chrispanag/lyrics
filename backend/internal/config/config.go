@@ -33,10 +33,22 @@ type Config struct {
 	// are empty in normal operation; tests and offline development point them at
 	// a locally served key set, which is the only way to exercise the auth path
 	// without live Prelude credentials.
-	PreludeJWKSURL  string
-	PreludeIssuer   string
-	AdminEmails     []string
-	CORSOrigins     []string
+	PreludeJWKSURL string
+	PreludeIssuer  string
+	AdminEmails    []string
+	CORSOrigins    []string
+	// ClientIPHeader names the header carrying the real caller's address, for the
+	// one endpoint that rate limits by it. Empty means the peer address is used,
+	// which is correct anywhere the process is reached directly and is why local
+	// development needs no setting.
+	//
+	// Only ever set this to a header the fronting proxy writes itself and
+	// overwrites on the way in. Any header a client can set is a bypass: the
+	// limit is per key, so forging a fresh value per request buys an unlimited
+	// number of buckets. On App Platform that header is `DO-Connecting-IP` and
+	// deliberately not `X-Forwarded-For`, which the platform documents as
+	// carrying the address of its own ingress rather than the caller's.
+	ClientIPHeader  string
 	LogLevel        slog.Level
 	ShutdownTimeout time.Duration
 }
@@ -94,6 +106,7 @@ func Load() (Config, error) {
 		PreludeIssuer:        strings.TrimSpace(os.Getenv("PRELUDE_ISSUER")),
 		AdminEmails:          envCSVLower("ADMIN_EMAILS"),
 		CORSOrigins:          envCSV("CORS_ORIGINS"),
+		ClientIPHeader:       strings.TrimSpace(os.Getenv("CLIENT_IP_HEADER")),
 		LogLevel:             envLevel("LOG_LEVEL", slog.LevelInfo, &problems),
 		ShutdownTimeout:      15 * time.Second,
 	}

@@ -630,7 +630,7 @@ needs a mailbox someone can read, exactly like email verification.
 substituting the placeholder env values from `.env` so no credential lands in a
 tracked file. Four components: a static site at `/`, the API at `/api`, a
 pre-deploy migration job, and a managed PostgreSQL. README has the walkthrough;
-these three are the parts that break quietly.
+these four are the parts that break quietly.
 
 - **The `/api` ingress rule needs `preserve_path_prefix: true`.** App Platform
   strips a matched prefix by default, and the router mounts at `/api/v1` — so
@@ -647,6 +647,26 @@ these three are the parts that break quietly.
   makes it call its own origin. Vite inlines the value at build time, so setting
   it bakes in a hostname that a domain change then invalidates — and the failure
   appears only in the browser, long after a green deploy.
+- **`CLIENT_IP_HEADER` must be `DO-Connecting-IP` here, and must stay unset
+  locally.** Registration is rate limited per caller, and behind the ingress the
+  peer address is the ingress — so the whole world shared one bucket of five per
+  minute, and the sixth honest sign-up anywhere was refused. **Not
+  `X-Forwarded-For`**: App Platform documents that header as carrying its own
+  ingress address rather than the caller's, so it is both forgeable in general
+  and useless here in particular. The variable names the *one* header trusted to
+  carry an address, which is what keeps trusting it a deployment's decision —
+  anything a client can set turns a per-key limit into no limit at all, since a
+  forged value per request buys a fresh bucket. A value that is missing or is not
+  an address falls back to the peer, which is the safe direction: one shared
+  bucket is stricter than a bucket per string a caller invents. Both directions
+  are pinned by `TestClientIP`. Whether the ingress **overwrites** a
+  client-supplied `DO-Connecting-IP` rather than appending to it was **never
+  confirmed against a live request** — the documentation is the evidence. If it
+  appends, the value arrives comma-joined, fails to parse and falls back to the
+  peer, so the limit goes back to being global rather than becoming forgeable:
+  the unconfirmed half can cost recall, never safety. Nothing in the logs would
+  say so, either, since `httpx` logs `remote_addr` from `RemoteAddr` and so
+  reports the ingress on every request whatever this is set to.
 
 Migrations run from `cmd/migrate`, which embeds `backend/migrations` with
 `go:embed` (hence `migrations/embed.go` — the directive cannot reach upward).

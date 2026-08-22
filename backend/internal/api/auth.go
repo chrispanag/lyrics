@@ -28,7 +28,7 @@ type registerRequest struct {
 // requires the API key, which must never reach a browser. The client therefore
 // calls this endpoint, then signs in against Prelude directly.
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) error {
-	if !s.registerLimiter.allow(clientIP(r)) {
+	if !s.registerLimiter.allow(clientIP(r, s.cfg.ClientIPHeader)) {
 		return httpx.RateLimited("Too many registration attempts. Please try again shortly.")
 	}
 

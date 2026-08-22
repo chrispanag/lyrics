@@ -3,6 +3,8 @@ package api
 import (
 	"net"
 	"net/http"
+	"net/netip"
+	"strings"
 	"sync"
 	"time"
 )
@@ -66,12 +68,29 @@ func (rl *rateLimiter) allow(key string) bool {
 
 // clientIP identifies the caller for rate limiting purposes.
 //
-// The key is the direct peer address only. X-Forwarded-For is deliberately not
-// consulted: the header is client-supplied, so trusting it would let anyone
-// bypass the limit by forging a new value per request. Behind a known proxy
-// every caller instead collapses onto the proxy's address, so this must be
-// replaced with that proxy's verified client address before deploying there.
-func clientIP(r *http.Request) string {
+// `header` is the one header trusted to carry the caller's address, or "" to use
+// the peer address. No header is consulted by default and none is guessed at:
+// anything a client can set is a bypass rather than an improvement, since the
+// limit is per key and a forged value per request buys a fresh bucket each time.
+// Naming it in configuration is what makes trusting it a deployment's decision,
+// taken where it is known that every request arrives through a proxy that
+// overwrites it — see config.ClientIPHeader for which header that is here, and
+// why it is not X-Forwarded-For.
+//
+// Behind a proxy with nothing configured, every caller collapses onto the
+// proxy's address and shares one bucket. That is the failure this exists to fix,
+// and it is also the direction to fail in: a value that is missing, or not an
+// address at all, falls back to the peer rather than keying on whatever arrived.
+func clientIP(r *http.Request, header string) string {
+	if header != "" {
+		// Parsed rather than taken verbatim, which also settles the comma-joined
+		// list a misconfigured header would carry: it is not an address, so it is
+		// refused instead of becoming a key of its own.
+		if ip, err := netip.ParseAddr(strings.TrimSpace(r.Header.Get(header))); err == nil {
+			return ip.String()
+		}
+	}
+
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
