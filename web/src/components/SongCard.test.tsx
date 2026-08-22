@@ -6,10 +6,8 @@ import { makeGenre, makeSong } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 
 /**
- * A card's height must not depend on what its song happens to carry: one short
- * card leaves every row under it out of step with the others. jsdom computes no
- * layout, so each reservation is pinned by the thing that holds it open — a
- * class on the subtitle, an invisible chip in the genre row.
+ * The card's reserved slots, which are what keep a list's rows in step. jsdom
+ * computes no layout, so each is pinned by the thing that holds it open.
  */
 describe("SongCard", () => {
   // The one paragraph is the subtitle because the fixture carries no snippet —
@@ -20,27 +18,23 @@ describe("SongCard", () => {
     expect(screen.getByRole("paragraph")).toHaveClass("min-h-lh");
   });
 
-  // Queried through the DOM rather than by role: the row is a plain box and its
-  // placeholder is hidden from assistive tech on purpose, so no accessible
-  // query can reach either.
-  it("keeps the genre row on a song with no genres", () => {
+  // Compared against a real chip rather than measured against a size named
+  // here: what the empty row has to hold is a chip's own box, and the classes
+  // the two share are as near as jsdom gets to saying so. The space inside the
+  // placeholder is pinned for the same reason it is there — without it the row
+  // is its padding and nothing else, which no other assertion here would show.
+  it("holds the genre row open with a chip's box when a song has none", () => {
+    const withGenre = renderWithProviders(<SongCard song={makeSong({ genres: [makeGenre()] })} />);
+    const chip = screen.getByText("Ρεμπέτικο");
+
+    // A placeholder left in beside real chips would take a chip's width and the
+    // gap after it, crowding the row towards a second line it does not need.
+    expect(withGenre.container.querySelector(".invisible")).toBeNull();
+
     const { container } = renderWithProviders(<SongCard song={makeSong({ genres: [] })} />);
+    const placeholder = container.querySelector(".invisible");
 
-    const chips = container.querySelectorAll("span.rounded-full");
-    expect(chips).toHaveLength(1);
-    expect(chips[0]).toHaveClass("invisible");
-    expect(chips[0]).toHaveAttribute("aria-hidden", "true");
-  });
-
-  // The other half of the same rule: a placeholder left in beside real chips
-  // would pay for the row twice, in the gap between it and the first genre.
-  it("shows a song's genres without a placeholder beside them", () => {
-    const { container } = renderWithProviders(
-      <SongCard song={makeSong({ genres: [makeGenre()] })} />,
-    );
-
-    expect(screen.getByText("Ρεμπέτικο")).toBeInTheDocument();
-    expect(container.querySelectorAll("span.rounded-full")).toHaveLength(1);
-    expect(container.querySelector(".invisible")).toBeNull();
+    expect(placeholder).toHaveClass(`${chip.className} invisible`, { exact: true });
+    expect(placeholder?.textContent).toBe("\u00A0");
   });
 });
