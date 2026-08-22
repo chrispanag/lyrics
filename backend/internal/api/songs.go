@@ -133,9 +133,24 @@ func genreIDsFor(genres []store.Genre) []uuid.UUID {
 	return out
 }
 
+// storedYouTubeURL is the link already on the song, trimmed, or "" when there is
+// no song yet or it has no link. Returning "" for both is what keeps the
+// comparison in toInput safe on create: it is only reached for a non-empty
+// trimmed value, so "" cannot match one and a create is never exempted.
+func storedYouTubeURL(existing *store.Song) string {
+	if existing == nil || existing.YouTubeURL == nil {
+		return ""
+	}
+	return strings.TrimSpace(*existing.YouTubeURL)
+}
+
 // toInput validates the payload and resolves credits into store rows, creating
 // people named inline as it goes.
-func (s *Server) toInput(r *http.Request, req songRequest) (store.SongInput, error) {
+//
+// `existing` is the song being updated, or nil on create. It is consulted for
+// one thing only — see the youtube_url block — and every other field is
+// validated the same way on both paths.
+func (s *Server) toInput(r *http.Request, req songRequest, existing *store.Song) (store.SongInput, error) {
 	problems := validationErrors{}
 
 	title := strings.TrimSpace(req.Title)
@@ -170,13 +185,33 @@ func (s *Server) toInput(r *http.Request, req songRequest) (store.SongInput, err
 	var youTubeURL, youTubeID *string
 	if trimmed := trimmedPtr(req.YouTubeURL); trimmed != nil {
 		id, ok := parseYouTubeURL(*trimmed)
-		if !ok {
-			problems.add("youtube_url", "Not a recognizable YouTube link.")
-		} else {
+		switch {
+		case ok:
 			// Store a canonical URL rather than whatever was pasted, so tracking
 			// parameters and shortened forms do not accumulate in the catalog.
 			canonical := "https://www.youtube.com/watch?v=" + id
 			youTubeURL, youTubeID = &canonical, &id
+
+		case storedYouTubeURL(existing) == *trimmed:
+			// A link this API refused is nonetheless already in the catalog: the
+			// importer stores youtube_url verbatim and sets the id only when it
+			// parses (cmd/import-songs/normalize.go), so the rows it left behind
+			// carry URLs no write path here would accept.
+			//
+			// merge fills every omitted field in from the stored song, and the
+			// editor sends the whole record hydrated the same way, so that URL
+			// arrives on a PATCH that never meant to touch it — and validating it
+			// answered 422 naming a field the contributor had not edited. Fixing a
+			// typo in the lyrics was then impossible without also clearing the
+			// link, which is the one thing the request was not asking for.
+			//
+			// Refusing it is only right for a value the caller chose. Unchanged
+			// from what is stored, both columns carry through exactly as they are
+			// — no canonicalization, since there is no id to build one from.
+			youTubeURL, youTubeID = existing.YouTubeURL, existing.YouTubeVideoID
+
+		default:
+			problems.add("youtube_url", "Not a recognizable YouTube link.")
 		}
 	}
 
@@ -367,7 +402,7 @@ func (s *Server) handleCreateSong(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
-	input, err := s.toInput(r, req)
+	input, err := s.toInput(r, req, nil)
 	if err != nil {
 		return err
 	}
@@ -404,7 +439,7 @@ func (s *Server) handleUpdateSong(w http.ResponseWriter, r *http.Request) error 
 	if err := httpx.DecodeJSON(w, r, &patch); err != nil {
 		return err
 	}
-	input, err := s.toInput(r, patch.merge(existing))
+	input, err := s.toInput(r, patch.merge(existing), existing)
 	if err != nil {
 		return err
 	}
