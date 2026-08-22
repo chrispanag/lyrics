@@ -610,7 +610,14 @@ these four are the parts that break quietly.
   forged value per request buys a fresh bucket. A value that is missing or is not
   an address falls back to the peer, which is the safe direction: one shared
   bucket is stricter than a bucket per string a caller invents. Both directions
-  are pinned by `TestClientIP`.
+  are pinned by `TestClientIP`. Whether the ingress **overwrites** a
+  client-supplied `DO-Connecting-IP` rather than appending to it was **never
+  confirmed against a live request** — the documentation is the evidence. If it
+  appends, the value arrives comma-joined, fails to parse and falls back to the
+  peer, so the limit goes back to being global rather than becoming forgeable:
+  the unconfirmed half can cost recall, never safety. Nothing in the logs would
+  say so, either, since `httpx` logs `remote_addr` from `RemoteAddr` and so
+  reports the ingress on every request whatever this is set to.
 
 Migrations run from `cmd/migrate`, which embeds `backend/migrations` with
 `go:embed` (hence `migrations/embed.go` — the directive cannot reach upward).
