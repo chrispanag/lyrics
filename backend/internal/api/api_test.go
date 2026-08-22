@@ -756,22 +756,18 @@ func TestYouTubeURLIsCanonicalized(t *testing.T) {
 // clearing the link as well.
 func TestPatchKeepsAnUnparseableStoredYouTubeURL(t *testing.T) {
 	h := newHarness(t)
-	token := h.tokenFor("contrib@example.com", store.RoleContributor)
+	owner, token := h.userAndToken("contrib@example.com", store.RoleContributor)
 
-	resp := h.do("POST", "/api/v1/songs", token, map[string]any{
-		"title": "Imported", "lyrics": "first take",
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("status = %d, want 201", resp.StatusCode)
-	}
-	song := decode[store.Song](t, resp)
-
-	// Stand in for the importer, which is the only writer that can produce this
-	// row: a URL that does not parse, and so no id beside it.
+	// Stand in for the importer: a URL that does not parse, and so no id beside
+	// it. The store carries the two columns independently and validates neither
+	// — the same bare INSERT the importer does — so it can plant the row no API
+	// write path would accept, which is the whole premise of this test.
 	const stored = "https://youtube.com/watch?feature=share"
-	if _, err := h.store.Pool().Exec(context.Background(),
-		`UPDATE songs SET youtube_url = $1, youtube_video_id = NULL WHERE id = $2`,
-		stored, song.ID); err != nil {
+	song, err := h.store.CreateSong(context.Background(), store.SongInput{
+		Title: "Imported", Lyrics: "first take", Language: "el",
+		YouTubeURL: ptr(stored),
+	}, owner.ID)
+	if err != nil {
 		t.Fatalf("plant the imported row: %v", err)
 	}
 	path := "/api/v1/songs/" + song.ID.String()
@@ -780,12 +776,11 @@ func TestPatchKeepsAnUnparseableStoredYouTubeURL(t *testing.T) {
 	// leaves the link out has it filled in by merge, while the editor hydrates
 	// the field from the stored value and sends the whole record every save.
 	for _, tc := range []struct {
-		name  string
-		title string
-		body  map[string]any
+		name string
+		body map[string]any
 	}{
-		{"omitting the link", "Lyrics fixed", map[string]any{"title": "Lyrics fixed"}},
-		{"resending it unchanged", "Fixed again", map[string]any{"title": "Fixed again", "youtube_url": stored}},
+		{"omitting the link", map[string]any{"title": "Lyrics fixed"}},
+		{"resending it unchanged", map[string]any{"title": "Fixed again", "youtube_url": stored}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resp := h.do("PATCH", path, token, tc.body)
@@ -795,8 +790,12 @@ func TestPatchKeepsAnUnparseableStoredYouTubeURL(t *testing.T) {
 			}
 
 			patched := decode[store.Song](t, resp)
-			if patched.Title != tc.title {
-				t.Errorf("title = %q, want %q", patched.Title, tc.title)
+			// Each case patches a different title, which is what shows the write
+			// landed rather than the request merely being accepted. The
+			// expectation is read back out of the body that was sent, so the
+			// title is written once and the two cannot drift apart.
+			if want, _ := tc.body["title"].(string); patched.Title != want {
+				t.Errorf("title = %q, want %q", patched.Title, want)
 			}
 			// Carried through exactly as stored: there is no id to canonicalize
 			// from, so anything else here would be rewriting the catalog.
