@@ -437,6 +437,39 @@ needs a mailbox someone can read, exactly like email verification.
   collapse the trail to one entry and send the first press to the list, which is
   the same two controls behaving differently; the list's name in the bar is the
   press that skips the trail.
+- **A search jump is the one destination that leaves `?list=` behind, and it has
+  to.** Every other address on the song page carries the list forward, so this
+  reads as the omission the bullet above warns about and is the opposite: a song
+  found by searching is not the reader's next song in that list and very often is
+  not in it at all, so keeping the parameter would put a bar on it counting a
+  position it does not hold, with steps to the songs either side of somebody
+  else's place. `SongSearch` therefore calls `songHref(song.id)` with no list, and
+  the spec that says so is the only thing standing between that and a
+  well-meaning "fix".
+- **The song page's quick search is a combobox whose rows cannot take focus, and
+  that is what keeps it out of the page's own gestures.** `useArrowKeyPaging`
+  stands down for a focused field, so left and right belong to the caret while
+  the results are up; let focus come to rest on a row instead and an arrow
+  pressed there pages the list out from under the panel — the results vanish and
+  the reader is on another song. So focus never leaves the field, the highlight
+  is `aria-activedescendant`, and every row carries `tabIndex={-1}`. With that,
+  nothing here has to ask `modalIsOpen()` and nothing has to stop an event
+  propagating: there is no conflict left to resolve. Two smaller pieces of the
+  same rule. The box is a sibling of the `<article>` rather than something inside
+  it — which is the whole reason `SongDetailPage` is a shell of two components —
+  because the article is the surface the paging swipe is read across, and a
+  gesture begun in the results would page the list. And the panel is dismissed by
+  a `pointerdown` listener rather than by a full-screen transparent element,
+  which is the shape of thing the tap strips were.
+- **`StickyHeader` is shared by two pages, and its rule is a class.** It hides on
+  the way down only below `md` — a desk has the height to spare — so the whole of
+  "out of the way on a phone, sticky at a desk" is the `max-md:` prefix on one
+  transform, and dropping it changes the catalog page as much as the song page.
+  That is why the spec lives beside the component in `Layout.test.tsx` rather than
+  inside either page's: read through one page's render, the other page's behavior
+  rides on a spec that has nothing to do with it. The rest of the reasoning — why
+  a Tailwind variant rather than `matchMedia`, and what `pinned` is for — is on
+  the component.
 - **The editor leaves by popping the history, not by navigating to the song.**
   It is only ever reached from the song's own page, so replacing its entry with
   that song — which is what saving used to do — leaves two identical song

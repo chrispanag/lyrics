@@ -81,6 +81,20 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
+  /* For a search field that draws its own clear button — see `SearchField`.
+     WebKit and Chromium put a cancel button inside `type="search"` themselves,
+     landing right where the component renders its own: two crosses side by side,
+     the native one a 14px target that ignores the field's padding. Given up the
+     same way `<Select>` gives up the native chevron above.
+
+     By class rather than for every `type="search"` in the app, because the admin
+     console's box has no button of its own and that native cross is the only way
+     to clear it. */
+  .search-own-clear::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
   /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the
      bottom of the viewport, which would otherwise sit on top of the tab bar. */
   .pb-safe {

@@ -31,7 +31,19 @@ export const keys = {
   users: (query: string, role: string) => ["users", query, role] as const,
 };
 
-export function useSongs(filters: SongFilters) {
+/**
+ * A page of songs.
+ *
+ * `enabled` is one boolean rather than an options bag, like `useLists` and
+ * `useSongLists` below: what the quick search above a song needs is a way to ask
+ * for nothing while its box is empty — an absent `q` is not an empty result but
+ * the whole catalog, so that panel would otherwise open on the newest songs and
+ * present them as matches. A `Partial<UseQueryOptions>` would buy that one knob
+ * at the price of letting any call site quietly override the `queryKey` this
+ * hook's key factory owns, or the `placeholderData` the comment below explains,
+ * which is the shape of the bug that comment records.
+ */
+export function useSongs(filters: SongFilters, enabled = true) {
   return useQuery({
     queryKey: keys.songs(filters),
     queryFn: () =>
@@ -40,6 +52,7 @@ export function useSongs(filters: SongFilters) {
     // for the global 60s window rather than the 30s this used to ask for — which
     // was half the default it overrode, achieving the opposite.
     placeholderData: (previous) => previous,
+    enabled,
   });
 }
 

@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Music4, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { Music4, Plus, SlidersHorizontal } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
 import { useGenres, usePerson, useSongs } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { StickyHeader } from "@/components/Layout";
 import { buttonClasses } from "@/components/buttonStyles";
-import { fieldChrome } from "@/components/fieldStyles";
+import { SearchField } from "@/components/SearchField";
 import { SongCard } from "@/components/SongCard";
-import { cn } from "@/lib/cn";
 import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Skeleton } from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
 import { LANGUAGE_LABELS, hasRole, type SongFilters } from "@/lib/types";
@@ -180,35 +179,10 @@ export function BrowsePage() {
       <StickyHeader>
         <div className="mx-auto max-w-3xl px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search
-                aria-hidden
-                className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-stone-400"
-              />
-              <input
-                type="search"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder="Search lyrics, titles, artists…"
-                aria-label="Search songs"
-                // Shares the field chrome but not the layout: this box is taller
-                // and rounder than a form <Input>, and cn is a plain join, so
-                // passing h-12/rounded-2xl through Input would leave both values
-                // in the class list. 16px minimum text, or iOS Safari zooms the
-                // page on focus.
-                className={cn(fieldChrome, "h-12 w-full rounded-2xl pl-10 pr-10 text-base")}
-              />
-              {draft && (
-                <button
-                  type="button"
-                  onClick={() => setDraft("")}
-                  aria-label="Clear search"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-2 text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800"
-                >
-                  <X aria-hidden className="size-4" />
-                </button>
-              )}
-            </div>
+            {/* The same box the song page carries, chrome and quirks included —
+                see `SearchField`. This one drives the listing below it rather
+                than a panel, so it is handed nothing but its state. */}
+            <SearchField value={draft} onChange={setDraft} className="flex-1" />
 
             <Button
               variant={hasFilters ? "primary" : "secondary"}

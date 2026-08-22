@@ -148,11 +148,30 @@ function MobileTabBar({ items }: { items: NavItem[] }) {
 }
 
 /**
- * A sticky page header that hides as the user scrolls down and returns on the
- * way up, giving lyrics the full height of a phone screen while keeping search
- * one gesture away.
+ * A sticky page header that gets out of the way on a phone.
+ *
+ * It hides as the reader scrolls down and returns on the way up, which is what
+ * gives lyrics the full height of a phone screen while keeping search one
+ * gesture away. Only on a phone, though: the hiding is scoped to `max-md`, since
+ * a desk has the height to spare and a header that comes and goes under the
+ * pointer is movement in exchange for nothing. The scroll listener still runs
+ * there — the class it toggles is simply a no-op above the breakpoint — rather
+ * than asking `matchMedia` and then keeping that answer in step with a window
+ * that can be dragged across the breakpoint at any time.
+ *
+ * `pinned` holds it still regardless, and what needs that is a header with
+ * something hanging off it: the song page's search results are anchored to this
+ * box, so a header that slid away would take the results with it. On iOS,
+ * focusing a field can scroll the page by itself — which is exactly the movement
+ * this reads as "scrolling down to the lyrics".
  */
-export function StickyHeader({ children }: { children: React.ReactNode }) {
+export function StickyHeader({
+  children,
+  pinned,
+}: {
+  children: React.ReactNode;
+  pinned?: boolean;
+}) {
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
@@ -184,7 +203,7 @@ export function StickyHeader({ children }: { children: React.ReactNode }) {
     <header
       className={cn(
         "sticky top-0 z-30 border-b border-stone-200 bg-stone-50/90 backdrop-blur transition-transform duration-200 pt-safe dark:border-stone-800 dark:bg-stone-950/90",
-        hidden && "-translate-y-full",
+        hidden && !pinned && "max-md:-translate-y-full",
       )}
     >
       {children}

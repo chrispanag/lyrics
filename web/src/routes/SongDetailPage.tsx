@@ -22,9 +22,11 @@ import {
 import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongNavFooter, ListSongSwipe } from "@/components/ListSongNav";
+import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { buttonClasses } from "@/components/buttonStyles";
 import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton } from "@/components/ui";
+import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_ORDER } from "@/lib/credits";
 import { cn } from "@/lib/cn";
 import { LIST_PARAM, listPosition } from "@/lib/listContext";
@@ -44,7 +46,26 @@ const FONT_SIZES = ["text-base", "text-lg", "text-xl", "text-2xl"] as const;
 const DEFAULT_FONT_SIZE = 1;
 const FONT_SIZE_KEY = "lyrics:font-size";
 
+/**
+ * A song, with the catalog's search box above it.
+ *
+ * Two siblings rather than one component, for two reasons that both bite if they
+ * are folded together. The box has to be there in every state the song below can
+ * be in — while it loads, and above all when it failed to load, where searching
+ * again is the way out rather than the browser's Back — and it has to sit outside
+ * the `<article>`, which is the surface the paging swipe is read across: a
+ * gesture that began in the results panel would page the list out from under it.
+ */
 export function SongDetailPage() {
+  return (
+    <>
+      <SongSearch />
+      <SongArticle />
+    </>
+  );
+}
+
+function SongArticle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -195,7 +216,7 @@ export function SongDetailPage() {
                   <span key={credit.person_id}>
                     {index > 0 && ", "}
                     <Link
-                      to={`/?person=${credit.person_id}`}
+                      to={browseHref({ person: credit.person_id })}
                       className="hover:text-brand-600 hover:underline"
                     >
                       {credit.name}
@@ -218,7 +239,7 @@ export function SongDetailPage() {
             {song.genres.map((genre) => (
               <Link
                 key={genre.id}
-                to={`/?genre_slug=${genre.slug}`}
+                to={browseHref({ genre_slug: genre.slug })}
                 className="rounded-full bg-stone-200 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300"
               >
                 {genre.name}
