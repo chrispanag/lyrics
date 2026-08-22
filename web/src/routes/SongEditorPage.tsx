@@ -353,7 +353,8 @@ export function SongEditorPage() {
         </Field>
 
         {/* The only confirmation that a pasted link was recognized, now that
-            there is no thumbnail to show: nothing appears until the id parses. */}
+            there is no thumbnail to show: nothing appears until the id parses,
+            and it parses exactly what the server does — see extractVideoId. */}
         {videoId && <WatchOnYouTube videoId={videoId} />}
 
         <Field label="Lyrics" htmlFor="lyrics" error={fieldErrors.lyrics}>
@@ -398,36 +399,93 @@ export function SongEditorPage() {
   );
 }
 
-// Module scope: a regex literal allocates a new RegExp every time it is
-// evaluated, and extractVideoId runs in the render body on every keystroke.
-//
-// `-nocookie` is in the host of both link shapes because the server's host list
-// accepts it, and now that the preview is the only confirmation a pasted link
-// was recognized, a link the server would happily save has to light it. That is
-// not a hypothetical host: YouTube's own share dialog hands out
-// `youtube-nocookie.com/embed/<id>` whenever privacy-enhanced mode is checked,
-// so leaving it out told those contributors their link was rejected while the
-// save would have gone through.
-const VIDEO_ID_PATTERNS = [
-  /(?:youtube(?:-nocookie)?\.com\/watch\?(?:.*&)?v=)([A-Za-z0-9_-]{11})/,
-  /(?:youtu\.be\/)([A-Za-z0-9_-]{11})/,
-  /(?:youtube(?:-nocookie)?\.com\/(?:embed|v|shorts|live)\/)([A-Za-z0-9_-]{11})/,
-  /^([A-Za-z0-9_-]{11})$/,
-];
+// Module scope: these are evaluated once rather than on every keystroke, since
+// extractVideoId runs in the render body.
+
+/** The 11-character identifier, which is the only shape an id is ever stored in. */
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+
+/**
+ * The hosts the server accepts, `www.` already stripped — the same list as
+ * `parseYouTubeURL`'s, and written out for the same reason it is there.
+ *
+ * A host missing from here reads as a link the field rejected while the save
+ * would have taken it, and `youtube-nocookie.com` is not a hypothetical:
+ * YouTube's own share dialog hands out `youtube-nocookie.com/embed/<id>`
+ * whenever privacy-enhanced mode is checked. `m.` and `music.` are the same
+ * trap one step quieter — they previewed only because the patterns this
+ * replaced matched anywhere in the text, so naming the host is what keeps them.
+ */
+const VIDEO_HOSTS = new Set([
+  "youtu.be",
+  "youtube.com",
+  "m.youtube.com",
+  "music.youtube.com",
+  "youtube-nocookie.com",
+]);
+
+/** The path shapes that carry the id as their second segment. */
+const VIDEO_PATHS = new Set(["embed", "v", "shorts", "live"]);
 
 /**
  * Extracts a video ID for the live preview.
  *
  * The server does the authoritative parsing and rejects anything it does not
- * recognize; this only decides whether to render a preview.
+ * recognize; this only decides whether to render a preview. But the preview is
+ * now the only confirmation that a pasted link was recognized, so anything the
+ * two disagree about is a verdict the save then contradicts — which makes this
+ * a deliberate mirror of `parseYouTubeURL`, down to the host list and the
+ * case-sensitive `v`.
+ *
+ * Parsing the URL rather than matching patterns against the raw text is what
+ * makes the host actually the host, and it closes both directions of that
+ * disagreement at once. A pattern looking for `youtube.com/watch?v=` also finds
+ * it in the query string of any other site, so `example.com/?u=<a youtube
+ * link>` lit the preview for a link the server refuses; and a pattern is
+ * case-sensitive where the server lowercases the host, so a pasted
+ * `WWW.YOUTUBE.COM/watch?v=…` — the shape `parseYouTubeURL`'s own comment
+ * records arriving — left the preview dark on a link that saves fine.
+ * `URL.hostname` is lowercased by the parser, so that half comes for free.
  */
 function extractVideoId(raw: string): string | null {
-  const trimmed = raw.trim();
+  let trimmed = raw.trim();
   if (!trimmed) return null;
+  // A bare id is a legitimate value, and the server accepts one.
+  if (VIDEO_ID.test(trimmed)) return trimmed;
 
-  for (const pattern of VIDEO_ID_PATTERNS) {
-    const match = trimmed.match(pattern);
-    if (match?.[1]) return match[1];
+  // A scheme-less "youtu.be/xyz" parses as a path rather than a host. The
+  // protocol-relative form has a host already and only wants the scheme, which
+  // is the shape `url.Parse` handles for the server without being asked.
+  if (trimmed.startsWith("//")) trimmed = `https:${trimmed}`;
+  else if (!trimmed.includes("//")) trimmed = `https://${trimmed}`;
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
   }
-  return null;
+
+  const host = url.hostname.replace(/^www\./, "");
+  if (!VIDEO_HOSTS.has(host)) return null;
+
+  if (host === "youtu.be") {
+    const id = trimSlashes(url.pathname);
+    return VIDEO_ID.test(id) ? id : null;
+  }
+
+  // Case-sensitive on the key, like the server's `Query().Get("v")`.
+  const v = url.searchParams.get("v");
+  if (v && VIDEO_ID.test(v)) return v;
+
+  // /embed/<id>, /v/<id>, /shorts/<id>, /live/<id> — two segments and no more,
+  // which is the length the server checks for.
+  const [shape, id, ...extra] = trimSlashes(url.pathname).split("/");
+  if (extra.length > 0 || !shape || !id) return null;
+  return VIDEO_PATHS.has(shape) && VIDEO_ID.test(id) ? id : null;
+}
+
+/** `strings.Trim(path, "/")`, which is what the server splits its segments off. */
+function trimSlashes(path: string): string {
+  return path.replace(/^\/+|\/+$/g, "");
 }
