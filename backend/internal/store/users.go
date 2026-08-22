@@ -48,6 +48,20 @@ func (s *Store) GetUser(ctx context.Context, id uuid.UUID) (*User, error) {
 //
 // The insert is idempotent: two concurrent first requests from the same new user
 // would otherwise race, and one would fail on the unique constraint.
+//
+// Idempotent on prelude_user_id, which is the only conflict the upsert absorbs.
+// email is UNIQUE as well and is not the declared target, so a row holding this
+// address under a *different* Prelude id raises a violation the upsert has no
+// answer for — reported as ErrEmailTaken, because the caller's move there is the
+// opposite of the usual one. Nothing about it heals: this function is what
+// self-healing means here, so a caller that leaves the repair to "the next
+// request" leaves it forever, and registration used to strand a fully created
+// Prelude account behind that promise.
+//
+// The row is not re-keyed onto the new id, and deliberately: the address would
+// then inherit whatever the old row holds — its lists, and its role. Handing
+// somebody an abandoned admin's row because they registered that admin's old
+// address is not a repair.
 func (s *Store) ProvisionUser(ctx context.Context, preludeID, email string, role Role) (*User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if role == "" {
@@ -63,6 +77,9 @@ func (s *Store) ProvisionUser(ctx context.Context, preludeID, email string, role
 			  SET email = EXCLUDED.email
 			RETURNING `+userColumns, preludeID, email, role), &user)
 		if err != nil {
+			if isUniqueViolation(err, "users_email_key") {
+				return fmt.Errorf("provision user %q: %w", email, ErrEmailTaken)
+			}
 			return fmt.Errorf("provision user: %w", translateErr(err))
 		}
 

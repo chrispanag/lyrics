@@ -852,6 +852,62 @@ func TestRegistrationRollsBackOrphanedAccount(t *testing.T) {
 	}
 }
 
+// users.email is UNIQUE and is not the upsert's conflict target, so a local row
+// holding the address under a different Prelude id is a violation provisioning
+// cannot absorb. It used to be reported as a plain conflict *after* the Prelude
+// account had been created and given a password, and that account was then left
+// in place on the promise that the next sign-in would provision the local row —
+// which fails on the same constraint every time. The address ended up carrying
+// an unusable Prelude identity per attempt, and every later sign-in answered 500.
+func TestRegisteringAnAddressHeldByAnotherAccount(t *testing.T) {
+	h := newHarness(t)
+
+	// The stale row: a Prelude account deleted and recreated, or a database
+	// restored from a backup older than the account, leaves exactly this.
+	h.user("taken@example.com", store.RoleUser)
+	before := len(h.prelude.Users)
+
+	// Mixed case on purpose — normalization is what makes this collide at all.
+	resp := h.do("POST", "/api/v1/auth/register", "", map[string]any{
+		"email": "Taken@Example.com", "password": "s3cret-password",
+	})
+	if resp.StatusCode != http.StatusConflict {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 409\nbody: %s", resp.StatusCode, body)
+	}
+
+	// The account made for this attempt cannot ever sign in, so leaving it would
+	// add another on every retry.
+	if got := len(h.prelude.Users); got != before {
+		t.Errorf("prelude users = %d, want %d — the new account was left behind", got, before)
+	}
+}
+
+// The same collision from the other side: an account that exists in Prelude and
+// signs in normally, whose address a local row already holds. Provisioning is
+// what the just-in-time path is for, so this is the one failure there that no
+// later request can clear — and answering "Unable to provision your account"
+// sent whoever read it looking for an outage.
+func TestSignInWhenAnotherAccountHoldsTheAddress(t *testing.T) {
+	h := newHarness(t)
+	h.user("taken@example.com", store.RoleUser)
+
+	token := h.issuer.Sign(t, testutil.TokenOptions{
+		UserID: "usr_a_different_account", Email: "taken@example.com",
+	})
+
+	resp := h.do("GET", "/api/v1/me", token, nil)
+	if resp.StatusCode != http.StatusConflict {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 409\nbody: %s", resp.StatusCode, body)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "another account") {
+		t.Errorf("body = %s, want it to name the address being held elsewhere", body)
+	}
+}
+
 func TestRegistrationRateLimited(t *testing.T) {
 	h := newHarness(t)
 

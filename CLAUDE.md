@@ -473,6 +473,22 @@ needs a mailbox someone can read, exactly like email verification.
   reach a browser. `POST /auth/register` makes two upstream calls and **deletes
   the account if the second fails**: a user created without a password can
   neither sign in nor register again, permanently burning that address.
+- **The local insert is rolled back too, but only for the one failure that will
+  never clear.** `ProvisionUser` upserts on `prelude_user_id`; `users.email` is
+  `UNIQUE` and is *not* that conflict target, so a row holding the address under
+  a different Prelude id raises a violation the upsert has no answer for, which
+  the store reports as `ErrEmailTaken` rather than plain `ErrConflict`. The
+  distinction is what the rollback hangs on. Any other store failure leaves the
+  Prelude account alone on purpose — it is complete and usable, and the next
+  sign-in provisions the local row just-in-time — but that promise is exactly
+  what this case cannot keep, since just-in-time provisioning is the same
+  statement failing the same way. Left in place, each attempt stacked another
+  Prelude identity that could never sign in, and every later sign-in answered
+  500 to an account with nothing wrong with it. **The row is never re-keyed onto
+  the new id**, which is the repair that suggests itself and is not one: the
+  address would inherit the old row's lists *and its role*. The address stays
+  unusable until someone deals with the stale row by hand — a support matter,
+  and the honest end of a story with no safe automatic ending.
 - **Queries are hand-written against pgx, not generated.** Most of the surface is
   dynamic — composable filters, blended relevance ranking — which generators
   model poorly.

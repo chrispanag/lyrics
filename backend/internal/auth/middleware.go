@@ -120,6 +120,17 @@ func (a *Authenticator) resolve(ctx context.Context, raw string) (*store.User, *
 
 	user, err = a.users.ProvisionUser(ctx, claims.UserID, claims.Email, role)
 	if err != nil {
+		// A local row already holds this address under a different Prelude
+		// account, which is the one provisioning failure that is not a fault and
+		// will not pass on the next request either. Reported as itself rather than
+		// as a server error: "Unable to provision your account" sends whoever
+		// reads it looking for an outage, and every sign-in by this account
+		// answers the same way until the stale row is dealt with by hand.
+		if errors.Is(err, store.ErrEmailTaken) {
+			return nil, nil, httpx.Conflict(
+				"Your email address is registered to another account. Please contact support.").
+				WithCause(err)
+		}
 		return nil, nil, httpx.Internal("Unable to provision your account.").WithCause(err)
 	}
 

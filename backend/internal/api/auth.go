@@ -88,7 +88,27 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) error {
 
 	user, err := s.store.CreateUserRecord(r.Context(), preludeUserID, email, displayName, role)
 	if err != nil {
-		// The Prelude account is complete and usable at this point, so it is
+		// A local row already holds this address under another Prelude account,
+		// and no later request can get past it: provisioning just-in-time is what
+		// the case below is waiting for, and it fails on the same constraint every
+		// time. Leaving the account would stack a second unusable Prelude
+		// identity on the address on every attempt, none of which can ever sign
+		// in — so this one is removed, exactly as a failed SetPassword is.
+		//
+		// The address stays unusable until the stale row is dealt with by hand,
+		// which is a support matter rather than something to guess at here: the
+		// row cannot be re-keyed onto this new account without handing over
+		// whatever it holds, and it cannot be deleted without discarding somebody
+		// else's lists.
+		if errors.Is(err, store.ErrEmailTaken) {
+			s.compensateFailedRegistration(preludeUserID, email)
+			slog.Error("local row holds this address under another prelude account",
+				"prelude_user_id", preludeUserID, "error", err)
+			return httpx.Conflict("An account with that email already exists.").WithCause(err)
+		}
+
+		// Any other failure is transient — the database being unreachable, most
+		// likely. The Prelude account is complete and usable, so it is
 		// deliberately left in place: the next sign-in provisions the local row
 		// just-in-time. Deleting a working account would be the worse outcome.
 		slog.Error("created prelude user but failed to create local record",
