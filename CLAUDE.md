@@ -598,6 +598,19 @@ these three are the parts that break quietly.
   makes it call its own origin. Vite inlines the value at build time, so setting
   it bakes in a hostname that a domain change then invalidates — and the failure
   appears only in the browser, long after a green deploy.
+- **`CLIENT_IP_HEADER` must be `DO-Connecting-IP` here, and must stay unset
+  locally.** Registration is rate limited per caller, and behind the ingress the
+  peer address is the ingress — so the whole world shared one bucket of five per
+  minute, and the sixth honest sign-up anywhere was refused. **Not
+  `X-Forwarded-For`**: App Platform documents that header as carrying its own
+  ingress address rather than the caller's, so it is both forgeable in general
+  and useless here in particular. The variable names the *one* header trusted to
+  carry an address, which is what keeps trusting it a deployment's decision —
+  anything a client can set turns a per-key limit into no limit at all, since a
+  forged value per request buys a fresh bucket. A value that is missing or is not
+  an address falls back to the peer, which is the safe direction: one shared
+  bucket is stricter than a bucket per string a caller invents. Both directions
+  are pinned by `TestClientIP`.
 
 Migrations run from `cmd/migrate`, which embeds `backend/migrations` with
 `go:embed` (hence `migrations/embed.go` — the directive cannot reach upward).

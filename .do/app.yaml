@@ -88,6 +88,15 @@ services:
       - key: LOG_LEVEL
         scope: RUN_TIME
         value: info
+      # Every request arrives through App Platform's ingress, so the peer address
+      # is the ingress and registration's rate limit counted the whole world in
+      # one bucket. This is the header the platform documents as carrying the
+      # caller's address; X-Forwarded-For here is the ingress's own, which is the
+      # value that made the limit global in the first place. Unset locally, where
+      # the peer address is already the caller's.
+      - key: CLIENT_IP_HEADER
+        scope: RUN_TIME
+        value: DO-Connecting-IP
 
       # --- filled in by scripts/deploy-do.sh from .env ---------------------
       - key: PRELUDE_APP_ID
