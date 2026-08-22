@@ -71,12 +71,25 @@ type User struct {
 	// derived boolean, so the client reads one field instead of two that could
 	// disagree.
 	EmailVerifiedAt *time.Time `json:"email_verified_at"`
+	// AvatarUpdatedAt is null until a profile picture is uploaded. It is the
+	// only version of the picture the client is given: the avatar's URL is
+	// stable, so this is what busts its cache when a new one is written, and
+	// what the fallback to initials is decided from.
+	AvatarUpdatedAt *time.Time `json:"avatar_updated_at"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // EmailVerified reports whether the address has been confirmed.
 func (u User) EmailVerified() bool { return u.EmailVerifiedAt != nil }
+
+// Avatar is a stored profile picture. The bytes are never part of a User: they
+// are read by one endpoint that serves them as an image and by nothing else.
+type Avatar struct {
+	ContentType string
+	Image       []byte
+	UpdatedAt   time.Time
+}
 
 // Person is anyone credited on a song.
 type Person struct {

@@ -91,29 +91,59 @@ func (h *harness) tokenFor(email string, role store.Role) string {
 func (h *harness) do(method, path, token string, body any) *http.Response {
 	h.t.Helper()
 
+	if body == nil {
+		return h.doRaw(method, path, token, "", nil)
+	}
+	payload, err := json.Marshal(body)
+	if err != nil {
+		h.t.Fatalf("marshal body: %v", err)
+	}
+	return h.doRaw(method, path, token, "application/json", payload)
+}
+
+// doRaw sends a body the JSON decoder never sees, which is what an avatar
+// upload is. `do` marshals through it, so the two cannot drift apart in how a
+// request is built.
+func (h *harness) doRaw(method, path, token, contentType string, body []byte) *http.Response {
+	h.t.Helper()
+
 	var reader io.Reader
 	if body != nil {
-		payload, err := json.Marshal(body)
-		if err != nil {
-			h.t.Fatalf("marshal body: %v", err)
-		}
-		reader = bytes.NewReader(payload)
+		reader = bytes.NewReader(body)
 	}
 
 	req, err := http.NewRequest(method, h.server.URL+path, reader)
 	if err != nil {
 		h.t.Fatalf("build request: %v", err)
 	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	return h.send(req)
+}
+
+// doConditional repeats a GET with an If-None-Match, which is the one header no
+// other test needs and so is not worth threading through `do`.
+func (h *harness) doConditional(path, etag string) *http.Response {
+	h.t.Helper()
+
+	req, err := http.NewRequest("GET", h.server.URL+path, nil)
+	if err != nil {
+		h.t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("If-None-Match", etag)
+	return h.send(req)
+}
+
+func (h *harness) send(req *http.Request) *http.Response {
+	h.t.Helper()
 
 	resp, err := h.server.Client().Do(req)
 	if err != nil {
-		h.t.Fatalf("%s %s: %v", method, path, err)
+		h.t.Fatalf("%s %s: %v", req.Method, req.URL.Path, err)
 	}
 	h.t.Cleanup(func() { _ = resp.Body.Close() })
 	return resp
@@ -258,6 +288,15 @@ func TestRBACMatrix(t *testing.T) {
 		{
 			name: "list all users", method: "GET", path: "/api/v1/admin/users",
 			guest: 401, user: 403, contributor: 403, admin: 200,
+		},
+		{
+			name: "read a profile picture", method: "GET",
+			path: "/api/v1/users/" + uuid.NewString() + "/avatar",
+			// Public, because an <img> carries no Authorization header. Nobody
+			// here has a picture, so every role sees the same 404 — a 401 for
+			// the guest would mean the route had been mounted behind
+			// authentication, where its own owner could not load it either.
+			guest: 404, user: 404, contributor: 404, admin: 404,
 		},
 	}
 
@@ -1116,6 +1155,54 @@ func TestEmailVerification(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestUnverifiedAccountIsGated walks the gate from both sides.
+//
+// With an *admin* principal, because the gate is not a role check and has to
+// hold for the role that passes every other one. And over the exemptions as
+// well as the refusals, since the exemption list is written at the mount point:
+// a route added to the wrong group stops needing verification silently, because
+// it still works.
+func TestUnverifiedAccountIsGated(t *testing.T) {
+	h := newHarness(t)
+
+	admin := h.unverifiedUser("unverified.admin@example.com", store.RoleAdmin)
+	token := h.sign(admin)
+
+	refused := []struct {
+		method, path string
+		body         any
+	}{
+		{"PATCH", "/api/v1/me", map[string]any{"display_name": "Not yet"}},
+		{"POST", "/api/v1/me/avatar", nil},
+		{"DELETE", "/api/v1/me/avatar", nil},
+		{"GET", "/api/v1/lists", nil},
+		{"POST", "/api/v1/lists", map[string]any{"name": "Not yet"}},
+		{"POST", "/api/v1/songs", map[string]any{"title": "N", "lyrics": "x", "language": "el"}},
+		{"POST", "/api/v1/people", map[string]any{"name": "Nobody"}},
+		{"GET", "/api/v1/admin/users", nil},
+	}
+	for _, tt := range refused {
+		// 403 and never 401: the session is perfectly valid, and a 401 would
+		// send the client off to refresh a token that is already fine.
+		if resp := h.do(tt.method, tt.path, token, tt.body); resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s %s unverified = %d, want 403", tt.method, tt.path, resp.StatusCode)
+		}
+	}
+
+	// The exemptions, which are the entire list: who am I, and record the
+	// challenge I just completed. Anything more here and the verification screen
+	// would be reachable by an account that has no way to leave it.
+	if resp := h.do("GET", "/api/v1/me", token, nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("GET /me unverified = %d, want 200", resp.StatusCode)
+	}
+
+	scoped := h.issuer.Sign(t, testutil.TokenOptions{
+		UserID: admin.PreludeUserID, Email: admin.Email, Scopes: []string{api.EmailVerifyScope}})
+	if resp := h.do("POST", "/api/v1/auth/verify-email", scoped, nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("POST /auth/verify-email unverified = %d, want 200", resp.StatusCode)
+	}
 }
 
 // Guests are unaffected: verification gates an account, not the catalog.

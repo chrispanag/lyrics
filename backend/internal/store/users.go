@@ -5,16 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
-const userColumns = `id, prelude_user_id, email, display_name, role, email_verified_at, created_at, updated_at`
+const userColumns = `id, prelude_user_id, email, display_name, role, email_verified_at,
+	avatar_updated_at, created_at, updated_at`
 
 func scanUser(row pgx.Row, u *User) error {
 	return row.Scan(&u.ID, &u.PreludeUserID, &u.Email, &u.DisplayName, &u.Role,
-		&u.EmailVerifiedAt, &u.CreatedAt, &u.UpdatedAt)
+		&u.EmailVerifiedAt, &u.AvatarUpdatedAt, &u.CreatedAt, &u.UpdatedAt)
 }
 
 // GetUserByPreludeID looks up the local record for an authenticated principal.
@@ -121,6 +123,83 @@ func (s *Store) UpdateProfile(ctx context.Context, id uuid.UUID, displayName *st
 		return nil, translateErr(err)
 	}
 	return &u, nil
+}
+
+// SetAvatar stores a user's profile picture, replacing any previous one.
+//
+// The picture and the timestamp that versions it are written together: that
+// timestamp is the only thing the client sees change, so a write that landed
+// one without the other would leave every reader holding a URL that still
+// points at the old image.
+func (s *Store) SetAvatar(ctx context.Context, id uuid.UUID, contentType string, image []byte) (*User, error) {
+	var u User
+	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO user_avatars (user_id, content_type, image)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (user_id) DO UPDATE
+			  SET content_type = EXCLUDED.content_type, image = EXCLUDED.image`,
+			id, contentType, image); err != nil {
+			return fmt.Errorf("store avatar: %w", err)
+		}
+		return scanUser(tx.QueryRow(ctx, `
+			UPDATE users SET avatar_updated_at = now() WHERE id = $1
+			RETURNING `+userColumns, id), &u)
+	})
+	if err != nil {
+		return nil, translateErr(err)
+	}
+	return &u, nil
+}
+
+// ClearAvatar removes a user's profile picture.
+//
+// Deliberately idempotent: the control that calls it is only rendered when a
+// picture exists, so a second press is a double tap rather than a mistake worth
+// an error.
+func (s *Store) ClearAvatar(ctx context.Context, id uuid.UUID) (*User, error) {
+	var u User
+	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx,
+			`DELETE FROM user_avatars WHERE user_id = $1`, id); err != nil {
+			return fmt.Errorf("delete avatar: %w", err)
+		}
+		return scanUser(tx.QueryRow(ctx, `
+			UPDATE users SET avatar_updated_at = NULL WHERE id = $1
+			RETURNING `+userColumns, id), &u)
+	})
+	if err != nil {
+		return nil, translateErr(err)
+	}
+	return &u, nil
+}
+
+// Avatar loads a user's profile picture.
+//
+// A user with no picture and a user that does not exist are the same
+// ErrNotFound, which is what keeps the endpoint in front of this from
+// confirming that an identifier belongs to an account.
+func (s *Store) Avatar(ctx context.Context, id uuid.UUID) (*Avatar, error) {
+	var a Avatar
+	// Scanned as a pointer even though a row and a timestamp are always written
+	// together: nothing in the schema enforces that pairing, and scanning NULL
+	// into a time.Time is a driver error rather than a domain one — which would
+	// surface as a 500 from the one route whose every failure is meant to be an
+	// indistinguishable 404.
+	var updatedAt *time.Time
+	err := s.pool.QueryRow(ctx, `
+		SELECT a.content_type, a.image, u.avatar_updated_at
+		FROM user_avatars a
+		JOIN users u ON u.id = a.user_id
+		WHERE a.user_id = $1`, id).Scan(&a.ContentType, &a.Image, &updatedAt)
+	if err != nil {
+		return nil, translateErr(err)
+	}
+	if updatedAt == nil {
+		return nil, fmt.Errorf("%w: avatar row for %s has no version", ErrNotFound, id)
+	}
+	a.UpdatedAt = *updatedAt
+	return &a, nil
 }
 
 // SetRole changes a user's authorization level.
