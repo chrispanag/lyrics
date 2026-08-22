@@ -24,11 +24,12 @@ describe("SongCard", () => {
   // placeholder is pinned for the same reason it is there — without it the row
   // is its padding and nothing else, which no other assertion here would show.
   it("holds the genre row open with a chip's box when a song has none", () => {
-    const withGenre = renderWithProviders(<SongCard song={makeSong({ genres: [makeGenre()] })} />);
-    const chip = screen.getByText("Ρεμπέτικο");
+    const genre = makeGenre();
+    const withGenre = renderWithProviders(<SongCard song={makeSong({ genres: [genre] })} />);
+    const chip = screen.getByText(genre.name);
 
     // A placeholder left in beside real chips would take a chip's width and the
-    // gap after it, crowding the row towards a second line it does not need.
+    // gap after it, crowding the row toward a second line it does not need.
     expect(withGenre.container.querySelector(".invisible")).toBeNull();
 
     const { container } = renderWithProviders(<SongCard song={makeSong({ genres: [] })} />);
