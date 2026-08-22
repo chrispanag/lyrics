@@ -428,13 +428,17 @@ needs a mailbox someone can read, exactly like email verification.
   which is why it read as a broken back button rather than a duplicate. Popping
   also restores the previous URL verbatim, and so is the only thing keeping
   `?list=` on the way out — the Edit link drops it, and any destination built
-  here would drop it too. The exception is the one way in with nothing behind
-  it: `/songs/new`, and an editor address opened in a fresh tab, which
-  `location.key === "default"` identifies. Those navigate with `replace`, so
-  Back cannot return to a form already saved. Pinned from both sides, address
-  *and* trail, in `SongEditorPage.test.tsx`: a fix that kept `?list=` while
-  still duplicating the entry passes that spec's every assertion about the
-  address.
+  here would drop it too. Two things do navigate instead, for two unrelated
+  reasons, and folding them together is the way to lose one: an editor address
+  opened in a fresh tab has nothing behind it, which `location.key ===
+  "default"` is what identifies; and adding a song has to land the reader on
+  what they created rather than on the catalog they opened the form from, which
+  is the `isEdit` branch and nothing to do with the key — an in-app `/songs/new`
+  has a perfectly ordinary key and a page behind it, which is why *cancelling*
+  there does pop. Both navigate with `replace`, so Back cannot return to a form
+  already saved. Pinned from both sides, address *and* trail, in
+  `SongEditorPage.test.tsx`: a fix that kept `?list=` while still duplicating
+  the entry passes that spec's every assertion about the address.
 
 ---
 

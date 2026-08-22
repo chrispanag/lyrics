@@ -8,6 +8,7 @@ import { useAuth } from "@/auth/useAuth";
 import { PersonAutocomplete, type PersonSelection } from "@/components/PersonAutocomplete";
 import { YouTubeFacade } from "@/components/YouTubeFacade";
 import { Button, Chip, ErrorMessage, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
+import { songHref } from "@/lib/listContext";
 import {
   CREDIT_ROLES,
   LANGUAGE_LABELS,
@@ -122,21 +123,23 @@ export function SongEditorPage() {
   /**
    * Leaves the editor for the page it was opened from.
    *
-   * Popping rather than navigating, because the editor is only ever reached
-   * from the song's own page: pushing the song again — or replacing the editor
-   * entry with it, which is the same thing one entry earlier — leaves two
-   * identical song entries in a row, and the reader has to press Back twice to
-   * get past a page that never appeared to change. Popping also restores the
-   * previous address verbatim, which is what keeps `?list=` on a song reached
-   * from a list; building the destination here would drop it.
+   * Popping rather than navigating, because an edit is only ever reached from
+   * the song's own page: pushing the song again — or replacing the editor entry
+   * with it, which is the same thing one entry earlier — leaves two identical
+   * song entries in a row, and the reader has to press Back twice to get past a
+   * page that never appeared to change. Popping also restores the previous
+   * address verbatim, which is what keeps `?list=` on a song reached from a
+   * list; building the destination would drop it, the Edit link having dropped
+   * it first.
    *
-   * `key` is `"default"` only on the entry a tab was opened on, so a deep link
-   * straight to the editor — the one way in with nothing behind it — falls back
-   * to an address instead, and does replace it so Back does not return to a
-   * form that has already been saved or abandoned.
+   * `key` is `"default"` only on the entry a tab was opened on, so an editor
+   * address opened in a fresh tab — the one way in with nothing behind it —
+   * takes the fallback instead, and replaces so Back does not return to a form
+   * already saved or abandoned. The fallback is derived rather than passed,
+   * since where the editor belongs is the same question at both call sites.
    */
-  const leaveEditor = (fallback: string) => {
-    if (location.key === "default") navigate(fallback, { replace: true });
+  const leaveEditor = () => {
+    if (location.key === "default") navigate(id ? songHref(id) : "/", { replace: true });
     else navigate(-1);
   };
 
@@ -175,10 +178,12 @@ export function SongEditorPage() {
         ? await updateSong.mutateAsync(payload)
         : await createSong.mutateAsync(payload);
       setDirty(false);
-      // A new song has no page behind the editor to return to, so its entry is
-      // replaced by the song it created.
-      if (isEdit) leaveEditor(`/songs/${saved.id}`);
-      else navigate(`/songs/${saved.id}`, { replace: true });
+      // Adding a song is the one save that does not go back: the reader has to
+      // land on what they just created, not wherever they opened the form from
+      // — which for `/songs/new` is usually the catalog, and popping would
+      // return them there with nothing to show for it.
+      if (isEdit) leaveEditor();
+      else navigate(songHref(saved.id), { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, "The song could not be saved."));
       setFieldErrors(errorDetails(caught));
@@ -381,7 +386,7 @@ export function SongEditorPage() {
             className="flex-1"
             onClick={() => {
               if (dirty && !confirm("Discard your unsaved changes?")) return;
-              leaveEditor(isEdit ? `/songs/${id}` : "/");
+              leaveEditor();
             }}
           >
             Cancel

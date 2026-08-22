@@ -61,7 +61,7 @@ export function renderWithProviders(
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
+        <MemoryRouter initialEntries={entries}>
           <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
         </MemoryRouter>
       </QueryClientProvider>
