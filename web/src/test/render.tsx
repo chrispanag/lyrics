@@ -51,7 +51,14 @@ export function renderWithProviders(
     resendVerificationCode: async () => {},
     startPasswordReset: async () => {},
     resendPasswordResetCode: async () => {},
-    confirmPasswordResetCode: async () => {},
+    // Two codes by default, because that is what the configured step-up does: a
+    // spec that walks the reset without thinking about it should walk the flow
+    // real visitors walk. The one-code answer is what a step-up granted outright
+    // looks like, and the spec that pins it says so.
+    confirmPasswordResetCode: async () => ({ secondCodeSent: true }),
+    startPasswordChange: async () => {},
+    confirmPasswordChangeCode: async () => {},
+    resendPasswordChangeCode: async () => {},
     changePassword: async () => {},
     signOutOtherDevices: async () => {},
     validatePassword: async () => ({ valid: true, messages: [] }),

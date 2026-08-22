@@ -1,8 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch, setUnauthorizedHandler } from "@/api/client";
-import { AuthContext, RESET_UNCONFIGURED_ERROR, type AuthContextValue } from "./context";
+import {
+  AuthContext,
+  PASSWORD_CHANGE_UNAVAILABLE_ERROR,
+  RESET_UNCONFIGURED_ERROR,
+  type AuthContextValue,
+} from "./context";
 import { OTP_LOGIN_CONFIG_ID, getAccessToken, sessionClient } from "./session";
 import type { User } from "@/lib/types";
 
@@ -22,6 +35,14 @@ const EMAIL_VERIFY_SCOPE = "email:verify";
  * EMAIL_VERIFY_SCOPE it is not named in three places: no configuration invents
  * it and our API never reads it. Prelude grants it, and consumes it as the
  * password is written, so it cannot be spent twice.
+ *
+ * One entry in one configuration serves both flows that write a password —
+ * `requestStepUp` names a scope and nothing else — so its policy is decided by
+ * the stricter of the two. That is the signed-in screen, which has nothing but a
+ * session to offer and so must be asked for a code; the reset pays for that with
+ * a second code it does not need. Both statuses are handled either way, so the
+ * configuration can be flipped back without a deploy and without a window where
+ * reset is broken.
  */
 const PASSWORD_WRITE_SCOPE = "prld:pwd:write";
 
@@ -195,43 +216,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(await apiFetch<User>("/api/v1/auth/verify-email", { method: "POST" }));
   }, []);
 
-  // The id of the open verification challenge. A ref rather than state: it is
-  // needed by the next call, not by the render, and re-rendering the code form
-  // on a value the user never sees would be noise.
-  const challengeID = useRef<string | null>(null);
+  // The id of an open challenge, one ref per scope that opens one. It is needed
+  // by the next call and never by a render — showing the user a value they have
+  // no use for — which is what makes a ref right rather than state. Two rather
+  // than one deliberately: each guard below reads its ref as "a challenge of
+  // mine is already open", and one shared ref would have each flow reuse the
+  // other's, opening none of its own and checking its code against a challenge
+  // for a scope it never asked about.
+  const verifyChallengeID = useRef<string | null>(null);
+  const passwordChallengeID = useRef<string | null>(null);
+
+  /**
+   * Requests a step-up for a scope and has Prelude send the code it asks for.
+   *
+   * The challenge is remembered in `challenge`, because checking the code needs
+   * that id back. A `continue` status is Prelude granting the scope outright:
+   * no challenge, nothing emailed, nothing to answer — and the three callers
+   * read that answer differently on purpose, so it is returned rather than
+   * resolved here. `block` never reaches them: there is nothing to offer a
+   * visitor whose step-up was refused.
+   */
+  const openStepUp = useCallback(
+    async (scope: string, challenge: RefObject<string | null>) => {
+      const { status } = await sessionClient.requestStepUp({
+        scope,
+        onChallenge: (info) => {
+          challenge.current = info.challengeId;
+        },
+      });
+
+      if (status === "continue") return status;
+      if (status === "block") {
+        throw new Error(`Prelude refused the "${scope}" step-up.`);
+      }
+      if (!challenge.current) {
+        throw new Error(`Prelude opened no "${scope}" challenge.`);
+      }
+      await sessionClient.startOTP({ challengeId: challenge.current });
+      return status;
+    },
+    [],
+  );
 
   const startEmailVerification = useCallback(async () => {
     // Reusing an open challenge matters: starting a second one retires the
     // first, so a remount would invalidate the code already sitting in the
     // user's inbox and every attempt at it would read as "wrong code".
-    if (challengeID.current) return;
-
-    const { status } = await sessionClient.requestStepUp({
-      scope: EMAIL_VERIFY_SCOPE,
-      onChallenge: (info) => {
-        challengeID.current = info.challengeId;
-      },
-    });
+    if (verifyChallengeID.current) return;
 
     // "continue" means Prelude granted the scope outright, with no challenge to
     // answer. Nothing was emailed and there is nothing to type, so the grant is
     // recorded immediately rather than leaving the user at a code form that can
     // never be satisfied.
-    if (status === "continue") {
+    if ((await openStepUp(EMAIL_VERIFY_SCOPE, verifyChallengeID)) === "continue") {
       await recordVerification();
-      return;
     }
-    if (!challengeID.current) {
-      throw new Error("Prelude opened no verification challenge.");
-    }
-    await sessionClient.startOTP({ challengeId: challengeID.current });
-  }, [recordVerification]);
+  }, [openStepUp, recordVerification]);
 
   const resendVerificationCode = useCallback(async () => {
     // No challenge open means the first attempt never got one — asking Prelude
     // to retry would then fail on a challenge that does not exist, which is the
     // one state the "send another" button exists to get out of.
-    if (!challengeID.current) {
+    if (!verifyChallengeID.current) {
       await startEmailVerification();
       return;
     }
@@ -240,14 +286,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyEmail = useCallback(
     async (code: string) => {
-      if (!challengeID.current) {
+      if (!verifyChallengeID.current) {
         throw new Error("No verification is in progress.");
       }
       // Prelude decides whether the code is right; a wrong one throws here and
       // never reaches our API. On success the SDK refreshes the session, so the
       // token the next request carries holds the granted scope.
-      await sessionClient.checkOTP({ code, challengeId: challengeID.current });
-      challengeID.current = null;
+      await sessionClient.checkOTP({ code, challengeId: verifyChallengeID.current });
+      verifyChallengeID.current = null;
       await recordVerification();
     },
     [recordVerification],
@@ -264,6 +310,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // not left looking at a signed-in UI they cannot use.
       setUser(null);
       queryClient.clear();
+      // The challenges belonged to the session that just ended, and both guards
+      // above read a ref as "one of mine is already open" — so a ref left behind
+      // has the next person to sign in on this tab shown a code form for a code
+      // that was never sent to them, since the flow skips opening a challenge of
+      // its own. The failed reset that leaves one is the likely way in: it signs
+      // the visitor out with a password challenge already opened.
+      verifyChallengeID.current = null;
+      passwordChallengeID.current = null;
     }
   }, [queryClient]);
 
@@ -313,25 +367,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await completeSignIn();
 
-        const { status } = await sessionClient.requestStepUp({ scope: PASSWORD_WRITE_SCOPE });
-        if (status !== "continue") {
-          // The scope is configured to be granted outright, because the code
-          // just entered is the same proof a challenge here would ask for a
-          // second time. Anything else means the step-up configuration was
-          // changed, and saying so beats stranding the visitor at a password
-          // form that cannot save.
-          throw new Error(`Prelude answered the password step-up with "${status}".`);
+        if ((await openStepUp(PASSWORD_WRITE_SCOPE, passwordChallengeID)) === "review") {
+          // Prelude has emailed a second code, and the screen has to ask for
+          // it. It proves the mailbox that the first code proved seconds
+          // earlier, which buys this flow nothing — it is the price of the one
+          // configuration being shared with the signed-in change-password
+          // screen, where a code is the only proof there is. The visitor is
+          // signed in and the reset is otherwise in hand;
+          // `confirmPasswordChangeCode` answers this challenge.
+          return { secondCodeSent: true };
         }
 
-        // A granted-outright scope arrives with no challenge to complete, so
-        // nothing has refreshed the session — and the cached access token can
-        // still predate the grant. canChangePassword is that forced refresh,
-        // and it reads the scope off the new token, so a token that somehow
-        // lacks it fails here rather than as an opaque rejection of the
-        // password itself.
+        // Granted outright instead. A scope handed over with no challenge has
+        // refreshed nothing, so the cached access token can still predate the
+        // grant. canChangePassword is that forced refresh, and it reads the
+        // scope off the new token, so a token that somehow lacks it fails here
+        // rather than as an opaque rejection of the password itself.
         if (!(await sessionClient.canChangePassword())) {
           throw new Error("The session did not receive permission to change the password.");
         }
+        return { secondCodeSent: false };
       } catch (caught) {
         // Its own try: a revocation that also fails must not replace the cause
         // the page is about to log, which is the only record of what happened.
@@ -343,8 +398,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw caught;
       }
     },
-    [completeSignIn, logout],
+    [completeSignIn, logout, openStepUp],
   );
+
+  const startPasswordChange = useCallback(async () => {
+    // Reusing an open challenge, exactly as verification does and for the same
+    // reason: a second challenge retires the first, so a remount would
+    // invalidate the code already in the inbox and every attempt at it would
+    // read as a wrong code.
+    if (passwordChallengeID.current) return;
+
+    if ((await openStepUp(PASSWORD_WRITE_SCOPE, passwordChallengeID)) === "continue") {
+      // Nothing was emailed, so nothing here re-proves who is at the keyboard —
+      // and a session is all that a stolen session is. Refusing is the whole
+      // reason this screen exists; changing a password on the strength of the
+      // session that asked to change it would be the screen agreeing to be
+      // useless while looking like a security feature.
+      const unavailable = new Error(
+        `Prelude granted "${PASSWORD_WRITE_SCOPE}" with no challenge, so nothing re-proves the account.`,
+      );
+      unavailable.name = PASSWORD_CHANGE_UNAVAILABLE_ERROR;
+      throw unavailable;
+    }
+  }, [openStepUp]);
+
+  const confirmPasswordChangeCode = useCallback(async (code: string) => {
+    const challengeId = passwordChallengeID.current;
+    if (!challengeId) {
+      throw new Error("No password change is in progress.");
+    }
+
+    // Prelude checks the code. A wrong one throws here and leaves the challenge
+    // open, so the next attempt is checked against the same one rather than
+    // needing a fresh code — which is why the ref is cleared after the call and
+    // not before it.
+    await sessionClient.checkOTP({ code, challengeId });
+    passwordChallengeID.current = null;
+
+    // The SDK refreshes the session when a challenge completes, but the grant is
+    // what the write depends on, so it is read off a freshly minted token rather
+    // than assumed: canChangePassword forces that refresh. A token that arrives
+    // without the scope fails here, where the screen can say the code bought no
+    // permission, instead of one step later as Prelude appearing to reject a
+    // perfectly good password.
+    if (!(await sessionClient.canChangePassword())) {
+      throw new Error("The session did not receive permission to change the password.");
+    }
+  }, []);
+
+  const resendPasswordChangeCode = useCallback(async () => {
+    if (passwordChallengeID.current) {
+      try {
+        await sessionClient.retryOTP();
+        return;
+      } catch (caught) {
+        // A challenge expires, and a retry on a dead one fails for good: the ref
+        // would go on naming it, so every later attempt would fail the same way
+        // and the screen would have no way out of a state it cannot describe.
+        // Opening a fresh challenge is that way out, and the cause is logged
+        // rather than swallowed because a Prelude outage looks identical from
+        // here — the difference is only visible in what the second call does.
+        console.error("A password change code could not be resent:", caught);
+        passwordChallengeID.current = null;
+      }
+    }
+    // Also covers a first attempt that never opened a challenge at all, which is
+    // the one state this button exists to get out of.
+    await startPasswordChange();
+  }, [startPasswordChange]);
 
   const changePassword = useCallback(async (password: string) => {
     await sessionClient.changePassword(password);
@@ -388,6 +509,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       startPasswordReset,
       resendPasswordResetCode,
       confirmPasswordResetCode,
+      startPasswordChange,
+      confirmPasswordChangeCode,
+      resendPasswordChangeCode,
       changePassword,
       signOutOtherDevices,
     }),
@@ -405,6 +529,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       startPasswordReset,
       resendPasswordResetCode,
       confirmPasswordResetCode,
+      startPasswordChange,
+      confirmPasswordChangeCode,
+      resendPasswordChangeCode,
       changePassword,
       signOutOtherDevices,
     ],

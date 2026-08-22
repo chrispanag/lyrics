@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { errorDetails, errorMessage } from "@/api/client";
-import { RESET_UNCONFIGURED_ERROR } from "@/auth/context";
+import { PASSWORD_CHANGE_UNAVAILABLE_ERROR, RESET_UNCONFIGURED_ERROR } from "@/auth/context";
 import { returnDestination } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { buttonClasses } from "@/components/buttonStyles";
@@ -328,6 +328,19 @@ function isInvalidPassword(caught: unknown): boolean {
 }
 
 /**
+ * Whether the password-change screen was refused before it could ask anything.
+ *
+ * The one failure on that screen an operator can fix rather than a visitor
+ * retry: the step-up grants `prld:pwd:write` outright, so no code was sent and
+ * nothing re-proves the account. Named for the same reason an unconfigured reset
+ * is — `errorMessage` carries through only our API's own messages, so this would
+ * otherwise read as Prelude being down.
+ */
+function isChangeUnavailable(caught: unknown): boolean {
+  return caught instanceof Error && caught.name === PASSWORD_CHANGE_UNAVAILABLE_ERROR;
+}
+
+/**
  * Whether the permission to write a password has run out.
  *
  * `prld:pwd:write` is granted for five minutes, so a visitor who takes longer
@@ -382,8 +395,16 @@ function CodeField({
   );
 }
 
-/** Which of the reset's four steps is on screen. */
-type ResetStep = "email" | "code" | "password" | "done";
+/**
+ * Which of the reset's steps is on screen.
+ *
+ * `confirm` is the second code: the step-up that permits the password write asks
+ * for one, because the same configuration serves the signed-in change-password
+ * screen and has to be strict there. Whether that step is visited at all is
+ * Prelude's answer to `confirmPasswordResetCode` rather than this screen's
+ * choice, so both routes through have to work.
+ */
+type ResetStep = "email" | "code" | "confirm" | "password" | "done";
 
 /**
  * Resets a forgotten password.
@@ -400,6 +421,8 @@ export function ForgotPasswordPage() {
     startPasswordReset,
     resendPasswordResetCode,
     confirmPasswordResetCode,
+    confirmPasswordChangeCode,
+    resendPasswordChangeCode,
     changePassword,
     signOutOtherDevices,
   } = useAuth();
@@ -407,6 +430,10 @@ export function ForgotPasswordPage() {
   const [step, setStep] = useState<ResetStep>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  // The second code gets its own state rather than reusing the first field's:
+  // they answer different challenges, and sharing would carry a spent code into
+  // the form for the next one — where it reads as a code that stopped working.
+  const [confirmCode, setConfirmCode] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -431,6 +458,7 @@ export function ForgotPasswordPage() {
   const startOver = () => {
     resetFeedback();
     setCode("");
+    setConfirmCode("");
     setPassword("");
     setStep("email");
   };
@@ -465,8 +493,12 @@ export function ForgotPasswordPage() {
     setSubmitting(true);
 
     try {
-      await confirmPasswordResetCode(code);
-      setStep("password");
+      const { secondCodeSent } = await confirmPasswordResetCode(code);
+      // Prelude decides which of these the visitor sees. A second code means the
+      // step-up asked to prove the mailbox again — the price of one
+      // configuration serving the signed-in change-password screen too — and a
+      // grant with no code means the one just entered was proof enough.
+      setStep(secondCodeSent ? "confirm" : "password");
     } catch (caught) {
       // One message for every failure, deliberately — the same choice the
       // sign-in screen makes about credentials, and for the same reason. An
@@ -508,6 +540,46 @@ export function ForgotPasswordPage() {
       startCooldown();
       setCode("");
       setNotice("A new code is on its way. Use the one in the most recent email.");
+      setResending(false);
+    }
+  };
+
+  const onSubmitConfirmCode = async (event: FormEvent) => {
+    event.preventDefault();
+    resetFeedback();
+    setSubmitting(true);
+
+    try {
+      await confirmPasswordChangeCode(confirmCode);
+      setStep("password");
+    } catch (caught) {
+      // Nothing to keep uniform here, unlike the step before it: only an address
+      // with an account could have reached this form, so naming the common
+      // mistake gives nothing away and saves a visitor guessing at which of
+      // their two codes is being refused.
+      console.error("The password confirmation code could not be checked:", caught);
+      setError(
+        isBadCode(caught)
+          ? "That code is not correct. Check it and try again."
+          : "That code could not be checked. Ask for another and try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const onResendConfirmCode = async () => {
+    resetFeedback();
+    setResending(true);
+
+    try {
+      await resendPasswordChangeCode();
+      startCooldown();
+      setConfirmCode("");
+      setNotice("A new code is on its way. Use the one in the most recent email.");
+    } catch (caught) {
+      setError(errorMessage(caught, "We could not send a new code. Please try again shortly."));
+    } finally {
       setResending(false);
     }
   };
@@ -627,6 +699,56 @@ export function ForgotPasswordPage() {
           <ResendCodeLink resending={resending} cooldown={cooldown} onResend={onResend} />
           <p>
             Wrong address?{" "}
+            <button
+              type="button"
+              onClick={startOver}
+              className="font-medium text-stone-500 hover:underline dark:text-stone-400"
+            >
+              Start over
+            </button>
+          </p>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  if (step === "confirm") {
+    return (
+      <AuthShell
+        title="One more code"
+        subtitle={`We sent a second code to ${email.trim()}`}
+      >
+        <form onSubmit={onSubmitConfirmCode} className="space-y-4" noValidate>
+          {error && <ErrorMessage>{error}</ErrorMessage>}
+          {notice && <Notice>{notice}</Notice>}
+
+          {/* Said out loud, because a second code for the same mailbox otherwise
+              reads as the first one having quietly failed. */}
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            Setting a new password needs one more check of your email. This is the
+            last step before you choose it.
+          </p>
+
+          <CodeField label="Confirmation code" value={confirmCode} onChange={setConfirmCode} />
+
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full"
+            loading={submitting}
+            disabled={confirmCode.length < CODE_LENGTH}
+          >
+            Continue
+          </Button>
+        </form>
+
+        <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
+          <ResendCodeLink
+            resending={resending}
+            cooldown={cooldown}
+            onResend={onResendConfirmCode}
+          />
+          <p>
             <button
               type="button"
               onClick={startOver}
@@ -861,6 +983,350 @@ export function VerifyEmailPage() {
             Sign out
           </button>
         </p>
+      </div>
+    </AuthShell>
+  );
+}
+
+/** Which of the change-password steps is on screen. */
+type ChangeStep = "code" | "password" | "done";
+
+/**
+ * Changes the password of a signed-in user.
+ *
+ * The proof is an emailed code, and it is the only proof there could be. Prelude
+ * grants `prld:pwd:write` on a step-up, and this screen has nothing to step up
+ * *with* except the session that asked — which is exactly what a stolen session
+ * is. A "current password" field would not close that: nothing in the browser
+ * can check one, and Prelude's password step-up has no step that does, so the
+ * field would be a gate an attacker skips by calling the SDK directly. The
+ * scope's configuration is what enforces this, which is why the screen refuses
+ * outright when Prelude answers with no challenge to run.
+ *
+ * Reached only from the profile, and deliberately outside the app's shell: the
+ * steps are state rather than routes, so navigating away is the flow lost
+ * part-way through, and there is no reason to offer that beside it. Both exits
+ * are therefore explicit.
+ */
+export function ChangePasswordPage() {
+  const {
+    user,
+    startPasswordChange,
+    confirmPasswordChangeCode,
+    resendPasswordChangeCode,
+    changePassword,
+    signOutOtherDevices,
+  } = useAuth();
+
+  const [step, setStep] = useState<ChangeStep>("code");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [sending, setSending] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
+  const [othersSignedOut, setOthersSignedOut] = useState(false);
+  const passwordHints = usePasswordHints();
+  const { cooldown, startCooldown } = useResendCooldown();
+  const started = useRef(false);
+
+  const resetFeedback = () => {
+    setError("");
+    setNotice("");
+  };
+
+  // The code is sent when this screen opens, like the verification screen and
+  // for the same reason: the challenge belongs to the browser's session with
+  // Prelude, so there is nobody to open it before the visitor gets here. The ref
+  // guards the double invocation React makes in development, which would
+  // otherwise open a second challenge and retire the code from the first.
+  useEffect(() => {
+    // Hooks run before the redirect below them is rendered, so without this a
+    // visitor whose session has ended opens a challenge on their way to the
+    // sign-in screen — and is emailed a code for a flow they cannot be in.
+    if (!user) return;
+    if (started.current) return;
+    started.current = true;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await startPasswordChange();
+      } catch (caught) {
+        // Let it be attempted again: the message tells the visitor to ask for
+        // another code, and the guard above would otherwise refuse to open one.
+        started.current = false;
+        if (cancelled) return;
+        if (isChangeUnavailable(caught)) {
+          // Not a fault to retry, and not one the visitor can fix. Saying so
+          // beats a code form waiting for a code that is never coming.
+          console.error("The password change step-up asked for nothing:", caught);
+          setUnavailable(true);
+          return;
+        }
+        setError(
+          errorMessage(caught, "We could not send a code just now. Try asking for another."),
+        );
+      } finally {
+        if (!cancelled) setSending(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [startPasswordChange, user]);
+
+  // Reached from the profile, which RequireAuth has gated already — this covers
+  // the session ending while the screen is open, which would otherwise leave a
+  // password form behind that can only fail.
+  if (!user) return <Navigate to="/login" replace />;
+
+  const onSubmitCode = async (event: FormEvent) => {
+    event.preventDefault();
+    resetFeedback();
+    setSubmitting(true);
+
+    try {
+      await confirmPasswordChangeCode(code);
+      setStep("password");
+    } catch (caught) {
+      // The visitor is signed in to the account they are changing, so there is
+      // nothing to keep uniform the way the reset's code step has to: naming a
+      // mistyped digit is simply the useful thing to say.
+      console.error("The password change code could not be checked:", caught);
+      setError(
+        isBadCode(caught)
+          ? "That code is not correct. Check it and try again."
+          : "That code could not be checked. Ask for another and try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const onResend = async () => {
+    resetFeedback();
+    setResending(true);
+
+    try {
+      await resendPasswordChangeCode();
+      startCooldown();
+      setCode("");
+      setNotice("A new code is on its way. Use the one in the most recent email.");
+    } catch (caught) {
+      // The same refusal the screen can open with, reachable here because a
+      // fresh challenge is what this asks for when the last one cannot be
+      // retried — so the configuration is read again, and can have changed.
+      // Reported as a failed send it would send whoever reads it hunting an
+      // outage.
+      if (isChangeUnavailable(caught)) {
+        console.error("The password change step-up asked for nothing:", caught);
+        setUnavailable(true);
+        return;
+      }
+      setError(errorMessage(caught, "We could not send a new code. Please try again shortly."));
+    } finally {
+      setResending(false);
+    }
+  };
+
+  // The permission a code buys lasts five minutes and the password form can
+  // outlive it, so there has to be a way back to a fresh one — the steps are
+  // state, not routes, so the back button is not that way. The challenge that
+  // got here is spent, which is why this asks for another code rather than
+  // returning to a form that nothing would satisfy.
+  const startAgain = async () => {
+    setPassword("");
+    setStep("code");
+    await onResend();
+  };
+
+  const onSubmitPassword = async (event: FormEvent) => {
+    event.preventDefault();
+    resetFeedback();
+    setSubmitting(true);
+
+    try {
+      await changePassword(password);
+      setStep("done");
+    } catch (caught) {
+      // None of this comes from our API, so errorMessage would render its
+      // fallback for every case. Two are worth naming: a permission that expired
+      // while the password was being chosen, which no password satisfies, and a
+      // password Prelude refused, whose reasons the compliancy check renders as
+      // prose for the field's own hints.
+      console.error("The new password could not be saved:", caught);
+      if (isExpiredGrant(caught)) {
+        setError("That confirmation has expired. Ask for a new code and try again.");
+      } else if (isInvalidPassword(caught)) {
+        setError("That password does not meet the requirements.");
+        await passwordHints.check(password);
+      } else {
+        setError(errorMessage(caught, "That password could not be saved. Please try another."));
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Offered after the change rather than as a checkbox before it, exactly as the
+  // reset offers it: this is the point where the choice can be acted on and its
+  // outcome reported, and a failure here must not read as a password that did
+  // not save — it did.
+  const onSignOutOthers = async () => {
+    resetFeedback();
+    setSubmitting(true);
+
+    try {
+      await signOutOtherDevices();
+      setOthersSignedOut(true);
+    } catch (caught) {
+      setError(
+        errorMessage(
+          caught,
+          "Your password was changed, but other devices could not be signed out.",
+        ),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (unavailable) {
+    return (
+      <AuthShell
+        title="Not available right now"
+        subtitle="Your password cannot be changed from here"
+      >
+        <div className="space-y-4">
+          <ErrorMessage>
+            This deployment is not set up to confirm a password change by email.
+          </ErrorMessage>
+          {/* A genuine way through rather than a consolation: the reset proves
+              the same mailbox this screen wanted proven, by the same code. */}
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            You can still set a new password by resetting it, which emails you a
+            code to confirm it is you.
+          </p>
+          <Link to="/forgot-password" className={buttonClasses("primary", "lg", "w-full")}>
+            Reset my password instead
+          </Link>
+          <Link to="/profile" className={buttonClasses("secondary", "lg", "w-full")}>
+            Back to profile
+          </Link>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  if (step === "code") {
+    return (
+      <AuthShell title="Confirm it is you" subtitle={`We sent a code to ${user.email}`}>
+        <form onSubmit={onSubmitCode} className="space-y-4" noValidate>
+          {error && <ErrorMessage>{error}</ErrorMessage>}
+          {notice && <Notice>{notice}</Notice>}
+
+          <CodeField label="Confirmation code" value={code} onChange={setCode} />
+
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full"
+            loading={submitting || sending}
+            disabled={code.length < CODE_LENGTH}
+          >
+            {sending ? "Sending code…" : "Continue"}
+          </Button>
+        </form>
+
+        <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
+          <ResendCodeLink resending={resending} cooldown={cooldown} onResend={onResend} />
+          <p>
+            <Link
+              to="/profile"
+              className="font-medium text-stone-500 hover:underline dark:text-stone-400"
+            >
+              Back to profile
+            </Link>
+          </p>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  if (step === "password") {
+    return (
+      <AuthShell title="Choose a new password" subtitle="This replaces the one you use now">
+        <form onSubmit={onSubmitPassword} className="space-y-4" noValidate>
+          {error && <ErrorMessage>{error}</ErrorMessage>}
+
+          <Field label="New password" htmlFor="new-password">
+            <Input
+              id="new-password"
+              type="password"
+              autoComplete="new-password"
+              autoFocus
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              onBlur={() => passwordHints.check(password)}
+            />
+          </Field>
+
+          <PasswordHints hints={passwordHints.hints} />
+
+          <Button type="submit" size="lg" className="w-full" loading={submitting}>
+            Save new password
+          </Button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
+          <button
+            type="button"
+            onClick={startAgain}
+            className="font-medium text-stone-500 hover:underline dark:text-stone-400"
+          >
+            Start again with a new code
+          </button>
+        </p>
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell
+      title="Password changed"
+      subtitle="Your new password is the one to use from now on"
+    >
+      {error && <ErrorMessage>{error}</ErrorMessage>}
+
+      <div className="space-y-4">
+        {othersSignedOut ? (
+          <Notice>Your other devices have been signed out.</Notice>
+        ) : (
+          <>
+            <p className="text-sm text-stone-500 dark:text-stone-400">
+              If you are signed in somewhere else, you can end those sessions now.
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              className="w-full"
+              loading={submitting}
+              onClick={onSignOutOthers}
+            >
+              Sign out my other devices
+            </Button>
+          </>
+        )}
+
+        <Link to="/profile" className={buttonClasses("primary", "lg", "w-full")}>
+          Back to profile
+        </Link>
       </div>
     </AuthShell>
   );

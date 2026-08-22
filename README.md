@@ -253,7 +253,7 @@ never sent anything may need Verify provisioned or funded on the Prelude
 account. A failure shows up as a non-2xx on `POST /v1/session/otp`, after
 `POST /v1/session/stepup/request` has already answered 200.
 
-### 6. Enable password reset — required for "Forgot your password?"
+### 6. Enable password writes — required for "Forgot your password?" and for changing a password
 
 Prelude opens step-up challenges only on sessions that already exist, and somebody
 who has forgotten their password has none. The reset therefore mails a code
@@ -305,24 +305,41 @@ curl -X PUT "https://api.prelude.dev/v2/session/apps/${APP_ID}/config/stepup" \
         "mode": "direct",
         "direct": {
           "identifier_types": ["email_address"],
-          "status": "continue",
+          "status": "review",
           "grant_mode": "session-bound",
-          "granted_for": 300
+          "granted_for": 300,
+          "steps": [{ "order": 1, "key": "verify_email", "expiration_duration": 600 }]
         }
       }
     ]
   }'
 ```
 
-`status: continue` grants the scope without a challenge, which is what keeps the
-reset to a single code: the code just entered is the same proof a `review` here
-would ask for a second time, from the same mailbox. The cost is that any live
-session can then acquire the scope, so a *signed-in* "change password" screen
-must not be built on this entry alone — it would let a stolen session change the
-password with nothing re-proven. Give that flow `review` + `verify_email` (its own
-scope entry, or this one flipped and the reset paying for two codes).
+`status: review` makes Prelude email a code before it grants the scope, and this
+entry's policy is shared by every flow that writes a password: there is one
+step-up configuration, one entry per scope, and `requestStepUp` names a scope and
+nothing else. So the strictest flow decides it, and that is the signed-in "change
+password" screen: it has nothing to offer but the session that asked,
+which is exactly what a stolen session is, so a code is the only proof available
+to it. `continue` would grant the scope to any live session and reduce that
+screen to decoration.
 
-Reset does not touch this API: the code and the new password both go from the
+The reset pays for that with a second code — one to sign in, one to permit the
+write, proving the same mailbox seconds apart. Both statuses are handled by the
+client, so this entry can be flipped back to `continue` with no deploy and no
+window where reset is broken: the reset then asks for one code again, and the
+change-password screen refuses itself and says why. `granted_for` is the window
+the password form has to be finished in — a slower visitor is refused with
+nothing wrong with the password they chose, which the screens name as a case of
+its own — and `expiration_duration` is how long the emailed code lasts.
+
+Nothing else has to be configured for **`/change-password`**, the screen a
+signed-in visitor reaches from their profile. It runs this same step-up, so the
+code it emails is the whole of its proof: a "current password" field would be
+checked by nothing (the browser cannot verify one, and the step-up has no step
+that does), which is why the screen does not ask for one.
+
+Neither flow touches this API: the codes and the new password all go from the
 browser to Prelude, and the backend only ever answers `GET /me`.
 
 ### 7. Bootstrap an admin

@@ -6,7 +6,13 @@ import { useAuth } from "@/auth/useAuth";
 import { Layout } from "@/components/Layout";
 import { EmptyState, Spinner } from "@/components/ui";
 import { hasRole } from "@/lib/types";
-import { ForgotPasswordPage, LoginPage, RegisterPage, VerifyEmailPage } from "@/routes/AuthPages";
+import {
+  ChangePasswordPage,
+  ForgotPasswordPage,
+  LoginPage,
+  RegisterPage,
+  VerifyEmailPage,
+} from "@/routes/AuthPages";
 import { BrowsePage } from "@/routes/BrowsePage";
 import { ADMIN_TABS } from "@/routes/adminTabs";
 import { ListDetailPage, ListsPage } from "@/routes/ListsPages";
@@ -112,6 +118,19 @@ export function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        {/* Signed in, and still outside the shell: this flow's steps are state
+            rather than routes, so a navigation away is the flow lost part-way
+            through. Guarded here rather than inside the page, like every other
+            route that needs a session — a guest following the link is sent to
+            sign in and returned. */}
+        <Route
+          path="/change-password"
+          element={
+            <RequireAuth>
+              <ChangePasswordPage />
+            </RequireAuth>
+          }
+        />
 
         <Route element={<Layout />}>
           <Route index element={<BrowsePage />} />
