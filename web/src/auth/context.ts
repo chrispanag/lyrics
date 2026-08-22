@@ -13,6 +13,36 @@ import type { User } from "@/lib/types";
  */
 export const RESET_UNCONFIGURED_ERROR = "PasswordResetUnconfiguredError";
 
+/**
+ * The `name` of the error `startPasswordChange` throws when Prelude hands over
+ * the password scope with no challenge to answer.
+ *
+ * A `continue` status on `prld:pwd:write` grants the scope to any live session.
+ * That is what the reset flow is built on — its emailed code proved the mailbox
+ * seconds earlier — and it is the one thing a signed-in change-password screen
+ * cannot accept: a session is all that a stolen session is, and the code is the
+ * only thing in this flow that the thief would not also have. So the screen
+ * refuses rather than changing a password on no proof, and this name is what
+ * lets it say *that* instead of blaming the network. Matched by name for the
+ * same reason as [RESET_UNCONFIGURED_ERROR]: the page must not import the SDK.
+ */
+export const PASSWORD_CHANGE_UNAVAILABLE_ERROR = "PasswordChangeUnavailableError";
+
+/**
+ * Builds an `Error` carrying a `name` the screens match on.
+ *
+ * The name is the whole mechanism — `errorMessage` carries through only our
+ * API's own messages, so a plain `Error` renders as a generic failure — and
+ * setting it takes three statements that read as ceremony around the one that
+ * matters. Declared beside the two names it is used with, and with the SDK's own
+ * (`BadCheckCodeError`, `ForbiddenError`) which the screens match the same way.
+ */
+export function namedError(name: string, message: string): Error {
+  const error = new Error(message);
+  error.name = name;
+  return error;
+}
+
 export interface AuthContextValue {
   /** The signed-in user, or null for a guest. */
   user: User | null;
@@ -45,14 +75,43 @@ export interface AuthContextValue {
   /** Asks Prelude to send the reset code again. */
   resendPasswordResetCode(): Promise<void>;
   /**
-   * Submits the emailed code, which signs the visitor in and acquires the scope
-   * that permits a password write.
+   * Submits the emailed code, which signs the visitor in and asks Prelude for
+   * the scope that permits a password write.
    *
-   * Resolving means `changePassword` can be called; the visitor is a signed-in
-   * user from this point on, which is why the reset screen must not send a
-   * signed-in visitor away.
+   * Resolves with whether that ask produced a second code. `prld:pwd:write` is
+   * configured to demand one, because the same entry serves the signed-in
+   * change-password screen and has to be strict there — so the reset proves the
+   * mailbox twice, seconds apart, and `confirmPasswordWriteCode` answers the
+   * second challenge. A configuration that grants the scope outright emails
+   * nothing and resolves `false`: this is the one flow entitled to read that as
+   * permission already given, the code just entered being the same proof.
+   *
+   * Either way the visitor is a signed-in user from this point on, which is why
+   * the reset screen must not send a signed-in visitor away.
    */
-  confirmPasswordResetCode(code: string): Promise<void>;
+  confirmPasswordResetCode(code: string): Promise<{ secondCodeSent: boolean }>;
+  /**
+   * Opens the challenge that lets a signed-in user write a new password, and
+   * has Prelude email its code.
+   *
+   * Safe to call again, like `startEmailVerification`, and for the same reason:
+   * an unfinished challenge is reused rather than replaced, so a remount cannot
+   * retire the code already sitting in the inbox. Throws an error named
+   * [PASSWORD_CHANGE_UNAVAILABLE_ERROR] when Prelude asks for nothing.
+   */
+  startPasswordChange(): Promise<void>;
+  /**
+   * Submits the code that permits the write. Resolving means `changePassword`
+   * can be called.
+   *
+   * Named for the scope rather than for either caller, because both flows call
+   * it: it is the same challenge for the same `prld:pwd:write`, opened by
+   * `confirmPasswordResetCode` on one path and `startPasswordChange` on the
+   * other.
+   */
+  confirmPasswordWriteCode(code: string): Promise<void>;
+  /** Asks Prelude to send that code again, opening a fresh challenge if it must. */
+  resendPasswordWriteCode(): Promise<void>;
   /** Writes the new password. Only callable after the code was accepted. */
   changePassword(password: string): Promise<void>;
   /** Ends every session but this one, e.g. after a password reset. */

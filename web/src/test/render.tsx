@@ -51,7 +51,13 @@ export function renderWithProviders(
     resendVerificationCode: async () => {},
     startPasswordReset: async () => {},
     resendPasswordResetCode: async () => {},
-    confirmPasswordResetCode: async () => {},
+    // Flow-neutral like every other entry here: which of the two supported
+    // step-up configurations is deployed is not something an app-wide helper
+    // should decide for every spec. The reset's own specs say which they walk.
+    confirmPasswordResetCode: async () => ({ secondCodeSent: false }),
+    startPasswordChange: async () => {},
+    confirmPasswordWriteCode: async () => {},
+    resendPasswordWriteCode: async () => {},
     changePassword: async () => {},
     signOutOtherDevices: async () => {},
     validatePassword: async () => ({ valid: true, messages: [] }),

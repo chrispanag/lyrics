@@ -175,21 +175,34 @@ Everything below follows from that one fact, and none of it announces itself.
   in `UNVERIFIED_ROUTES` because an unverified account would otherwise be bounced
   mid-flow to a code form for a *different* challenge, which reads exactly like
   the reset code having stopped working. Both directions are pinned by tests.
-- **`prld:pwd:write` is configured `status: continue`, which is what keeps the
-  reset to one code** — a `review` here would email a second code proving the
-  same mailbox. The cost is real and belongs to whoever adds a *signed-in* change
-  password screen: with `continue`, any live session can acquire the scope, so a
-  stolen session could change the password with nothing re-proven. That flow
-  needs `review` + `verify_email`, not this entry. Flip this one and every reset
-  dead-ends at the code form — `confirmPasswordResetCode` throws on any status but
-  `continue`, and the code step shows its one uniform message. The real reason is
-  in the console, which is the only place it can be.
+- **The reset asks for two codes, and the second one is not its own idea.**
+  `prld:pwd:write` is configured `review` + `verify_email`, so Prelude emails a
+  code before granting the scope — proving, seconds later, the same mailbox the
+  login code just proved. Nothing about the reset wants that. There is one
+  step-up configuration with one entry per scope, and `requestStepUp` names a
+  scope and nothing else, so the entry belongs to the strictest flow that uses
+  it: [changing a password while signed in](#changing-a-password-while-signed-in),
+  which has no proof available to it but a code. The reset pays, being the flow
+  that has proof to spare.
+- **Both statuses are handled, in the flow that does not need the strict one.**
+  `confirmPasswordResetCode` answers `{ secondCodeSent }`, and `continue` — the
+  scope granted outright, nothing emailed — takes the visitor straight to the
+  password step, which is what the reset did when that was the configuration. So
+  the entry can be flipped either way with no deploy behind it and no window
+  where reset is broken; what flipping costs is visible on the other screen,
+  which then refuses itself. An earlier version threw on anything but
+  `continue`, which is why this is written down: the same code, read as an
+  invariant rather than a branch, dead-ends every reset at the code form behind
+  one uniform message, with the real cause in the console.
 - **A granted-outright scope refreshes nothing.** The SDK refreshes the session
   when a *challenge* completes; `continue` has no challenge, so the cached access
   token can still predate the grant and the password write answers 403.
   `canChangePassword()` is that forced refresh — it is not a redundant check, and
   removing it reintroduces a failure that looks like Prelude rejecting the
-  password.
+  password. It is called on the code path too, where the SDK has refreshed
+  already: the check is what makes "the code bought no permission" a failure the
+  code step can name, rather than an opaque rejection of a good password a step
+  later.
 - **The step-up configuration is written with `PUT`.** `POST` answers
   `409 step_up_config_already_exists`, and the body replaces the whole config —
   so it must carry the `email:verify` entry too, or sign-up verification silently
@@ -235,6 +248,69 @@ Everything below follows from that one fact, and none of it announces itself.
 
 Never confirmed end to end: a correct code through to a written password. It
 needs a mailbox someone can read, exactly like email verification.
+
+### Changing a password while signed in
+
+`/change-password` runs the same step-up the reset ends with, and the emailed
+code is the whole of its proof. That is not a choice between two options: this
+screen has nothing to offer Prelude but the session that asked, which is exactly
+what a stolen session is, so the code is the only thing in the flow that a thief
+would not also have. Everything below follows from having no second factor to
+lean on.
+
+- **There is deliberately no "current password" field.** Nothing in the browser
+  can check one — `validatePassword` judges composition rules, not the account's
+  actual password — and Prelude's password step-up has no step that does, so the
+  only way to verify one would be to sign in again with it: rate-limited at
+  10/hour per identifier and shared with ordinary sign-in, so a few fumbles lock
+  the visitor out of the app as well as the form. What is left is a field checked
+  by nobody, which an attacker skips by calling the SDK directly. A field like
+  that is worse than none: it reads, to everyone including the next person to
+  work on this, as though something were being verified.
+- **The screen refuses a `continue` grant instead of proceeding.**
+  `startPasswordChange` throws `PASSWORD_CHANGE_UNAVAILABLE_ERROR` when Prelude
+  hands over `prld:pwd:write` with no challenge, and the page renders that as its
+  own state — pointing at the reset, which proves the same mailbox. Proceeding
+  would leave a screen that changes a password on the strength of the session
+  that asked to change it: the exact hole it exists to close, now with a
+  confirmation step in front of it. Refusing does not un-grant the scope, and is
+  not meant to; the *configuration* is the enforcement, and the refusal is how a
+  configuration that stopped enforcing announces itself instead of going quiet.
+- **One challenge ref per scope.** The verification and password challenges are
+  tracked separately, and both guards read as "a challenge of mine is already
+  open" — which is what keeps a remount from retiring the code already in the
+  inbox. Share one ref and each flow reuses the other's: no challenge of its own
+  is opened, and its code is checked against a challenge for a scope it never
+  asked about.
+- **The resend has to be able to open a *fresh* challenge.** A challenge expires
+  in ten minutes, a visitor who wandered off comes back to a page still naming
+  it, and `retryOTP` on a dead challenge fails for good — so every later attempt
+  fails identically and the screen has no way out of a state it cannot describe.
+  `resendPasswordChangeCode` drops the ref and opens a new one when the retry
+  fails, which also covers a first attempt that never opened one at all. The
+  swallowed cause goes to the console, because a Prelude outage looks identical
+  from here.
+- **The grant lasts 300 seconds and the password form outlives it**, exactly as
+  on the reset screen, and with the same consequence: `ForbiddenError` with
+  nothing whatsoever wrong with the password. It is named, and "Start again with
+  a new code" asks for a *new* code rather than stepping back to the old form —
+  the challenge that got here is spent, so a form waiting on it could not be
+  satisfied.
+- **The route is guarded by `RequireAuth` and sits outside the shell**, beside
+  the other credential screens rather than inside `Layout`. The steps are state,
+  not routes, so navigation offered beside them is the flow lost part-way
+  through. It is deliberately *not* in `UNVERIFIED_ROUTES`: an unverified account
+  is bounced to the verification screen, which is the right screen — the address
+  has to be proven before a code sent to it can prove anything else.
+- **Failures here can be named, unlike the reset's.** Enumeration is what forces
+  the reset's one uniform message, and there is nothing to enumerate on a screen
+  only reachable by a signed-in account looking at its own profile. The reset's
+  *second* code step is the same case for the same reason, being reachable only
+  after a correct first code — which is why that step names a wrong code while
+  the step before it must not.
+
+Never confirmed end to end, exactly like the reset: a real code through to a
+written password needs a mailbox someone can read.
 
 ### Frontend
 

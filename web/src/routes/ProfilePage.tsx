@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { LogOut, Moon, Sun } from "lucide-react";
+import { KeyRound, LogOut, Moon, Sun } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
 import { useUpdateProfile } from "@/api/hooks";
@@ -116,6 +116,17 @@ export function ProfilePage() {
         </Button>
       </form>
 
+      <div className="mt-8">
+        <SectionHeading>Security</SectionHeading>
+        {/* A link rather than a form on this page: changing a password takes an
+            emailed code first, which is a flow of its own and not something to
+            begin by accident beside the display name. */}
+        <Link to="/change-password" className={buttonClasses("secondary", "lg", "w-full")}>
+          <KeyRound aria-hidden className="size-4" />
+          Change password
+        </Link>
+      </div>
+
       <ThemeToggle theme={theme} onChange={selectTheme} className="mt-8" />
 
       <Button variant="ghost" className="mt-8 w-full" onClick={() => void logout()}>
@@ -123,6 +134,16 @@ export function ProfilePage() {
         Sign out
       </Button>
     </div>
+  );
+}
+
+/**
+ * The label above a group of settings, shared so the two groups cannot drift
+ * apart — `cn()` is a plain join, so chrome is shared rather than overridden.
+ */
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="mb-2 text-sm font-medium text-stone-700 dark:text-stone-300">{children}</h2>
   );
 }
 
@@ -137,7 +158,7 @@ function ThemeToggle({
 }) {
   return (
     <div className={className}>
-      <h2 className="mb-2 text-sm font-medium text-stone-700 dark:text-stone-300">Appearance</h2>
+      <SectionHeading>Appearance</SectionHeading>
       <div
         role="radiogroup"
         aria-label="Appearance"
