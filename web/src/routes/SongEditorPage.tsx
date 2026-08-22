@@ -456,6 +456,14 @@ function extractVideoId(raw: string): string | null {
   // A scheme-less "youtu.be/xyz" parses as a path rather than a host. The
   // protocol-relative form has a host already and only wants the scheme, which
   // is the shape `url.Parse` handles for the server without being asked.
+  //
+  // The second test looks for `//` rather than `://`, which is the server's
+  // test and not a loose spelling of it. `youtube.com//watch?v=<id>` contains
+  // `//`, so neither stack prefixes a scheme, and `url.Parse` then yields no
+  // host at all and the save refuses the link. Tightened to `://` this would
+  // prefix that string instead, resolve `youtube.com` as the host, read `v` and
+  // light a preview for a link the server rejects — the exact class of
+  // disagreement this function exists to close.
   if (trimmed.startsWith("//")) trimmed = `https:${trimmed}`;
   else if (!trimmed.includes("//")) trimmed = `https://${trimmed}`;
 
