@@ -120,6 +120,26 @@ func (a *Authenticator) resolve(ctx context.Context, raw string) (*store.User, *
 
 	user, err = a.users.ProvisionUser(ctx, claims.UserID, claims.Email, role)
 	if err != nil {
+		// A local row already holds this address under a different Prelude
+		// account, which is the one provisioning failure that is not a fault and
+		// will not pass on the next request either. Reported as itself rather than
+		// as a server error: "Unable to provision your account" sends whoever
+		// reads it looking for an outage, and every sign-in by this account
+		// answers the same way until the stale row is dealt with by hand.
+		//
+		// Logged here because answering 409 rather than 500 also moved the cause
+		// out of sight: WriteError logs a 4xx cause at Debug and the default level
+		// is Info, so the one path that tells a reader to contact support would
+		// tell support nothing. Warn rather than Error — nothing here is failing,
+		// and the answer above repeats — carrying the id and the address that
+		// finding the stale row takes.
+		if store.IsEmailTaken(err) {
+			slog.Warn("local row holds this address under another prelude account",
+				"prelude_user_id", claims.UserID, "email", claims.Email)
+			return nil, nil, httpx.Conflict(
+				"Your email address is registered to another account. Please contact support.").
+				WithCause(err)
+		}
 		return nil, nil, httpx.Internal("Unable to provision your account.").WithCause(err)
 	}
 

@@ -33,6 +33,14 @@ var (
 	// rather than 422, and the mapping is what a newly added store-side rule
 	// inherits instead of waiting for a handler to anticipate it.
 	ErrInvalid = errors.New("invalid input")
+	// ErrEmailTaken means users.email is already held by a row belonging to a
+	// different Prelude account. It is separated from ErrConflict because the two
+	// call for opposite handling and only this one is permanent: provisioning
+	// upserts on prelude_user_id, so a conflict there is the ordinary idempotent
+	// case, while a collision on email is a row that no retry of the same request
+	// can get past. Callers that would otherwise wait for the next attempt to
+	// settle it have to stop instead — see ProvisionUser.
+	ErrEmailTaken = errors.New("email already registered to another account")
 )
 
 // PostgreSQL error codes we translate into domain errors.
@@ -205,6 +213,20 @@ func (s *Store) count(ctx context.Context, op, query string, args ...any) (int, 
 func isPGCode(err error, code string) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == code
+}
+
+// isUniqueViolation reports whether err is a uniqueness failure on one named
+// constraint.
+//
+// Asked by name, because translateErr flattens every unique violation onto
+// ErrConflict and carries the constraint only as text in the message. A
+// statement whose table has more than one unique index gets different answers
+// depending on which one failed, and matching that text would tie the answer to
+// how the error happens to be formatted.
+func isUniqueViolation(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) &&
+		pgErr.Code == pgUniqueViolation && pgErr.ConstraintName == constraint
 }
 
 // translateErr converts driver-specific failures into the sentinel errors above.

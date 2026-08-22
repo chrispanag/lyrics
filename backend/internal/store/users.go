@@ -46,8 +46,21 @@ func (s *Store) GetUser(ctx context.Context, id uuid.UUID) (*User, error) {
 // restored from an older backup. Provisioning on demand means those cases heal
 // themselves instead of returning a confusing 403.
 //
-// The insert is idempotent: two concurrent first requests from the same new user
-// would otherwise race, and one would fail on the unique constraint.
+// The insert is idempotent on prelude_user_id, and on nothing else: two
+// concurrent first requests from the same new user would otherwise race, and one
+// would fail on that unique constraint. email is UNIQUE as well and is not the
+// declared target, so a row holding this address under a *different* Prelude id
+// raises a violation the upsert has no answer for — reported as ErrEmailTaken,
+// because the caller's move there is the opposite of the usual one. Nothing
+// about it heals: this function is what self-healing means here, so a caller
+// that leaves the repair to "the next request" leaves it forever, and
+// registration used to strand a fully created Prelude account behind that
+// promise.
+//
+// The row is not re-keyed onto the new id, and deliberately: the address would
+// then inherit whatever the old row holds — its lists, and its role. Handing
+// somebody an abandoned admin's row because they registered that admin's old
+// address is not a repair.
 func (s *Store) ProvisionUser(ctx context.Context, preludeID, email string, role Role) (*User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if role == "" {
@@ -63,6 +76,9 @@ func (s *Store) ProvisionUser(ctx context.Context, preludeID, email string, role
 			  SET email = EXCLUDED.email
 			RETURNING `+userColumns, preludeID, email, role), &user)
 		if err != nil {
+			if isUniqueViolation(err, "users_email_key") {
+				return fmt.Errorf("provision user %q: %w", email, ErrEmailTaken)
+			}
 			return fmt.Errorf("provision user: %w", translateErr(err))
 		}
 
@@ -189,3 +205,9 @@ func IsInUse(err error) bool { return errors.Is(err, ErrInUse) }
 
 // IsInvalid reports whether an error is (or wraps) ErrInvalid.
 func IsInvalid(err error) bool { return errors.Is(err, ErrInvalid) }
+
+// IsEmailTaken reports whether an error is (or wraps) ErrEmailTaken. It sits
+// beside IsConflict rather than inside it: the two are asked separately on
+// purpose, and a caller that cannot tell them apart is the bug this sentinel
+// exists to prevent.
+func IsEmailTaken(err error) bool { return errors.Is(err, ErrEmailTaken) }
