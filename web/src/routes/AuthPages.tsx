@@ -126,23 +126,39 @@ export function LoginPage() {
 function usePasswordHints() {
   const { validatePassword } = useAuth();
   const [hints, setHints] = useState<string[]>([]);
-  // The password the last verdict was about. Clicking submit blurs the field, so
-  // a refused password is asked about twice within a second — once on the way
-  // out of the field and once because Prelude rejected it — and the second round
-  // trip can only produce the answer already on screen. Only a verdict with
-  // something to say is remembered: validatePassword swallows a failed fetch
-  // into "valid, nothing to report", so remembering that would suppress exactly
-  // the retry this path exists to make.
-  const judged = useRef<string | null>(null);
+  // The last verdict *and* what it said. Clicking submit blurs the field, so a
+  // refused password is asked about twice within a second — once on the way out
+  // of the field and once because Prelude rejected it — and the second round trip
+  // can only reproduce an answer already given. Remembering the password without
+  // its reasons is worse than not remembering at all: the hints are cleared as
+  // soon as any other password is judged, so returning to a refused one would
+  // skip the check and show nothing, and the recovery on the refusal path would
+  // be skipped too — a password refused with no reasons, for as long as it stays
+  // in the field. Nothing is remembered from an empty verdict, because
+  // validatePassword swallows a failed fetch into "valid, nothing to report" and
+  // that must not be mistaken for a judgment.
+  const judged = useRef<{ password: string; messages: string[] } | null>(null);
 
   const check = async (password: string) => {
-    if (!password || password === judged.current) return;
+    if (!password) return;
+    if (judged.current?.password === password) {
+      setHints(judged.current.messages);
+      return;
+    }
+
     const { messages } = await validatePassword(password);
-    if (messages.length > 0) judged.current = password;
+    judged.current = messages.length > 0 ? { password, messages } : null;
     setHints(messages);
   };
 
-  return { hints, check };
+  // Both screens abandon a password without leaving the field, and the hints
+  // under it would otherwise still be describing it when the form comes back.
+  const clear = () => {
+    judged.current = null;
+    setHints([]);
+  };
+
+  return { hints, check, clear };
 }
 
 /** The rules a typed password does not yet meet, in Prelude's own words. */
@@ -610,6 +626,9 @@ export function ForgotPasswordPage() {
     setCode("");
     setConfirmCode("");
     setPassword("");
+    // Hints for the password being abandoned, which would otherwise still be
+    // under the field on the way back through.
+    passwordHints.clear();
     setStep("email");
   };
 
@@ -648,6 +667,14 @@ export function ForgotPasswordPage() {
       // step-up asked to prove the mailbox again — the price of one
       // configuration serving the signed-in change-password screen too — and a
       // grant with no code means the one just entered was proof enough.
+      if (secondCodeSent) {
+        // That code was sent a moment ago, so the next step's rest starts here.
+        // The cooldown is one countdown for the whole screen, and without this
+        // the second step inherits whatever is left of the first step's — a
+        // "Send another" resting for reasons that belong to a different code, or
+        // available for a code that has only just gone out.
+        startCooldown();
+      }
       setStep(secondCodeSent ? "confirm" : "password");
     } catch (caught) {
       // One message for every failure, deliberately — the same choice the
@@ -1068,7 +1095,15 @@ export function VerifyEmailPage() {
       </form>
 
       <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
-        <ResendCodeLink resending={resending} cooldown={cooldown} onResend={onResend} />
+        {/* `sending` counts as resending: the code this screen sends on open is
+            still in flight, and a click here would find no challenge open yet
+            and start a second step-up — retiring the challenge the first one is
+            about to report, so that two codes are emailed and neither works. */}
+        <ResendCodeLink
+          resending={resending || sending}
+          cooldown={cooldown}
+          onResend={onResend}
+        />
         <p>
           Wrong address?{" "}
           <button
@@ -1231,6 +1266,9 @@ export function ChangePasswordPage() {
   // returning to a form that nothing would satisfy.
   const startAgain = async () => {
     setPassword("");
+    // The hints are about the password being abandoned; left alone they are
+    // still under the field when this form comes back.
+    passwordHints.clear();
     setStep("code");
     await onResend();
   };
@@ -1307,7 +1345,14 @@ export function ChangePasswordPage() {
         </form>
 
         <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
-          <ResendCodeLink resending={resending} cooldown={cooldown} onResend={onResend} />
+          {/* Held while the first code is still in flight, for the reason given
+              on the verification screen: a click then opens a second step-up and
+              retires the challenge the first one is about to report. */}
+          <ResendCodeLink
+            resending={resending || sending}
+            cooldown={cooldown}
+            onResend={onResend}
+          />
           <p>
             <Link
               to="/profile"
@@ -1340,10 +1385,15 @@ export function ChangePasswordPage() {
         </form>
 
         <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
+          {/* Disabled while it works, because it asks for a code without a
+              cooldown to hide behind: a second press before the first returns is
+              a second code, and the rest that stops a stuck visitor mailing
+              themselves has not started yet. */}
           <button
             type="button"
             onClick={startAgain}
-            className="font-medium text-stone-500 hover:underline dark:text-stone-400"
+            disabled={resending}
+            className="font-medium text-stone-500 hover:underline disabled:cursor-not-allowed disabled:text-stone-400 disabled:no-underline dark:text-stone-400"
           >
             Start again with a new code
           </button>

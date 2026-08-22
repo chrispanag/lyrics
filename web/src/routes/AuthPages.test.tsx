@@ -671,6 +671,21 @@ describe("ChangePasswordPage", () => {
     await waitFor(() => expect(startPasswordChange).toHaveBeenCalledTimes(2));
   });
 
+  // Nothing has a challenge to retry until the first send comes back, so a click
+  // here would open a *second* step-up — retiring the challenge the first one is
+  // about to report, emailing two codes and leaving neither able to work. The
+  // cooldown cannot cover this: it has not started yet.
+  it("holds the resend while the first code is still in flight", async () => {
+    const resendPasswordWriteCode = vi.fn();
+    renderChangePage({
+      startPasswordChange: () => new Promise(() => {}),
+      resendPasswordWriteCode,
+    });
+
+    expect(await screen.findByRole("button", { name: "Send another" })).toBeDisabled();
+    expect(resendPasswordWriteCode).not.toHaveBeenCalled();
+  });
+
   it("can ask for another code, then rests", async () => {
     const resendPasswordWriteCode = vi.fn().mockResolvedValue(undefined);
     renderChangePage({ resendPasswordWriteCode });
@@ -737,6 +752,39 @@ describe("ChangePasswordPage", () => {
     } finally {
       logged.mockRestore();
     }
+  });
+
+  // The compliancy check is asked once per password and its answer remembered,
+  // because clicking submit blurs the field and a refused password would be
+  // asked about twice in a second. Remembering the password without its reasons
+  // is the trap: the hints are cleared as soon as another password is judged, so
+  // coming back to a refused one — a paste, an undo — would skip the check and
+  // leave a password refused with nothing saying why.
+  it("still says why after another password was judged in between", async () => {
+    const validatePassword = vi.fn(async (password: string) =>
+      password === "short"
+        ? { valid: false, messages: ["Use at least 8 characters."] }
+        : { valid: true, messages: [] },
+    );
+    await reachPasswordStep({ validatePassword });
+
+    const field = screen.getByLabelText("New password");
+    await userEvent.type(field, "short");
+    await userEvent.tab();
+    expect(await screen.findByText("• Use at least 8 characters.")).toBeInTheDocument();
+
+    await userEvent.clear(field);
+    await userEvent.type(field, "long-enough-secret");
+    await userEvent.tab();
+    await waitFor(() =>
+      expect(screen.queryByText("• Use at least 8 characters.")).not.toBeInTheDocument(),
+    );
+
+    await userEvent.clear(field);
+    await userEvent.type(field, "short");
+    await userEvent.tab();
+
+    expect(await screen.findByText("• Use at least 8 characters.")).toBeInTheDocument();
   });
 
   // A password change is exactly when somebody wants the sessions they no longer
