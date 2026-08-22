@@ -277,8 +277,15 @@ export function BrowsePage() {
 
         {isLoading && (
           <div className="space-y-3">
+            {/* A song card is one height now that its empty slots are reserved,
+                and `h-28` is that height. Restated rather than reserved: a
+                skeleton has nothing inside it to take a height from, so this
+                is the number to correct by hand if a card's padding or type
+                sizes change. A card carrying a search snippet is taller, so
+                the rows still move under a query; standing in for the
+                unfiltered catalog is the most this can do. */}
             {Array.from({ length: 5 }, (_, index) => (
-              <Skeleton key={index} className="h-24 w-full" />
+              <Skeleton key={index} className="h-28 w-full" />
             ))}
           </div>
         )}
