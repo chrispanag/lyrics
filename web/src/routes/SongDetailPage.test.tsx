@@ -102,18 +102,16 @@ describe("SongDetailPage", () => {
   });
 
   // The video leaves the page entirely: no player, no thumbnail, nothing that
-  // loads from YouTube before someone asks for it. The link is keyed on
-  // `youtube_url` — the field the button actually reads — because a fixture
-  // setting only the id would render nothing and the spec would blame the page.
+  // loads from YouTube before someone asks for it.
+  //
+  // The fixture sets only the id, which is also the gate: `youtube_url` is
+  // stored unvalidated by the catalog importer, so the page must not reach for
+  // it. A page that regressed to reading the URL would fail here rather than
+  // quietly rendering whatever the old database held.
   it("links out to the video in a new tab instead of embedding it", async () => {
     server.use(
       http.get(`${API}/api/v1/songs/:id`, () =>
-        HttpResponse.json(
-          makeSong({
-            youtube_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            youtube_video_id: "dQw4w9WgXcQ",
-          }),
-        ),
+        HttpResponse.json(makeSong({ youtube_video_id: "dQw4w9WgXcQ" })),
       ),
     );
 

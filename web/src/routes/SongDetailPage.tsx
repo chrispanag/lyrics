@@ -275,8 +275,11 @@ export function SongDetailPage() {
 
       {/* Below the lyrics rather than above them: the video is somewhere else
           to go once the song has been read, and a block between the credits and
-          the first line is what the embed did wrong. */}
-      {song.youtube_url && <WatchOnYouTube href={song.youtube_url} className="mt-6" />}
+          the first line is what the embed did wrong. Gated on the id, not the
+          URL — see WatchOnYouTube for why the URL is not the field to trust. */}
+      {song.youtube_video_id && (
+        <WatchOnYouTube videoId={song.youtube_video_id} className="mt-6" />
+      )}
 
       {song.notes && (
         <section className="mt-8 rounded-2xl bg-stone-100 p-4 dark:bg-stone-900">

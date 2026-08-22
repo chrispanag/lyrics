@@ -323,10 +323,8 @@ export function SongEditorPage() {
         </Field>
 
         {/* The only confirmation that a pasted link was recognized, now that
-            there is no thumbnail to show. The href is built from the extracted
-            id rather than the raw field, so a link that would not parse has
-            nothing to open. */}
-        {videoId && <WatchOnYouTube href={`https://www.youtube.com/watch?v=${videoId}`} />}
+            there is no thumbnail to show: nothing appears until the id parses. */}
+        {videoId && <WatchOnYouTube videoId={videoId} />}
 
         <Field label="Lyrics" htmlFor="lyrics" error={fieldErrors.lyrics}>
           <Textarea

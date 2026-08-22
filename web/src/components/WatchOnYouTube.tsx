@@ -5,14 +5,19 @@ import { buttonClasses } from "@/components/buttonStyles";
 /**
  * A link out to the video, standing where an embedded player used to.
  *
- * Shared by the song page and the editor so the two cannot drift, and so the
- * editor keeps confirming that a pasted link was recognized — that was the only
- * job the preview thumbnail still did once the player itself was dropped.
+ * Takes the video id rather than a URL, and builds the link itself. Two reasons,
+ * and the first is not stylistic: `songs.youtube_url` is not always a link this
+ * app validated. The API canonicalizes it, but the catalog importer stores
+ * whatever the old database held and sets the id only when it parses — so a URL
+ * rendered straight into an href is stored text, under a label promising
+ * YouTube. An id is eleven characters of `[A-Za-z0-9_-]` or it is not stored at
+ * all, so the destination cannot be anywhere else. The second reason is that
+ * the canonical shape is then written in one place per stack rather than two.
  */
-export function WatchOnYouTube({ href, className }: { href: string; className?: string }) {
+export function WatchOnYouTube({ videoId, className }: { videoId: string; className?: string }) {
   return (
     <a
-      href={href}
+      href={`https://www.youtube.com/watch?v=${videoId}`}
       target="_blank"
       // noreferrer alongside noopener: the tab this opens has no business
       // learning which song page sent it.
