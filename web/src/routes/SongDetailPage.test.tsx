@@ -123,6 +123,27 @@ describe("SongDetailPage", () => {
     expect(container.querySelector("iframe")).toBeNull();
   });
 
+  // The other half of the gate, and the half that catches the URL being read
+  // back: the fixture here carries a `youtube_url` and no id, which is
+  // exactly the row the catalog importer leaves behind when the old database
+  // held a link it could not parse. Offering a link there would send a reader
+  // to whatever that text is, under a label promising YouTube — and the spec
+  // above cannot see it, since a page reading either field passes that one.
+  it("offers no video link when the song has no video id", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(
+          makeSong({ youtube_url: "https://example.com/not-a-video", youtube_video_id: null }),
+        ),
+      ),
+    );
+
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
+  });
+
   // Saving is the reason to hold an account, so a guest is invited into it
   // rather than shown a page with the affordance missing.
   it("offers saving to a guest and sends them to sign in", async () => {

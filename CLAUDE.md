@@ -254,10 +254,14 @@ needs a mailbox someone can read, exactly like email verification.
   therefore takes the id and builds the link, which is the same idiom the search
   snippets use — a wrong destination is impossible by construction, not filtered.
   Gating on the URL instead also disagrees with `SongCard`'s badge, which reads
-  the id: the card says there is no video and the page offers one. There is
-  deliberately no third-party player on a song page either, which is what the
-  link replaced — an embed costs roughly a megabyte on every visit, and almost
-  no visit presses play.
+  the id: the card says there is no video and the page offers one. What the link
+  replaced was **not an embed but a click-to-load facade**, and the difference
+  matters to anyone tempted to bring it back as the cheaper option: the player
+  was already deferred to a press, so the megabyte was never being spent. What
+  the facade did spend was a request to `i.ytimg.com` for a thumbnail on every
+  song page, watched or not, and that is the cost the link actually removes —
+  along with the deferred-player state that had to be kept honest. A song page
+  now loads nothing from YouTube at all.
 - **Browse's filter chips are keyed on what is in the URL, never on the filter
   being found.** A genre can be deleted from the admin console while someone
   holds a link filtered by it, and the request still answers — with no songs,

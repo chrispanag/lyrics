@@ -370,10 +370,18 @@ export function SongEditorPage() {
 
 // Module scope: a regex literal allocates a new RegExp every time it is
 // evaluated, and extractVideoId runs in the render body on every keystroke.
+//
+// `-nocookie` is in the host of both link shapes because the server's host list
+// accepts it, and now that the preview is the only confirmation a pasted link
+// was recognized, a link the server would happily save has to light it. That is
+// not a hypothetical host: YouTube's own share dialog hands out
+// `youtube-nocookie.com/embed/<id>` whenever privacy-enhanced mode is checked,
+// so leaving it out told those contributors their link was rejected while the
+// save would have gone through.
 const VIDEO_ID_PATTERNS = [
-  /(?:youtube\.com\/watch\?(?:.*&)?v=)([A-Za-z0-9_-]{11})/,
+  /(?:youtube(?:-nocookie)?\.com\/watch\?(?:.*&)?v=)([A-Za-z0-9_-]{11})/,
   /(?:youtu\.be\/)([A-Za-z0-9_-]{11})/,
-  /(?:youtube\.com\/(?:embed|v|shorts|live)\/)([A-Za-z0-9_-]{11})/,
+  /(?:youtube(?:-nocookie)?\.com\/(?:embed|v|shorts|live)\/)([A-Za-z0-9_-]{11})/,
   /^([A-Za-z0-9_-]{11})$/,
 ];
 

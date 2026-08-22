@@ -3,7 +3,10 @@ import { Youtube } from "lucide-react";
 import { buttonClasses } from "@/components/buttonStyles";
 
 /**
- * A link out to the video, standing where an embedded player used to.
+ * A link out to the video, standing where a click-to-load player facade used to.
+ * Not an embed: the facade already deferred the player to a press. What it did
+ * cost was a thumbnail fetched from `i.ytimg.com` on every song page, which is
+ * what a link costs nothing of.
  *
  * Takes the video id rather than a URL, and builds the link itself. Two reasons,
  * and the first is not stylistic: `songs.youtube_url` is not always a link this
