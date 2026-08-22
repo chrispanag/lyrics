@@ -117,7 +117,7 @@ export function ProfilePage() {
       </form>
 
       <div className="mt-8">
-        <h2 className="mb-2 text-sm font-medium text-stone-700 dark:text-stone-300">Security</h2>
+        <SectionHeading>Security</SectionHeading>
         {/* A link rather than a form on this page: changing a password takes an
             emailed code first, which is a flow of its own and not something to
             begin by accident beside the display name. */}
@@ -137,6 +137,16 @@ export function ProfilePage() {
   );
 }
 
+/**
+ * The label above a group of settings, shared so the two groups cannot drift
+ * apart — `cn()` is a plain join, so chrome is shared rather than overridden.
+ */
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="mb-2 text-sm font-medium text-stone-700 dark:text-stone-300">{children}</h2>
+  );
+}
+
 function ThemeToggle({
   theme,
   onChange,
@@ -148,7 +158,7 @@ function ThemeToggle({
 }) {
   return (
     <div className={className}>
-      <h2 className="mb-2 text-sm font-medium text-stone-700 dark:text-stone-300">Appearance</h2>
+      <SectionHeading>Appearance</SectionHeading>
       <div
         role="radiogroup"
         aria-label="Appearance"

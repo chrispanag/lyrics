@@ -28,6 +28,21 @@ export const RESET_UNCONFIGURED_ERROR = "PasswordResetUnconfiguredError";
  */
 export const PASSWORD_CHANGE_UNAVAILABLE_ERROR = "PasswordChangeUnavailableError";
 
+/**
+ * Builds an `Error` carrying a `name` the screens match on.
+ *
+ * The name is the whole mechanism — `errorMessage` carries through only our
+ * API's own messages, so a plain `Error` renders as a generic failure — and
+ * setting it takes three statements that read as ceremony around the one that
+ * matters. Declared beside the two names it is used with, and with the SDK's own
+ * (`BadCheckCodeError`, `ForbiddenError`) which the screens match the same way.
+ */
+export function namedError(name: string, message: string): Error {
+  const error = new Error(message);
+  error.name = name;
+  return error;
+}
+
 export interface AuthContextValue {
   /** The signed-in user, or null for a guest. */
   user: User | null;
@@ -66,7 +81,7 @@ export interface AuthContextValue {
    * Resolves with whether that ask produced a second code. `prld:pwd:write` is
    * configured to demand one, because the same entry serves the signed-in
    * change-password screen and has to be strict there — so the reset proves the
-   * mailbox twice, seconds apart, and `confirmPasswordChangeCode` answers the
+   * mailbox twice, seconds apart, and `confirmPasswordWriteCode` answers the
    * second challenge. A configuration that grants the scope outright emails
    * nothing and resolves `false`: this is the one flow entitled to read that as
    * permission already given, the code just entered being the same proof.
@@ -89,13 +104,14 @@ export interface AuthContextValue {
    * Submits the code that permits the write. Resolving means `changePassword`
    * can be called.
    *
-   * Shared with the reset's second code, which is not a coincidence to be
-   * tidied away: it is the same challenge, for the same scope, opened by
-   * `confirmPasswordResetCode` instead of by `startPasswordChange`.
+   * Named for the scope rather than for either caller, because both flows call
+   * it: it is the same challenge for the same `prld:pwd:write`, opened by
+   * `confirmPasswordResetCode` on one path and `startPasswordChange` on the
+   * other.
    */
-  confirmPasswordChangeCode(code: string): Promise<void>;
+  confirmPasswordWriteCode(code: string): Promise<void>;
   /** Asks Prelude to send that code again, opening a fresh challenge if it must. */
-  resendPasswordChangeCode(): Promise<void>;
+  resendPasswordWriteCode(): Promise<void>;
   /** Writes the new password. Only callable after the code was accepted. */
   changePassword(password: string): Promise<void>;
   /** Ends every session but this one, e.g. after a password reset. */

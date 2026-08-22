@@ -8,6 +8,7 @@ import { ApiError } from "@/api/client";
 import {
   PASSWORD_CHANGE_UNAVAILABLE_ERROR,
   RESET_UNCONFIGURED_ERROR,
+  namedError,
   type AuthContextValue,
 } from "@/auth/context";
 import { makeUser } from "@/test/handlers";
@@ -79,9 +80,9 @@ describe("VerifyEmailPage", () => {
   // generic failure, which reads as "something is broken" for what is almost
   // always a mistyped digit.
   it("names a wrong code as a wrong code", async () => {
-    const badCode = new Error("Bad check code");
-    badCode.name = "BadCheckCodeError";
-    const verifyEmail = vi.fn().mockRejectedValue(badCode);
+    const verifyEmail = vi
+      .fn()
+      .mockRejectedValue(namedError("BadCheckCodeError", "Bad check code"));
     renderVerifyPage({ verifyEmail });
 
     await userEvent.type(screen.getByLabelText("Verification code"), "000000");
@@ -180,26 +181,52 @@ describe("VerifyEmailPage", () => {
 
 describe("ForgotPasswordPage", () => {
   /**
-   * Walks the flow as far as the password step, so each test starts where it
-   * tests.
-   *
-   * Two codes, because that is what the configured step-up asks for: the emailed
-   * code that signs the visitor in, then the one that permits the write. A spec
-   * about the password step should walk the flow real visitors walk.
+   * The step-up as configured: it emails a second code before granting the
+   * scope, so a spec that says nothing about it walks the flow real visitors
+   * walk. Kept here rather than in `renderWithProviders`, because which
+   * configuration is deployed is this flow's business and not every spec's.
    */
-  async function reachPasswordStep(auth: Partial<AuthContextValue> = {}) {
-    const view = renderWithProviders(<ForgotPasswordPage />, {
+  const twoCodes: Partial<AuthContextValue> = {
+    confirmPasswordResetCode: async () => ({ secondCodeSent: true }),
+  };
+
+  function renderResetPage(auth: Partial<AuthContextValue> = {}) {
+    return renderWithProviders(<ForgotPasswordPage />, {
       route: "/forgot-password",
-      auth,
+      auth: { ...twoCodes, ...auth },
     });
+  }
+
+  /** Renders and asks for a code, which is where the first code form appears. */
+  async function reachCodeStep(auth: Partial<AuthContextValue> = {}) {
+    const view = renderResetPage(auth);
 
     await userEvent.type(screen.getByLabelText("Email"), "forgetful@example.com");
     await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
 
-    await userEvent.type(await screen.findByLabelText("Reset code"), "123456");
+    await screen.findByLabelText("Reset code");
+    return view;
+  }
+
+  /** One rung further: the code that signs the visitor in has been accepted. */
+  async function reachConfirmStep(auth: Partial<AuthContextValue> = {}) {
+    const view = await reachCodeStep(auth);
+
+    await userEvent.type(screen.getByLabelText("Reset code"), "123456");
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    await userEvent.type(await screen.findByLabelText("Confirmation code"), "654321");
+    await screen.findByLabelText("Confirmation code");
+    return view;
+  }
+
+  /**
+   * The last rung, where the new password is asked for — so each spec starts
+   * where it tests instead of retyping the walk that got there.
+   */
+  async function reachPasswordStep(auth: Partial<AuthContextValue> = {}) {
+    const view = await reachConfirmStep(auth);
+
+    await userEvent.type(screen.getByLabelText("Confirmation code"), "654321");
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     await screen.findByLabelText("New password");
@@ -224,11 +251,11 @@ describe("ForgotPasswordPage", () => {
 
   it("submits the emailed code, then the one that permits the write", async () => {
     const confirmPasswordResetCode = vi.fn().mockResolvedValue({ secondCodeSent: true });
-    const confirmPasswordChangeCode = vi.fn().mockResolvedValue(undefined);
-    await reachPasswordStep({ confirmPasswordResetCode, confirmPasswordChangeCode });
+    const confirmPasswordWriteCode = vi.fn().mockResolvedValue(undefined);
+    await reachPasswordStep({ confirmPasswordResetCode, confirmPasswordWriteCode });
 
     expect(confirmPasswordResetCode).toHaveBeenCalledWith("123456");
-    expect(confirmPasswordChangeCode).toHaveBeenCalledWith("654321");
+    expect(confirmPasswordWriteCode).toHaveBeenCalledWith("654321");
   });
 
   // Which of the two routes a visitor takes is Prelude's answer rather than this
@@ -238,14 +265,9 @@ describe("ForgotPasswordPage", () => {
   // showed the second form would pass every other spec in this file.
   it("goes straight to the new password when the step-up grants outright", async () => {
     const confirmPasswordResetCode = vi.fn().mockResolvedValue({ secondCodeSent: false });
-    renderWithProviders(<ForgotPasswordPage />, {
-      route: "/forgot-password",
-      auth: { confirmPasswordResetCode },
-    });
+    await reachCodeStep({ confirmPasswordResetCode });
 
-    await userEvent.type(screen.getByLabelText("Email"), "forgetful@example.com");
-    await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
-    await userEvent.type(await screen.findByLabelText("Reset code"), "123456");
+    await userEvent.type(screen.getByLabelText("Reset code"), "123456");
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByLabelText("New password")).toBeInTheDocument();
@@ -257,22 +279,15 @@ describe("ForgotPasswordPage", () => {
   // account reaches this form, which is the thing the step before it must not
   // give away.
   it("names a wrong confirmation code", async () => {
-    const badCode = new Error("Bad check code");
-    badCode.name = "BadCheckCodeError";
-    const confirmPasswordChangeCode = vi.fn().mockRejectedValue(badCode);
+    const confirmPasswordWriteCode = vi
+      .fn()
+      .mockRejectedValue(namedError("BadCheckCodeError", "Bad check code"));
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
     try {
-      renderWithProviders(<ForgotPasswordPage />, {
-        route: "/forgot-password",
-        auth: { confirmPasswordChangeCode },
-      });
+      await reachConfirmStep({ confirmPasswordWriteCode });
 
-      await userEvent.type(screen.getByLabelText("Email"), "forgetful@example.com");
-      await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
-      await userEvent.type(await screen.findByLabelText("Reset code"), "123456");
-      await userEvent.click(screen.getByRole("button", { name: "Continue" }));
-      await userEvent.type(await screen.findByLabelText("Confirmation code"), "000000");
+      await userEvent.type(screen.getByLabelText("Confirmation code"), "000000");
       await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
       expect(
@@ -310,11 +325,7 @@ describe("ForgotPasswordPage", () => {
     "That code is not correct, or it has expired. Ask for another and try again.";
 
   it.each([
-    ["a mistyped digit", (() => {
-      const badCode = new Error("Bad check code");
-      badCode.name = "BadCheckCodeError";
-      return badCode;
-    })()],
+    ["a mistyped digit", namedError("BadCheckCodeError", "Bad check code")],
     ["an address with no account", new ApiError(404, "not_found", "No such user.")],
     ["a step-up Prelude refused", new Error('Prelude refused the "prld:pwd:write" step-up.')],
   ])("reports %s the same way", async (_case, failure) => {
@@ -361,9 +372,11 @@ describe("ForgotPasswordPage", () => {
   // for every one of them, which is why these two are matched by name. Asserting
   // against an ApiError here would pass while the real path said nothing.
   it("keeps a rejected password on the password form and says why", async () => {
-    const invalid = new Error("Password does not meet compliancy requirements.");
-    invalid.name = "InvalidPasswordError";
-    const changePassword = vi.fn().mockRejectedValue(invalid);
+    const changePassword = vi
+      .fn()
+      .mockRejectedValue(
+        namedError("InvalidPasswordError", "Password does not meet compliancy requirements."),
+      );
     const validatePassword = vi
       .fn()
       .mockResolvedValue({ valid: false, messages: ["Use at least 8 characters."] });
@@ -391,9 +404,7 @@ describe("ForgotPasswordPage", () => {
   // try another, the visitor is sent round a loop that no password escapes — so
   // this one failure has to be named, and there has to be a way out of the step.
   it("names an expired reset rather than blaming the password", async () => {
-    const expired = new Error("Forbidden");
-    expired.name = "ForbiddenError";
-    const changePassword = vi.fn().mockRejectedValue(expired);
+    const changePassword = vi.fn().mockRejectedValue(namedError("ForbiddenError", "Forbidden"));
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
     try {
@@ -497,9 +508,11 @@ describe("ForgotPasswordPage", () => {
   // read as Prelude being down: a build that shipped without the login
   // configuration to send a code through.
   it("names an unconfigured deployment", async () => {
-    const unconfigured = new Error("VITE_PRELUDE_OTP_LOGIN_CONFIG_ID is empty.");
-    unconfigured.name = RESET_UNCONFIGURED_ERROR;
-    const startPasswordReset = vi.fn().mockRejectedValue(unconfigured);
+    const startPasswordReset = vi
+      .fn()
+      .mockRejectedValue(
+        namedError(RESET_UNCONFIGURED_ERROR, "VITE_PRELUDE_OTP_LOGIN_CONFIG_ID is empty."),
+      );
 
     renderWithProviders(<ForgotPasswordPage />, {
       route: "/forgot-password",
@@ -560,30 +573,30 @@ describe("ChangePasswordPage", () => {
   });
 
   it("submits the code, then asks for a new password", async () => {
-    const confirmPasswordChangeCode = vi.fn().mockResolvedValue(undefined);
-    await reachPasswordStep({ confirmPasswordChangeCode });
+    const confirmPasswordWriteCode = vi.fn().mockResolvedValue(undefined);
+    await reachPasswordStep({ confirmPasswordWriteCode });
 
-    expect(confirmPasswordChangeCode).toHaveBeenCalledWith("123456");
+    expect(confirmPasswordWriteCode).toHaveBeenCalledWith("123456");
   });
 
   it("will not submit a partial code", async () => {
-    const confirmPasswordChangeCode = vi.fn();
-    renderChangePage({ confirmPasswordChangeCode });
+    const confirmPasswordWriteCode = vi.fn();
+    renderChangePage({ confirmPasswordWriteCode });
 
     await userEvent.type(await screen.findByLabelText("Confirmation code"), "123");
 
     expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
-    expect(confirmPasswordChangeCode).not.toHaveBeenCalled();
+    expect(confirmPasswordWriteCode).not.toHaveBeenCalled();
   });
 
   it("names a wrong code as a wrong code", async () => {
-    const badCode = new Error("Bad check code");
-    badCode.name = "BadCheckCodeError";
-    const confirmPasswordChangeCode = vi.fn().mockRejectedValue(badCode);
+    const confirmPasswordWriteCode = vi
+      .fn()
+      .mockRejectedValue(namedError("BadCheckCodeError", "Bad check code"));
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
     try {
-      renderChangePage({ confirmPasswordChangeCode });
+      renderChangePage({ confirmPasswordWriteCode });
 
       await userEvent.type(await screen.findByLabelText("Confirmation code"), "000000");
       await userEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -613,9 +626,11 @@ describe("ChangePasswordPage", () => {
   // session — and a code form would then wait for a code that is never sent.
   // What it offers instead is the reset, which proves the same mailbox.
   it("refuses to change a password when Prelude asks for nothing", async () => {
-    const unavailable = new Error("granted with no challenge");
-    unavailable.name = PASSWORD_CHANGE_UNAVAILABLE_ERROR;
-    const startPasswordChange = vi.fn().mockRejectedValue(unavailable);
+    const startPasswordChange = vi
+      .fn()
+      .mockRejectedValue(
+        namedError(PASSWORD_CHANGE_UNAVAILABLE_ERROR, "granted with no challenge"),
+      );
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
     try {
@@ -645,8 +660,8 @@ describe("ChangePasswordPage", () => {
       .fn()
       .mockRejectedValueOnce(new Error("stepup unavailable"))
       .mockResolvedValue(undefined);
-    const resendPasswordChangeCode = vi.fn(() => startPasswordChange());
-    renderChangePage({ startPasswordChange, resendPasswordChangeCode });
+    const resendPasswordWriteCode = vi.fn(() => startPasswordChange());
+    renderChangePage({ startPasswordChange, resendPasswordWriteCode });
 
     expect(
       await screen.findByText("We could not send a code just now. Try asking for another."),
@@ -657,12 +672,12 @@ describe("ChangePasswordPage", () => {
   });
 
   it("can ask for another code, then rests", async () => {
-    const resendPasswordChangeCode = vi.fn().mockResolvedValue(undefined);
-    renderChangePage({ resendPasswordChangeCode });
+    const resendPasswordWriteCode = vi.fn().mockResolvedValue(undefined);
+    renderChangePage({ resendPasswordWriteCode });
 
     await userEvent.click(await screen.findByRole("button", { name: "Send another" }));
 
-    await waitFor(() => expect(resendPasswordChangeCode).toHaveBeenCalled());
+    await waitFor(() => expect(resendPasswordWriteCode).toHaveBeenCalled());
     expect(await screen.findByRole("status")).toHaveTextContent(/most recent email/);
     expect(screen.getByRole("button", { name: /Send another in \d+s/ })).toBeDisabled();
   });
@@ -674,14 +689,12 @@ describe("ChangePasswordPage", () => {
   // The spent challenge is why it asks for a new code rather than just stepping
   // back to a form.
   it("names an expired confirmation and asks for a new code", async () => {
-    const expired = new Error("Forbidden");
-    expired.name = "ForbiddenError";
-    const changePassword = vi.fn().mockRejectedValue(expired);
-    const resendPasswordChangeCode = vi.fn().mockResolvedValue(undefined);
+    const changePassword = vi.fn().mockRejectedValue(namedError("ForbiddenError", "Forbidden"));
+    const resendPasswordWriteCode = vi.fn().mockResolvedValue(undefined);
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
     try {
-      await reachPasswordStep({ changePassword, resendPasswordChangeCode });
+      await reachPasswordStep({ changePassword, resendPasswordWriteCode });
 
       await userEvent.type(screen.getByLabelText("New password"), "a-better-secret");
       await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
@@ -693,16 +706,18 @@ describe("ChangePasswordPage", () => {
       await userEvent.click(screen.getByRole("button", { name: "Start again with a new code" }));
 
       expect(await screen.findByLabelText("Confirmation code")).toBeInTheDocument();
-      await waitFor(() => expect(resendPasswordChangeCode).toHaveBeenCalled());
+      await waitFor(() => expect(resendPasswordWriteCode).toHaveBeenCalled());
     } finally {
       logged.mockRestore();
     }
   });
 
   it("keeps a rejected password on the password form and says why", async () => {
-    const invalid = new Error("Password does not meet compliancy requirements.");
-    invalid.name = "InvalidPasswordError";
-    const changePassword = vi.fn().mockRejectedValue(invalid);
+    const changePassword = vi
+      .fn()
+      .mockRejectedValue(
+        namedError("InvalidPasswordError", "Password does not meet compliancy requirements."),
+      );
     const validatePassword = vi
       .fn()
       .mockResolvedValue({ valid: false, messages: ["Use at least 8 characters."] });

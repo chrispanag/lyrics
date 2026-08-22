@@ -126,10 +126,19 @@ export function LoginPage() {
 function usePasswordHints() {
   const { validatePassword } = useAuth();
   const [hints, setHints] = useState<string[]>([]);
+  // The password the last verdict was about. Clicking submit blurs the field, so
+  // a refused password is asked about twice within a second — once on the way
+  // out of the field and once because Prelude rejected it — and the second round
+  // trip can only produce the answer already on screen. Only a verdict with
+  // something to say is remembered: validatePassword swallows a failed fetch
+  // into "valid, nothing to report", so remembering that would suppress exactly
+  // the retry this path exists to make.
+  const judged = useRef<string | null>(null);
 
   const check = async (password: string) => {
-    if (!password) return;
+    if (!password || password === judged.current) return;
     const { messages } = await validatePassword(password);
+    if (messages.length > 0) judged.current = password;
     setHints(messages);
   };
 
@@ -151,6 +160,22 @@ function PasswordHints({ hints }: { hints: string[] }) {
 
 /** How long the resend button rests, so a stuck user cannot mail-bomb themselves. */
 const RESEND_COOLDOWN_SECONDS = 30;
+
+/**
+ * The sentences more than one code form says.
+ *
+ * Owned here for the same reason the cooldown above is: a screen that says the
+ * same thing as another screen has to keep saying it, and an edit made one
+ * screen at a time is how that stops being true. Each of these was already
+ * written out two to four times. Wording that is deliberately per-screen — the
+ * reset's one uniform code failure, its expired grant against the change
+ * screen's — stays with its screen.
+ */
+const CODE_RESENT_NOTICE = "A new code is on its way. Use the one in the most recent email.";
+const CODE_NOT_SENT = "We could not send a new code. Please try again shortly.";
+const CODE_UNSENDABLE = "We could not send a code just now. Try asking for another.";
+const PASSWORD_REJECTED = "That password does not meet the requirements.";
+const PASSWORD_UNSAVED = "That password could not be saved. Please try another.";
 
 /**
  * The rest between one emailed code and the next.
@@ -396,6 +421,133 @@ function CodeField({
 }
 
 /**
+ * The new-password field, shared by the two screens that ask for one.
+ *
+ * Same field, same autofill, same on-blur compliancy check, same hints below it
+ * — the reset and the change screen had it written out twice, which is how the
+ * four attributes `CodeField` exists to keep in step drift apart one screen at a
+ * time. The label does not vary the way `CodeField`'s does: a new password is a
+ * new password whichever screen asks.
+ */
+function NewPasswordField({
+  value,
+  hints,
+  onChange,
+  onCheck,
+}: {
+  value: string;
+  hints: string[];
+  onChange: (password: string) => void;
+  onCheck: () => void;
+}) {
+  return (
+    <>
+      <Field label="New password" htmlFor="new-password">
+        <Input
+          id="new-password"
+          type="password"
+          autoComplete="new-password"
+          autoFocus
+          required
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onCheck}
+        />
+      </Field>
+
+      <PasswordHints hints={hints} />
+    </>
+  );
+}
+
+/**
+ * What to say when the code that permits a password write is refused.
+ *
+ * Both screens that ask for that code are past the point where anything can be
+ * given away — the change screen is reached only by a signed-in account looking
+ * at its own profile, and the reset's second code only after a correct first one
+ * — so both may name a mistyped digit, and both must name it the same way. The
+ * reset's *first* code step is the one that may not, and it does not use this.
+ */
+function writeCodeMessage(caught: unknown): string {
+  return isBadCode(caught)
+    ? "That code is not correct. Check it and try again."
+    : "That code could not be checked. Ask for another and try again.";
+}
+
+/**
+ * What to say when Prelude refused a new password, and whether the field's own
+ * hints are worth refreshing.
+ *
+ * Both screens map the same three cases and only the expired sentence differs:
+ * the reset's grant and the change screen's confirmation are the same 300
+ * seconds, but there is a different thing to do about each. Returning the
+ * hint decision rather than leaving the caller to re-test the error is what
+ * keeps the reasons under the field in step with the message above it.
+ */
+function passwordSaveFailure(
+  caught: unknown,
+  expired: string,
+): { message: string; hintsWorthChecking: boolean } {
+  if (isExpiredGrant(caught)) return { message: expired, hintsWorthChecking: false };
+  if (isInvalidPassword(caught)) return { message: PASSWORD_REJECTED, hintsWorthChecking: true };
+  return { message: errorMessage(caught, PASSWORD_UNSAVED), hintsWorthChecking: false };
+}
+
+/**
+ * Offers to end the sessions that were open before the password changed.
+ *
+ * Both screens that change a password offer this, identically, and afterwards
+ * rather than as a checkbox before: this is the point where the choice can be
+ * acted on and its outcome reported, and a failure here must not read as a
+ * password that did not save — it did, which is what makes this panel's own
+ * error the right place for one.
+ */
+function SignOutOthersPanel() {
+  const { signOutOtherDevices } = useAuth();
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [signedOut, setSignedOut] = useState(false);
+
+  if (signedOut) return <Notice>Your other devices have been signed out.</Notice>;
+
+  const onSignOutOthers = async () => {
+    setError("");
+    setSubmitting(true);
+
+    try {
+      await signOutOtherDevices();
+      setSignedOut(true);
+    } catch (caught) {
+      setError(
+        errorMessage(caught, "Your password was changed, but other devices could not be signed out."),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      {error && <ErrorMessage>{error}</ErrorMessage>}
+      <p className="text-sm text-stone-500 dark:text-stone-400">
+        If you are signed in somewhere else, you can end those sessions now.
+      </p>
+      <Button
+        type="button"
+        variant="secondary"
+        size="lg"
+        className="w-full"
+        loading={submitting}
+        onClick={onSignOutOthers}
+      >
+        Sign out my other devices
+      </Button>
+    </>
+  );
+}
+
+/**
  * Which of the reset's steps is on screen.
  *
  * `confirm` is the second code: the step-up that permits the password write asks
@@ -421,10 +573,9 @@ export function ForgotPasswordPage() {
     startPasswordReset,
     resendPasswordResetCode,
     confirmPasswordResetCode,
-    confirmPasswordChangeCode,
-    resendPasswordChangeCode,
+    confirmPasswordWriteCode,
+    resendPasswordWriteCode,
     changePassword,
-    signOutOtherDevices,
   } = useAuth();
 
   const [step, setStep] = useState<ResetStep>("email");
@@ -439,7 +590,6 @@ export function ForgotPasswordPage() {
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
-  const [othersSignedOut, setOthersSignedOut] = useState(false);
   const passwordHints = usePasswordHints();
   const { cooldown, startCooldown } = useResendCooldown();
 
@@ -539,7 +689,7 @@ export function ForgotPasswordPage() {
     } finally {
       startCooldown();
       setCode("");
-      setNotice("A new code is on its way. Use the one in the most recent email.");
+      setNotice(CODE_RESENT_NOTICE);
       setResending(false);
     }
   };
@@ -550,7 +700,7 @@ export function ForgotPasswordPage() {
     setSubmitting(true);
 
     try {
-      await confirmPasswordChangeCode(confirmCode);
+      await confirmPasswordWriteCode(confirmCode);
       setStep("password");
     } catch (caught) {
       // Nothing to keep uniform here, unlike the step before it: only an address
@@ -558,11 +708,7 @@ export function ForgotPasswordPage() {
       // mistake gives nothing away and saves a visitor guessing at which of
       // their two codes is being refused.
       console.error("The password confirmation code could not be checked:", caught);
-      setError(
-        isBadCode(caught)
-          ? "That code is not correct. Check it and try again."
-          : "That code could not be checked. Ask for another and try again.",
-      );
+      setError(writeCodeMessage(caught));
     } finally {
       setSubmitting(false);
     }
@@ -573,12 +719,12 @@ export function ForgotPasswordPage() {
     setResending(true);
 
     try {
-      await resendPasswordChangeCode();
+      await resendPasswordWriteCode();
       startCooldown();
       setConfirmCode("");
-      setNotice("A new code is on its way. Use the one in the most recent email.");
+      setNotice(CODE_RESENT_NOTICE);
     } catch (caught) {
-      setError(errorMessage(caught, "We could not send a new code. Please try again shortly."));
+      setError(errorMessage(caught, CODE_NOT_SENT));
     } finally {
       setResending(false);
     }
@@ -595,38 +741,16 @@ export function ForgotPasswordPage() {
     } catch (caught) {
       // Nothing here arrives from our API, so errorMessage would render its
       // fallback for every case — and by this step the visitor is signed in, so
-      // naming a cause gives nothing away. Two are worth naming: a grant that
-      // expired while they chose (nothing wrong with the password, and no
-      // password will do), and a password Prelude refused, whose reasons the
-      // compliancy check already renders as prose for the field's own hints.
+      // naming a cause gives nothing away. The expired grant is the one case
+      // worth wording per screen: nothing is wrong with the password, and no
+      // password will do, so what it says is where to go instead.
       console.error("The new password could not be saved:", caught);
-      if (isExpiredGrant(caught)) {
-        setError("This reset has expired. Ask for a new code and start again.");
-      } else if (isInvalidPassword(caught)) {
-        setError("That password does not meet the requirements.");
-        await passwordHints.check(password);
-      } else {
-        setError(errorMessage(caught, "That password could not be saved. Please try another."));
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Offered after the change rather than as a checkbox before it: this is the
-  // point where the choice can be acted on and its outcome reported, and a
-  // failure here must not read as a password that did not save — it did.
-  const onSignOutOthers = async () => {
-    resetFeedback();
-    setSubmitting(true);
-
-    try {
-      await signOutOtherDevices();
-      setOthersSignedOut(true);
-    } catch (caught) {
-      setError(
-        errorMessage(caught, "Your password was changed, but other devices could not be signed out."),
+      const failure = passwordSaveFailure(
+        caught,
+        "This reset has expired. Ask for a new code and start again.",
       );
+      setError(failure.message);
+      if (failure.hintsWorthChecking) await passwordHints.check(password);
     } finally {
       setSubmitting(false);
     }
@@ -768,20 +892,12 @@ export function ForgotPasswordPage() {
         <form onSubmit={onSubmitPassword} className="space-y-4" noValidate>
           {error && <ErrorMessage>{error}</ErrorMessage>}
 
-          <Field label="New password" htmlFor="new-password">
-            <Input
-              id="new-password"
-              type="password"
-              autoComplete="new-password"
-              autoFocus
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              onBlur={() => passwordHints.check(password)}
-            />
-          </Field>
-
-          <PasswordHints hints={passwordHints.hints} />
+          <NewPasswordField
+            value={password}
+            hints={passwordHints.hints}
+            onChange={setPassword}
+            onCheck={() => passwordHints.check(password)}
+          />
 
           <Button type="submit" size="lg" className="w-full" loading={submitting}>
             Save new password
@@ -803,28 +919,8 @@ export function ForgotPasswordPage() {
 
   return (
     <AuthShell title="Password changed" subtitle="You are signed in with your new password">
-      {error && <ErrorMessage>{error}</ErrorMessage>}
-
       <div className="space-y-4">
-        {othersSignedOut ? (
-          <Notice>Your other devices have been signed out.</Notice>
-        ) : (
-          <>
-            <p className="text-sm text-stone-500 dark:text-stone-400">
-              If you were signed in somewhere else, you can end those sessions now.
-            </p>
-            <Button
-              type="button"
-              variant="secondary"
-              size="lg"
-              className="w-full"
-              loading={submitting}
-              onClick={onSignOutOthers}
-            >
-              Sign out my other devices
-            </Button>
-          </>
-        )}
+        <SignOutOthersPanel />
 
         {/* A Link borrowing the button chrome, not a Button inside a Link: an
             anchor wrapping a button is invalid and loses keyboard handling. */}
@@ -872,7 +968,15 @@ export function VerifyEmailPage() {
     if (started.current) return;
     started.current = true;
 
-    let cancelled = false;
+    // No cancellation flag, deliberately, and this is the one place the ref above
+    // makes one dangerous. React runs this effect, its cleanup, and the effect
+    // again on a single mounted component — the double invocation the ref is here
+    // to survive — so a flag set by that cleanup would discard the result of the
+    // run that actually opened the challenge, while the second run reuses it and
+    // returns early. Nothing would then clear "Sending code…" or report a
+    // failure: a button spinning for good, in development only. Landing the
+    // state instead costs nothing, a state update after a real unmount being a
+    // no-op in React 18 and later.
     (async () => {
       try {
         await startEmailVerification();
@@ -880,19 +984,11 @@ export function VerifyEmailPage() {
         // Let it be attempted again: the error below tells the user to ask for
         // another code, and without this the guard would refuse to open one.
         started.current = false;
-        if (!cancelled) {
-          setError(
-            errorMessage(caught, "We could not send a code just now. Try asking for another."),
-          );
-        }
+        setError(errorMessage(caught, CODE_UNSENDABLE));
       } finally {
-        if (!cancelled) setSending(false);
+        setSending(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [startEmailVerification, user]);
 
   // Unlike the other two screens, this one is reached by redirect and kept in
@@ -939,9 +1035,9 @@ export function VerifyEmailPage() {
       await resendVerificationCode();
       startCooldown();
       setCode("");
-      setNotice("A new code is on its way. Use the one in the most recent email.");
+      setNotice(CODE_RESENT_NOTICE);
     } catch (caught) {
-      setError(errorMessage(caught, "We could not send a new code. Please try again shortly."));
+      setError(errorMessage(caught, CODE_NOT_SENT));
     } finally {
       setResending(false);
     }
@@ -988,8 +1084,14 @@ export function VerifyEmailPage() {
   );
 }
 
-/** Which of the change-password steps is on screen. */
-type ChangeStep = "code" | "password" | "done";
+/**
+ * Which of the change-password steps is on screen.
+ *
+ * `unavailable` is a step rather than a flag beside one: as a boolean its branch
+ * silently outranked every step below it, which is precedence a reader has to
+ * notice instead of read.
+ */
+type ChangeStep = "code" | "password" | "done" | "unavailable";
 
 /**
  * Changes the password of a signed-in user.
@@ -1012,10 +1114,9 @@ export function ChangePasswordPage() {
   const {
     user,
     startPasswordChange,
-    confirmPasswordChangeCode,
-    resendPasswordChangeCode,
+    confirmPasswordWriteCode,
+    resendPasswordWriteCode,
     changePassword,
-    signOutOtherDevices,
   } = useAuth();
 
   const [step, setStep] = useState<ChangeStep>("code");
@@ -1026,8 +1127,6 @@ export function ChangePasswordPage() {
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
   const [sending, setSending] = useState(true);
-  const [unavailable, setUnavailable] = useState(false);
-  const [othersSignedOut, setOthersSignedOut] = useState(false);
   const passwordHints = usePasswordHints();
   const { cooldown, startCooldown } = useResendCooldown();
   const started = useRef(false);
@@ -1050,7 +1149,10 @@ export function ChangePasswordPage() {
     if (started.current) return;
     started.current = true;
 
-    let cancelled = false;
+    // No cancellation flag, for the reason spelled out on the verification
+    // screen's copy of this effect: the cleanup React runs between the two
+    // invocations would otherwise throw away the result of the run that opened
+    // the challenge, and leave this screen sending a code for ever.
     (async () => {
       try {
         await startPasswordChange();
@@ -1058,25 +1160,18 @@ export function ChangePasswordPage() {
         // Let it be attempted again: the message tells the visitor to ask for
         // another code, and the guard above would otherwise refuse to open one.
         started.current = false;
-        if (cancelled) return;
         if (isChangeUnavailable(caught)) {
           // Not a fault to retry, and not one the visitor can fix. Saying so
           // beats a code form waiting for a code that is never coming.
           console.error("The password change step-up asked for nothing:", caught);
-          setUnavailable(true);
+          setStep("unavailable");
           return;
         }
-        setError(
-          errorMessage(caught, "We could not send a code just now. Try asking for another."),
-        );
+        setError(errorMessage(caught, CODE_UNSENDABLE));
       } finally {
-        if (!cancelled) setSending(false);
+        setSending(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [startPasswordChange, user]);
 
   // Reached from the profile, which RequireAuth has gated already — this covers
@@ -1090,18 +1185,14 @@ export function ChangePasswordPage() {
     setSubmitting(true);
 
     try {
-      await confirmPasswordChangeCode(code);
+      await confirmPasswordWriteCode(code);
       setStep("password");
     } catch (caught) {
       // The visitor is signed in to the account they are changing, so there is
       // nothing to keep uniform the way the reset's code step has to: naming a
       // mistyped digit is simply the useful thing to say.
       console.error("The password change code could not be checked:", caught);
-      setError(
-        isBadCode(caught)
-          ? "That code is not correct. Check it and try again."
-          : "That code could not be checked. Ask for another and try again.",
-      );
+      setError(writeCodeMessage(caught));
     } finally {
       setSubmitting(false);
     }
@@ -1112,10 +1203,10 @@ export function ChangePasswordPage() {
     setResending(true);
 
     try {
-      await resendPasswordChangeCode();
+      await resendPasswordWriteCode();
       startCooldown();
       setCode("");
-      setNotice("A new code is on its way. Use the one in the most recent email.");
+      setNotice(CODE_RESENT_NOTICE);
     } catch (caught) {
       // The same refusal the screen can open with, reachable here because a
       // fresh challenge is what this asks for when the last one cannot be
@@ -1124,10 +1215,10 @@ export function ChangePasswordPage() {
       // outage.
       if (isChangeUnavailable(caught)) {
         console.error("The password change step-up asked for nothing:", caught);
-        setUnavailable(true);
+        setStep("unavailable");
         return;
       }
-      setError(errorMessage(caught, "We could not send a new code. Please try again shortly."));
+      setError(errorMessage(caught, CODE_NOT_SENT));
     } finally {
       setResending(false);
     }
@@ -1153,49 +1244,22 @@ export function ChangePasswordPage() {
       await changePassword(password);
       setStep("done");
     } catch (caught) {
-      // None of this comes from our API, so errorMessage would render its
-      // fallback for every case. Two are worth naming: a permission that expired
-      // while the password was being chosen, which no password satisfies, and a
-      // password Prelude refused, whose reasons the compliancy check renders as
-      // prose for the field's own hints.
+      // Same three cases as the reset's password step, and the same reasoning
+      // behind naming them; only the expired sentence is this screen's own,
+      // because the way back to a code is not the same one.
       console.error("The new password could not be saved:", caught);
-      if (isExpiredGrant(caught)) {
-        setError("That confirmation has expired. Ask for a new code and try again.");
-      } else if (isInvalidPassword(caught)) {
-        setError("That password does not meet the requirements.");
-        await passwordHints.check(password);
-      } else {
-        setError(errorMessage(caught, "That password could not be saved. Please try another."));
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Offered after the change rather than as a checkbox before it, exactly as the
-  // reset offers it: this is the point where the choice can be acted on and its
-  // outcome reported, and a failure here must not read as a password that did
-  // not save — it did.
-  const onSignOutOthers = async () => {
-    resetFeedback();
-    setSubmitting(true);
-
-    try {
-      await signOutOtherDevices();
-      setOthersSignedOut(true);
-    } catch (caught) {
-      setError(
-        errorMessage(
-          caught,
-          "Your password was changed, but other devices could not be signed out.",
-        ),
+      const failure = passwordSaveFailure(
+        caught,
+        "That confirmation has expired. Ask for a new code and try again.",
       );
+      setError(failure.message);
+      if (failure.hintsWorthChecking) await passwordHints.check(password);
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (unavailable) {
+  if (step === "unavailable") {
     return (
       <AuthShell
         title="Not available right now"
@@ -1263,20 +1327,12 @@ export function ChangePasswordPage() {
         <form onSubmit={onSubmitPassword} className="space-y-4" noValidate>
           {error && <ErrorMessage>{error}</ErrorMessage>}
 
-          <Field label="New password" htmlFor="new-password">
-            <Input
-              id="new-password"
-              type="password"
-              autoComplete="new-password"
-              autoFocus
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              onBlur={() => passwordHints.check(password)}
-            />
-          </Field>
-
-          <PasswordHints hints={passwordHints.hints} />
+          <NewPasswordField
+            value={password}
+            hints={passwordHints.hints}
+            onChange={setPassword}
+            onCheck={() => passwordHints.check(password)}
+          />
 
           <Button type="submit" size="lg" className="w-full" loading={submitting}>
             Save new password
@@ -1301,28 +1357,8 @@ export function ChangePasswordPage() {
       title="Password changed"
       subtitle="Your new password is the one to use from now on"
     >
-      {error && <ErrorMessage>{error}</ErrorMessage>}
-
       <div className="space-y-4">
-        {othersSignedOut ? (
-          <Notice>Your other devices have been signed out.</Notice>
-        ) : (
-          <>
-            <p className="text-sm text-stone-500 dark:text-stone-400">
-              If you are signed in somewhere else, you can end those sessions now.
-            </p>
-            <Button
-              type="button"
-              variant="secondary"
-              size="lg"
-              className="w-full"
-              loading={submitting}
-              onClick={onSignOutOthers}
-            >
-              Sign out my other devices
-            </Button>
-          </>
-        )}
+        <SignOutOthersPanel />
 
         <Link to="/profile" className={buttonClasses("primary", "lg", "w-full")}>
           Back to profile
