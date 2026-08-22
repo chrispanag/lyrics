@@ -13,6 +13,7 @@ import {
 } from "@/api/hooks";
 import { buttonClasses } from "@/components/buttonStyles";
 import { cardChrome } from "@/components/cardStyles";
+import { PageTitle } from "@/components/PageTitle";
 import {
   Button,
   ConfirmSheet,
@@ -85,6 +86,10 @@ export function AdminConsole() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
+      {/* Named here for the same reason the heading is: the tab that matches
+          the address is the one place a screen's name is written, so a screen
+          added to ADMIN_TABS is titled without touching this file. */}
+      <PageTitle name={current ? `Admin · ${current.label}` : "Admin"} />
       {current && <h1 className="text-2xl font-bold tracking-tight">{current.label}</h1>}
 
       <nav aria-label="Admin" className="my-5 flex gap-2">

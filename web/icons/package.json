@@ -1,0 +1,6 @@
+{
+  "//": "Exists only to stop npm walking up to web/package.json. Without it, `make icons`' --no-save install of sharp and png-to-ico lands in web/node_modules, where app code can import them: it would typecheck, lint and run under `make web`, then fail in web/Dockerfile's npm ci with a green local build. Keeping them here preserves the property the target is built around — that an image toolchain is not a frontend dependency.",
+  "name": "songfolio-icons",
+  "private": true,
+  "type": "module"
+}

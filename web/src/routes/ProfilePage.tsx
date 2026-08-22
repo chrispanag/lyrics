@@ -7,6 +7,7 @@ import { useUpdateProfile } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { Button, ErrorMessage, Field, Input, Spinner } from "@/components/ui";
 import { buttonClasses } from "@/components/buttonStyles";
+import { PageTitle } from "@/components/PageTitle";
 import { cn } from "@/lib/cn";
 import { applyTheme, storeTheme, storedTheme, type Theme } from "@/lib/theme";
 
@@ -38,11 +39,29 @@ export function ProfilePage() {
     storeTheme(next);
   };
 
-  if (loading) return <Spinner />;
+  // The title is repeated across all three branches rather than hoisted, which
+  // is a trade rather than a necessity: collapsing the branches into one
+  // insertion point means lifting three unrelated layouts into a variable and
+  // moving `onSubmit` above the guard it sits below. Three copies of a
+  // five-word line is the cheaper side of that.
+  //
+  // What is not optional is having one on each. React unmounts the hoisted
+  // title with the branch that rendered it, so a branch without one does not
+  // inherit the previous page's name — it falls back to the static title in
+  // index.html, and the tab reads a bare "Songfolio" for as long as that state
+  // lasts. On the guest branch that is until they sign in.
+  if (loading)
+    return (
+      <>
+        <PageTitle name="Profile" />
+        <Spinner />
+      </>
+    );
 
   if (!user) {
     return (
       <div className="mx-auto max-w-md px-4 py-10 text-center">
+        <PageTitle name="Profile" />
         <h1 className="text-2xl font-bold tracking-tight">You are browsing as a guest</h1>
         <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
           Sign in to build lists of songs.
@@ -89,6 +108,7 @@ export function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-6">
+      <PageTitle name="Profile" />
       <h1 className="mb-6 text-2xl font-bold tracking-tight">Profile</h1>
 
       <dl className="mb-6 space-y-2 rounded-2xl bg-stone-100 p-4 text-sm dark:bg-stone-900">

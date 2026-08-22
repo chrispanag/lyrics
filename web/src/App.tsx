@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { Layout } from "@/components/Layout";
+import { PageTitle } from "@/components/PageTitle";
 import { EmptyState, Spinner } from "@/components/ui";
 import { hasRole } from "@/lib/types";
 import {
@@ -164,13 +165,20 @@ export function App() {
             <Route path="genres" element={<AdminGenresPage />} />
           </Route>
 
+          {/* The catch-all renders rather than redirecting, so it needs naming
+              like any other screen: without this a mistyped URL keeps whatever
+              title the previous page set, and the tab goes on claiming a song
+              that is not on screen. */}
           <Route
             path="*"
             element={
-              <EmptyState
-                title="Page not found"
-                description="That link does not lead anywhere."
-              />
+              <>
+                <PageTitle name="Page not found" />
+                <EmptyState
+                  title="Page not found"
+                  description="That link does not lead anywhere."
+                />
+              </>
             }
           />
         </Route>

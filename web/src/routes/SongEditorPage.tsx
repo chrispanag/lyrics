@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { errorDetails, errorMessage } from "@/api/client";
 import { useCreateSong, useGenres, useSong, useUpdateSong } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
+import { PageTitle } from "@/components/PageTitle";
 import { PersonAutocomplete, type PersonSelection } from "@/components/PersonAutocomplete";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { Button, Chip, ErrorMessage, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
@@ -106,6 +107,10 @@ export function SongEditorPage() {
   if (isEdit && (songFailed || !existing)) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
+        {/* This branch persists rather than resolving, so it needs a name like
+            the equivalent states on the song and list pages — otherwise the one
+            page a contributor is stuck on is the one whose tab says nothing. */}
+        <PageTitle name="Edit song" />
         <ErrorMessage>
           This song could not be loaded, so it cannot be edited right now. Reload the page to
           try again.
@@ -192,12 +197,17 @@ export function SongEditorPage() {
 
   const videoId = extractVideoId(youtubeUrl);
   const saving = createSong.isPending || updateSong.isPending;
+  const heading = isEdit ? "Edit song" : "Add a song";
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
-      <h1 className="mb-6 text-2xl font-bold tracking-tight">
-        {isEdit ? "Edit song" : "Add a song"}
-      </h1>
+      {/* Named after the form rather than the song being edited, so the entry
+          the editor leaves behind is distinguishable from the song page it was
+          opened from — which is the whole point on a route that pops history to
+          get out. One binding for the tab and the heading, so the two cannot
+          drift into disagreeing about which form this is. */}
+      <PageTitle name={heading} />
+      <h1 className="mb-6 text-2xl font-bold tracking-tight">{heading}</h1>
 
       <form onSubmit={onSubmit} className="space-y-5" noValidate>
         {error && <ErrorMessage>{error}</ErrorMessage>}

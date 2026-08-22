@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Songfolio">
+  <!-- Full-bleed source for every raster icon (apple-touch-icon, icon-192,
+       icon-512, favicon.ico).
+
+       Deliberately NOT public/favicon.svg with a bigger viewBox: that file has
+       rx="7" and is transparent outside the radius, while iOS composites its
+       own mask over an opaque square. Rasterizing the rounded shape puts dark
+       wedges in the corners of the home-screen icon — invisible until someone
+       looks at an actual phone. The corners here are square and the ground is
+       opaque, so whatever mask the platform applies has something to cut.
+
+       Geometry is public/favicon.svg's, scaled 32 -> 512 (x16). #c6481c is the
+       `color-brand-600` custom property (oklch 0.57 0.17 38) in sRGB; CLAUDE.md
+       lists every place that value is repeated by hand.
+
+       Two things about this file are load-bearing for generate.mjs and neither
+       is about the drawing. The comment sits inside the root element because
+       libvips sniffs for `<svg` near the start of the file and a comment block
+       above it pushes the element out of range — the file is then rejected as
+       an unknown format. And the token is named without its leading dashes,
+       because a double hyphen is illegal inside an XML comment and librsvg
+       refuses the whole file rather than tolerating it the way a browser
+       does. -->
+  <rect width="512" height="512" fill="#c6481c" />
+  <circle cx="256" cy="256" r="152" fill="none" stroke="#fff" stroke-width="32" opacity="0.4" />
+  <circle cx="256" cy="256" r="56" fill="#fff" />
+</svg>

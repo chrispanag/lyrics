@@ -6,6 +6,7 @@ import { PASSWORD_CHANGE_UNAVAILABLE_ERROR, RESET_UNCONFIGURED_ERROR } from "@/a
 import { returnDestination } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { buttonClasses } from "@/components/buttonStyles";
+import { PageTitle } from "@/components/PageTitle";
 import { Button, ErrorMessage, Field, Input, Notice, Spinner } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
 
@@ -13,6 +14,12 @@ import { Wordmark } from "@/components/Wordmark";
 function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-5 py-10">
+      {/* Every auth screen names itself through this shell, so the steps of a
+          reset — code, new password, done — are distinguishable in history
+          rather than four entries all reading "Songfolio". They are state
+          rather than routes, so history is the only place they are told
+          apart. */}
+      <PageTitle name={title} />
       <div className="mb-8 text-center">
         {/* The wordmark sits above the heading rather than in it: these screens
             are often a visitor's first, and the heading is the step they are on

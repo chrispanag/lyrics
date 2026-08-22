@@ -140,6 +140,15 @@ test-web: ## Run frontend unit tests
 lint-web: ## Typecheck and lint the frontend
 	cd web && npm run typecheck && npm run lint
 
+.PHONY: icons
+# sharp and png-to-ico are installed here rather than in web/package.json: this
+# runs once per brand change, and every `npm ci` — the Dockerfile's included —
+# would otherwise pay for an image toolchain no build step invokes. They cannot
+# be run through `npx -p`, which puts a temp install on PATH for binaries and
+# not on node's ESM resolution path, so the imports would not resolve.
+icons: ## Regenerate the app icons and og card from web/icons/*.svg
+	cd web/icons && npm install --no-save sharp png-to-ico && node generate.mjs
+
 .PHONY: e2e
 # Playwright starts its own `npm run dev`, so the session domain has to be mapped
 # here too: without it the browser signs in against the default host while the

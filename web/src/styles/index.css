@@ -18,10 +18,14 @@
   --color-brand-300: oklch(0.8 0.11 45);
   --color-brand-400: oklch(0.72 0.15 42);
   --color-brand-500: oklch(0.65 0.18 40);
-  /* Changing this one also means re-converting it by hand into
-     `web/public/favicon.svg` — a favicon renders with no access to page CSS,
-     and nothing processes that file. Nothing warns when the two drift. */
+  /* Changing this one also means re-converting it by hand into the four icon
+     sources listed under "Head assets" in CLAUDE.md — an icon renders with no
+     access to page CSS, and nothing processes those files. The inventory lives
+     there rather than here so there is one list to keep right; it started as
+     just `favicon.svg` and was wrong within a release. Nothing warns on drift. */
   --color-brand-600: oklch(0.57 0.17 38);
+  /* brand-700 is the second half of the og card's gradient, hand-converted the
+     same way. */
   --color-brand-700: oklch(0.48 0.14 36);
   --color-brand-800: oklch(0.4 0.11 35);
   --color-brand-900: oklch(0.33 0.08 34);
