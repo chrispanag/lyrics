@@ -64,6 +64,14 @@ export interface User {
    * finishing verification until it is set, so this is what the app gates on.
    */
   email_verified_at: string | null;
+  /**
+   * When the profile picture was last written, or null when there is none.
+   *
+   * The picture's URL is stable, so this is both what decides whether there is
+   * one to show and what busts its cache once a new one is stored — see
+   * `lib/avatar.ts`.
+   */
+  avatar_updated_at: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -37,6 +37,9 @@ export function makeUser(overrides: Partial<User> = {}): User {
     // Verified by default: an unverified account is refused everywhere but the
     // verification screen, so it is the exception a spec asks for explicitly.
     email_verified_at: "2024-01-01T00:00:00Z",
+    // No picture by default, so a spec that wants one says so — and the
+    // initials fallback is what most screens are rendering.
+    avatar_updated_at: null,
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
     ...overrides,

@@ -312,6 +312,92 @@ lean on.
 Never confirmed end to end, exactly like the reset: a real code through to a
 written password needs a mailbox someone can read.
 
+### Profile pictures
+
+Prelude has no picture field — a user's `profile` there is an open map of string
+values, and nothing in the product hosts an image — so the picture is ours, like
+`users.role` and `users.email_verified_at`. Seven parts hold it up, and none of
+them announces itself.
+
+- **`GET /users/{id}/avatar` is public, and has to be.** An `<img>` is not
+  fetched by `apiFetch` and carries no bearer token, so a picture behind
+  authentication does not load for the person it belongs to — the same failure
+  as the private-list 404 below, and nothing recovers from it either. The cost
+  is accepted: avatars are public content keyed by an unguessable identifier.
+  Which is why a missing picture and an unknown user are the *same* 404 — the
+  route must not answer whether an identifier belongs to an account.
+- **The `user_avatars` row and `users.avatar_updated_at` are written in one
+  transaction.** That timestamp is the only version the client is given: it is
+  the ETag, and it is the `?v=` the app appends to an address that never
+  otherwise changes. Written apart, every reader holds a URL pointing at a
+  picture that has already been replaced, and the `immutable` `Cache-Control`
+  keeps it that way for a year — not even a reload revalidates. The bytes live in their own table because `userColumns` is one
+  string scanned by every `/me`, every provisioning and every page of the admin
+  console; that table deliberately has no timestamp of its own to disagree with
+  this one, which is also what keeps the `RETURNING userColumns` every user
+  write uses — a joined column cannot appear there.
+- **`image.DecodeConfig` runs before `image.Decode`.** A few kilobytes of PNG
+  can declare 20000×20000, and decoding it allocates 1.6 GB before any check
+  downstream of the decode could refuse it. Pinned with a hand-built 33-byte
+  header, `testutil.PNGHeader`, which is a decompression bomb with no pixels in
+  it at all.
+- **The upload is cropped and re-encoded rather than stored.** Re-encoding is
+  what strips EXIF — a photo from a phone carries the GPS coordinates where it
+  was taken, which nobody choosing an avatar is thinking about — and it makes the
+  stored bytes provably the output of Go's encoder rather than a file that merely
+  begins with the right magic bytes. `Normalize` returns the content type
+  *with* the bytes, so the label a row is stored under cannot disagree with the
+  format that was encoded. Cropping belongs here rather than only in the browser
+  because this is the layer no client can skip: "a stored picture is square" is
+  then true for every consumer, and the `object-cover` on the `<img>` is belt and
+  suspenders instead of the thing holding the circle together. JPEG has no
+  alpha, so a transparent source is flattened onto white first; drawn straight
+  across, every clear pixel comes out black and a logo on a clear background
+  arrives as a dark square. That flatten asks the *image* whether it is opaque
+  rather than checking `format == "png"`: keyed on the format name, registering
+  one more decoder — a line in an import block, in a file with no reason to
+  mention compositing — would silently bring the black square back.
+- **The browser has to bake the rotation into the pixels before uploading.**
+  `lib/image.ts` passes `imageOrientation: "from-image"` explicitly, because Go's
+  decoder ignores EXIF and this re-encode discards it. Without it every portrait
+  taken on a phone is stored on its side — and only photos from phones, so no
+  synthetic test image reproduces it. A client bypassing `toSquareJpeg` can still
+  store a sideways picture; that is bounded and accepted.
+- **A `Blob` handed to `fetch` is only recognized by the implementation that
+  defined it**, which is why `payloadOf` reads it out to an `ArrayBuffer`: an
+  unrecognized Blob is *stringified*, so `"[object Blob]"` goes up as thirteen
+  bytes of text with every byte of the image dropped, and the request looks
+  perfectly well formed doing it. jsdom's Blob implements `slice`, `size` and
+  `type` and nothing else, which is why `vitest.setup.ts` fills in
+  `arrayBuffer` beside the other gaps it covers.
+- **`Avatar` decides from `avatar_updated_at`, never from whether an image
+  loaded** — the same idiom as `SongCard`'s badge reading `youtube_video_id`.
+  Which is why both avatar mutations unsettle `["users"]`: the admin console
+  caches its own copy of that field, so without it an admin who removes their
+  picture finds their own row still rendering an image — the old one out of
+  their year-long cache, an empty circle on anybody else's machine.
+- **`ProfilePage` syncs the display-name field from the *stored name*, not from
+  the user object.** Every write to the auth context replaces that object —
+  saving a picture, removing one — so an effect keyed on `[user]` reset the
+  field on each of them and threw away a name that had been typed and not yet
+  saved. Silently: the upload itself succeeded. Pinned by a spec that nests its
+  own provider, because `renderWithProviders` stubs a *fixed* user and the bug
+  needs the record to actually be replaced — the first version of that spec
+  passed against the broken code.
+- **The store reads `avatar_updated_at` as a `*time.Time`.** A row whose
+  version is NULL breaks no rule the schema enforces, and scanning NULL into a
+  `time.Time` is a driver error rather than a domain one — so it would answer
+  500 from the one route whose every failure is meant to be an
+  indistinguishable 404.
+- **The conditional request is answered by `http.ServeContent`, not by comparing
+  the tag here.** A browser echoes an ETag verbatim, so a string comparison
+  looked sufficient — but `Cache-Control: public` invites a shared cache in
+  front of the route, and those revalidate with a *list* of tags or a weak one.
+  Either misses an exact comparison and is answered with the whole image body,
+  silently. The header is a year and `immutable` because the address carries the
+  version: there is nothing to revalidate, so an hour's freshness only bought a
+  round trip per picture per hour for an answer already known.
+
 ### Frontend
 
 - **`BrowsePage`'s debounced-search effect needs its guard.** `setParams` is not

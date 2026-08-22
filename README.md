@@ -461,12 +461,15 @@ GET    /songs/{id}
 GET    /people           ?q=&role=
 GET    /genres
 GET    /lists/{id}                       public lists, or your own
+GET    /users/{id}/avatar                a profile picture; 404 when there is none
 POST   /auth/register
 
 GET    /me                               ┐ signed in, address not yet verified
 POST   /auth/verify-email                ┘ (no body; reads the step-up grant)
 
 PATCH  /me                               ┐
+POST   /me/avatar        (image bytes)   │
+DELETE /me/avatar                        │
 GET    /lists                            │ signed in, address verified
 POST   /lists                            │
 PATCH  /lists/{id}                       │
@@ -490,6 +493,17 @@ GET    /admin/users                      │
 PATCH  /admin/users/{id}/role            │
 DELETE /admin/users/{id}                 ┘
 ```
+
+A profile picture is read without authentication and written only by its owner.
+It has to be: an `<img>` carries no `Authorization` header, so a picture behind
+authentication would not load for the person it belongs to. Both writes take raw
+image bytes rather than a JSON field, answer with the updated user, and are
+capped at 1 MB — the API center-crops whatever arrives to a square and re-encodes
+it as JPEG, which is also what strips the EXIF metadata a phone photo carries, so
+every stored picture is square whichever client wrote it. `GET` serves it with an
+`ETag` and a year of `immutable` `Cache-Control`, which is safe because the app
+appends the picture's `avatar_updated_at` to the URL: a replacement is a new
+address rather than a stale cache entry, so there is nothing to revalidate.
 
 Try it without signing in:
 

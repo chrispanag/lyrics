@@ -11,6 +11,7 @@ import {
   useUpdateGenre,
   useUsers,
 } from "@/api/hooks";
+import { Avatar } from "@/components/Avatar";
 import { buttonClasses } from "@/components/buttonStyles";
 import { cardChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
@@ -157,14 +158,21 @@ export function AdminUsersPage() {
       <ul className="space-y-2">
         {data?.data.map((row) => (
           <li key={row.id} className={adminRowChrome}>
-            <div className="min-w-0">
-              <p className="truncate font-medium">{row.display_name ?? row.email}</p>
-              {row.display_name && (
-                <p className="truncate text-sm text-stone-500 dark:text-stone-400">{row.email}</p>
-              )}
-              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                {ROLE_DESCRIPTIONS[row.role]}
-              </p>
+            {/* The picture belongs to the name, so the two travel together:
+                the row itself is a stack on a phone and spreads its children to
+                its edges from `sm` up, which would put the two halves of one
+                identity at opposite ends of it. */}
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar user={row} size="md" />
+              <div className="min-w-0">
+                <p className="truncate font-medium">{row.display_name ?? row.email}</p>
+                {row.display_name && (
+                  <p className="truncate text-sm text-stone-500 dark:text-stone-400">{row.email}</p>
+                )}
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                  {ROLE_DESCRIPTIONS[row.role]}
+                </p>
+              </div>
             </div>
 
             <Select

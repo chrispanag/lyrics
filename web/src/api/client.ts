@@ -11,6 +11,17 @@ import type { ApiErrorBody } from "@/lib/types";
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://localhost:8080" : "");
 
+/**
+ * The absolute URL of an API path.
+ *
+ * For the things the browser fetches by itself: an `<img src>` does not go
+ * through `apiFetch`, and left relative it would ask Vite on :5173 for an image
+ * the API serves on :8080.
+ */
+export function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
 /** Error carrying the API's structured failure body. */
 export class ApiError extends Error {
   readonly status: number;
@@ -63,6 +74,10 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 
 export interface RequestOptions {
   method?: string;
+  /**
+   * Sent as JSON, unless it is a `Blob` — an image upload — which goes up as
+   * its own bytes under its own content type.
+   */
   body?: unknown;
   /** Skip the Authorization header even when a session exists. */
   anonymous?: boolean;
@@ -102,16 +117,39 @@ async function send(
     const token = await getToken(forceRefresh);
     if (token) headers.Authorization = `Bearer ${token}`;
   }
-  if (options.body !== undefined) {
-    headers["Content-Type"] = "application/json";
-  }
+  const payload = await payloadOf(options.body);
+  if (payload) headers["Content-Type"] = payload.contentType;
 
-  return fetch(`${API_BASE}${path}`, {
+  return fetch(apiUrl(path), {
     method: options.method ?? "GET",
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: payload?.body,
     signal: options.signal,
   });
+}
+
+/**
+ * The body to send and the content type that describes it, or null for none.
+ *
+ * A `Blob` — an image being uploaded — is read out into its bytes rather than
+ * handed to `fetch` as it is. A Blob is only recognized as one by the fetch
+ * implementation that defined it, and an unrecognized one is *stringified*:
+ * `"[object Blob]"` goes up as thirteen bytes of text, every byte of the image
+ * dropped, and the request looks perfectly well formed doing it. Reading it
+ * here is what makes an upload independent of whose Blob it is.
+ *
+ * Reading it per attempt also keeps the 401 retry above working, since a Blob
+ * can be read again where a stream could not.
+ */
+async function payloadOf(body: unknown): Promise<{ body: BodyInit; contentType: string } | null> {
+  if (body === undefined) return null;
+  if (body instanceof Blob) {
+    return {
+      body: await body.arrayBuffer(),
+      contentType: body.type || "application/octet-stream",
+    };
+  }
+  return { body: JSON.stringify(body), contentType: "application/json" };
 }
 
 async function handle<T>(response: Response): Promise<T> {

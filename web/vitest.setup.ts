@@ -25,6 +25,21 @@ beforeAll(() => {
   );
   window.scrollTo = vi.fn();
 
+  // jsdom's Blob implements slice, size and type and nothing else, so reading
+  // an image out to upload it fails there in a way it cannot in a browser. Via
+  // FileReader, which jsdom does implement — the alternative is production code
+  // written around a gap in the test environment.
+  if (!Blob.prototype.arrayBuffer) {
+    Blob.prototype.arrayBuffer = function readAsArrayBuffer(this: Blob) {
+      return new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(reader.error ?? new Error("could not read blob"));
+        reader.readAsArrayBuffer(this);
+      });
+    };
+  }
+
   // Any request a test did not explicitly stub is a bug in the test, not
   // something to silently pass through to the network.
   server.listen({ onUnhandledRequest: "error" });

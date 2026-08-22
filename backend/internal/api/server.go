@@ -77,6 +77,13 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/people/{id}", httpx.Handler(s.handleGetPerson))
 			r.Get("/genres", httpx.Handler(s.handleListGenres))
 			r.Get("/lists/{id}", httpx.Handler(s.handleGetList))
+			// Public, and it has to be: an <img> is not fetched by the API
+			// client and carries no Authorization header, so a route behind
+			// authentication would answer as a guest for the picture's own
+			// owner. Avatars are therefore public content keyed by an
+			// unguessable identifier, and a missing picture and an unknown user
+			// are the same 404.
+			r.Get("/users/{id}/avatar", httpx.Handler(s.handleGetUserAvatar))
 
 			// --- Registration -------------------------------------------------
 			r.Post("/auth/register", httpx.Handler(s.handleRegister))
@@ -101,6 +108,11 @@ func (s *Server) Routes() http.Handler {
 				r.Use(s.authn.Required, auth.RequireVerifiedEmail)
 
 				r.Patch("/me", httpx.Handler(s.handleUpdateMe))
+				// Raw image bytes rather than a field on the PATCH above: that
+				// one is tri-state JSON, and mixing a body it cannot express
+				// into it would cost both of them their shape.
+				r.Post("/me/avatar", httpx.Handler(s.handleUploadAvatar))
+				r.Delete("/me/avatar", httpx.Handler(s.handleDeleteAvatar))
 
 				r.Get("/lists", httpx.Handler(s.handleListLists))
 				r.Post("/lists", httpx.Handler(s.handleCreateList))

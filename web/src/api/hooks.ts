@@ -403,3 +403,35 @@ export function useUpdateProfile() {
       apiFetch<User>("/api/v1/me", { method: "PATCH", body: input }),
   });
 }
+
+/**
+ * Stores a profile picture, replacing any previous one.
+ *
+ * The image goes up as its own bytes rather than as a field on the PATCH above,
+ * and both of these answer with the updated user — so, like the display name,
+ * the response goes straight into the auth context instead of costing a second
+ * request for a record already in hand.
+ *
+ * The admin listing is unsettled as well, because it caches its own copy of
+ * every row's `avatar_updated_at` and `Avatar` decides from that field. Left
+ * alone, an admin who removes their picture and then opens the console finds
+ * their own row still rendering an image — the old one out of cache on their
+ * machine, an empty circle on anybody else's — instead of the initials the
+ * removal was supposed to leave behind.
+ */
+export function useUploadAvatar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (image: Blob) =>
+      apiFetch<User>("/api/v1/me/avatar", { method: "POST", body: image }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+export function useRemoveAvatar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<User>("/api/v1/me/avatar", { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
+  });
+}

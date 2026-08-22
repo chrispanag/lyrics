@@ -3,6 +3,7 @@ import { ListMusic, Search, Shield, User as UserIcon } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 
 import { useAuth } from "@/auth/useAuth";
+import { Avatar } from "@/components/Avatar";
 import { buttonClasses } from "@/components/buttonStyles";
 import { Spinner } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
@@ -101,9 +102,12 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
 
       <div className="mt-auto px-2 pt-6">
         {user ? (
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{user.display_name ?? user.email}</p>
-            <p className="text-xs capitalize text-stone-500 dark:text-stone-400">{user.role}</p>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Avatar user={user} />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{user.display_name ?? user.email}</p>
+              <p className="text-xs capitalize text-stone-500 dark:text-stone-400">{user.role}</p>
+            </div>
           </div>
         ) : (
           <NavLink
