@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
@@ -32,6 +32,7 @@ export function SongEditorPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading: authLoading } = useAuth();
 
   const { data: existing, isLoading: loadingSong, isError: songFailed } = useSong(id);
@@ -118,6 +119,27 @@ export function SongEditorPage() {
     return <Navigate to={`/songs/${existing.id}`} replace />;
   }
 
+  /**
+   * Leaves the editor for the page it was opened from.
+   *
+   * Popping rather than navigating, because the editor is only ever reached
+   * from the song's own page: pushing the song again — or replacing the editor
+   * entry with it, which is the same thing one entry earlier — leaves two
+   * identical song entries in a row, and the reader has to press Back twice to
+   * get past a page that never appeared to change. Popping also restores the
+   * previous address verbatim, which is what keeps `?list=` on a song reached
+   * from a list; building the destination here would drop it.
+   *
+   * `key` is `"default"` only on the entry a tab was opened on, so a deep link
+   * straight to the editor — the one way in with nothing behind it — falls back
+   * to an address instead, and does replace it so Back does not return to a
+   * form that has already been saved or abandoned.
+   */
+  const leaveEditor = (fallback: string) => {
+    if (location.key === "default") navigate(fallback, { replace: true });
+    else navigate(-1);
+  };
+
   const track = <T,>(setter: (value: T) => void) => (value: T) => {
     setter(value);
     setDirty(true);
@@ -153,7 +175,10 @@ export function SongEditorPage() {
         ? await updateSong.mutateAsync(payload)
         : await createSong.mutateAsync(payload);
       setDirty(false);
-      navigate(`/songs/${saved.id}`, { replace: true });
+      // A new song has no page behind the editor to return to, so its entry is
+      // replaced by the song it created.
+      if (isEdit) leaveEditor(`/songs/${saved.id}`);
+      else navigate(`/songs/${saved.id}`, { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, "The song could not be saved."));
       setFieldErrors(errorDetails(caught));
@@ -356,7 +381,7 @@ export function SongEditorPage() {
             className="flex-1"
             onClick={() => {
               if (dirty && !confirm("Discard your unsaved changes?")) return;
-              navigate(-1);
+              leaveEditor(isEdit ? `/songs/${id}` : "/");
             }}
           >
             Cancel

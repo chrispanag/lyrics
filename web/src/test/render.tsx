@@ -17,11 +17,19 @@ export function renderWithProviders(
   ui: ReactElement,
   options: {
     user?: User | null;
-    route?: string;
+    /**
+     * The address to render at, or the history behind it: an array is the
+     * entries a visitor arrived through, oldest first, rendered at the last of
+     * them. That is the only way to give a spec something to go Back to, which
+     * anything popping the history — the editor leaving for the page it was
+     * opened from — has to be tested against.
+     */
+    route?: string | string[];
     auth?: Partial<AuthContextValue>;
   } & Omit<RenderOptions, "wrapper"> = {},
 ) {
   const { user = null, route = "/", auth, ...rest } = options;
+  const entries = Array.isArray(route) ? route : [route];
 
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -53,7 +61,7 @@ export function renderWithProviders(
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[route]}>
+        <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
           <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
         </MemoryRouter>
       </QueryClientProvider>
