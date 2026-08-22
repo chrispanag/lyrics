@@ -420,6 +420,25 @@ needs a mailbox someone can read, exactly like email verification.
   collapse the trail to one entry and send the first press to the list, which is
   the same two controls behaving differently; the list's name in the bar is the
   press that skips the trail.
+- **The editor leaves by popping the history, not by navigating to the song.**
+  It is only ever reached from the song's own page, so replacing its entry with
+  that song — which is what saving used to do — leaves two identical song
+  entries in a row: Back lands on a page that appears not to have moved, and it
+  takes a second press to reach the list. Nothing about the address says so,
+  which is why it read as a broken back button rather than a duplicate. Popping
+  also restores the previous URL verbatim, and so is the only thing keeping
+  `?list=` on the way out — the Edit link drops it, and any destination built
+  here would drop it too. Two things do navigate instead, for two unrelated
+  reasons, and folding them together is the way to lose one: an editor address
+  opened in a fresh tab has nothing behind it, which `location.key ===
+  "default"` is what identifies; and adding a song has to land the reader on
+  what they created rather than on the catalog they opened the form from, which
+  is the `isEdit` branch and nothing to do with the key — an in-app `/songs/new`
+  has a perfectly ordinary key and a page behind it, which is why *canceling*
+  there does pop. Both navigate with `replace`, so Back cannot return to a form
+  already saved. Pinned from both sides, address *and* trail, in
+  `SongEditorPage.test.tsx`: a fix that kept `?list=` while still duplicating
+  the entry passes that spec's every assertion about the address.
 
 ---
 

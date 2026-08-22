@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
@@ -8,6 +8,7 @@ import { useAuth } from "@/auth/useAuth";
 import { PersonAutocomplete, type PersonSelection } from "@/components/PersonAutocomplete";
 import { YouTubeFacade } from "@/components/YouTubeFacade";
 import { Button, Chip, ErrorMessage, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
+import { songHref } from "@/lib/listContext";
 import {
   CREDIT_ROLES,
   LANGUAGE_LABELS,
@@ -32,6 +33,7 @@ export function SongEditorPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading: authLoading } = useAuth();
 
   const { data: existing, isLoading: loadingSong, isError: songFailed } = useSong(id);
@@ -115,8 +117,31 @@ export function SongEditorPage() {
   // The server enforces this too; the redirect just avoids showing a form that
   // is guaranteed to be rejected.
   if (isEdit && existing && !canEditSong(user, existing)) {
-    return <Navigate to={`/songs/${existing.id}`} replace />;
+    return <Navigate to={songHref(existing.id)} replace />;
   }
+
+  /**
+   * Leaves the editor for the page it was opened from.
+   *
+   * Popping rather than navigating, because an edit is only ever reached from
+   * the song's own page: pushing the song again — or replacing the editor entry
+   * with it, which is the same thing one entry earlier — leaves two identical
+   * song entries in a row, and the reader has to press Back twice to get past a
+   * page that never appeared to change. Popping also restores the previous
+   * address verbatim, which is what keeps `?list=` on a song reached from a
+   * list; building the destination would drop it, the Edit link having dropped
+   * it first.
+   *
+   * `key` is `"default"` only on the entry a tab was opened on, so an editor
+   * address opened in a fresh tab — the one way in with nothing behind it —
+   * takes the fallback instead, and replaces so Back does not return to a form
+   * already saved or abandoned. The fallback is derived rather than passed,
+   * since where the editor belongs is the same question at both call sites.
+   */
+  const leaveEditor = () => {
+    if (location.key === "default") navigate(id ? songHref(id) : "/", { replace: true });
+    else navigate(-1);
+  };
 
   const track = <T,>(setter: (value: T) => void) => (value: T) => {
     setter(value);
@@ -153,7 +178,12 @@ export function SongEditorPage() {
         ? await updateSong.mutateAsync(payload)
         : await createSong.mutateAsync(payload);
       setDirty(false);
-      navigate(`/songs/${saved.id}`, { replace: true });
+      // Adding a song is the one save that does not go back: the reader has to
+      // land on what they just created, not wherever they opened the form from
+      // — which for `/songs/new` is usually the catalog, and popping would
+      // return them there with nothing to show for it.
+      if (isEdit) leaveEditor();
+      else navigate(songHref(saved.id), { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, "The song could not be saved."));
       setFieldErrors(errorDetails(caught));
@@ -356,7 +386,7 @@ export function SongEditorPage() {
             className="flex-1"
             onClick={() => {
               if (dirty && !confirm("Discard your unsaved changes?")) return;
-              navigate(-1);
+              leaveEditor();
             }}
           >
             Cancel
