@@ -6,14 +6,18 @@ import (
 	"time"
 )
 
+// Spelled as .do/app.yaml ships it, rather than in the canonical form the header
+// is stored under. Header.Get canonicalizes the name it is handed, so the two
+// meet in the map either way — but the string the deployment actually configures
+// is then the one these tests put through clientIP.
+const clientIPHeader = "DO-Connecting-IP"
+
 // The limit is per key, so which key a request gets is the whole of whether it
 // works. Behind a proxy the peer address is the proxy's and every caller shares
 // one bucket; trusting a header a client can set is the opposite failure, where
 // a forged value per request buys a fresh bucket each time. Both are silent —
 // the endpoint answers normally either way — so both directions are pinned here.
 func TestClientIP(t *testing.T) {
-	const header = "Do-Connecting-Ip"
-
 	for _, tc := range []struct {
 		name   string
 		header string // the header clientIP is configured to trust
@@ -28,13 +32,13 @@ func TestClientIP(t *testing.T) {
 			// Nothing may be read from a header that was not configured, however
 			// plausible its name: this is the bypass, not the fix.
 			name: "an untrusted header is ignored even when present",
-			set:  map[string]string{header: "203.0.113.7", "X-Forwarded-For": "203.0.113.8"},
+			set:  map[string]string{clientIPHeader: "203.0.113.7", "X-Forwarded-For": "203.0.113.8"},
 			want: "192.0.2.10",
 		},
 		{
 			name:   "the trusted header when it carries an address",
-			header: header,
-			set:    map[string]string{header: "203.0.113.7"},
+			header: clientIPHeader,
+			set:    map[string]string{clientIPHeader: "203.0.113.7"},
 			want:   "203.0.113.7",
 		},
 		{
@@ -42,21 +46,21 @@ func TestClientIP(t *testing.T) {
 			// header that was named. On App Platform it carries the ingress
 			// address anyway, which is the peer this would have used regardless.
 			name:   "only the named header, not whichever one is populated",
-			header: header,
+			header: clientIPHeader,
 			set:    map[string]string{"X-Forwarded-For": "203.0.113.8"},
 			want:   "192.0.2.10",
 		},
 		{
 			name:   "the peer address when the trusted header is absent",
-			header: header,
+			header: clientIPHeader,
 			want:   "192.0.2.10",
 		},
 		{
 			// Falling back is the safe direction: one shared bucket is stricter
 			// than a bucket per unparseable string a caller cares to send.
 			name:   "the peer address when the trusted header is not an address",
-			header: header,
-			set:    map[string]string{header: "not-an-ip"},
+			header: clientIPHeader,
+			set:    map[string]string{clientIPHeader: "not-an-ip"},
 			want:   "192.0.2.10",
 		},
 		{
@@ -64,8 +68,8 @@ func TestClientIP(t *testing.T) {
 			// is not an address, so it is refused rather than keyed on — and the
 			// first entry, the one a client controls, is never reached.
 			name:   "the peer address for a comma-joined list",
-			header: header,
-			set:    map[string]string{header: "203.0.113.7, 198.51.100.1"},
+			header: clientIPHeader,
+			set:    map[string]string{clientIPHeader: "203.0.113.7, 198.51.100.1"},
 			want:   "192.0.2.10",
 		},
 	} {
@@ -85,17 +89,16 @@ func TestClientIP(t *testing.T) {
 
 // The point of reading the header at all: two callers behind one proxy have to
 // land in different buckets. Keyed on the peer address they do not, and the
-// fifth honest registration anywhere is refused because of the four before it.
+// sixth honest registration anywhere is refused because of the five before it.
 func TestRateLimitSeparatesCallersBehindAProxy(t *testing.T) {
-	const header = "Do-Connecting-Ip"
 	limiter := newRateLimiter(2, time.Minute)
 
 	attempt := func(callerIP string) bool {
 		r := httptest.NewRequest("POST", "/api/v1/auth/register", nil)
 		// One proxy, one peer address, as App Platform's ingress presents it.
 		r.RemoteAddr = "10.0.0.1:443"
-		r.Header.Set(header, callerIP)
-		return limiter.allow(clientIP(r, header))
+		r.Header.Set(clientIPHeader, callerIP)
+		return limiter.allow(clientIP(r, clientIPHeader))
 	}
 
 	for i := range 2 {

@@ -581,7 +581,7 @@ needs a mailbox someone can read, exactly like email verification.
 substituting the placeholder env values from `.env` so no credential lands in a
 tracked file. Four components: a static site at `/`, the API at `/api`, a
 pre-deploy migration job, and a managed PostgreSQL. README has the walkthrough;
-these three are the parts that break quietly.
+these four are the parts that break quietly.
 
 - **The `/api` ingress rule needs `preserve_path_prefix: true`.** App Platform
   strips a matched prefix by default, and the router mounts at `/api/v1` — so
