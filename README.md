@@ -501,9 +501,12 @@ image bytes rather than a JSON field, answer with the updated user, and are
 capped at 1 MB — the API center-crops whatever arrives to a square and re-encodes
 it as JPEG, which is also what strips the EXIF metadata a phone photo carries, so
 every stored picture is square whichever client wrote it. `GET` serves it with an
-`ETag` and a year of `immutable` `Cache-Control`, which is safe because the app
-appends the picture's `avatar_updated_at` to the URL: a replacement is a new
-address rather than a stale cache entry, so there is nothing to revalidate.
+`ETag` and five minutes of `Cache-Control`. The app appends the picture's
+`avatar_updated_at` to the URL, so a *replacement* is a new address and appears
+at once — but a removal has no new version to point anyone at and nothing that
+recalls the old one, which is what the window is sized for: it is how long a
+removed picture may still be served to everybody else. The `ETag` is what keeps
+that cheap, a revalidation being a 304 rather than another copy of the image.
 
 Try it without signing in:
 

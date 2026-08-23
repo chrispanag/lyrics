@@ -332,12 +332,13 @@ inventory this file records going stale under Head assets.)
   transaction.** That timestamp is the only version the client is given: it is
   the ETag, and it is the `?v=` the app appends to an address that never
   otherwise changes. Written apart, every reader holds a URL pointing at a
-  picture that has already been replaced, and the `immutable` `Cache-Control`
-  keeps it that way for a year — not even a reload revalidates. The bytes live in their own table because `userColumns` is one
-  string scanned by every `/me`, every provisioning and every page of the admin
-  console; that table deliberately has no timestamp of its own to disagree with
-  this one, which is also what keeps the `RETURNING userColumns` every user
-  write uses — a joined column cannot appear there.
+  picture that has already been replaced, and holds it for the whole of the
+  freshness window the `http.ServeContent` bullet below is about. The bytes live
+  in their own table because `userColumns` is one string scanned by every `/me`,
+  every provisioning and every page of the admin console; that table deliberately
+  has no timestamp of its own to disagree with this one, which is also what keeps
+  the `RETURNING userColumns` every user write uses — a joined column cannot
+  appear there.
 - **`image.DecodeConfig` runs before `image.Decode`.** A few kilobytes of PNG
   can declare 20000×20000, and decoding it allocates 1.6 GB before any check
   downstream of the decode could refuse it. Pinned with a hand-built 33-byte
@@ -377,7 +378,7 @@ inventory this file records going stale under Head assets.)
   Which is why both avatar mutations unsettle `["users"]`: the admin console
   caches its own copy of that field, so without it an admin who removes their
   picture finds their own row still rendering an image — the old one out of
-  their year-long cache, an empty circle on anybody else's machine.
+  their own still-fresh cache, an empty circle on anybody else's machine.
 - **Both controls that touch a picture live behind the pencil on the circle,
   and the sheet closes before either one starts work.** What that buys is where
   the state goes: the busy spinner is on the badge and the failure is on the
@@ -422,9 +423,19 @@ inventory this file records going stale under Head assets.)
   looked sufficient — but `Cache-Control: public` invites a shared cache in
   front of the route, and those revalidate with a *list* of tags or a weak one.
   Either misses an exact comparison and is answered with the whole image body,
-  silently. The header is a year and `immutable` because the address carries the
-  version: there is nothing to revalidate, so an hour's freshness only bought a
-  round trip per picture per hour for an answer already known.
+  silently. It is also what pays for the header being short — `max-age=300` and
+  no `immutable` — because **a delete cannot reach a cache.** A *replacement* is
+  a new address, which is what `avatar_updated_at` in the `?v=` is for and still
+  is; a removal mints no new version, so there is no new address to send anyone
+  to and nothing that recalls the old one. The freshness window *is* the
+  deletion's real latency: for the whole of it a removed picture stays on other
+  people's screens while the origin answers 404, and `immutable` for a year
+  meant that for a year, unclearable by a reload. Five minutes costs almost
+  nothing here precisely because of the sentences above — each revalidation is a
+  304 of a couple of hundred bytes, and after a removal it is the one that
+  reaches the 404. What is left is that the person who removed their picture
+  sees it gone at once and nobody else is promised that for another five
+  minutes.
 
 ### Frontend
 

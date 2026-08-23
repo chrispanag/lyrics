@@ -44,6 +44,12 @@ func TestProfilePictureLifecycle(t *testing.T) {
 	if got := served.Header.Get("Content-Type"); got != "image/jpeg" {
 		t.Errorf("Content-Type = %q, want image/jpeg", got)
 	}
+	// Pinned as a literal, because this header is the whole of what a removal
+	// can promise: `immutable`, or a year of freshness, leaves a removed picture
+	// on other people's screens with nothing able to recall it.
+	if got := served.Header.Get("Cache-Control"); got != "public, max-age=300" {
+		t.Errorf("Cache-Control = %q, want public, max-age=300", got)
+	}
 	etag := served.Header.Get("ETag")
 	if etag == "" {
 		t.Error("a picture must be served with an ETag, or every page load re-downloads it")
