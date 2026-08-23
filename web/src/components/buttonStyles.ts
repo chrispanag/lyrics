@@ -11,7 +11,7 @@ import { cn } from "@/lib/cn";
  */
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
-export type ButtonSize = "sm" | "md" | "lg";
+export type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
@@ -29,6 +29,14 @@ const buttonSizes: Record<ButtonSize, string> = {
   sm: "h-9 px-3 text-sm",
   md: "h-11 px-4 text-sm",
   lg: "h-12 px-6 text-base",
+  // A button that is nothing but an icon: square, and 44px on each edge — the
+  // touch floor named above, and `md`'s own height, so it sits level with a
+  // labeled button beside it. It is a size rather than a caller's override because
+  // horizontal padding is the one thing `cn` cannot replace — a plain join
+  // leaves `px-4 px-3` both in the class list with CSS source order picking the
+  // winner, so the width of an icon button written that way is whatever
+  // Tailwind happened to emit last, which is no width to build a layout on.
+  icon: "size-11",
 };
 
 export function buttonClasses(

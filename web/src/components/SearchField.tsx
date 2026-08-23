@@ -22,13 +22,17 @@ import { cn } from "@/lib/cn";
  * with CSS source order picking the winner.
  *
  * `className` lands on the wrapper rather than the field, because the wrapper is
- * what a caller places — `flex-1` in a row of controls. Everything else an input
- * can be handed comes through `...rest`, which is what lets the song page's box
- * be a combobox — its role, the aria that goes with it, and its own key handling
- * — without this file knowing that a results panel exists. The label and
- * placeholder are written below rather than defaulted in the signature, since
- * `...rest` comes after them: neither caller overrides one today, and one that
- * needs to still can.
+ * the box a caller would place. No caller places one today — `SearchHeader` owns
+ * the field's share of its row, `flex-1` and all — and the prop stays named here
+ * rather than left to `...rest`, which would put a caller's class on the input,
+ * where it replaces `fieldClasses` outright instead of adding to it.
+ *
+ * Everything else an input can be handed comes through `...rest`, which is what
+ * lets the song page's box be a combobox — its role, the aria that goes with it,
+ * and its own key handling — without this file knowing that a results panel
+ * exists. The label and placeholder are written below rather than defaulted in
+ * the signature, since `...rest` comes after them: neither caller overrides one
+ * today, and one that needs to still can.
  */
 const fieldClasses = cn(
   fieldChrome,

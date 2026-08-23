@@ -708,8 +708,9 @@ inventory this file records going stale under Head assets.)
   gesture begun in the results would page the list. And the panel is dismissed by
   a `pointerdown` listener rather than by a full-screen transparent element,
   which is the shape of thing the tap strips were.
-- **`StickyHeader` is shared by two pages, and its rule is a class.** It hides on
-  the way down only below `md` — a desk has the height to spare — so the whole of
+- **`StickyHeader` is shared by two pages — both reaching it through
+  `SearchHeader` — and its rule is a class.** It hides on the way down only below
+  `md` — a desk has the height to spare — so the whole of
   "out of the way on a phone, sticky at a desk" is the `max-md:` prefix on one
   transform, and dropping it changes the catalog page as much as the song page.
   That is why the spec lives beside the component in `Layout.test.tsx` rather than
@@ -717,6 +718,42 @@ inventory this file records going stale under Head assets.)
   rides on a spec that has nothing to do with it. The rest of the reasoning — why
   a Tailwind variant rather than `matchMedia`, and what `pinned` is for — is on
   the component.
+- **`SearchHeader` renders that sticky chrome itself, and owns the column and the
+  field's share of the row, so that no page can choose any of them.** The search
+  box is the one control that stays on screen through a navigation, so anything
+  that moves it moves under the finger that just tapped a row — and every cause
+  was in the markup rather than in any behavior. The catalog's column was
+  `max-w-3xl` against the song page's `max-w-2xl`, which slid the field sideways
+  on the way in and back on the way out; only the catalog carries a filter
+  button; and the filter *count* was text beside that button's icon, so applying
+  a filter widened the button and shrank the field in place. Hence one component
+  around `StickyHeader` rather than beside it: "a sticky header with a
+  hand-rolled column" is then not a thing a page can write, which is worth more
+  than a spec saying not to — a spec rendering this component can only ever see
+  the column it hardcodes. `flex-1` is in here for the same reason, since a
+  caller stating its own proportion is the same divergence one level down. The
+  count is a badge over a square button — an `icon` size in `buttonStyles`, since
+  `cn` is a plain join and `px-4 px-3` leaves the width to whichever Tailwind
+  emitted last — and `trailing` is emphatically **not a reserved slot**: a page
+  with no control to put there gives the field that width instead, and the slot
+  is not rendered at all, the row's `gap` alone being 8px of the field. A slot
+  held empty was the first fix and the wrong one; it kept the box identical to
+  the pixel while leaving it a half-button left of center on the page that had
+  nothing to fill it, and off-center reads worse than a right edge that moves. So
+  the right edge is the one part of the field a page carrying a control cannot
+  share, and it is the deliberate cost — which is the half `SearchHeader.test.tsx`
+  pins, being a choice rather than a structure. **`SongDetailPage`'s own column
+  followed the header rather than the reverse**, and every state of that page
+  carries it — the skeleton and the "not available" message too, or the width
+  changes as the song arrives. A song page's field was 96px wider than the
+  article under it while the article kept `max-w-2xl`, so the open results panel
+  hung past the lyrics it covered by 48px on each side; the lyrics are short
+  lines rather than prose, so the wider measure costs them nothing. **The last
+  cause is in no component at all** — a page long enough for a scrollbar and one
+  short enough to go without slide a centered column sideways by half a
+  scrollbar between them, so `scrollbar-gutter: stable` is on `html`. Invisible
+  on a Mac, where scrollbars overlay and reserve nothing, which is exactly why
+  it is written down.
 - **The editor leaves by popping the history, not by navigating to the song.**
   It is only ever reached from the song's own page, so replacing its entry with
   that song — which is what saving used to do — leaves two identical song

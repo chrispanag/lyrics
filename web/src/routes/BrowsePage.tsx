@@ -5,10 +5,10 @@ import { Music4, Plus, SlidersHorizontal } from "lucide-react";
 import { errorMessage } from "@/api/client";
 import { useGenres, usePerson, useSongs } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
-import { StickyHeader } from "@/components/Layout";
 import { buttonClasses } from "@/components/buttonStyles";
 import { PageTitle } from "@/components/PageTitle";
 import { SearchField } from "@/components/SearchField";
+import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
 import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Skeleton } from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
@@ -171,7 +171,11 @@ export function BrowsePage() {
   const activeGenre = genres?.data.find((g) => g.slug === genreSlug);
   // Fetched by id so the chip can show a name rather than a UUID.
   const { data: activePerson } = usePerson(personId);
-  const hasFilters = Boolean(genreSlug || language || personId);
+  // One list of what counts as a filter: the button's variant and the badge's
+  // number read the same value, so a fourth filter cannot reach one and miss
+  // the other.
+  const filterCount = [personId, genreSlug, language].filter(Boolean).length;
+  const hasFilters = filterCount > 0;
   const total = data?.meta.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -182,31 +186,39 @@ export function BrowsePage() {
           those are exactly the two places a row of identical "Songfolio"
           entries is useless. */}
       <PageTitle name={query ? `Search: ${query}` : "Browse"} />
-      <StickyHeader>
-        <div className="mx-auto max-w-3xl px-4 py-3">
-          <div className="flex items-center gap-2">
-            {/* The same box the song page carries, chrome and quirks included —
-                see `SearchField`. This one drives the listing below it rather
-                than a panel, so it is handed nothing but its state. */}
-            <SearchField value={draft} onChange={setDraft} className="flex-1" />
-
-            <Button
-              variant={hasFilters ? "primary" : "secondary"}
-              size="md"
-              onClick={() => setFiltersOpen(true)}
-              aria-label="Filters"
-              className="shrink-0 px-3"
-            >
-              <SlidersHorizontal aria-hidden className="size-5" />
-              {hasFilters && (
-                <span className="text-xs">
-                  {[personId, genreSlug, language].filter(Boolean).length}
-                </span>
-              )}
-            </Button>
-          </div>
-
-          {hasFilters && (
+      {/* The header, its column and the field's share of the row all belong to
+          `SearchHeader`, which is how the field keeps its place on a song page —
+          where, with no button beside it, it takes the width this one gives
+          up. */}
+      <SearchHeader
+        trailing={
+          <Button
+            // Square, and the count rides on its corner rather than sitting
+            // beside the icon: as text in the row it widened the button, and a
+            // wider button is a narrower field, so applying a filter resized
+            // the search box in place.
+            size="icon"
+            variant={hasFilters ? "primary" : "secondary"}
+            onClick={() => setFiltersOpen(true)}
+            // The count is in the name because an `aria-label` replaces the
+            // content it labels, so a badge inside this button is announced by
+            // nobody.
+            aria-label={hasFilters ? `Filters (${filterCount} active)` : "Filters"}
+            className="relative"
+          >
+            <SlidersHorizontal aria-hidden className="size-5" />
+            {hasFilters && (
+              <span
+                aria-hidden
+                className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-brand-700 dark:bg-stone-900 dark:text-brand-200"
+              >
+                {filterCount}
+              </span>
+            )}
+          </Button>
+        }
+        below={
+          hasFilters && (
             <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
               {personId && (
                 <Chip onRemove={() => setParam("person", null)}>
@@ -231,9 +243,14 @@ export function BrowsePage() {
                 </Chip>
               )}
             </div>
-          )}
-        </div>
-      </StickyHeader>
+          )
+        }
+      >
+        {/* The same box the song page carries, chrome and quirks included — see
+            `SearchField`. This one drives the listing below it rather than a
+            panel, so it is handed nothing but its state. */}
+        <SearchField value={draft} onChange={setDraft} />
+      </SearchHeader>
 
       <div className="mx-auto max-w-3xl px-4 py-4">
         <div className="mb-4 flex items-center justify-between gap-3">

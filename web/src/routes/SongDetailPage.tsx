@@ -120,7 +120,7 @@ function SongArticle() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 px-4 py-6">
+      <div className="mx-auto max-w-3xl space-y-4 px-4 py-6">
         {/* Nameless while the song is in flight, rather than a tab that flashes
             "undefined — Songfolio" on every step through a list. */}
         <PageTitle />
@@ -133,7 +133,7 @@ function SongArticle() {
 
   if (isError || !song) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-6">
+      <div className="mx-auto max-w-3xl px-4 py-6">
         <PageTitle name="Song not available" />
         <ErrorMessage>{errorMessage(error, "This song could not be loaded.")}</ErrorMessage>
         <Link to="/" className="mt-4 inline-block text-sm text-brand-600 hover:underline">
@@ -147,7 +147,12 @@ function SongArticle() {
   const position = contextList ? listPosition(contextList, song.id) : null;
 
   return (
-    <article ref={surface} className="mx-auto max-w-2xl px-4 py-4">
+    // The catalog's column, which is the search header's above it: the box a
+    // reader's eye follows down from the field has to be the same box, and the
+    // open results panel hung 48px past this article on each side while it was
+    // narrower. Every state of the page carries it, or the width changes as the
+    // song arrives.
+    <article ref={surface} className="mx-auto max-w-3xl px-4 py-4">
       {/* The song alone, not the song and its artist: a tab strip truncates
           hard, and the title is what a reader is looking for among ten of
           these. */}

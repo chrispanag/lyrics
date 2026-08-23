@@ -10,8 +10,8 @@ import {
 } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import { StickyHeader } from "./Layout";
 import { SearchField } from "./SearchField";
+import { SearchHeader } from "./SearchHeader";
 import { Snippet } from "./Snippet";
 import { useSongs } from "@/api/hooks";
 import { browseHref } from "@/lib/browse";
@@ -290,69 +290,70 @@ export function SongSearch() {
   };
 
   return (
-    // Pinned while the panel is up, since the results hang off this box — and
+    // The header is the catalog's, column and all, because the field has to keep
+    // its place across a navigation — tapping a song otherwise moves the box out
+    // from under the finger that tapped it. With no filter button to sit beside,
+    // the field takes that width too; see `SearchHeader`.
+    //
+    // Pinned while the panel is up, since the results hang off that box — and
     // while the field merely has the caret, which is the case a panel cannot
     // cover: on iOS, focusing a field can scroll the document by itself, and
     // that is read as scrolling down to the lyrics. Nothing is open yet at that
     // moment, so a header pinned on `open` alone slides away with the caret in
     // it and snaps back on the first keystroke.
-    <StickyHeader pinned={open || focused}>
-      {/* The column matches the article's own width, so the box lines up with
-          the song under it rather than with the catalog's wider grid. */}
-      <div className="mx-auto max-w-2xl px-4 py-3">
-        <div
-          ref={wrapper}
-          className="relative"
-          // Focus leaving for somewhere else closes the panel, which a press
-          // outside cannot do for a reader who Tabs away: the rows are not tab
-          // stops, so focus jumps clear of the panel and would leave it standing
-          // over the lyrics with no press to shut it. Only when focus actually
-          // landed somewhere — a null `relatedTarget` is the window going away,
-          // or Safari declining to focus a link it was clicked on, and
-          // dismissing then would unmount the row before its click reached it.
-          onBlur={(event) => {
-            const next = event.relatedTarget;
-            if (!(next instanceof Node)) return;
-            if (wrapper.current?.contains(next)) return;
-            dismiss();
+    <SearchHeader pinned={open || focused}>
+      <div
+        ref={wrapper}
+        className="relative"
+        // Focus leaving for somewhere else closes the panel, which a press
+        // outside cannot do for a reader who Tabs away: the rows are not tab
+        // stops, so focus jumps clear of the panel and would leave it standing
+        // over the lyrics with no press to shut it. Only when focus actually
+        // landed somewhere — a null `relatedTarget` is the window going away,
+        // or Safari declining to focus a link it was clicked on, and
+        // dismissing then would unmount the row before its click reached it.
+        onBlur={(event) => {
+          const next = event.relatedTarget;
+          if (!(next instanceof Node)) return;
+          if (wrapper.current?.contains(next)) return;
+          dismiss();
+        }}
+      >
+        <SearchField
+          value={draft}
+          onChange={(next) => {
+            setDraft(next);
+            setDismissed(false);
+            setActive(-1);
           }}
-        >
-          <SearchField
-            value={draft}
-            onChange={(next) => {
-              setDraft(next);
-              setDismissed(false);
-              setActive(-1);
-            }}
-            onKeyDown={onKeyDown}
-            onFocus={() => setFocused(true)}
-            // Unguarded, unlike the wrapper's: what this tracks is the caret, so
-            // losing it to nowhere at all — a press on the lyrics — has to count.
-            onBlur={() => setFocused(false)}
-            role="combobox"
-            aria-expanded={open}
-            // Only while the listbox is really rendered, which the panel's
-            // "Searching…" and "nothing matched" answers are not: an id that
-            // resolves to nothing promises a screen reader a list that is not
-            // there.
-            aria-controls={results.length > 0 ? listboxId : undefined}
-            aria-autocomplete="list"
-            aria-activedescendant={activeSong ? optionId(listboxId, active) : undefined}
-          />
+          onKeyDown={onKeyDown}
+          onFocus={() => setFocused(true)}
+          // Unguarded, unlike the wrapper's: what this tracks is the caret, so
+          // losing it to nowhere at all — a press on the lyrics — has to count.
+          onBlur={() => setFocused(false)}
+          role="combobox"
+          aria-expanded={open}
+          // Only while the listbox is really rendered, which the panel's
+          // "Searching…" and "nothing matched" answers are not: an id that
+          // resolves to nothing promises a screen reader a list that is not
+          // there.
+          aria-controls={results.length > 0 ? listboxId : undefined}
+          aria-autocomplete="list"
+          aria-activedescendant={activeSong ? optionId(listboxId, active) : undefined}
+        />
 
-          {open && (
-            <div
-              className={cn(
-                "absolute inset-x-0 top-full z-10 mt-2 overflow-hidden rounded-2xl border shadow-xl",
-                "border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-900",
-              )}
-            >
-              {panelBody()}
-            </div>
-          )}
-        </div>
+        {open && (
+          <div
+            className={cn(
+              "absolute inset-x-0 top-full z-10 mt-2 overflow-hidden rounded-2xl border shadow-xl",
+              "border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-900",
+            )}
+          >
+            {panelBody()}
+          </div>
+        )}
       </div>
-    </StickyHeader>
+    </SearchHeader>
   );
 }
 

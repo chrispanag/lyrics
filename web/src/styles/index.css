@@ -35,6 +35,16 @@
   html {
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    /* The gutter is reserved whether or not the page is long enough to need a
+       scrollbar, which is what keeps a centered column still across a
+       navigation. Where a scrollbar takes layout width — Windows and Linux,
+       Chrome most of all — a catalog of a thousand songs has one and a short
+       song page does not, so the whole column, search box included, slid
+       sideways by half a scrollbar on the way in and back on the way out. It is
+       the one movement `SearchHeader` cannot hold, since the box it hands both
+       pages is already identical. Invisible on a Mac, where scrollbars overlay
+       the content and reserve nothing. */
+    scrollbar-gutter: stable;
   }
 
   @media (prefers-reduced-motion: reduce) {
