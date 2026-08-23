@@ -287,6 +287,33 @@ export function Sheet({
     };
   }, [open, onClose]);
 
+  // Whatever was focused when the sheet went up gets focus back when it comes
+  // down. Closing unmounts everything in here, and an unmounted element takes
+  // focus with it — to `<body>`, which is no element at all: the reader is
+  // dropped at the top of the document with the whole page to tab through
+  // again. It is invisible with a mouse, and worst on a sheet whose own action
+  // closes it, where the control that vanishes is the one just pressed.
+  //
+  // Its own effect, keyed on `open` alone, and that is the whole of why it is
+  // not folded into the one above: every call site passes `onClose` as an
+  // inline closure, so that effect re-runs on any parent render while the sheet
+  // is *open* — and a restore living in its cleanup would fire then, pulling
+  // focus out of the dialog and onto the trigger behind the backdrop. Renders
+  // like that are ordinary: this page reopens the sheet while an upload is in
+  // flight, and `AddToListSheet` re-renders its page on every list it toggles.
+  //
+  // Reading the opener here rather than asking the caller for it is what makes
+  // it true for all seven sheets; `focus` on an element that has since left the
+  // document or gone disabled does nothing, which is right in both cases.
+  useEffect(() => {
+    if (!open) return;
+
+    const opener = document.activeElement;
+    return () => {
+      if (opener instanceof HTMLElement) opener.focus();
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (

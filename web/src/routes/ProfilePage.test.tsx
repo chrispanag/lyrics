@@ -16,6 +16,17 @@ import { server } from "@/test/server";
 const photo = () => new File(["pretend jpeg"], "portrait.jpg", { type: "image/jpeg" });
 
 /**
+ * Press the pencil on the picture.
+ *
+ * Both controls that touch a picture live behind it, so every spec here opens
+ * the sheet before it can reach one — which is the pin on there being a single
+ * way in, and on that way being reachable by name rather than by the badge
+ * being found among the page's other buttons.
+ */
+const openPictureMenu = () =>
+  userEvent.click(screen.getByRole("button", { name: "Edit picture" }));
+
+/**
  * The page under an auth context whose account record really is replaced.
  *
  * `renderWithProviders` stubs a fixed user, which is exactly the condition the
@@ -63,6 +74,7 @@ describe("ProfilePage pictures", () => {
     const reload = vi.fn();
 
     renderWithProviders(<ProfilePage />, { user: makeUser(), auth: { reload } });
+    await openPictureMenu();
     await userEvent.upload(screen.getByLabelText("Add picture"), photo());
 
     // The bytes on the wire are the canvas's, not the chosen file's: the API
@@ -75,9 +87,10 @@ describe("ProfilePage pictures", () => {
     await waitFor(() => expect(reload).toHaveBeenCalledWith(stored));
   });
 
-  it("offers removal only to an account that has a picture", () => {
+  it("offers removal only to an account that has a picture", async () => {
     const { unmount } = renderWithProviders(<ProfilePage />, { user: makeUser() });
 
+    await openPictureMenu();
     expect(screen.getByLabelText("Add picture")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Remove picture" })).not.toBeInTheDocument();
     unmount();
@@ -86,8 +99,88 @@ describe("ProfilePage pictures", () => {
       user: makeUser({ avatar_updated_at: "2026-08-22T20:00:00Z" }),
     });
 
+    await openPictureMenu();
     expect(screen.getByLabelText("Change picture")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove picture" })).toBeInTheDocument();
+  });
+
+  // The sheet is a modal — `lib/modal.ts` finds it, and the arrow keys and the
+  // paging swipe stand down while it is up. Left open across an upload it would
+  // also cover the picture being replaced, which is the one thing worth
+  // watching, and its file input would still be there to start a second decode
+  // over the first.
+  //
+  // The upload is held open on purpose. Against a handler that answers at once,
+  // this passes just as well with the close moved *after* the await — which is
+  // the arrangement it exists to refuse — so "as soon as" has to be read while
+  // the request is still in flight or it is not being read at all.
+  it("closes the menu as soon as a picture is chosen, before the upload lands", async () => {
+    const stored = makeUser({ avatar_updated_at: "2026-08-22T20:00:00Z" });
+    let land = () => {};
+    const landed = new Promise<void>((resolve) => {
+      land = resolve;
+    });
+    server.use(
+      http.post(`${API}/api/v1/me/avatar`, async () => {
+        await landed;
+        return HttpResponse.json(stored);
+      }),
+    );
+
+    renderWithProviders(<ProfilePage />, { user: makeUser() });
+
+    await openPictureMenu();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    await userEvent.upload(screen.getByLabelText("Add picture"), photo());
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    // Reopened while the request is still out: the pick that must not happen
+    // twice is refused here rather than by the trigger, which stays pressable so
+    // that closing the sheet has somewhere to put focus back.
+    await openPictureMenu();
+    expect(screen.getByLabelText("Working…")).toBeDisabled();
+
+    expect(screen.getByRole("status")).toHaveTextContent("Saving your picture…");
+
+    // Parked on a control inside the open sheet, because landing re-renders the
+    // page under it: `Sheet` restores focus from an effect keyed on `open`
+    // alone, and folded into the effect beside it — whose `onClose` dep is a
+    // fresh closure every render — that restore would run here, mid-open, and
+    // pull focus onto the trigger behind the backdrop.
+    screen.getByRole("button", { name: "Close" }).focus();
+
+    // Still "Add picture" once it lands, not "Change picture": the stubbed
+    // context holds a fixed record, so what is being read here is the pick
+    // being offered again — not the account gaining a picture, which is the
+    // spec above's with a provider that really replaces it.
+    land();
+    await waitFor(() => expect(screen.getByLabelText("Add picture")).toBeEnabled());
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+  });
+
+  // Closing unmounts the control that was pressed, and focus goes with it — to
+  // `<body>`, which leaves a keyboard reader at the top of the document with the
+  // whole page to tab through again. `Sheet` hands it back; the trigger stays
+  // enabled while busy so that there is something to hand it back to.
+  it("returns focus to the pencil when the menu closes", async () => {
+    server.use(
+      http.delete(`${API}/api/v1/me/avatar`, () =>
+        HttpResponse.json(makeUser({ avatar_updated_at: null })),
+      ),
+    );
+
+    renderWithProviders(<ProfilePage />, {
+      user: makeUser({ avatar_updated_at: "2026-08-22T20:00:00Z" }),
+    });
+    const trigger = screen.getByRole("button", { name: "Edit picture" });
+
+    await userEvent.click(trigger);
+    await userEvent.click(screen.getByRole("button", { name: "Remove picture" }));
+
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("removes a picture and hands that account back too", async () => {
@@ -99,14 +192,16 @@ describe("ProfilePage pictures", () => {
       user: makeUser({ avatar_updated_at: "2026-08-22T20:00:00Z" }),
       auth: { reload },
     });
+    await openPictureMenu();
     await userEvent.click(screen.getByRole("button", { name: "Remove picture" }));
 
     await waitFor(() => expect(reload).toHaveBeenCalledWith(cleared));
   });
 
-  // Without this the promise rejects unhandled, the control returns to "Add
-  // picture", and nothing on the screen distinguishes a refused upload from one
-  // that worked.
+  // Without this the promise rejects unhandled, the pencil stops spinning, and
+  // nothing on the screen distinguishes a refused upload from one that worked.
+  // The message has to be on the page rather than in the sheet, which the pick
+  // has already closed.
   it("says so when the API refuses the picture", async () => {
     server.use(
       http.post(`${API}/api/v1/me/avatar`, () =>
@@ -124,6 +219,7 @@ describe("ProfilePage pictures", () => {
     );
 
     renderWithProviders(<ProfilePage />, { user: makeUser() });
+    await openPictureMenu();
     await userEvent.upload(screen.getByLabelText("Add picture"), photo());
 
     // Both halves: the message says what went wrong, and the detail is the only
@@ -148,9 +244,21 @@ describe("ProfilePage pictures", () => {
     renderWithProviders(<LiveAccount start={stored} />, { user: stored });
     const field = screen.getByLabelText("Display name");
     await userEvent.type(field, "Μαρία Κ.");
+    await openPictureMenu();
     await userEvent.upload(screen.getByLabelText("Add picture"), photo());
 
-    await waitFor(() => expect(screen.getByLabelText("Change picture")).toBeInTheDocument());
+    // Opened a second time — the pick closed it — to read the account the
+    // context now holds: the label in there is keyed on `avatar_updated_at`, so
+    // "Change picture" is what says the record really was replaced, which is the
+    // condition the field has to survive and the reason this spec nests its own
+    // provider. That the sheet shut at all belongs to the spec above.
+    //
+    // `findBy`, because the sheet can be reopened before the upload lands and
+    // the label reads "Working…" until it does. A `getBy` here passes only on
+    // the stubbed pipeline being fast, and fails on a spec's own slowness rather
+    // than on the invariant.
+    await openPictureMenu();
+    expect(await screen.findByLabelText("Change picture")).toBeInTheDocument();
     expect(field).toHaveValue("Μαρία Κ.");
   });
 
@@ -161,6 +269,7 @@ describe("ProfilePage pictures", () => {
     const huge = photo();
     Object.defineProperty(huge, "size", { value: 40 * 1024 * 1024 });
 
+    await openPictureMenu();
     await userEvent.upload(screen.getByLabelText("Add picture"), huge);
 
     expect(
@@ -175,6 +284,7 @@ describe("ProfilePage pictures", () => {
     vi.stubGlobal("createImageBitmap", () => Promise.reject(new Error("unsupported format")));
 
     renderWithProviders(<ProfilePage />, { user: makeUser() });
+    await openPictureMenu();
     await userEvent.upload(screen.getByLabelText("Add picture"), photo());
 
     expect(
