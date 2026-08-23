@@ -35,9 +35,12 @@ func TestNormalizeProducesJPEG(t *testing.T) {
 	}
 }
 
-// Cropped here and not only in the browser, so every stored picture is square —
-// including one written by a client that skipped the browser path entirely.
-func TestNormalizeCropsToACenteredSquare(t *testing.T) {
+// Cropped and shrunk here and not only in the browser, so every stored picture is
+// a small square — including one written by a client that skipped the browser
+// path entirely, which would otherwise store a MaxDimension square, sixteen
+// times the pixels the app draws, leaving the admin console to download fifty of
+// those to fill fifty 40px circles.
+func TestNormalizeCropsAndShrinksToACenteredSquare(t *testing.T) {
 	// Both source formats, because they take different branches: a JPEG reports
 	// itself opaque and is drawn straight across, a PNG may not be and is
 	// composited onto white. JPEG is also the only format the browser ever
@@ -50,7 +53,13 @@ func TestNormalizeCropsToACenteredSquare(t *testing.T) {
 	}
 
 	for name, fixture := range fixtures {
-		for _, size := range [][2]int{{1000, 500}, {60, 240}, {33, 33}} {
+		for _, size := range [][2]int{
+			{1000, 500}, {60, 240}, {33, 33},
+			// MaxDimension exactly, one pixel below the refusal cases further
+			// down: this row is the shrink, not the refusal. A client that
+			// skipped `toSquareJpeg` is the only thing that sends it.
+			{imaging.MaxDimension, imaging.MaxDimension},
+		} {
 			out, _, err := imaging.Normalize(fixture(size[0], size[1]))
 			if err != nil {
 				t.Fatalf("Normalize(%s %dx%d): %v", name, size[0], size[1], err)
@@ -60,11 +69,63 @@ func TestNormalizeCropsToACenteredSquare(t *testing.T) {
 			if err != nil {
 				t.Fatalf("decode result: %v", err)
 			}
-			want := min(size[0], size[1])
+			// Crop first, then shrink: the square is the shorter side, unless
+			// that is over the size this package stores, in which case it is
+			// StoredEdge. 1000x500 exercises both steps at once.
+			want := min(size[0], size[1], imaging.StoredEdge)
 			if cfg.Width != want || cfg.Height != want {
 				t.Errorf("Normalize(%s %dx%d) = %dx%d, want %dx%d",
 					name, size[0], size[1], cfg.Width, cfg.Height, want, want)
 			}
+		}
+	}
+}
+
+// The two steps compose, and the order matters: an oversized rectangle is
+// cropped to its middle and *then* shrunk. Shrinking first would fit the whole
+// picture into the square, which is the squashed caricature the crop exists to
+// avoid — and the dimensions alone cannot tell the two apart, so this reads a
+// pixel that only survives a centered crop.
+func TestNormalizeCropsBeforeShrinkingANonSquarePicture(t *testing.T) {
+	// Three square bands of this edge, so the picture is 3:1 and the largest
+	// centered square inside it is exactly the middle band. The edge is over
+	// StoredEdge, so that square is then shrunk — and three of them still fit
+	// inside MaxDimension, which is what keeps this the shrink and not the
+	// refusal.
+	const band = imaging.MaxDimension / 3
+
+	// Red and blue on the outside, mid-gray in the middle.
+	out, _, err := imaging.Normalize(testutil.BandsPNG(t, band,
+		color.NRGBA{R: 0xff, A: 0xff},
+		color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xff},
+		color.NRGBA{B: 0xff, A: 0xff},
+	))
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+
+	decoded, err := jpeg.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if got := decoded.Bounds(); got.Dx() != imaging.StoredEdge || got.Dy() != imaging.StoredEdge {
+		t.Errorf("size = %dx%d, want %dx%d",
+			got.Dx(), got.Dy(), imaging.StoredEdge, imaging.StoredEdge)
+	}
+
+	// Three points across the row, each well clear of the band edges the
+	// resampling kernel reaches across. All mid-gray means the middle band
+	// filled the output on its own. A crop taken from a corner rather than the
+	// middle shows an outer band's color at the center; the whole 3:1 picture
+	// squeezed into the square — scaled instead of cropped — is gray in the
+	// middle either way and puts red and blue back at the quarter points, which
+	// is why the center alone would not tell the two apart.
+	const mid = imaging.StoredEdge / 2
+	for _, x := range []int{imaging.StoredEdge / 8, mid, imaging.StoredEdge * 7 / 8} {
+		r, g, b, _ := decoded.At(x, mid).RGBA()
+		if r < 0x4000 || r > 0xc000 || g < 0x4000 || g > 0xc000 || b < 0x4000 || b > 0xc000 {
+			t.Errorf("(%d,%d) = (r=%d g=%d b=%d), want the middle band's mid-gray",
+				x, mid, r, g, b)
 		}
 	}
 }
@@ -92,21 +153,30 @@ func TestNormalizeKeepsAnOpaqueSourcesPixels(t *testing.T) {
 // A transparent PNG has to be composited onto something, because JPEG has no
 // alpha channel. Encoded as-is, every clear pixel comes out black and a logo on
 // a transparent background arrives as a dark square.
+// Both sizes, because they take different paths through the same fill: a
+// picture at or under StoredEdge is copied onto the white, an oversized one is
+// resampled onto it. Scaling with draw.Src instead — or flattening after the
+// scale rather than before — writes premultiplied zeroes over the fill, which
+// is the dark square with an extra step in front of it.
 func TestNormalizeFlattensTransparencyOntoWhite(t *testing.T) {
-	transparent := testutil.SolidPNG(t, 8, 8, color.NRGBA{})
+	for _, edge := range []int{8, imaging.StoredEdge * 2} {
+		transparent := testutil.SolidPNG(t, edge, edge, color.NRGBA{})
 
-	out, _, err := imaging.Normalize(transparent)
-	if err != nil {
-		t.Fatalf("Normalize: %v", err)
-	}
+		out, _, err := imaging.Normalize(transparent)
+		if err != nil {
+			t.Fatalf("Normalize(%dx%d): %v", edge, edge, err)
+		}
 
-	decoded, err := jpeg.Decode(bytes.NewReader(out))
-	if err != nil {
-		t.Fatalf("decode result: %v", err)
-	}
-	r, g, b, a := decoded.At(4, 4).RGBA()
-	if r < 0xf000 || g < 0xf000 || b < 0xf000 || a != 0xffff {
-		t.Errorf("transparent pixel became (%d, %d, %d, %d), want opaque white", r, g, b, a)
+		decoded, err := jpeg.Decode(bytes.NewReader(out))
+		if err != nil {
+			t.Fatalf("decode result: %v", err)
+		}
+		center := decoded.Bounds().Dx() / 2
+		r, g, b, a := decoded.At(center, center).RGBA()
+		if r < 0xf000 || g < 0xf000 || b < 0xf000 || a != 0xffff {
+			t.Errorf("transparent %dx%d pixel became (%d, %d, %d, %d), want opaque white",
+				edge, edge, r, g, b, a)
+		}
 	}
 }
 

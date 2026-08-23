@@ -31,6 +31,27 @@ func SolidPNG(t testing.TB, width, height int, fill color.NRGBA) []byte {
 	return out.Bytes()
 }
 
+// BandsPNG encodes a PNG of equal-width vertical bands, one square of the given
+// edge per fill, so the picture is len(fills):1. With an odd number of fills the
+// largest centered square inside it is exactly the middle band, which is what
+// lets a test tell a centered crop apart from a whole picture squashed into the
+// square — the output dimensions alone cannot, since both are square.
+func BandsPNG(t testing.TB, band int, fills ...color.NRGBA) []byte {
+	t.Helper()
+
+	img := image.NewNRGBA(image.Rect(0, 0, band*len(fills), band))
+	for i, fill := range fills {
+		strip := image.Rect(i*band, 0, (i+1)*band, band)
+		draw.Draw(img, strip, image.NewUniform(fill), image.Point{}, draw.Src)
+	}
+
+	var out bytes.Buffer
+	if err := png.Encode(&out, img); err != nil {
+		t.Fatalf("encode png: %v", err)
+	}
+	return out.Bytes()
+}
+
 // SolidJPEG encodes a one-color JPEG of the given size. JPEG carries no alpha,
 // so this is the opaque path — and the only format the browser ever uploads,
 // which is why it is worth having beside SolidPNG.

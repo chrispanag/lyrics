@@ -497,11 +497,12 @@ DELETE /admin/users/{id}                 ┘
 A profile picture is read without authentication and written only by its owner.
 It has to be: an `<img>` carries no `Authorization` header, so a picture behind
 authentication would not load for the person it belongs to. Both writes answer
-with the updated user; the upload takes raw image bytes, not a JSON field, and is
-capped at 1 MB — the API center-crops whatever arrives to a square and re-encodes
-it as JPEG, which is also what strips the EXIF metadata a phone photo carries, so
-every stored picture is square whichever client wrote it. `GET` serves it with an
-`ETag` and five minutes of `Cache-Control`. The app appends the picture's
+with the updated user; the upload takes raw image bytes, not a JSON field, and
+is capped at 1 MB — the API center-crops whatever arrives to a square, shrinks
+that square to 256px if it is larger, and re-encodes it as JPEG, which is also
+what strips the EXIF metadata a phone photo carries, so every stored picture is
+a small square whichever client wrote it. `GET` serves it with an `ETag` and
+five minutes of `Cache-Control`. The app appends the picture's
 `avatar_updated_at` to the URL, so a *replacement* is a new address and appears
 at once — but a removal has no new version to point anyone at and nothing that
 recalls the old one, which is what the window is sized for: it is how long a

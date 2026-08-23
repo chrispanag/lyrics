@@ -358,22 +358,36 @@ inventory this file records going stale under Head assets.)
   `TestProfilePictureUploadsAreRateLimited`, which asserts the *route* — the
   counter itself is unit tested — and asserts a second account is unaffected,
   since sharing a bucket is the failure the key choice exists to prevent.
-- **The upload is cropped and re-encoded rather than stored.** Re-encoding is
-  what strips EXIF — a photo from a phone carries the GPS coordinates where it
-  was taken, which nobody choosing an avatar is thinking about — and it makes the
-  stored bytes provably the output of Go's encoder rather than a file that merely
-  begins with the right magic bytes. `Normalize` returns the content type
-  *with* the bytes, so the label a row is stored under cannot disagree with the
-  format that was encoded. Cropping belongs here rather than only in the browser
-  because this is the layer no client can skip: "a stored picture is square" is
-  then true for every consumer, and the `object-cover` on the `<img>` is belt and
-  suspenders instead of the thing holding the circle together. JPEG has no
-  alpha, so a transparent source is flattened onto white first; drawn straight
-  across, every clear pixel comes out black and a logo on a clear background
-  arrives as a dark square. That flatten asks the *image* whether it is opaque
-  rather than checking `format == "png"`: keyed on the format name, registering
-  one more decoder — a line in an import block, in a file with no reason to
-  mention compositing — would silently bring the black square back.
+- **The upload is cropped, shrunk and re-encoded rather than stored.**
+  Re-encoding is what strips EXIF — a photo from a phone carries the GPS
+  coordinates where it was taken, which nobody choosing an avatar is thinking
+  about — and it makes the stored bytes provably the output of Go's encoder
+  rather than a file that merely begins with the right magic bytes. `Normalize`
+  returns the content type *with* the bytes, so the label a row is stored under
+  cannot disagree with the format that was encoded. Cropping belongs here
+  rather than only in the browser because this is the layer no client can skip:
+  "a stored picture is square" is then true for every consumer, and the
+  `object-cover` on the `<img>` is belt and suspenders instead of the thing
+  holding the circle together. Shrinking belongs here for the same reason and
+  was missing: `Normalize` cropped without ever resizing, so a client that
+  skipped `toSquareJpeg` could store a full `MaxDimension` square — sixteen
+  times the pixels the app draws — and the admin console downloads fifty
+  pictures to fill fifty 40px circles. `StoredEdge` is `AVATAR_SIZE` in
+  `lib/image.ts`, one decision written in two places; the two disagreeing costs
+  sharpness or upload bytes and never fails, because the smaller of them wins.
+  It is emphatically **not** `MaxDimension`, which is the decode bound above —
+  a refusal, sized to stop a header allocating 1.6 GB — and folding the two
+  together either refuses ordinary photographs or stores them at four times the
+  edge anything renders them at. JPEG has no alpha, so a transparent source is
+  flattened onto white first; drawn straight across, every clear pixel comes
+  out black and a logo on a clear background arrives as a dark square. That
+  flatten asks the *image* whether it is opaque rather than checking `format ==
+  "png"`: keyed on the format name, registering one more decoder — a line in an
+  import block, in a file with no reason to mention compositing — would
+  silently bring the black square back. The fill also goes down *before* the
+  resample, and that order is load-bearing now that there is one: scaled with
+  `draw.Src` instead, a transparent source writes premultiplied zeroes straight
+  over the white and the dark square is back with an extra step in front of it.
 - **The browser has to bake the rotation into the pixels before uploading.**
   `lib/image.ts` passes `imageOrientation: "from-image"` explicitly, because Go's
   decoder ignores EXIF and this re-encode discards it. Without it every portrait
