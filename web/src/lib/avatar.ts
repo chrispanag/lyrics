@@ -14,8 +14,9 @@ export type Identity = Pick<User, "id" | "email" | "display_name" | "avatar_upda
  * fallback is decided from data already in hand, the same way a song's video
  * badge reads `youtube_video_id`. The version in the query string is what makes
  * a replacement visible immediately, and it has to: the path itself never
- * changes, and the response is served `immutable` for a year, so a stale entry
- * is not something a reload would clear.
+ * changes. A removal has no version to move to, so it is only ever as quick as
+ * the response's freshness window — five minutes, which is why that response is
+ * not served `immutable`.
  */
 export function avatarSrc(user: Identity): string | null {
   if (!user.avatar_updated_at) return null;

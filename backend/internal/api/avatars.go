@@ -14,11 +14,19 @@ import (
 )
 
 // avatarCacheControl is how long a browser may reuse a picture before asking
-// again. It is a year and immutable because the client appends the picture's
-// version to the URL: a replacement is a different address, so there is nothing
-// to revalidate, and every conditional request an hour's freshness would have
-// bought is a round trip for an answer already known.
-const avatarCacheControl = "public, max-age=31536000, immutable"
+// again. Five minutes, and deliberately not immutable: the version the client
+// appends to the URL makes a *replacement* a new address, but a removal mints no
+// new version, so nothing busts the URL a reader is already holding — and
+// nothing recalls a cache entry either. This number is therefore the whole of a
+// deletion's latency, and a year of it meant a removed picture served for a year
+// from an address the origin had started answering 404 to.
+//
+// Five minutes is affordable because of the ETag below: a revalidation is a 304
+// of a couple of hundred bytes rather than another copy of the image, and after
+// a removal it is that revalidation which reaches the 404 and ends the exposure.
+// The residual is bounded and named — for up to five minutes after a removal,
+// other people's caches may still serve the old picture.
+const avatarCacheControl = "public, max-age=300"
 
 func (s *Server) handleUploadAvatar(w http.ResponseWriter, r *http.Request) error {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, imaging.MaxBytes))
