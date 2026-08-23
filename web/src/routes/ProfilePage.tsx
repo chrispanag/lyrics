@@ -1,14 +1,15 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { KeyRound, LogOut, Moon, Sun } from "lucide-react";
+import { KeyRound, Loader2, LogOut, Moon, Pencil, Sun, Trash2, Upload } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import { useRemoveAvatar, useUpdateProfile, useUploadAvatar } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
-import { Button, ErrorMessage, Field, Input, Spinner } from "@/components/ui";
+import { Button, ErrorMessage, Field, Input, Sheet, Spinner } from "@/components/ui";
 import { buttonClasses } from "@/components/buttonStyles";
 import { PageTitle } from "@/components/PageTitle";
+import type { Identity } from "@/lib/avatar";
 import { cn } from "@/lib/cn";
 import {
   IMAGE_TOO_LARGE_ERROR,
@@ -37,6 +38,7 @@ export function ProfilePage() {
   const [error, setError] = useState("");
   const [pictureError, setPictureError] = useState("");
   const [preparing, setPreparing] = useState(false);
+  const [pictureMenu, setPictureMenu] = useState(false);
   const [theme, setTheme] = useState<Theme>(storedTheme);
 
   // Adjusted while rendering, and keyed on the stored name rather than on the
@@ -127,10 +129,11 @@ export function ProfilePage() {
 
   const onPickPicture = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    // Cleared straight away, because a change event needs the value to differ:
-    // after a failed upload the file worth retrying is usually the same one,
-    // and left in place picking it again would do nothing at all.
+    // Belt to the close below's suspenders, which unmounts this input and so
+    // already empties it: on one that outlived the pick, retrying the same file
+    // — the usual one after a failure — would raise no change event at all.
     event.target.value = "";
+    setPictureMenu(false);
     if (!file) return;
 
     setPictureError("");
@@ -156,6 +159,7 @@ export function ProfilePage() {
 
   const onRemovePicture = async () => {
     setPictureError("");
+    setPictureMenu(false);
     try {
       await reload(await removeAvatar.mutateAsync());
     } catch (caught) {
@@ -168,47 +172,28 @@ export function ProfilePage() {
       <PageTitle name="Profile" />
       <h1 className="mb-6 text-2xl font-bold tracking-tight">Profile</h1>
 
-      <div className="mb-6 flex items-center gap-4">
-        <Avatar user={user} size="lg" />
-        <div className="min-w-0 space-y-1">
-          {/* A label around a visually hidden input, rather than a button that
-              clicks one: this way the control is a real file picker to a
-              keyboard and a screen reader, and `sr-only` keeps the input
-              focusable where `hidden` would not. */}
-          <label
-            className={cn(
-              buttonClasses("secondary", "md"),
-              // The ring belongs to the label because the input it wraps is
-              // `sr-only`: the browser draws focus on a 1px clipped box, so a
-              // keyboard user got no visible focus here while every other
-              // control on the page — a real button — shows one. The disabled
-              // pair is conditional for the same reason, since a `disabled:`
-              // variant can never match a label.
-              "cursor-pointer focus-within:ring-2 focus-within:outline-none",
-              busy && "cursor-not-allowed opacity-60",
-            )}
-          >
-            <input
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              disabled={busy}
-              onChange={(event) => void onPickPicture(event)}
-            />
-            {busy ? "Working…" : user.avatar_updated_at ? "Change picture" : "Add picture"}
-          </label>
-          {user.avatar_updated_at && (
-            <Button
-              variant="ghost"
-              className="w-full"
-              loading={removeAvatar.isPending}
-              onClick={() => void onRemovePicture()}
-            >
-              Remove picture
-            </Button>
-          )}
-        </div>
+      <div className="mb-6">
+        <PictureButton user={user} busy={busy} onClick={() => setPictureMenu(true)} />
+        {/* The badge's spinner said this to everyone who could see it and to
+            nobody else — the button's name does not change and the badge is
+            `aria-hidden`, so between choosing a photo and its landing (a 12MP
+            decode, on the device where that is slowest) a screen reader had
+            silence. Rendered always and emptied rather than mounted on demand:
+            a live region has to be on the page before its text changes, or the
+            change is the region arriving and there is nothing to announce. */}
+        <span role="status" className="sr-only">
+          {busy ? busyMessage(removeAvatar.isPending) : ""}
+        </span>
       </div>
+
+      <PictureMenu
+        open={pictureMenu}
+        onClose={() => setPictureMenu(false)}
+        hasPicture={Boolean(user.avatar_updated_at)}
+        busy={busy}
+        onPick={(event) => void onPickPicture(event)}
+        onRemove={() => void onRemovePicture()}
+      />
 
       {pictureError && (
         <div className="mb-6">
@@ -263,6 +248,167 @@ export function ProfilePage() {
 }
 
 /**
+ * The picture, and the one control that changes it.
+ *
+ * The whole circle is the button rather than the pencil alone. A badge small
+ * enough to sit on the perimeter of an 80px circle is around 32px across, well
+ * under the 44px floor every other control on this page keeps — and pressing
+ * the pencil still works, because it is drawn inside the button it marks.
+ * What the pair of buttons this replaces could not do is line up with the
+ * circle: a `<label>` and a `<Button>` are separate elements sized separately,
+ * so the stack beside the picture sat visibly ragged against it and against
+ * each other, which no spacing on the row could fix.
+ *
+ * Busy is drawn on the circle for the same reason the pending state is set
+ * before the canvas work rather than around the request alone: preparing a
+ * 12MP photo is the slow half, on the device where it is slowest, and the
+ * sheet holding the control has closed by then — so the circle is the only
+ * thing left on screen that can say something is happening.
+ */
+function PictureButton({
+  user,
+  busy,
+  onClick,
+}: {
+  user: Identity;
+  busy: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      // Deliberately not `disabled` while busy, which is what it was: closing
+      // the sheet hands focus back here, and focus cannot land on a disabled
+      // element — so the reader who pressed the control that just unmounted was
+      // dropped on `<body>` instead. Reopening mid-upload is harmless because
+      // the sheet refuses its own controls while busy, which is where that guard
+      // belongs anyway: it is the pick that must not happen twice, not the menu.
+      aria-busy={busy}
+      aria-label="Edit picture"
+      className={
+        // `group` so the badge can answer a hover over the whole circle: it is
+        // the part that looks pressable, and lighting up only when the pointer
+        // is on the badge itself makes the other 80% of the target look inert.
+        //
+        // `inline-flex` and not the button's own `inline-block`, which leaves a
+        // line box under the picture for a descender that is not there — three
+        // or four pixels of it, enough to drop the badge clear of the circle it
+        // is meant to straddle. Nor plain `flex`, which is block-level and
+        // would stretch the target across the column.
+        //
+        // No focus classes: `index.css` outlines every `:focus-visible` in
+        // `brand-500`, and this is a real button, so the outline lands on it —
+        // following the `rounded-full` as an outline does. The `<label>` below
+        // draws its own only because focus there is on an `sr-only` input the
+        // outline would trace instead.
+        "group relative inline-flex cursor-pointer rounded-full"
+      }
+    >
+      <Avatar user={user} size="lg" className={busy ? "opacity-50" : undefined} />
+      <span
+        // Decorative: the button around it carries the name, and a second one
+        // here would have a screen reader announce the control twice.
+        aria-hidden
+        className={cn(
+          // Straddling the perimeter, not inside it: a badge within the circle
+          // covers the face, and one clear of it reads as a separate control
+          // beside the picture — which is the arrangement this replaces.
+          "absolute -right-0.5 -bottom-0.5 flex size-8 items-center justify-center rounded-full",
+          // The ring is the page's own ground rather than a color of its own
+          // — `stone-50`, which is what `body` paints, not white — so the badge
+          // separates from a photo of any brightness while reading as a bite
+          // out of the circle rather than as a second disc on top of it.
+          "bg-brand-600 text-white ring-2 ring-stone-50 transition-colors dark:ring-stone-950",
+          !busy && "group-hover:bg-brand-700 group-active:bg-brand-800",
+        )}
+      >
+        {busy ? <Loader2 className="size-4 animate-spin" /> : <Pencil className="size-3.5" />}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The choice between the two things that can be done to a picture.
+ *
+ * A sheet rather than a menu anchored to the badge: it is the app's one modal,
+ * so Escape, the scroll lock and the pair of attributes `lib/modal.ts` reads
+ * all come with it. An anchored menu would need its own dismissal listener over
+ * the page, which is the shape of thing the tap strips were.
+ *
+ * Both actions close it the moment they start, so failure is reported on the
+ * page rather than in here: waiting instead would leave the sheet over the
+ * picture it is in the middle of replacing. What it does still have to say is
+ * that a picture is already on its way, because the trigger no longer refuses a
+ * press while one is — this is where that refusal lives now, and it has to be
+ * stated rather than inferred from the sheet being shut, or the second pick is
+ * a second decode and two reloads landing in whatever order they finish.
+ */
+function PictureMenu({
+  open,
+  onClose,
+  hasPicture,
+  busy,
+  onPick,
+  onRemove,
+}: {
+  open: boolean;
+  onClose: () => void;
+  hasPicture: boolean;
+  busy: boolean;
+  onPick: (event: ChangeEvent<HTMLInputElement>) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <Sheet open={open} onClose={onClose} title="Profile picture">
+      <div className="space-y-2">
+        {/* A label around a visually hidden input, rather than a button that
+            clicks one: this way the control is a real file picker to a
+            keyboard and a screen reader, and `sr-only` keeps the input
+            focusable where `hidden` would not. */}
+        <label
+          className={cn(
+            buttonClasses("secondary", "lg", "w-full"),
+            // The ring belongs to the label because the input it wraps is
+            // `sr-only`: the browser draws focus on a 1px clipped box, so a
+            // keyboard user got no visible focus here while every other
+            // control on the page — a real button — shows one. The disabled
+            // pair is conditional for the same reason: a `disabled:` variant
+            // can never match a label, only the input inside it.
+            "cursor-pointer focus-within:ring-2 focus-within:outline-none",
+            busy && "cursor-not-allowed opacity-60",
+          )}
+        >
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={busy}
+            onChange={onPick}
+          />
+          <Upload aria-hidden className="size-4" />
+          {busy ? "Working…" : hasPicture ? "Change picture" : "Add picture"}
+        </label>
+        {hasPicture && (
+          // Ghost and not `danger`, and with no color passed through either:
+          // `cn` is a plain join, so a `text-red-600` here lands beside the
+          // variant's own `text-stone-700` and loses to it on source order —
+          // rendering exactly as it does without the class, which is how a
+          // dead override survives being looked at. The trash is what marks
+          // this as the destructive one, and a removed picture can be put
+          // back, which is not what the solid red is for.
+          <Button variant="ghost" className="w-full" disabled={busy} onClick={onRemove}>
+            <Trash2 aria-hidden className="size-4" />
+            Remove picture
+          </Button>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+/**
  * The label above a group of settings, shared so the two groups cannot drift
  * apart — `cn()` is a plain join, so chrome is shared rather than overridden.
  */
@@ -270,6 +416,17 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
     <h2 className="mb-2 text-sm font-medium text-stone-700 dark:text-stone-300">{children}</h2>
   );
+}
+
+/**
+ * What the live region says while a picture is in flight.
+ *
+ * Two sentences rather than one, because the two waits end in opposite places:
+ * a reader told "saving" who then finds no picture has been given the wrong
+ * account of what they just did.
+ */
+function busyMessage(removing: boolean): string {
+  return removing ? "Removing your picture…" : "Saving your picture…";
 }
 
 /**

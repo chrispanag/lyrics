@@ -316,8 +316,10 @@ written password needs a mailbox someone can read.
 
 Prelude has no picture field — a user's `profile` there is an open map of string
 values, and nothing in the product hosts an image — so the picture is ours, like
-`users.role` and `users.email_verified_at`. Seven parts hold it up, and none of
-them announces itself.
+`users.role` and `users.email_verified_at`. The parts below hold it up, and none
+of them announces itself. (Deliberately not counted: the count was seven, the
+list was ten before this sentence was written, and a number in prose is the
+inventory this file records going stale under Head assets.)
 
 - **`GET /users/{id}/avatar` is public, and has to be.** An `<img>` is not
   fetched by `apiFetch` and carries no bearer token, so a picture behind
@@ -376,6 +378,32 @@ them announces itself.
   caches its own copy of that field, so without it an admin who removes their
   picture finds their own row still rendering an image — the old one out of
   their year-long cache, an empty circle on anybody else's machine.
+- **Both controls that touch a picture live behind the pencil on the circle,
+  and the sheet closes before either one starts work.** What that buys is where
+  the state goes: the busy spinner is on the badge and the failure is on the
+  page, so neither has anywhere else it could be. Left open, the sheet covers
+  the picture being replaced — the one thing worth watching — and its file
+  input is still there to start a second decode over the first, which is the
+  race `preparing` exists to close. Closing is also what empties the input, so
+  the pick's `event.target.value = ""` is belt to those suspenders rather than
+  the load-bearing line it is on a form that keeps its input. The whole circle
+  is the button rather than the badge, which at 32px is under the 44px floor
+  the rest of the page keeps.
+- **Three things follow from the sheet closing under its own action, and each
+  is a hole where the arrangement it replaced had none.** The control that was
+  pressed unmounts, so focus goes to `<body>` and a keyboard reader is returned
+  to the top of the document — `Sheet` hands focus back to whatever opened it,
+  which is written there rather than here because all seven of its callers have
+  the same gap and one of them will close the same way next. That handing-back
+  is why **the pencil must not be `disabled` while busy**: focus cannot land on
+  a disabled element, so the guard would eat the fix. Which in turn is why **the
+  refusal of a second pick is stated inside the sheet** — `disabled` on the
+  input and on Remove — rather than left to the trigger being unpressable, and
+  the specs reopen it mid-upload to say so. And the spinner on the badge is
+  `aria-hidden` inside a button whose name never changes, so the wait is
+  announced by a `role="status"` region that is **rendered always and emptied**:
+  mounted only while busy, the change a screen reader has to notice is the
+  region arriving, and there is nothing yet to read.
 - **`ProfilePage` syncs the display-name field from the *stored name*, not from
   the user object.** Every write to the auth context replaces that object —
   saving a picture, removing one — so an effect keyed on `[user]` reset the
