@@ -263,7 +263,7 @@ func (s *Server) handleAddSongToList(w http.ResponseWriter, r *http.Request) err
 	if err != nil {
 		return err
 	}
-	songID, err := urlUUID(r, "songID")
+	songID, err := s.songID(r, "songID")
 	if err != nil {
 		return err
 	}
@@ -280,7 +280,7 @@ func (s *Server) handleRemoveSongFromList(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		return err
 	}
-	songID, err := urlUUID(r, "songID")
+	songID, err := s.songID(r, "songID")
 	if err != nil {
 		return err
 	}
@@ -344,7 +344,10 @@ func (s *Server) handleReorderList(w http.ResponseWriter, r *http.Request) error
 // handleListsContainingSong reports which of the caller's lists hold a song, so
 // the UI can render toggle state in one request instead of one per list.
 func (s *Server) handleListsContainingSong(w http.ResponseWriter, r *http.Request) error {
-	songID, err := urlUUID(r, "id")
+	// By ref, so every route whose path names a song takes the same thing: what
+	// the caller has in hand is whatever is in the song page's URL, which is a
+	// slug for every link the app builds and a uuid for every one already shared.
+	songID, err := s.songID(r, "id")
 	if err != nil {
 		return err
 	}

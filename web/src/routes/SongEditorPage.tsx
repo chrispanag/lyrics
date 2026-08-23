@@ -9,7 +9,7 @@ import { PageTitle } from "@/components/PageTitle";
 import { PersonAutocomplete, type PersonSelection } from "@/components/PersonAutocomplete";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { Button, Chip, ErrorMessage, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
-import { songHref } from "@/lib/listContext";
+import { songHref, songRefHref } from "@/lib/listContext";
 import { extractVideoId } from "@/lib/youtube";
 import { CREDIT_PICKER_LABELS } from "@/lib/credits";
 import {
@@ -189,7 +189,7 @@ export function SongEditorPage() {
   // The server enforces this too; the redirect just avoids showing a form that
   // is guaranteed to be rejected.
   if (isEdit && existing && !canEditSong(user, existing)) {
-    return <Navigate to={songHref(existing.id)} replace />;
+    return <Navigate to={songHref(existing)} replace />;
   }
 
   /**
@@ -211,7 +211,7 @@ export function SongEditorPage() {
    * since where the editor belongs is the same question at both call sites.
    */
   const leaveEditor = () => {
-    if (location.key === "default") navigate(id ? songHref(id) : "/", { replace: true });
+    if (location.key === "default") navigate(id ? songRefHref(id) : "/", { replace: true });
     else navigate(-1);
   };
 
@@ -333,7 +333,7 @@ export function SongEditorPage() {
       // — which for `/songs/new` is usually the catalog, and popping would
       // return them there with nothing to show for it.
       if (isEdit) leaveEditor();
-      else navigate(songHref(saved.id), { replace: true });
+      else navigate(songHref(saved), { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, "The song could not be saved."));
       setFieldErrors(errorDetails(caught));

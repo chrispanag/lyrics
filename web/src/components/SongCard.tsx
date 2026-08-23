@@ -42,7 +42,7 @@ export const SongCard = memo(function SongCard({
 
   return (
     <Link
-      to={songHref(song.id, listId)}
+      to={songHref(song, listId)}
       className={cn(
         cardChrome,
         cardHover,

@@ -155,9 +155,15 @@ type Recording struct {
 
 // Song is a catalog entry. Snippet and Score are populated only by search.
 type Song struct {
-	ID       uuid.UUID `json:"id"`
-	Title    string    `json:"title"`
-	AltTitle *string   `json:"alt_title"`
+	ID    uuid.UUID `json:"id"`
+	Title string    `json:"title"`
+	// Slug is the song's address: /songs/<slug>. Derived from the title when the
+	// row is inserted and never recomputed, so correcting a title cannot move a
+	// bookmarked URL — the same promise UpdateGenre keeps for a genre's slug,
+	// except that here a BEFORE INSERT trigger is what keeps it, so no writer in
+	// this package can break it by accident. Nothing here writes it.
+	Slug     string  `json:"slug"`
+	AltTitle *string `json:"alt_title"`
 	// Lyrics is the song body, present only on single-song reads. Listings —
 	// browse, search and a list's songs — project it away: no screen showing
 	// more than one song renders the body, and a page of twenty carried more

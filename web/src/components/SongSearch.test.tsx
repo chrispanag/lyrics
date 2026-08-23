@@ -54,14 +54,14 @@ function Back() {
 }
 
 const matches = [
-  makeSong({ id: "song-2", title: "Το Τραγούδι της Λίμνης" }),
-  makeSong({ id: "song-3", title: "Άσπρο Πουκάμισο" }),
+  makeSong({ id: "song-2", slug: "to-tragoydi-tis-limnis", title: "Το Τραγούδι της Λίμνης" }),
+  makeSong({ id: "song-3", slug: "aspro-poykamiso", title: "Άσπρο Πουκάμισο" }),
 ];
 
 /** Two more, for the spec that needs a panel to shrink from four rows to two. */
 const more = [
-  makeSong({ id: "song-4", title: "Τραγούδι Τέταρτο" }),
-  makeSong({ id: "song-5", title: "Τραγούδι Πέμπτο" }),
+  makeSong({ id: "song-4", slug: "tragoydi-tetarto", title: "Τραγούδι Τέταρτο" }),
+  makeSong({ id: "song-5", slug: "tragoydi-pempto", title: "Τραγούδι Πέμπτο" }),
 ];
 
 /**
@@ -93,7 +93,7 @@ describe("SongSearch", () => {
 
     await user.click(await screen.findByRole("option", { name: /Λίμνης/ }));
 
-    expect(screen.getByText("Now at /songs/song-2")).toBeInTheDocument();
+    expect(screen.getByText("Now at /songs/to-tragoydi-tis-limnis")).toBeInTheDocument();
     // And the box is empty behind it. Landing on the song with the search that
     // found it still in the field, and its panel still over the first verse, is
     // the state this component spends an effect on avoiding.
@@ -111,7 +111,7 @@ describe("SongSearch", () => {
 
     await user.keyboard("{Enter}");
 
-    expect(screen.getByText("Now at /songs/song-2")).toBeInTheDocument();
+    expect(screen.getByText("Now at /songs/to-tragoydi-tis-limnis")).toBeInTheDocument();
   });
 
   it("moves the highlight with the arrow keys and opens the highlighted song", async () => {
@@ -133,7 +133,7 @@ describe("SongSearch", () => {
 
     await user.keyboard("{Enter}");
 
-    expect(screen.getByText("Now at /songs/song-3")).toBeInTheDocument();
+    expect(screen.getByText("Now at /songs/aspro-poykamiso")).toBeInTheDocument();
   });
 
   // Never a dead Enter: a query with nothing behind it is worth taking to the
@@ -322,13 +322,17 @@ describe("SongSearch", () => {
   // eats one step of the trail. The same failure the editor's exit documents.
   it("does not push a second entry for the song already open", async () => {
     const user = userEvent.setup();
-    searchAnswers([makeSong({ id: "song-1", title: "This Very Song" })]);
+    searchAnswers([makeSong({ id: "song-1", slug: "this-very-song", title: "This Very Song" })]);
 
+    // Opened at the song's *id* form, which is what a link shared before slugs
+    // existed says — so this also pins that "the song already open" is asked of
+    // the song rather than of the address. The step still replaces, and the
+    // address it replaces with is the canonical one.
     renderSearch(["/songs/song-0", "/songs/song-1"]);
     await user.type(box(), "τραγ");
 
     await user.click(await screen.findByRole("option", { name: /This Very Song/ }));
-    expect(screen.getByText("Now at /songs/song-1")).toBeInTheDocument();
+    expect(screen.getByText("Now at /songs/this-very-song")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Back" }));
 
@@ -348,7 +352,7 @@ describe("SongSearch", () => {
 
     expect(await screen.findByRole("option", { name: /Λίμνης/ })).toHaveAttribute(
       "href",
-      "/songs/song-2",
+      "/songs/to-tragoydi-tis-limnis",
     );
   });
 

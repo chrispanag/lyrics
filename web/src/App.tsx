@@ -186,6 +186,11 @@ export function App() {
           <Route path="/songs/:id" element={<SongDetailPage />} />
 
           <Route element={<MenuBarLayout />}>
+            {/* A static segment under /songs/ has to be a slug no song can hold,
+                or the song holding it is unreachable and its address opens this
+                form instead. `new` is reserved in migration 000010, pinned by
+                TestASongIsNeverSluggedNew — add a sibling here and it needs the
+                same treatment, since nothing checks the two lists agree. */}
             <Route path="/songs/new" element={<SongEditorPage />} />
             <Route path="/songs/:id/edit" element={<SongEditorPage />} />
             <Route

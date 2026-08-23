@@ -145,6 +145,15 @@ export interface Recording {
 export interface Song {
   id: string;
   title: string;
+  /**
+   * The song's address: `/songs/<slug>`.
+   *
+   * Derived from the title when the row is inserted and never recomputed, so
+   * correcting a title cannot move a bookmarked URL. Build links with
+   * `songHref` rather than from this directly — the id still resolves too, and
+   * which one a route parameter holds is `songMatchesRef`'s question.
+   */
+  slug: string;
   alt_title: string | null;
   /**
    * The song body, present only on single-song reads.

@@ -31,7 +31,7 @@ import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton } from "@/component
 import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_LABELS, groupCredits } from "@/lib/credits";
 import { cn } from "@/lib/cn";
-import { LIST_PARAM, listPosition } from "@/lib/listContext";
+import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { recordingCount, songCount } from "@/lib/format";
@@ -208,7 +208,7 @@ function SongArticle() {
           </Button>
           {canEdit && (
             <Link
-              to={`/songs/${id}/edit`}
+              to={`${songRefHref(id ?? "")}/edit`}
               className={buttonClasses("ghost", "sm")}
             >
               <Pencil aria-hidden className="size-4" />
