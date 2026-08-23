@@ -23,6 +23,7 @@ import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongNavFooter, ListSongSwipe } from "@/components/ListSongNav";
 import { PageTitle } from "@/components/PageTitle";
+import { PersonLinks } from "@/components/PersonLinks";
 import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { buttonClasses } from "@/components/buttonStyles";
@@ -166,13 +167,6 @@ function SongArticle() {
   // next song loads instead of blinking out at every step through a list — the
   // reader's place in it is what the URL already says.
   const position = contextList && id ? listPosition(contextList, id) : null;
-
-  // The video is read off the first recording, which the server has already
-  // sorted to the front, and falls back to the song's own copy of it: with a
-  // recording the copy is equal to it anyway, and with none there is nothing to
-  // stand in for. Reading index 0 strictly instead would let this page say there
-  // is no video while SongCard's badge — which reads the copy — says there is.
-  const videoId = song?.recordings[0]?.youtube_video_id ?? song?.youtube_video_id;
 
   return (
     // The catalog's column, which is the search header's above it: the box a
@@ -350,7 +344,9 @@ function SongArticle() {
           to go once the song has been read, and a block between the credits and
           the first line is what the facade did wrong. Gated on the id, not the
           URL — see WatchOnYouTube for why the URL is not the field to trust. */}
-      {videoId && <WatchOnYouTube videoId={videoId} className="mt-6" />}
+      {song?.youtube_video_id && (
+        <WatchOnYouTube videoId={song.youtube_video_id} className="mt-6" />
+      )}
 
       {song?.notes && (
         <section className="mt-8 rounded-2xl bg-stone-100 p-4 dark:bg-stone-900">
@@ -430,12 +426,17 @@ function SongArticle() {
 function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: () => void }) {
   const creditsByRole = groupCredits(song.credits);
 
-  // The first recording, which the server has already sorted to the front. Its
-  // performers are on no column of the song's; its year falls back to the song's
-  // copy for the same reason the video does at the call site — see there.
-  const first = song.recordings[0];
-  const performers = first?.performers ?? [];
-  const year = first?.release_year ?? song.release_year;
+  // The performers come off the first recording, which the server has already
+  // sorted to the front. The year — and the video, below the lyrics — comes off
+  // the song's own copy of it, deliberately, and not as a fallback for a
+  // recording that might be missing: those columns *are* the trigger's copy of
+  // the same row this reads index 0 of, pinned against it by
+  // TestFirstRecordingRuleHasOneAuthority. So there is one source here rather
+  // than two hedged against each other, and it is the source SongCard's badge
+  // reads, which is what makes the card and the page agree structurally instead
+  // of by a `??` that can never fire.
+  const performers = song.recordings[0]?.performers ?? [];
+  const year = song.release_year;
 
   return (
     /* The song's own language, like the lyrics below — a Greek title is content
@@ -456,17 +457,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
           <div className="flex gap-2">
             <dt className="shrink-0 text-stone-500 dark:text-stone-400">Performed by</dt>
             <dd className="font-medium">
-              {performers.map((performer, index) => (
-                <span key={performer.person_id}>
-                  {index > 0 && ", "}
-                  <Link
-                    to={browseHref({ person: performer.person_id })}
-                    className="hover:text-brand-600 hover:underline"
-                  >
-                    {performer.name}
-                  </Link>
-                </span>
-              ))}
+              <PersonLinks people={performers} />
             </dd>
           </div>
         )}
@@ -476,17 +467,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
               {CREDIT_DISPLAY_LABELS[role]}
             </dt>
             <dd className="font-medium">
-              {names.map((credit, index) => (
-                <span key={credit.person_id}>
-                  {index > 0 && ", "}
-                  <Link
-                    to={browseHref({ person: credit.person_id })}
-                    className="hover:text-brand-600 hover:underline"
-                  >
-                    {credit.name}
-                  </Link>
-                </span>
-              ))}
+              <PersonLinks people={names} />
             </dd>
           </div>
         ))}

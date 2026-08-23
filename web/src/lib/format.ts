@@ -1,20 +1,21 @@
 /**
- * Renders a song tally with the right plural.
+ * Renders a tally with the right plural.
  *
- * Four screens show this same phrase. Written out at each of them, the noun and
- * its plural rule were four things to find before the wording could change at
- * all — and the browse header had already drifted into a template literal while
- * the others used JSX interpolation.
+ * The noun and its plural rule were written out at every screen that shows one
+ * of these phrases, so changing the wording meant finding all of them first —
+ * and the browse header had already drifted into a template literal while the
+ * others used JSX interpolation. Only the regular `-s` nouns belong here; an
+ * irregular one needs its plural passed rather than this rule bent around it.
  */
-export function songCount(n: number): string {
-  return `${n} ${n === 1 ? "song" : "songs"}`;
+export function pluralize(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
 }
 
 /**
- * Renders a recording tally with the right plural, like songCount above and for
- * the same reason: the song page's affordance and the sheet it opens both name
- * the count, and a third caller is one edit away.
+ * The two tallies the app actually shows, named so the call sites read as
+ * English rather than as a helper invocation. Four screens name a song count;
+ * the song page's recordings affordance and the sheet it opens both name a
+ * recording count.
  */
-export function recordingCount(n: number): string {
-  return `${n} ${n === 1 ? "recording" : "recordings"}`;
-}
+export const songCount = (n: number): string => pluralize(n, "song");
+export const recordingCount = (n: number): string => pluralize(n, "recording");

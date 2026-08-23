@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -940,13 +941,8 @@ func TestFirstRecordingRuleHasOneAuthority(t *testing.T) {
 		labels[i] = *r.Label
 	}
 	want := []string{"marked", "earliest", "no year"}
-	if len(labels) != len(want) {
+	if !slices.Equal(labels, want) {
 		t.Fatalf("recordings = %v, want %v", labels, want)
-	}
-	for i := range want {
-		if labels[i] != want[i] {
-			t.Fatalf("recordings = %v, want %v", labels, want)
-		}
 	}
 
 	// And the song's copy is that same first recording's, not another's.

@@ -197,19 +197,18 @@ func genreIDsFor(genres []store.Genre) []uuid.UUID {
 // "the caller sent back what was already stored" is the whole condition the
 // exemption turns on. Two recordings sharing one link is pathological but
 // harmless; the first wins and they carry the same value anyway.
-func storedRecordingURLs(existing *store.Song) map[string]*store.Recording {
-	stored := map[string]*store.Recording{}
+func storedRecordingLinks(existing *store.Song) map[string]recordingLink {
+	stored := map[string]recordingLink{}
 	if existing == nil {
 		return stored
 	}
-	for i := range existing.Recordings {
-		r := &existing.Recordings[i]
+	for _, r := range existing.Recordings {
 		if r.YouTubeURL == nil {
 			continue
 		}
 		if u := strings.TrimSpace(*r.YouTubeURL); u != "" {
 			if _, seen := stored[u]; !seen {
-				stored[u] = r
+				stored[u] = recordingLink{url: r.YouTubeURL, videoID: r.YouTubeVideoID}
 			}
 		}
 	}
@@ -259,7 +258,7 @@ func (s *Server) toInput(r *http.Request, req songRequest, existing *store.Song)
 	// The recordings' links, canonicalized one by one. This runs before the
 	// early return so a bad link joins whatever else the payload got wrong,
 	// rather than costing the caller a second round trip to find out about.
-	stored := storedRecordingURLs(existing)
+	stored := storedRecordingLinks(existing)
 	links := make([]recordingLink, len(req.Recordings))
 	for i, rec := range req.Recordings {
 		trimmed := trimmedPtr(rec.YouTubeURL)
@@ -267,6 +266,7 @@ func (s *Server) toInput(r *http.Request, req songRequest, existing *store.Song)
 			continue
 		}
 		id, ok := parseYouTubeURL(*trimmed)
+		match, exempt := stored[*trimmed]
 		switch {
 		case ok:
 			// Store a canonical URL rather than whatever was pasted, so tracking
@@ -274,7 +274,7 @@ func (s *Server) toInput(r *http.Request, req songRequest, existing *store.Song)
 			canonical := "https://www.youtube.com/watch?v=" + id
 			links[i] = recordingLink{url: &canonical, videoID: &id}
 
-		case stored[*trimmed] != nil:
+		case exempt:
 			// A link this API refused is nonetheless already in the catalog: the
 			// importer stores youtube_url verbatim and sets the id only when it
 			// parses (cmd/import-songs/normalize.go), so the rows it left behind
@@ -290,8 +290,7 @@ func (s *Server) toInput(r *http.Request, req songRequest, existing *store.Song)
 			// Refusing it is only right for a value the caller chose. Unchanged
 			// from what is stored, both columns carry through exactly as they are
 			// — no canonicalization, since there is no id to build one from.
-			match := stored[*trimmed]
-			links[i] = recordingLink{url: match.YouTubeURL, videoID: match.YouTubeVideoID}
+			links[i] = match
 
 		default:
 			problems.add(recordingField(i)+".youtube_url", "Not a recognizable YouTube link.")
@@ -370,16 +369,25 @@ func checkCredits(requested []creditRequest, problems validationErrors) {
 			problems.add(field+".role", "Role must be composer or lyricist.")
 			continue
 		}
-		if c.PersonID != nil {
-			continue
-		}
-		name := strings.TrimSpace(c.Name)
-		switch {
-		case name == "":
-			problems.add(field, "Either person_id or name is required.")
-		case utf8.RuneCountInString(name) > maxNameLen:
-			problems.add(field+".name", "Name is too long.")
-		}
+		checkPersonRef(field, c.PersonID, c.Name, problems)
+	}
+}
+
+// checkPersonRef validates the two ways a payload can name a person — an id, or
+// a name to create one from. Credits and a recording's performers both carry
+// that pair, and the field path is the only thing that differs between them:
+// resolvePerson is already the shared other half of this, so a second copy of
+// the check is how the two come to answer differently about the same name.
+func checkPersonRef(field string, personID *uuid.UUID, name string, problems validationErrors) {
+	if personID != nil {
+		return
+	}
+	trimmed := strings.TrimSpace(name)
+	switch {
+	case trimmed == "":
+		problems.add(field, "Either person_id or name is required.")
+	case utf8.RuneCountInString(trimmed) > maxNameLen:
+		problems.add(field+".name", "Name is too long.")
 	}
 }
 
@@ -425,16 +433,7 @@ func checkRecordings(requested []recordingRequest, problems validationErrors) {
 		}
 
 		for j, p := range rec.Performers {
-			if p.PersonID != nil {
-				continue
-			}
-			name := strings.TrimSpace(p.Name)
-			switch {
-			case name == "":
-				problems.add(performerField(i, j), "Either person_id or name is required.")
-			case utf8.RuneCountInString(name) > maxNameLen:
-				problems.add(performerField(i, j)+".name", "Name is too long.")
-			}
+			checkPersonRef(performerField(i, j), p.PersonID, p.Name, problems)
 		}
 	}
 }

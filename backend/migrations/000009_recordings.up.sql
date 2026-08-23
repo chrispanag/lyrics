@@ -185,14 +185,6 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER recordings_denorm
-  AFTER INSERT OR UPDATE OR DELETE ON recordings
-  FOR EACH ROW EXECUTE FUNCTION songs_denorm_from_recordings();
-
-CREATE TRIGGER recording_credits_denorm
-  AFTER INSERT OR UPDATE OR DELETE ON recording_credits
-  FOR EACH ROW EXECUTE FUNCTION songs_denorm_from_recording_credits();
-
 -- Backfill: one first recording for every song that has anything
 -- recording-shaped about it — performers, a link, or a year. A song with none
 -- of the three gets no recording, because there would be nothing in it.
@@ -202,6 +194,13 @@ CREATE TRIGGER recording_credits_denorm
 -- function that did not yet know about recordings would write a credits_text
 -- with the performers missing. The final rebuild would repair it, but there is
 -- no reason to pass through a wrong state on the way.
+--
+-- The two *triggers* on the new tables are created after this block for the
+-- opposite reason: row-level, they would refresh a song once per inserted
+-- recording and once per inserted performer — roughly 1,800 full-song rewrites,
+-- each recomputing a tsvector over the whole lyrics — and the rebuild at the end
+-- makes every one of them dead work. Nothing observes the gap: the file runs as
+-- one implicit transaction, and that rebuild closes it.
 WITH source AS (
   SELECT s.id AS song_id, s.youtube_url, s.youtube_video_id, s.release_year
   FROM songs s
@@ -232,7 +231,9 @@ moved AS (
   FROM new_recordings nr
   JOIN song_credits sc ON sc.song_id = nr.song_id AND sc.role IN ('artist', 'performer')
   JOIN people p        ON p.id = sc.person_id
-  ORDER BY nr.id, sc.person_id, CASE sc.role WHEN 'artist' THEN 0 ELSE 1 END, sc.position
+  -- role_rank, not a second copy of its CASE: the DISTINCT ON tie-break and the
+  -- rank the row_number() below orders by have to be the same expression.
+  ORDER BY nr.id, sc.person_id, role_rank, sc.position
 )
 INSERT INTO recording_credits (recording_id, person_id, position)
 SELECT recording_id,
@@ -252,6 +253,16 @@ ALTER TABLE song_credits DROP CONSTRAINT song_credits_role_check;
 ALTER TABLE song_credits ADD CONSTRAINT song_credits_role_check
   CHECK (role IN ('composer', 'lyricist'));
 
+CREATE TRIGGER recordings_denorm
+  AFTER INSERT OR UPDATE OR DELETE ON recordings
+  FOR EACH ROW EXECUTE FUNCTION songs_denorm_from_recordings();
+
+CREATE TRIGGER recording_credits_denorm
+  AFTER INSERT OR UPDATE OR DELETE ON recording_credits
+  FOR EACH ROW EXECUTE FUNCTION songs_denorm_from_recording_credits();
+
 -- Rebuild every row, so credits_text and the three first-recording columns are
--- right regardless of how the triggers above interleaved (000005 precedent).
+-- right regardless of how the backfill above left them (000005 precedent). This
+-- is also what stands in for the trigger firings the backfill deliberately ran
+-- without.
 SELECT refresh_songs_denorm(ARRAY(SELECT id FROM songs));

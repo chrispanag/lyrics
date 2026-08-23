@@ -101,28 +101,38 @@ func buildSongFilters(f SongFilter, a *args) []string {
 			a.next(*id), a.next(string(role))))
 	}
 
-	// The performing arm. A join inside an EXISTS is fine — it cannot multiply
-	// the outer song rows, which is the only thing the rule above is about.
-	performedBy := func(id uuid.UUID) string {
+	// The two places a person can be attached to a song, one spelling each.
+	//
+	// They take an already-rendered placeholder rather than an id because the
+	// ?person= arm below references one placeholder twice — which is why these
+	// were a closure over the id and a second, inline copy of the same SQL, and
+	// so why a change to the performing join could fix ?performer= and silently
+	// leave ?person= matching the old shape. That is the "?person= has to ask
+	// both tables" trap one level down.
+	//
+	// A join inside an EXISTS is fine — it cannot multiply the outer song rows,
+	// which is the only thing the rule above is about.
+	creditedOn := func(ph string) string {
+		return fmt.Sprintf(
+			`EXISTS (SELECT 1 FROM song_credits sc WHERE sc.song_id = s.id AND sc.person_id = %s)`,
+			ph)
+	}
+	performedBy := func(ph string) string {
 		return fmt.Sprintf(
 			`EXISTS (SELECT 1 FROM recordings r
 			         JOIN recording_credits rc ON rc.recording_id = r.id
 			         WHERE r.song_id = s.id AND rc.person_id = %s)`,
-			a.next(id))
+			ph)
 	}
 
 	if f.PersonID != nil {
 		// One placeholder, referenced by both arms: the same person, asked about
 		// in the two places a person can be attached to a song.
 		p := a.next(*f.PersonID)
-		conds = append(conds, fmt.Sprintf(
-			`(EXISTS (SELECT 1 FROM song_credits sc WHERE sc.song_id = s.id AND sc.person_id = %[1]s)
-			  OR EXISTS (SELECT 1 FROM recordings r
-			             JOIN recording_credits rc ON rc.recording_id = r.id
-			             WHERE r.song_id = s.id AND rc.person_id = %[1]s))`, p))
+		conds = append(conds, "("+creditedOn(p)+" OR "+performedBy(p)+")")
 	}
 	if f.PerformerID != nil {
-		conds = append(conds, performedBy(*f.PerformerID))
+		conds = append(conds, performedBy(a.next(*f.PerformerID)))
 	}
 	creditFilter(f.ComposerID, CreditComposer)
 	creditFilter(f.LyricistID, CreditLyricist)
@@ -437,25 +447,20 @@ func (s *Store) attachRelations(ctx context.Context, songs []Song) error {
 	}
 	genreRows.Close()
 
-	if err := s.attachRecordings(ctx, songs, ids); err != nil {
+	if err := s.attachRecordings(ctx, songs, ids, index); err != nil {
 		return err
 	}
 
-	// Normalize nil slices so the JSON encoder emits [] rather than null.
+	// Normalize nil slices so the JSON encoder emits [] rather than null. The
+	// recordings and their performers are normalized by attachRecordings, which
+	// is the function that owns that shape — reaching two levels into it from
+	// here is how the next relation hung off a recording comes to be missed.
 	for i := range songs {
 		if songs[i].Credits == nil {
 			songs[i].Credits = []Credit{}
 		}
 		if songs[i].Genres == nil {
 			songs[i].Genres = []Genre{}
-		}
-		if songs[i].Recordings == nil {
-			songs[i].Recordings = []Recording{}
-		}
-		for j := range songs[i].Recordings {
-			if songs[i].Recordings[j].Performers == nil {
-				songs[i].Recordings[j].Performers = []RecordingPerformer{}
-			}
 		}
 	}
 	return nil
@@ -467,7 +472,31 @@ func (s *Store) attachRelations(ctx context.Context, songs []Song) error {
 // own query: a recording with four performers would otherwise arrive four
 // times. The performers are keyed on the recording, which is why this cannot be
 // folded into the loop above — see the comment at the index below.
-func (s *Store) attachRecordings(ctx context.Context, songs []Song, ids []uuid.UUID) error {
+func (s *Store) attachRecordings(
+	ctx context.Context,
+	songs []Song,
+	ids []uuid.UUID,
+	index map[uuid.UUID]*Song,
+) error {
+	// Nil slices become empty ones so the JSON encoder emits [] rather than
+	// null. Here rather than in attachRelations because this is the function
+	// that owns the shape — normalized from the caller, it was a loop reaching
+	// two levels into a recording, which is not where anyone adding a relation
+	// to one will look. Deferred because there are two success returns below and
+	// the early one would otherwise leave a song's recordings null.
+	defer func() {
+		for i := range songs {
+			if songs[i].Recordings == nil {
+				songs[i].Recordings = []Recording{}
+			}
+			for j := range songs[i].Recordings {
+				if songs[i].Recordings[j].Performers == nil {
+					songs[i].Recordings[j].Performers = []RecordingPerformer{}
+				}
+			}
+		}
+	}()
+
 	// The ORDER BY is the definition of "first recording", and it is what makes
 	// that the API's answer rather than every client's calculation: the list
 	// arrives ordered and index 0 is the first recording. IsFirst leads because
@@ -488,11 +517,6 @@ func (s *Store) attachRecordings(ctx context.Context, songs []Song, ids []uuid.U
 		return fmt.Errorf("query recordings: %w", translateErr(err))
 	}
 	defer recordingRows.Close()
-
-	index := make(map[uuid.UUID]*Song, len(songs))
-	for i := range songs {
-		index[songs[i].ID] = &songs[i]
-	}
 
 	var recordingIDs []uuid.UUID
 	for recordingRows.Next() {

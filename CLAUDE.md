@@ -81,7 +81,16 @@ of the song, and the parts below are what hold that split up.
   denormalized column comes to disagree with what it was copied from, and here
   the disagreement is a year on the page belonging to a recording other than the
   one shown beside it. Deleting a song's last recording therefore nulls all
-  three, which is the truth about it.
+  three, which is the truth about it. **`SongDetailPage` reads the year and the
+  video off these columns too, and not off `recordings[0]` hedged against
+  them.** The hedge looks like the safe form and is the opposite: its right-hand
+  side is unreachable — the columns *are* the trigger's copy of the row index 0
+  is, which `TestFirstRecordingRuleHasOneAuthority` is what pins — so it asks
+  the reader to reason about a disagreement the schema forbids, and it would
+  paper over exactly the one that test exists to surface. Reading the same
+  column `SongCard`'s badge reads is what makes the card and the page agree
+  structurally; the first recording is still where the *performers* come from,
+  since those are on no column.
 - **"First" is one ORDER BY, and it exists in exactly two places that cannot
   share an implementation** — the recordings query in `attachRelations` and the
   sub-SELECT inside `refresh_songs_denorm`. The first hands clients an

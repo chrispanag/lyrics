@@ -1,19 +1,7 @@
-import { Link } from "react-router-dom";
-
+import { PersonLinks } from "@/components/PersonLinks";
 import { Sheet } from "@/components/ui";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
-import { browseHref } from "@/lib/browse";
 import type { Recording } from "@/lib/types";
-
-/**
- * Whether the row's primary line says something other than the year.
- *
- * When it does not, the year is standing in as that line and the column on the
- * right must not print it a second time.
- */
-function rowHasText(recording: Recording): boolean {
-  return recording.performers.length > 0 || recording.label !== null;
-}
 
 /**
  * Every recording of a song, in the order the server sent them.
@@ -39,7 +27,16 @@ export function RecordingsSheet({
   return (
     <Sheet open={open} onClose={onClose} title="Recordings">
       <ul className="divide-y divide-stone-200 dark:divide-stone-800">
-        {recordings.map((recording) => (
+        {recordings.map((recording) => {
+          const hasPerformers = recording.performers.length > 0;
+          // Whether the row's primary line says something other than the year.
+          // When it does not, the year is standing in as that line and the
+          // column on the right must not print it a second time. Derived here,
+          // beside the fallback chain that consumes it, so the two cannot come
+          // to disagree about what counts as the row's own text.
+          const hasOwnText = hasPerformers || recording.label !== null;
+
+          return (
           <li key={recording.id} className="py-3 first:pt-0 last:pb-0">
             <div className="flex items-start justify-between gap-3">
               {/* The song's language, on the contributor's words only. The
@@ -49,20 +46,9 @@ export function RecordingsSheet({
                   were once split by. The labels around it are chrome and stay
                   outside. */}
               <div className="min-w-0" lang={language}>
-                {recording.performers.length > 0 ? (
+                {hasPerformers ? (
                   <p className="font-medium">
-                    {recording.performers.map((performer, index) => (
-                      <span key={performer.person_id}>
-                        {index > 0 && ", "}
-                        <Link
-                          to={browseHref({ person: performer.person_id })}
-                          onClick={onClose}
-                          className="hover:text-brand-600 hover:underline"
-                        >
-                          {performer.name}
-                        </Link>
-                      </span>
-                    ))}
+                    <PersonLinks people={recording.performers} onNavigate={onClose} />
                   </p>
                 ) : (
                   // Most of the catalog's recordings are a year and nothing
@@ -75,7 +61,7 @@ export function RecordingsSheet({
                 )}
                 {/* Shown under the names, and not again when it has already
                     stood in for them above. */}
-                {recording.label && recording.performers.length > 0 && (
+                {recording.label && hasPerformers && (
                   <p className="text-sm text-stone-500 dark:text-stone-400">{recording.label}</p>
                 )}
                 {recording.notes && (
@@ -103,7 +89,7 @@ export function RecordingsSheet({
                     which for a recording with no performers and no label it is,
                     and that is most of the catalog. Rendered unconditionally it
                     read "1964 · First recording · 1964". */}
-                {recording.release_year !== null && rowHasText(recording) && (
+                {recording.release_year !== null && hasOwnText && (
                   <p className="mt-1 text-stone-500 dark:text-stone-400">
                     {recording.release_year}
                   </p>
@@ -118,7 +104,8 @@ export function RecordingsSheet({
               <WatchOnYouTube videoId={recording.youtube_video_id} className="mt-2" />
             )}
           </li>
-        ))}
+          );
+        })}
       </ul>
     </Sheet>
   );

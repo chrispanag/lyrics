@@ -61,10 +61,21 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
 }
 
 /**
- * Drives a horizontal swipe across an element.
+ * Drives a one-finger horizontal swipe across an element, in the client
+ * coordinates that decide whether it is a swipe: where it starts across the
+ * screen, and how far and which way it went.
  *
  * At module scope because two describes read it now: the list-paging specs, and
  * the recordings sheet's guard against being swiped through.
+ *
+ * jsdom lays nothing out, so none of this is measured — the coordinates are the
+ * whole of what the listener reads, and `window.innerWidth` is the 1024 jsdom
+ * reports. Dispatched on an element inside the song rather than on the article
+ * itself, because the gesture is read across the whole page and has to arrive by
+ * bubbling for that to be true.
+ *
+ * `fingers` is how many touches the move reports: a second one landing partway
+ * through is a pinch, and the movement is no longer a swipe.
  */
 function swipe(
   target: Element,
@@ -332,9 +343,29 @@ describe("SongDetailPage while the song loads", () => {
  * header, and the sheet holding all of them.
  */
 describe("SongDetailPage recordings", () => {
+  /**
+   * A song with these recordings — and with the denormalized copies the server
+   * keeps in step with the first of them.
+   *
+   * Mirroring them is what makes the fixture a shape a real response can have:
+   * `refresh_songs_denorm` copies the first recording's year and link onto the
+   * song, and the page reads them off the song for exactly that reason. Setting
+   * only the recording described a row the database cannot hold, and a spec built
+   * on one asserts against a disagreement the schema forbids.
+   */
   function withRecordings(recordings: Recording[]) {
+    const first = recordings[0];
     server.use(
-      http.get(`${API}/api/v1/songs/:id`, () => HttpResponse.json(makeSong({ recordings }))),
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(
+          makeSong({
+            recordings,
+            release_year: first?.release_year ?? null,
+            youtube_url: first?.youtube_url ?? null,
+            youtube_video_id: first?.youtube_video_id ?? null,
+          }),
+        ),
+      ),
     );
   }
 
@@ -690,19 +721,6 @@ describe("SongDetailPage inside a list", () => {
     expect(screen.queryByRole("link", { name: "Previous song" })).not.toBeInTheDocument();
   });
 
-  /**
-   * A one-finger gesture, in the client coordinates that decide whether it is a
-   * swipe: where it starts across the screen, and how far and which way it went.
-   *
-   * jsdom lays nothing out, so none of this is measured — the coordinates are
-   * the whole of what the listener reads, and `window.innerWidth` is the 1024
-   * jsdom reports. Dispatched on an element inside the song rather than on the
-   * article itself, because the gesture is read across the whole page and has to
-   * arrive by bubbling for that to be true.
-   *
-   * `fingers` is how many touches the move reports: a second one landing partway
-   * through is a pinch, and the movement is no longer a swipe.
-   */
   /**
    * The middle song of the list, open, with the lyrics a thumb would be over.
    *

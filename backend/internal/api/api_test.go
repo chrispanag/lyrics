@@ -879,7 +879,7 @@ func TestYouTubeURLIsCanonicalized(t *testing.T) {
 // writes those three columns, so this is what says the trigger is doing it.
 func TestSongColumnsFollowRecordingEdits(t *testing.T) {
 	h := newHarness(t)
-	owner, token := h.userAndToken("contrib@example.com", store.RoleContributor)
+	_, token := h.userAndToken("contrib@example.com", store.RoleContributor)
 
 	resp := h.do("POST", "/api/v1/songs", token, map[string]any{
 		"title":      "Tracked",
@@ -892,7 +892,6 @@ func TestSongColumnsFollowRecordingEdits(t *testing.T) {
 	if song.ReleaseYear == nil || *song.ReleaseYear != 1964 {
 		t.Fatalf("release_year = %v, want 1964", song.ReleaseYear)
 	}
-	_ = owner
 	path := "/api/v1/songs/" + song.ID.String()
 
 	t.Run("editing the recording's year moves the song's", func(t *testing.T) {
@@ -1519,17 +1518,22 @@ func TestSongPatchPreservesOmittedFields(t *testing.T) {
 
 	// An explicit empty list is the one way to say "remove them all", and must
 	// still be distinguishable from omitting the key.
-	for _, field := range []string{"credits", "recordings"} {
-		resp = h.do("PATCH", path, token, map[string]any{field: []any{}})
+	// The assertion travels with the field name, rather than the loop body
+	// re-branching on the variable it just bound: a third field added to the list
+	// then cannot pass by matching neither arm.
+	for _, tc := range []struct {
+		field string
+		count func(store.Song) int
+	}{
+		{"credits", func(s store.Song) int { return len(s.Credits) }},
+		{"recordings", func(s store.Song) int { return len(s.Recordings) }},
+	} {
+		resp = h.do("PATCH", path, token, map[string]any{tc.field: []any{}})
 		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("clearing %s: status = %d, want 200", field, resp.StatusCode)
+			t.Fatalf("clearing %s: status = %d, want 200", tc.field, resp.StatusCode)
 		}
-		cleared := decode[store.Song](t, resp)
-		if field == "credits" && len(cleared.Credits) != 0 {
-			t.Errorf("credits = %d, want an explicit [] to clear them", len(cleared.Credits))
-		}
-		if field == "recordings" && len(cleared.Recordings) != 0 {
-			t.Errorf("recordings = %d, want an explicit [] to clear them", len(cleared.Recordings))
+		if n := tc.count(decode[store.Song](t, resp)); n != 0 {
+			t.Errorf("%s = %d, want an explicit [] to clear them", tc.field, n)
 		}
 	}
 }

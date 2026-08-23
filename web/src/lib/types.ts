@@ -259,7 +259,11 @@ export interface RecordingInput {
 
 export interface SongFilters {
   q?: string;
-  artist?: string;
+  // The honest name for the filter, which is what the API calls it too. It kept
+  // `artist` as an alias for links already out in the world, and nothing here
+  // should reach for that spelling — a client type naming only the deprecated
+  // one is how the alias becomes impossible to retire.
+  performer?: string;
   composer?: string;
   lyricist?: string;
   person?: string;

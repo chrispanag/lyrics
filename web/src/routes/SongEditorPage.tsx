@@ -48,6 +48,37 @@ const emptyRecording = (): RecordingDraft => ({
   performers: [],
 });
 
+/**
+ * Whether a person row names anybody — either one picked from the autocomplete
+ * or one typed in.
+ *
+ * The same question decides three things: which credits are sent, which
+ * performers are sent, and whether a recording is worth sending at all. Written
+ * out at each of them, the second and third can come to disagree, and a
+ * recording is then submitted whose performers are all dropped.
+ */
+const named = (person: PersonSelection): boolean => Boolean(person.personId || person.name.trim());
+
+/**
+ * Whether a recording row is an abandoned add rather than a performance.
+ *
+ * Beside `RecordingDraft` and `emptyRecording` deliberately: it is a field-by-
+ * field mirror of that shape, so the shape and the "is anything in it" test have
+ * to be read together. Held down in `onSubmit` instead, a field added to the
+ * draft is a field this predicate does not know about — and a row carrying only
+ * that field is then dropped at save, silently, since the form still looks
+ * filled in and the whole payload is sent on the next save anyway.
+ *
+ * `isFirst` is deliberately not among the fields consulted: marking an empty row
+ * as the first recording says nothing about any performance.
+ */
+const isBlankRecording = (recording: RecordingDraft): boolean =>
+  !recording.label.trim() &&
+  !recording.youtubeUrl.trim() &&
+  !recording.releaseYear &&
+  !recording.notes.trim() &&
+  !recording.performers.some(named);
+
 export function SongEditorPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
@@ -196,6 +227,24 @@ export function SongEditorPage() {
     );
 
   /**
+   * Rewrites one recording's performers.
+   *
+   * Three controls edit that list — the name field, the remove button and the add
+   * button — and each spelled out the `editRecording(index, { performers: ... })`
+   * wrapper around its own one-line change, which is the nesting rather than the
+   * change being what the row read as.
+   */
+  const editPerformers = (
+    index: number,
+    next: (performers: PersonSelection[]) => PersonSelection[],
+  ) =>
+    track(setRecordings)(
+      recordings.map((recording, i) =>
+        i === index ? { ...recording, performers: next(recording.performers) } : recording,
+      ),
+    );
+
+  /**
    * Marks one recording as the first, or none of them.
    *
    * Written across every row rather than on the one pressed, because at most one
@@ -222,7 +271,7 @@ export function SongEditorPage() {
       // Blank rows are dropped rather than rejected: an empty credit is an
       // abandoned edit, not a mistake worth interrupting the save for.
       credits: credits
-        .filter((credit) => credit.personId || credit.name.trim())
+        .filter(named)
         .map((credit, index) => ({
           ...(credit.personId ? { person_id: credit.personId } : { name: credit.name.trim() }),
           role: credit.role,
@@ -230,17 +279,10 @@ export function SongEditorPage() {
         })),
       genre_ids: genreIds,
       // A recording with nothing in it is an abandoned add, like a blank credit
-      // row — and `isFirst` alone does not rescue one, since marking an empty
-      // row as the first recording says nothing about any performance.
+      // row. What counts as "nothing in it" is stated beside the draft shape it
+      // reads, which is the only place both can be kept in step.
       recordings: recordings
-        .filter(
-          (recording) =>
-            recording.label.trim() ||
-            recording.youtubeUrl.trim() ||
-            recording.releaseYear ||
-            recording.notes.trim() ||
-            recording.performers.some((performer) => performer.personId || performer.name.trim()),
-        )
+        .filter((recording) => !isBlankRecording(recording))
         .map((recording, index) => ({
           label: recording.label.trim() || null,
           youtube_url: recording.youtubeUrl.trim() || null,
@@ -249,7 +291,7 @@ export function SongEditorPage() {
           is_first: recording.isFirst,
           position: index,
           performers: recording.performers
-            .filter((performer) => performer.personId || performer.name.trim())
+            .filter(named)
             .map((performer, performerIndex) => ({
               ...(performer.personId
                 ? { person_id: performer.personId }
@@ -505,27 +547,29 @@ export function SongEditorPage() {
                           value={performer}
                           placeholder="Name"
                           onChange={(selection) =>
-                            editRecording(index, {
-                              performers: recording.performers.map((item, i) =>
+                            editPerformers(index, (performers) =>
+                              performers.map((item, i) =>
                                 i === performerIndex ? { ...item, ...selection } : item,
                               ),
-                            })
+                            )
                           }
                         />
                       </div>
                       <Button
                         type="button"
                         variant="ghost"
-                        size="md"
+                        // Nothing but an icon, exactly like the remove-credit
+                        // button above: `size` says so rather than a `px-2`
+                        // joining `md`'s `px-4` in the class list and leaving the
+                        // width to whichever Tailwind emitted last.
+                        size="icon"
                         aria-label={`Remove performer ${performerIndex + 1} from recording ${index + 1}`}
                         onClick={() =>
-                          editRecording(index, {
-                            performers: recording.performers.filter(
-                              (_, i) => i !== performerIndex,
-                            ),
-                          })
+                          editPerformers(index, (performers) =>
+                            performers.filter((_, i) => i !== performerIndex),
+                          )
                         }
-                        className="shrink-0 px-2"
+                        className="shrink-0"
                       >
                         <Trash2 aria-hidden className="size-4 text-red-600" />
                       </Button>
@@ -535,11 +579,7 @@ export function SongEditorPage() {
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={() =>
-                      editRecording(index, {
-                        performers: [...recording.performers, { name: "" }],
-                      })
-                    }
+                    onClick={() => editPerformers(index, (performers) => [...performers, { name: "" }])}
                   >
                     <Plus aria-hidden className="size-4" />
                     Add performer

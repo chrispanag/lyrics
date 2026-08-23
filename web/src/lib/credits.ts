@@ -44,11 +44,12 @@ export const CREDIT_PICKER_LABELS: Record<CreditRole, string> = {
  *
  * `recordings[0]` is the first recording because the server ordered them, and a
  * song with none contributes no performers rather than falling back to anything.
+ * The performers within it are not re-sorted for the same reason — the query
+ * orders them by position — which is what the song page's "Performed by" row and
+ * the recordings sheet already assume by rendering them as they arrive.
  */
 export function songByline(song: Pick<Song, "credits" | "recordings">): string {
-  const performers = [...(song.recordings[0]?.performers ?? [])]
-    .sort((a, b) => a.position - b.position)
-    .map((performer) => performer.name);
+  const performers = (song.recordings[0]?.performers ?? []).map((performer) => performer.name);
 
   const credited = [...song.credits]
     .sort((a, b) => CREDIT_PRIORITY[a.role] - CREDIT_PRIORITY[b.role] || a.position - b.position)
