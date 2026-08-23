@@ -577,6 +577,45 @@ inventory this file records going stale under Head assets.)
   is the trap next to it: a disabled query is not `isLoading`, so
   `ListDetailPage` has to hold its own skeleton while waiting, or it falls
   through to "not available" and tells the owner their list is gone.
+- **`SongDetailPage` renders its chrome while the song is in flight, so its
+  failure branch reads the request rather than the absence — and reads
+  `isLoading`, never `isError`.** `!song` is true for the whole of a load once
+  the shell no longer sits behind a skeleton, so `!song` alone paints "not
+  available" on the way *into* every song; `!isLoading && !song` is the pair, and
+  a query that was never enabled — no `id` — still reaches it, a disabled query
+  not being `isLoading` either. `isError` is the disjunct that is **not** there,
+  and it is the one that looks obviously missing: it is only ever true here with
+  a song already in hand, since a first attempt that fails leaves no data and is
+  caught by the pair above. That leaves exactly one case — a *refetch* that
+  failed, which react-query runs on every return to the tab — so adding it takes
+  the lyrics off the screen of someone reading them on a phone that lost signal,
+  to report a request they never made. The cached song stays instead, which is
+  the deliberate trade: a song deleted by somebody else stays readable until the
+  page is reloaded, and a failed refresh says nothing. Pinned by a spec that
+  presses a control after the refetch fails, because the refetch's promise
+  resolves before react-query has told the page — asserting straight after it
+  passes with the disjunct back in. What the shell buys is that Back, Save, the
+  editor link and the list bar do not blink out at each step through a list. The
+  paging *swipe* is the one piece that still waits for the song, and
+  deliberately: the mark explaining it
+  is spent once per device the moment it is on screen, so mounting it over a song
+  that never arrives spends that showing on a page with no gesture on it — the
+  failure `useSwipeHint`'s observer exists to prevent, arriving from the other
+  side. What the shell costs is two decisions that have to be made without a
+  song. Editing is one, and it is answered in `canEditSong` rather than beside
+  the call: its admin check comes
+  *before* it looks at the song, so an admin's row is the row it will still be,
+  and the page asks the shared helper instead of re-deriving the admin case for
+  itself. Put that guard back in front and the link appears a moment late, under
+  the finger of someone reaching for Save. Deletion is the other, and it waits,
+  being the one confirmation that names the song it is about. The skeleton left
+  in the shell is shaped like the header most songs have, credit lines and a
+  genre chip included, because the text-size controls sit under it and they are
+  controls — so `SongHeader`'s spacing and that block have to move together, and
+  jsdom lays nothing out, so nothing says otherwise. `ListDetailPage` keeps the
+  older shape on purpose: nobody pages through *lists* the way a reader pages
+  through the songs in one, so the flicker this removes barely arises there, and
+  its early return also stands in for the session wait.
 - **The verification gate wraps `<Routes>` and reads `user.email_verified_at`;
   `VerifyEmailPage` waits for `loading` before deciding, and its
   challenge-opening effect checks the same flag itself.** Three separate traps,

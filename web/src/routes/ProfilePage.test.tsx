@@ -9,6 +9,7 @@ import { useAuth } from "@/auth/useAuth";
 import type { User } from "@/lib/types";
 import { ProfilePage } from "@/routes/ProfilePage";
 import { stubImagePipeline, type ImagePipelineStub } from "@/test/canvas";
+import { deferred } from "@/test/deferred";
 import { API, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
@@ -116,10 +117,7 @@ describe("ProfilePage pictures", () => {
   // the request is still in flight or it is not being read at all.
   it("closes the menu as soon as a picture is chosen, before the upload lands", async () => {
     const stored = makeUser({ avatar_updated_at: "2026-08-22T20:00:00Z" });
-    let land = () => {};
-    const landed = new Promise<void>((resolve) => {
-      land = resolve;
-    });
+    const [landed, land] = deferred();
     server.use(
       http.post(`${API}/api/v1/me/avatar`, async () => {
         await landed;
