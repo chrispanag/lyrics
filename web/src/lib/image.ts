@@ -5,6 +5,12 @@
  * pixels on a 3x screen — so this is the smallest size that is still sharp
  * everywhere it is used. The admin list renders fifty of them at 40px, so the
  * difference between this and a larger square is paid fifty times over.
+ *
+ * The API holds the same number as `imaging.StoredEdge` and shrinks anything
+ * larger to it, since a client can skip this module entirely. Changing one of
+ * the two does not break anything — the smaller wins, so a bigger number here
+ * only spends upload bytes the server throws away, and a smaller one is stored
+ * as it arrives and looks soft on a dense screen. Change both.
  */
 export const AVATAR_SIZE = 256;
 
