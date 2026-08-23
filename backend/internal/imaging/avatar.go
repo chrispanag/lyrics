@@ -145,13 +145,13 @@ func square(src image.Image) image.Image {
 	// with draw.Src writes premultiplied zeroes — transparent black — straight
 	// over the fill, so a flatten that ran afterwards would have nothing left
 	// to flatten and the dark square would be back.
+	op := draw.Src
 	if opaque, ok := src.(interface{ Opaque() bool }); !ok || !opaque.Opaque() {
 		draw.Draw(dst, dst.Bounds(), image.White, image.Point{}, draw.Src)
-		fit(dst, src, crop, draw.Over)
-		return dst
+		op = draw.Over
 	}
 
-	fit(dst, src, crop, draw.Src)
+	fit(dst, src, crop, op)
 	return dst
 }
 

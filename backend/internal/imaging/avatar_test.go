@@ -5,9 +5,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
-	"image/draw"
 	"image/jpeg"
-	"image/png"
 	"testing"
 
 	"github.com/christos/lyrics/backend/internal/imaging"
@@ -37,9 +35,12 @@ func TestNormalizeProducesJPEG(t *testing.T) {
 	}
 }
 
-// Cropped here and not only in the browser, so every stored picture is square —
-// including one written by a client that skipped the browser path entirely.
-func TestNormalizeCropsToACenteredSquare(t *testing.T) {
+// Cropped and shrunk here and not only in the browser, so every stored picture is
+// a small square — including one written by a client that skipped the browser
+// path entirely, which would otherwise store a MaxDimension square, sixteen
+// times the pixels the app draws, leaving the admin console to download fifty of
+// those to fill fifty 40px circles.
+func TestNormalizeCropsAndShrinksToACenteredSquare(t *testing.T) {
 	// Both source formats, because they take different branches: a JPEG reports
 	// itself opaque and is drawn straight across, a PNG may not be and is
 	// composited onto white. JPEG is also the only format the browser ever
@@ -52,7 +53,13 @@ func TestNormalizeCropsToACenteredSquare(t *testing.T) {
 	}
 
 	for name, fixture := range fixtures {
-		for _, size := range [][2]int{{1000, 500}, {60, 240}, {33, 33}} {
+		for _, size := range [][2]int{
+			{1000, 500}, {60, 240}, {33, 33},
+			// MaxDimension exactly, one pixel below the refusal cases further
+			// down: this row is the shrink, not the refusal. A client that
+			// skipped `toSquareJpeg` is the only thing that sends it.
+			{imaging.MaxDimension, imaging.MaxDimension},
+		} {
 			out, _, err := imaging.Normalize(fixture(size[0], size[1]))
 			if err != nil {
 				t.Fatalf("Normalize(%s %dx%d): %v", name, size[0], size[1], err)
@@ -74,37 +81,6 @@ func TestNormalizeCropsToACenteredSquare(t *testing.T) {
 	}
 }
 
-// Shrunk here and not only in the browser, for the same reason the crop is: a
-// client that skipped `toSquareJpeg` would otherwise store a MaxDimension
-// square, and the admin console downloads fifty pictures to draw fifty 40px
-// circles.
-func TestNormalizeShrinksAnOversizedPictureToTheStoredEdge(t *testing.T) {
-	// A picture the browser path would never produce, and well inside
-	// MaxDimension: this is not the refusal, it is the shrink.
-	out, contentType, err := imaging.Normalize(
-		testutil.SolidPNG(t, imaging.MaxDimension, imaging.MaxDimension, testutil.Opaque))
-	if err != nil {
-		t.Fatalf("Normalize: %v", err)
-	}
-	if contentType != "image/jpeg" {
-		t.Errorf("content type = %q, want image/jpeg", contentType)
-	}
-
-	cfg, format, err := image.DecodeConfig(bytes.NewReader(out))
-	if err != nil {
-		t.Fatalf("decode result: %v", err)
-	}
-	// Still square, and still a JPEG: the scale step is inside the same
-	// contract the crop is, not a second form of stored picture.
-	if format != "jpeg" {
-		t.Errorf("format = %q, want jpeg", format)
-	}
-	if cfg.Width != imaging.StoredEdge || cfg.Height != imaging.StoredEdge {
-		t.Errorf("size = %dx%d, want %dx%d",
-			cfg.Width, cfg.Height, imaging.StoredEdge, imaging.StoredEdge)
-	}
-}
-
 // The two steps compose, and the order matters: an oversized rectangle is
 // cropped to its middle and *then* shrunk. Shrinking first would fit the whole
 // picture into the square, which is the squashed caricature the crop exists to
@@ -119,7 +95,7 @@ func TestNormalizeCropsBeforeShrinkingANonSquarePicture(t *testing.T) {
 	const band = imaging.MaxDimension / 3
 
 	// Red and blue on the outside, mid-gray in the middle.
-	out, _, err := imaging.Normalize(verticalBandsPNG(t, band,
+	out, _, err := imaging.Normalize(testutil.BandsPNG(t, band,
 		color.NRGBA{R: 0xff, A: 0xff},
 		color.NRGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xff},
 		color.NRGBA{B: 0xff, A: 0xff},
@@ -144,37 +120,14 @@ func TestNormalizeCropsBeforeShrinkingANonSquarePicture(t *testing.T) {
 	// squeezed into the square — scaled instead of cropped — is gray in the
 	// middle either way and puts red and blue back at the quarter points, which
 	// is why the center alone would not tell the two apart.
-	const y = imaging.StoredEdge / 2
-	for _, x := range []int{imaging.StoredEdge / 8, y, imaging.StoredEdge * 7 / 8} {
-		r, g, b, _ := decoded.At(x, y).RGBA()
-		for _, channel := range []struct {
-			name  string
-			value uint32
-		}{{"red", r}, {"green", g}, {"blue", b}} {
-			if channel.value < 0x4000 || channel.value > 0xc000 {
-				t.Errorf("(%d,%d) %s = %d, want the middle band's mid-gray (r=%d g=%d b=%d)",
-					x, y, channel.name, channel.value, r, g, b)
-			}
+	const mid = imaging.StoredEdge / 2
+	for _, x := range []int{imaging.StoredEdge / 8, mid, imaging.StoredEdge * 7 / 8} {
+		r, g, b, _ := decoded.At(x, mid).RGBA()
+		if r < 0x4000 || r > 0xc000 || g < 0x4000 || g > 0xc000 || b < 0x4000 || b > 0xc000 {
+			t.Errorf("(%d,%d) = (r=%d g=%d b=%d), want the middle band's mid-gray",
+				x, mid, r, g, b)
 		}
 	}
-}
-
-// verticalBandsPNG encodes a PNG three bands wide and one band tall, so that the
-// largest centered square inside it is exactly the middle band.
-func verticalBandsPNG(t testing.TB, band int, fills ...color.NRGBA) []byte {
-	t.Helper()
-
-	img := image.NewNRGBA(image.Rect(0, 0, band*len(fills), band))
-	for i, fill := range fills {
-		strip := image.Rect(i*band, 0, (i+1)*band, band)
-		draw.Draw(img, strip, image.NewUniform(fill), image.Point{}, draw.Src)
-	}
-
-	var out bytes.Buffer
-	if err := png.Encode(&out, img); err != nil {
-		t.Fatalf("encode png: %v", err)
-	}
-	return out.Bytes()
 }
 
 // The flatten is skipped for an opaque source, so this pins that skipping it
