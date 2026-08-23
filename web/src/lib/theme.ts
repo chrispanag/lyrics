@@ -54,10 +54,40 @@ export const THEME_BOOT_SCRIPT =
   `document.documentElement.classList.toggle("dark",d)` +
   `}catch(e){}`;
 
+/**
+ * The theme this browser was last set to, or "system" when it has not been set.
+ *
+ * Wrapped for the two reasons the boot script above is wrapped and
+ * `auth/storedUser` says out loud: a browser can refuse to hand its storage
+ * over, and — the day anything importing this renders on a server — there is no
+ * storage to ask. "system" is what both fall back to, which is the answer a
+ * visitor who has never chosen gets anyway.
+ *
+ * That is the one case where this and the boot script above deliberately part
+ * company, and it is worth naming because everything else about them is held
+ * to agreeing. The script's `try` wraps the whole rule including the
+ * `classList.toggle`, so a browser refusing its storage gets no class at all
+ * and paints light; `applyTheme(storedTheme())` would fall back to "system"
+ * and honor `prefers-color-scheme`, so a dark machine would go dark. Nothing
+ * reaches that today — `applyTheme` is called only from the theme switch, the
+ * boot script being the whole of what runs on a load — so the divergence costs
+ * nothing until someone restores a boot-time call, and `theme.test.ts` does not
+ * cover it precisely because there is no answer yet about which of the two is
+ * right.
+ */
 export function storedTheme(): Theme {
-  return (localStorage.getItem(THEME_KEY) as Theme | null) ?? "system";
+  try {
+    return (localStorage.getItem(THEME_KEY) as Theme | null) ?? "system";
+  } catch {
+    return "system";
+  }
 }
 
+/** Records the choice, for the boot script above to read on the next load. */
 export function storeTheme(theme: Theme): void {
-  localStorage.setItem(THEME_KEY, theme);
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    // A theme that cannot be remembered still applies to the page that set it.
+  }
 }

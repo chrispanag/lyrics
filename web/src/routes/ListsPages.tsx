@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash2 } from "lucide-react";
 
@@ -192,6 +192,17 @@ export function ListDetailPage() {
   const [naming, setNaming] = useState(false);
   const [copyName, setCopyName] = useState("");
   const [copyError, setCopyError] = useState("");
+  // Where this app is being served from, asked for once it is running rather
+  // than while rendering: `window` is not there for a render a server
+  // performed, so the share link below was the page's one line that could not
+  // survive the `ssr: false` coming off. An ordinary effect rather than the
+  // layout one the song page's reads take, because there is no paint to be
+  // ahead of — the link is only ever read inside a sheet a reader has to open,
+  // and by a button they have to press.
+  const [origin, setOrigin] = useState("");
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   // A disabled query is not "loading" as far as React Query is concerned, so the
   // wait for the session has to be spelled out here — otherwise the page falls
@@ -229,9 +240,9 @@ export function ListDetailPage() {
   // `variables` outlives the request it belongs to, so the row it names would
   // stay disabled after the removal settled were this not held to the flight.
   const pendingRemoval = removeSong.isPending ? removeSong.variables : undefined;
-  // Built from the origin rather than read off window.location, so the link is
-  // the canonical one whatever query or hash the current URL carries.
-  const shareUrl = `${window.location.origin}/lists/${list.id}`;
+  // Built from the origin rather than the whole of the current address, so the
+  // link is the canonical one whatever query or hash this page was reached with.
+  const shareUrl = `${origin}/lists/${list.id}`;
 
   const copyLink = async () => {
     // Clipboard access needs a secure context and can be refused outright. The

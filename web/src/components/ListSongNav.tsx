@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ListMusic } from "lucide-react";
 
@@ -175,12 +175,13 @@ export function ListSongSwipe({
   useSwipePaging(position, surface);
   const [hinting, markMounted] = useSwipeHint();
 
-  // Nothing left to draw: a reader past their one showing has already been told,
-  // and a list of one has nowhere to swipe to. Both after the hooks, which is
-  // what keeps this honest rather than conditional — and the gesture is
-  // installed by one of them, so it outlives the mark by design. Rendering a
-  // spent mark anyway would leave an invisible fixed box over every song page
-  // for good, which is the shape of thing this page has just got rid of.
+  // Nothing to draw: the stored answer is not in yet, a reader past their one
+  // showing has already been told, or a list of one has nowhere to swipe to.
+  // All of them after the hooks, which is what keeps this honest rather than
+  // conditional — and the gesture is installed by one of them, so it outlives
+  // the mark by design. Rendering a spent mark anyway would leave an invisible
+  // fixed box over every song page for good, which is the shape of thing this
+  // page has just got rid of.
   if (hinting === null) return null;
   if (!position.previousHref && !position.nextHref) return null;
 
@@ -365,20 +366,75 @@ function selectedText(): string {
  * Recorded when it is shown rather than when it finishes, so a reader who steps
  * on mid-fade is not shown it again on the next song.
  *
- * Answers null once that showing is over — before it starts on a device that has
- * already had it, and again after the fade has run — which is the caller's cue to
- * render nothing at all: there is then nothing to observe and nothing to draw.
+ * Answers null whenever there is nothing to draw, which is the caller's cue to
+ * render nothing at all: on the very first render, before the stored answer is
+ * in; on a device that has already had its showing; and again after the fade
+ * has run. There is then nothing to observe and nothing to draw.
  *
  * Hands back the callback to attach to the mark rather than taking a ref, which
  * is what lets the observer be set up whenever the mark actually arrives. See the
  * state it is held in below.
  */
+/**
+ * Whether this device still has its one showing of the mark, and how it is
+ * spent.
+ *
+ * Wrapped like `lib/fontSize`'s pair and `lib/theme`'s, and for the first of
+ * the two reasons those give: a browser can refuse to hand its storage over,
+ * and the access throws rather than answering. Bare, that took the whole song
+ * page down and only for a reader who opened it from a list — the read runs in
+ * a layout effect, where React has no boundary above it to catch anything, and
+ * the write runs inside the observer's callback, where a throw would leave the
+ * mark shown and never faded.
+ *
+ * Spent is what a refusal answers, because the two halves have to agree: a
+ * device that cannot record the showing would otherwise be given it on every
+ * song, forever.
+ *
+ * Inline rather than a fourth `stored*`/`store*` module, the key belonging to
+ * this hook and nothing else reading it.
+ */
+function hintUnspent(): boolean {
+  try {
+    return localStorage.getItem(HINT_SEEN_KEY) === null;
+  } catch {
+    return false;
+  }
+}
+
+function spendHint(): void {
+  try {
+    localStorage.setItem(HINT_SEEN_KEY, "1");
+  } catch {
+    // Nothing to record it in, and nothing to do about that: the read above
+    // answers "spent" on this browser, so the mark is not offered again.
+  }
+}
+
 function useSwipeHint(): [boolean | null, (element: HTMLElement | null) => void] {
-  // Read at render rather than inside the effect, the same lazy read the
-  // reader's font size makes, because the answer decides whether there is
-  // anything to render at all — and it cannot change under a mounted page, since
-  // this hook is the only writer.
-  const [unspent] = useState(() => localStorage.getItem(HINT_SEEN_KEY) === null);
+  // The spent answer first, and the stored one a tick later. That is more than
+  // the caution the reader's font size takes next door, because this read
+  // really does decide markup: the caller renders nothing at all while this
+  // hook answers null, so the observed box either exists or it does not. Read
+  // during the first render, a server would say "no box" and the browser
+  // "box", and React answers that disagreement by throwing the server's HTML
+  // away and rendering the whole root again.
+  //
+  // Nothing is lost by starting spent. The mark waits for an
+  // IntersectionObserver before it shows anything, so the commit it now arrives
+  // a beat late for is one it was invisible in anyway; and the single showing
+  // still cannot be spent at a desk, where `md:hidden` leaves the box no
+  // geometry to intersect with. A layout effect rather than the ordinary one
+  // that delay would also allow, so that this read and the font size next door
+  // are one shape — and so the flip lands before the paint rather than after
+  // it, which is the cheaper of the two orders here and the safer one to copy.
+  //
+  // Only the first render is the default: the read happens once, and the answer
+  // cannot change under a mounted page since this hook is the only writer.
+  const [unspent, setUnspent] = useState(false);
+  useLayoutEffect(() => {
+    setUnspent(hintUnspent());
+  }, []);
   const [hinting, setHinting] = useState(false);
   const [over, setOver] = useState(false);
   // Held in state rather than a ref, because the effect below has to run when the
@@ -397,7 +453,7 @@ function useSwipeHint(): [boolean | null, (element: HTMLElement | null) => void]
       if (!entries.some((entry) => entry.isIntersecting)) return;
 
       observer.disconnect();
-      localStorage.setItem(HINT_SEEN_KEY, "1");
+      spendHint();
       setHinting(true);
       fade = setTimeout(() => {
         setHinting(false);
