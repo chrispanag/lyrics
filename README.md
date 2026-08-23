@@ -469,7 +469,7 @@ POST   /auth/verify-email                ┘ (no body; reads the step-up grant)
 
 PATCH  /me                               ┐
 POST   /me/avatar        (image bytes)   │
-DELETE /me/avatar                        │
+DELETE /me/avatar        (no body)       │
 GET    /lists                            │ signed in, address verified
 POST   /lists                            │
 PATCH  /lists/{id}                       │
@@ -496,8 +496,8 @@ DELETE /admin/users/{id}                 ┘
 
 A profile picture is read without authentication and written only by its owner.
 It has to be: an `<img>` carries no `Authorization` header, so a picture behind
-authentication would not load for the person it belongs to. Both writes take raw
-image bytes rather than a JSON field, answer with the updated user, and are
+authentication would not load for the person it belongs to. Both writes answer
+with the updated user; the upload takes raw image bytes, not a JSON field, and is
 capped at 1 MB — the API center-crops whatever arrives to a square and re-encodes
 it as JPEG, which is also what strips the EXIF metadata a phone photo carries, so
 every stored picture is square whichever client wrote it. `GET` serves it with an
