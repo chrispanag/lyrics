@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Check,
@@ -31,16 +31,12 @@ import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton } from "@/component
 import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_LABELS, groupCredits } from "@/lib/credits";
 import { cn } from "@/lib/cn";
+import { DEFAULT_FONT_SIZE, FONT_SIZES, storeFontSize, storedFontSize } from "@/lib/fontSize";
 import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { recordingCount, songCount } from "@/lib/format";
 import { RecordingsSheet } from "@/components/RecordingsSheet";
-
-/** Reader font sizes, persisted so the choice survives navigation. */
-const FONT_SIZES = ["text-base", "text-lg", "text-xl", "text-2xl"] as const;
-const DEFAULT_FONT_SIZE = 1;
-const FONT_SIZE_KEY = "lyrics:font-size";
 
 /**
  * A song, with the catalog's search box above it.
@@ -109,23 +105,29 @@ function SongArticle() {
   const [listSheetOpen, setListSheetOpen] = useState(false);
   const [recordingsOpen, setRecordingsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [fontSizeIndex, setFontSizeIndex] = useState(() => {
-    // The absent-key case has to be caught before Number(): localStorage returns
-    // null, Number(null) is 0, and 0 is a perfectly valid index — so the
-    // intended default of text-lg was unreachable and every first-time reader
-    // silently got the smallest size.
-    const raw = localStorage.getItem(FONT_SIZE_KEY);
-    if (raw === null) return DEFAULT_FONT_SIZE;
-    const stored = Number(raw);
-    return Number.isInteger(stored) && stored >= 0 && stored < FONT_SIZES.length
-      ? stored
-      : DEFAULT_FONT_SIZE;
-  });
+  // The default first, and the reader's own size a moment later. Read during
+  // the first render instead — which is what this was — and the size is a
+  // browser-only answer inside a render body: it throws where there is no
+  // storage, and wrapping that only trades the throw for the worse failure,
+  // a server rendering one size and the client's first render another. React
+  // answers that mismatch by discarding the server's HTML and rendering the
+  // whole root again.
+  //
+  // A layout effect rather than an ordinary one because it runs before the
+  // browser paints, so on the client-only route this is today nothing changes
+  // visually at all — where an effect would paint text-lg first and correct it.
+  // That is the same flash `THEME_BOOT_SCRIPT` is in `app/layout.tsx` to avoid
+  // one level up, and for the same reason: the wrong answer painted once reads
+  // worse than the right one painted a beat late.
+  const [fontSizeIndex, setFontSizeIndex] = useState(DEFAULT_FONT_SIZE);
+  useLayoutEffect(() => {
+    setFontSizeIndex(storedFontSize());
+  }, []);
 
   const setFontSize = (index: number) => {
     const clamped = Math.max(0, Math.min(FONT_SIZES.length - 1, index));
     setFontSizeIndex(clamped);
-    localStorage.setItem(FONT_SIZE_KEY, String(clamped));
+    storeFontSize(clamped);
   };
 
   // Asked of a song that may not be here yet, which `canEditSong` answers for

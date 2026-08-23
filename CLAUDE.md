@@ -690,14 +690,67 @@ no application code — but while it stands, these are the parts holding it up.
   what makes every rule below the shell keep applying unchanged.** The providers,
   `BrowserRouter`, the module-scope `QueryClient` and every route run in the
   browser and only there, exactly as they did under Vite — so the module-scope
-  `localStorage` reads, the import-time `setTokenProvider`, the `useState`
-  initializers that read storage and `window.location.origin` in a render body
-  are all still safe. Remove the `ssr: false` and they are not; that is the first
-  work any server-rendering change has to do, and doing it needs the four
-  render-phase reads found in `ListsPages`, `SongDetailPage`, `ListSongNav` and
-  `lib/theme.ts` fixed first. `ssr: false` is legal only inside a client
-  component, which is why `app/[[...slug]]/client.tsx` exists between the page
-  and `AppRoot` rather than the page importing it directly.
+  `localStorage` reads, the import-time `setTokenProvider` and the `useState`
+  initializers that read storage are still safe. Remove the `ssr: false` and
+  they are not; that is the first work any server-rendering change has to do,
+  and the render *bodies* are now most of the way there rather than all of it.
+  Three reads have been moved off the first render — the reader's font size, the
+  swipe hint's unspent flag and `window.location.origin` on a list page. Two are
+  knowingly left: `ProfilePage`'s `useState(storedTheme)`, which is wrapped
+  rather than moved, and `AuthProvider`'s `useState(storedUser)`, which is the
+  larger of the two and the one to do first — a server renders guest chrome
+  while the client's first render paints the remembered profile, which is a
+  mismatch on every signed-in load rather than on one screen. The layout-effect
+  shape below costs that snapshot nothing, since it runs before paint. Do not
+  read this list as an inventory; grep for the reads. `ssr: false` is legal only inside a client component,
+  which is why `app/[[...slug]]/client.tsx` exists between the page and
+  `AppRoot` rather than the page importing it directly.
+- **A value only the browser has may not be read while rendering, and a
+  try/catch is not the fix.** Wrapping stops the throw and leaves the worse
+  half: the server renders one answer and the client's first render another,
+  which React 19 answers by discarding the server's HTML and re-rendering the
+  whole root. So each of these starts from the default that a server would
+  produce and takes the stored answer in a `useLayoutEffect` — before the
+  browser paints, so on the client-only routes these are today nothing changes
+  visually at all. The reader's font size (`lib/fontSize.ts`, extracted from
+  `SongDetailPage` so a spec can call it without the page's import graph) and
+  `useSwipeHint`'s `unspent` are the two, and the second is the one that
+  genuinely decides markup: `ListSongSwipe` returns null outright while the hook
+  answers null, so the observed box either exists or does not, and starting
+  spent is what makes both sides agree. Nothing is lost by that — the mark waits
+  for an IntersectionObserver before it shows anything, and `md:hidden` still
+  denies the box any geometry at a desk, so the single showing cannot be spent
+  there. `storedTheme`/`storeTheme` and `ListsPages`'s share URL are the other
+  two, and needed only the wrap and a mounted flag: nothing renders on a server
+  while `ssr: false` stands, so they are fixed for the module graph rather than
+  for a path anything is on yet. What the wrap does *not* finish is
+  `ProfilePage`'s `useState(storedTheme)`, which is still a stored value read
+  while rendering and wants the same layout-effect shape — it answers "system"
+  there rather than throwing, so it is the mismatch and not the crash, and the
+  theme radio group is the markup that disagrees. The catch-all has no per-route
+  opt-out, so "that screen is client-only" lasts exactly as long as
+  `ssr: false` does. `src/serverRender.test.tsx` is what
+  says so, and it has to be `// @vitest-environment node` — the first spec here
+  to want its own environment, borrowing `auth/session.test.ts`'s reasoning and
+  not its mechanism, that one running under jsdom like everything else — because
+  jsdom hands a `localStorage` to anything that asks, so a render-phase read
+  passes the whole suite and fails only when the `ssr: false` comes off. Which
+  is also why `vitest.setup.ts` guards its stubs on `typeof window`: the setup
+  file runs for that spec too. **It names its sites rather than catching them**,
+  and its four cases are not equally strong: every one of these reads is
+  wrapped now, so none of them can throw there, and asserting `storedTheme` and
+  `storedFontSize` answer their defaults pins that the modules are safe to
+  *call* on a server rather than that nothing calls them mid-render. The one
+  case that does constrain a render needs a **spy** to do it, and that is the
+  part worth carrying to the next such spec: with a wrap in place, "there is no
+  storage" and "nothing asked for any" render the same empty string, so the
+  call is the only thing left that a `catch` cannot hide. Both directions are
+  pinned — the mark's box appears if the read moves back into the render body,
+  and the spy fires even when it does not, which is the case with the hint
+  already spent. What would catch the sites nobody named is a hydration check — render,
+  seed the storage, `hydrateRoot`, assert React recovered from nothing — and it
+  belongs with the work that drops `ssr: false`, since the two reads it would
+  newly find are the two left above.
 - **The theme is applied by an inline script in `app/layout.tsx`, which is a
   hand-written copy of `applyTheme(storedTheme())` and of the `lyrics:theme`
   key.** Nothing bundled runs early enough: the script has to execute while the
