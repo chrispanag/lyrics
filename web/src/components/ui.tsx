@@ -1,6 +1,5 @@
 import {
   forwardRef,
-  useEffect,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
@@ -12,6 +11,7 @@ import { Loader2, X } from "lucide-react";
 import { buttonClasses, type ButtonSize, type ButtonVariant } from "./buttonStyles";
 import { fieldChrome } from "@/components/fieldStyles";
 import { cn } from "@/lib/cn";
+import { useModal } from "@/lib/modal";
 
 /*
  * Shared primitives. Every interactive control is at least 44px tall on
@@ -269,53 +269,12 @@ export function Sheet({
   title: string;
   children: ReactNode;
 }) {
-  // Escape must close it, and the page behind must not scroll while it is up.
-  useEffect(() => {
-    if (!open) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open, onClose]);
-
-  // Whatever was focused when the sheet went up gets focus back when it comes
-  // down. Closing unmounts everything in here, and an unmounted element takes
-  // focus with it — to `<body>`, which is no element at all: the reader is
-  // dropped at the top of the document with the whole page to tab through
-  // again. It is invisible with a mouse, and worst on a sheet whose own action
-  // closes it, where the control that vanishes is the one just pressed.
-  //
-  // Its own effect, keyed on `open` alone, and that is the whole of why it is
-  // not folded into the one above: every call site passes `onClose` as an
-  // inline closure, so that effect re-runs on any parent render while the sheet
-  // is *open* — and a restore living in its cleanup would fire then, pulling
-  // focus out of the dialog and onto the trigger behind the backdrop. Renders
-  // like that are ordinary: this page reopens the sheet while an upload is in
-  // flight, and `AddToListSheet` re-renders its page on every list it toggles.
-  //
-  // Reading the opener here rather than asking the caller for it is what makes
-  // it true for every sheet, whichever page mounts it — deliberately not "all
-  // N sheets", since a count in a comment goes stale the next time one is
-  // added and reads as though the new one were not covered. `focus` on an
-  // element that has since left the document or gone disabled does nothing,
-  // which is right in both cases.
-  useEffect(() => {
-    if (!open) return;
-
-    const opener = document.activeElement;
-    return () => {
-      if (opener instanceof HTMLElement) opener.focus();
-    };
-  }, [open]);
+  // Escape, the scroll lock, the focus handed back on the way down, and the
+  // marking that tells the page's gestures to stand down — all of it in
+  // `lib/modal.ts`, which is where the phone's navigation drawer gets the same.
+  // No focus target is passed: a sheet unmounts when it closes, so focus is
+  // already inside it and there is nothing to send.
+  const marking = useModal({ open, onClose });
 
   if (!open) return null;
 
@@ -327,11 +286,11 @@ export function Sheet({
         aria-hidden
       />
       <div
-        // These two attributes are the whole of how a sheet announces itself:
-        // `lib/modal.ts` looks for exactly this pair, and both the arrow keys
-        // and the paging swipe stand down while it answers.
-        role="dialog"
-        aria-modal="true"
+        // The marking is the whole of how a sheet announces itself, and both
+        // the arrow keys and the paging swipe stand down while it is on the
+        // page. It comes from `useModal` rather than being written here, so
+        // there is one answer to what a modal looks like — see `lib/modal.ts`.
+        {...marking}
         aria-label={title}
         className={cn(
           "relative flex max-h-[85vh] w-full flex-col rounded-t-3xl bg-white shadow-2xl",

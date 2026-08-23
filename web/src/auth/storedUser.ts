@@ -6,8 +6,8 @@ import { ROLES, type User } from "@/lib/types";
  * Restoring a session is two round trips — the SDK's token refresh, then
  * `GET /me` — and until they land the app knows nothing about who is here.
  * Rendering that as "nobody" is what made every refresh of a signed-in page
- * paint the *guest* answer first: a sidebar offering a sign-in button, a tab bar
- * with no Lists in it, a catalog with no Add song, all of it replaced a few
+ * paint the *guest* answer first: a navigation offering a sign-in button and
+ * no Lists in it, a catalog with no Add song, all of it replaced a few
  * hundred milliseconds later. This is the same trade `applyTheme(storedTheme())`
  * makes in `main.tsx`: paint the last known answer rather than a wrong one while
  * waiting for the right one.

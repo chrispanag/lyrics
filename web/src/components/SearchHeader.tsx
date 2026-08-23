@@ -1,6 +1,17 @@
 import type { ReactNode } from "react";
 
-import { StickyHeader } from "./Layout";
+import { MenuButton, StickyHeader } from "./Layout";
+
+/**
+ * The column both bars below put their contents in.
+ *
+ * One string rather than two copies of it, for the reason this whole component
+ * exists: retuned in one place only, the measure or the padding would move the
+ * hamburger sideways — or change the bar's height — between a song page and the
+ * list it was opened from, which is the movement under the finger the component
+ * was written to stop, arriving from inside it this time.
+ */
+const headerColumn = "mx-auto max-w-3xl px-4 py-3";
 
 /**
  * The header a search box sits in, shared by the catalog and a song page.
@@ -32,6 +43,13 @@ import { StickyHeader } from "./Layout";
  * row has left. Which is why the filter count is a badge over a square button
  * rather than text beside its icon: as text it widened the button and narrowed
  * the field, resizing the box in place every time a filter was applied.
+ *
+ * The hamburger leading the row is the same rule from the other side: it is
+ * rendered here, unconditionally, rather than passed in — a page that had the
+ * choice would be a page whose field starts 52px further left than the next
+ * one's, which is the movement under the finger this component exists to stop.
+ * A page with no search box of its own gets `MenuHeader` below, so the button
+ * lands in the same place on every screen in the app.
  */
 export function SearchHeader({
   children,
@@ -50,12 +68,43 @@ export function SearchHeader({
 }) {
   return (
     <StickyHeader pinned={pinned}>
-      <div className="mx-auto max-w-3xl px-4 py-3">
+      <div className={headerColumn}>
         <div className="flex items-center gap-2">
+          <MenuButton />
           <div className="min-w-0 flex-1">{children}</div>
           {trailing && <div className="shrink-0">{trailing}</div>}
         </div>
         {below}
+      </div>
+    </StickyHeader>
+  );
+}
+
+/**
+ * The same bar for a screen with no search box of its own: the hamburger, in
+ * the place every other screen keeps it.
+ *
+ * It shares `StickyHeader` and the column above rather than stating either
+ * again, which is what makes "the way into the navigation is always here" true
+ * by construction instead of by six pages agreeing on a number. Nothing is at
+ * the right of the row on purpose — a screen with something to put there has a
+ * header of its own already.
+ *
+ * `mobileOnly`, because at a desk this bar has nothing in it: the sidebar is
+ * the navigation there, and a header rendered anyway would be an empty
+ * hairline across the top of two thirds of the app.
+ *
+ * It is applied by position, as the element of a layout route wrapping every
+ * screen that needs one — see `App.tsx`. A page that carried this itself would
+ * have to carry it in every state it can be in, and `ListDetailPage` alone has
+ * three; one forgotten leaves that screen with no navigation at all on a phone,
+ * which is exactly the failure the tab bar could not have.
+ */
+export function MenuHeader() {
+  return (
+    <StickyHeader mobileOnly>
+      <div className={headerColumn}>
+        <MenuButton />
       </div>
     </StickyHeader>
   );

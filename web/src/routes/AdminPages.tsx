@@ -72,9 +72,14 @@ function RowSkeletons() {
  * screen's name is written in one place rather than in the route, the tab, and
  * a title prop.
  *
- * The console gets a single entry in the app's navigation — the phone's tab bar
- * is a row of equal shares and a fifth would crowd it — so moving between these
- * screens is something the console itself has to offer.
+ * The console gets a single entry in the app's navigation, naming the section
+ * rather than either screen in it, so moving between these screens is something
+ * the console itself has to offer. That was once forced — the phone's tab bar
+ * was a row of equal shares and a fifth would have crowded it — and the drawer
+ * that replaced it has room to spare. It stays one entry because the reason it
+ * points at `/admin` has not changed: a `NavLink` matches on prefix, so the one
+ * entry is lit on both screens, where two would light one and darken the other
+ * as an admin moved between them.
  */
 export function AdminConsole() {
   const { pathname } = useLocation();

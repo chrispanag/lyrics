@@ -190,8 +190,9 @@ export function ListSongSwipe({
       aria-hidden
       // Fixed, because the gesture is the whole song and not a part of it: a
       // mark that has to be scrolled to is a mark for something nobody has found
-      // yet. bottom-24 rests it in thumb reach and clear of the tab bar, the
-      // same allowance the page itself makes for it.
+      // yet. bottom-12 rests it in thumb reach, level with the allowance the
+      // shell's own `pb-12` leaves at the foot of every page — it was bottom-24
+      // while a tab bar stood there, and left behind it floated in open space.
       //
       // `md:hidden` is also what keeps the single showing from being spent at a
       // desk, where the bar's arrows and the arrow keys are the way through and
@@ -199,7 +200,7 @@ export function ListSongSwipe({
       // comes into view and `useSwipeHint` never fires. Which matters most on
       // the machines that are both — a tablet in landscape spends nothing, and
       // has the mark waiting when it is turned.
-      className="pointer-events-none fixed inset-x-0 bottom-24 z-30 flex justify-center md:hidden"
+      className="pointer-events-none fixed inset-x-0 bottom-12 z-30 flex justify-center md:hidden"
     >
       {/* Opaque and inverted, because it floats over the lyrics: a translucent
           gray on gray is a gesture nobody can see, which is a gesture nobody
