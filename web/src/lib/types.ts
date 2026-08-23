@@ -43,13 +43,23 @@ export function hasRole(role: Role | undefined, minimum: Role): boolean {
  * Shared by the detail page and the editor so the Edit affordance and the
  * editor's own guard cannot disagree about who gets in. As with hasRole, the
  * server is the authority; this only decides what to render.
+ *
+ * The admin answer comes before the song is looked at, which is what lets a
+ * caller ask before it has one: a song page renders its controls while the song
+ * is in flight, and an admin's row has to be the row it will still be once the
+ * song lands rather than gaining a link a moment later, under the finger of
+ * someone reaching for the button beside it. Guarding on `!song` first — as this
+ * did — pushed that caller into re-deriving the admin case for itself, which is
+ * the disagreement the sharing exists to prevent. A contributor is the one who
+ * cannot be answered early, their claim being on the song itself.
  */
 export function canEditSong(
   user: Pick<User, "id" | "role"> | null | undefined,
   song: Pick<Song, "created_by"> | null | undefined,
 ): boolean {
-  if (!user || !song) return false;
+  if (!user) return false;
   if (hasRole(user.role, "admin")) return true;
+  if (!song) return false;
   return hasRole(user.role, "contributor") && song.created_by === user.id;
 }
 

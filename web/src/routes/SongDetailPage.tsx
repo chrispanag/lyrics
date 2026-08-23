@@ -31,7 +31,7 @@ import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_ORDER } from "@/lib/credits";
 import { cn } from "@/lib/cn";
 import { LIST_PARAM, listPosition } from "@/lib/listContext";
-import { canEditSong, hasRole, type Credit, type CreditRole } from "@/lib/types";
+import { canEditSong, hasRole, type Credit, type CreditRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { songCount } from "@/lib/format";
 
@@ -66,6 +66,19 @@ export function SongDetailPage() {
   );
 }
 
+/**
+ * The song, and the chrome that is the same chrome for every song.
+ *
+ * Only the second half waits. The way back, the way into a list, the way to the
+ * editor and the reader's place in a list are all decided by the address and the
+ * session rather than by the song, so they are drawn at once — a step through a
+ * list used to replace the lot with a grey block and draw it again a moment
+ * later, and the one control a reader is most likely to reach for while waiting
+ * is the one that takes them back out.
+ *
+ * What is left to a skeleton is the song's own: its title, who made it, its
+ * lyrics and its notes.
+ */
 function SongArticle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -73,7 +86,10 @@ function SongArticle() {
   const [params] = useSearchParams();
   const { user, loading: sessionLoading } = useAuth();
 
-  const { data: song, isLoading, isError, error } = useSong(id);
+  // No `isError` deliberately — see the guard below, which is the whole reason
+  // the flag is not read. `error` still is: it names the failure that left this
+  // page with no song at all.
+  const { data: song, isLoading, error } = useSong(id);
   const deleteSong = useDeleteSong();
 
   // The list this song is being read from, if it is being read from one. Held
@@ -116,22 +132,30 @@ function SongArticle() {
     localStorage.setItem(FONT_SIZE_KEY, String(clamped));
   };
 
+  // Asked of a song that may not be here yet, which `canEditSong` answers for
+  // the role that can edit every song and refuses for everyone else — see the
+  // order of its guards. A contributor's link therefore arrives with the song
+  // rather than being promised early and then withdrawn.
   const canEdit = canEditSong(user, song);
 
-  if (isLoading) {
-    return (
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-6">
-        {/* Nameless while the song is in flight, rather than a tab that flashes
-            "undefined — Songfolio" on every step through a list. */}
-        <PageTitle />
-        <Skeleton className="h-8 w-2/3" />
-        <Skeleton className="h-4 w-1/3" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
-
-  if (isError || !song) {
+  // A song this page has not got, once the request has settled on not having
+  // it. Both halves earn their place. `!song` alone is every load, since the
+  // shell below is rendered while the song is in flight, so every song would
+  // paint this page on its way in; `!isLoading` alone never fires, a settled
+  // request being the only kind that is not loading. A missing `id` lands here
+  // too, its query never having been enabled — a disabled query is not
+  // `isLoading` either.
+  //
+  // `isError` is deliberately *not* a third disjunct, though it reads like the
+  // obvious one. It is only ever true here with a song already in hand — a
+  // refetch that failed, which react-query runs on every return to the tab —
+  // and a reader on a phone that lost signal mid-song would then watch the
+  // lyrics they were reading replaced by an error about a request they never
+  // made. The cached song stays instead. What that costs is the other
+  // direction: a song deleted by somebody else stays readable here until the
+  // page is reloaded, and a failed refresh is silent. Both are quieter than
+  // taking a song off the screen of someone reading it.
+  if (!isLoading && !song) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-6">
         <PageTitle name="Song not available" />
@@ -143,8 +167,10 @@ function SongArticle() {
     );
   }
 
-  const creditsByRole = groupCredits(song.credits);
-  const position = contextList ? listPosition(contextList, song.id) : null;
+  // Located by the address rather than by the song, so the bar is there while the
+  // next song loads instead of blinking out at every step through a list — the
+  // reader's place in it is what the URL already says.
+  const position = contextList && id ? listPosition(contextList, id) : null;
 
   return (
     // The catalog's column, which is the search header's above it: the box a
@@ -152,11 +178,12 @@ function SongArticle() {
     // open results panel hung 48px past this article on each side while it was
     // narrower. Every state of the page carries it, or the width changes as the
     // song arrives.
-    <article ref={surface} className="mx-auto max-w-3xl px-4 py-4">
+    <article ref={surface} aria-busy={isLoading} className="mx-auto max-w-3xl px-4 py-4">
       {/* The song alone, not the song and its artist: a tab strip truncates
           hard, and the title is what a reader is looking for among ten of
-          these. */}
-      <PageTitle name={song.title} />
+          these. Nameless while the song is in flight, rather than a tab that
+          flashes "undefined — Songfolio" on every step through a list. */}
+      <PageTitle name={song?.title} />
       <div className="mb-4 flex items-center justify-between gap-2">
         <BackButton />
 
@@ -185,7 +212,7 @@ function SongArticle() {
           </Button>
           {canEdit && (
             <Link
-              to={`/songs/${song.id}/edit`}
+              to={`/songs/${id}/edit`}
               className={buttonClasses("ghost", "sm")}
             >
               <Pencil aria-hidden className="size-4" />
@@ -200,6 +227,11 @@ function SongArticle() {
               variant="ghost"
               size="sm"
               aria-label="Delete song"
+              // The one irreversible action on the page, and the confirmation
+              // behind it names the song. Held until there is a song to name:
+              // asking someone to confirm the deletion of a title they have not
+              // been shown is the one wait worth keeping.
+              disabled={!song}
               onClick={() => setConfirmDelete(true)}
             >
               <Trash2 aria-hidden className="size-4 text-red-600" />
@@ -211,61 +243,42 @@ function SongArticle() {
       {position && (
         <>
           <ListSongNavBar position={position} />
-          <ListSongSwipe position={position} surface={surface} />
+          {/* The bar is chrome and comes at once; the gesture is read across the
+              song, so it waits for one. Not a nicety: the mark that explains the
+              swipe is shown once per device the moment it is on screen, and a
+              song that fails to load would spend that showing on a page with no
+              gesture on it — which is the failure `useSwipeHint`'s observer
+              exists to prevent, arriving from the other side. What it costs is a
+              swipe made during the load window doing nothing; the bar's own
+              arrows are there throughout, and a hint still showing when the
+              reader swipes ends with the step they have just made. */}
+          {song && <ListSongSwipe position={position} surface={surface} />}
         </>
       )}
 
-      {/* The song's own language, like the lyrics below — a Greek title is
-          content too, and it is what a screen reader announces first. */}
-      <header className="mb-5" lang={song.language}>
-        <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">
-          {song.title}
-        </h1>
-        {song.alt_title && (
-          <p className="mt-1 text-lg text-stone-500 dark:text-stone-400">{song.alt_title}</p>
-        )}
-
-        <dl className="mt-3 space-y-1 text-sm">
-          {creditsByRole.map(([role, names]) => (
-            <div key={role} className="flex gap-2">
-              <dt className="shrink-0 text-stone-500 dark:text-stone-400">{ROLE_LABELS[role]}</dt>
-              <dd className="font-medium">
-                {names.map((credit, index) => (
-                  <span key={credit.person_id}>
-                    {index > 0 && ", "}
-                    <Link
-                      to={browseHref({ person: credit.person_id })}
-                      className="hover:text-brand-600 hover:underline"
-                    >
-                      {credit.name}
-                    </Link>
-                  </span>
-                ))}
-              </dd>
-            </div>
-          ))}
-          {song.release_year && (
-            <div className="flex gap-2">
-              <dt className="text-stone-500 dark:text-stone-400">Year</dt>
-              <dd className="font-medium">{song.release_year}</dd>
-            </div>
-          )}
-        </dl>
-
-        {song.genres.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {song.genres.map((genre) => (
-              <Link
-                key={genre.id}
-                to={browseHref({ genre_slug: genre.slug })}
-                className="rounded-full bg-stone-200 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300"
-              >
-                {genre.name}
-              </Link>
-            ))}
+      {song ? (
+        <SongHeader song={song} />
+      ) : (
+        // The header's own margins and rhythm, so the lyrics heading below —
+        // which is a control, being where the text size is set — lands within a
+        // pixel or two of where the song will put it: `mb-5` under the block and
+        // `mt-3` off the title, then the two credit lines and the one genre chip
+        // most songs carry. A song with more or fewer moves it, and there is
+        // nothing here that could know which; what the shape buys is that the
+        // common case does not.
+        //
+        // No `rounded-full` on the chip, tempting as it is: `cn` is a plain join,
+        // so it would land beside Skeleton's own `rounded-lg` and CSS source
+        // order, not this line, would pick the winner.
+        <div className="mb-5 space-y-3">
+          <Skeleton className="h-9 w-2/3" />
+          <div className="space-y-1">
+            <Skeleton className="h-5 w-1/2" />
+            <Skeleton className="h-5 w-1/3" />
           </div>
-        )}
-      </header>
+          <Skeleton className="h-6 w-20" />
+        </div>
+      )}
 
       <section aria-label="Lyrics">
         <div className="mb-2 flex items-center justify-between">
@@ -295,7 +308,9 @@ function SongArticle() {
           </div>
         </div>
 
-        {song.lyrics?.trim() ? (
+        {!song ? (
+          <Skeleton className="h-64 w-full" />
+        ) : song.lyrics?.trim() ? (
           // whitespace-pre-line preserves the line and verse breaks that give
           // lyrics their shape, without needing any markup in the stored text.
           //
@@ -324,11 +339,11 @@ function SongArticle() {
           to go once the song has been read, and a block between the credits and
           the first line is what the facade did wrong. Gated on the id, not the
           URL — see WatchOnYouTube for why the URL is not the field to trust. */}
-      {song.youtube_video_id && (
+      {song?.youtube_video_id && (
         <WatchOnYouTube videoId={song.youtube_video_id} className="mt-6" />
       )}
 
-      {song.notes && (
+      {song?.notes && (
         <section className="mt-8 rounded-2xl bg-stone-100 p-4 dark:bg-stone-900">
           <h2 className="mb-1 text-sm font-semibold text-stone-700 dark:text-stone-300">Notes</h2>
           <p className="whitespace-pre-line text-sm text-stone-600 dark:text-stone-400">
@@ -339,25 +354,113 @@ function SongArticle() {
 
       {position && <ListSongNavFooter position={position} />}
 
-      {user && (
+      {/* The song itself is not wanted here — a list holds ids — so the sheet
+          opens on a song still loading, which is what lets Save be pressed the
+          moment it is seen rather than only once the lyrics have landed. */}
+      {user && id && (
         <AddToListSheet
-          songId={song.id}
+          songId={id}
           open={listSheetOpen}
           onClose={() => setListSheetOpen(false)}
         />
       )}
 
-      <ConfirmSheet
-        open={confirmDelete}
-        onClose={() => setConfirmDelete(false)}
-        title="Delete this song?"
-        pending={deleteSong.isPending}
-        onConfirm={() => deleteSong.mutate(song.id, { onSuccess: () => navigate("/") })}
-      >
-        “{song.title}” will be removed for everyone, along with its place in any lists. This cannot
-        be undone.
-      </ConfirmSheet>
+      {song && (
+        <ConfirmSheet
+          open={confirmDelete}
+          onClose={() => {
+            setConfirmDelete(false);
+            // The sheet keeps its mount across an open and a close, so a refusal
+            // left on the mutation would be waiting inside it the next time it is
+            // opened — an error reported against an attempt nobody has made yet.
+            deleteSong.reset();
+          }}
+          title="Delete this song?"
+          pending={deleteSong.isPending}
+          // A refused delete is otherwise silent, and silence reads as nothing
+          // having happened: the spinner stops, `onSuccess` never navigates, and
+          // the sheet sits there with the same button on it. The one irreversible
+          // action on the page is the last one that can afford to fail quietly.
+          error={
+            deleteSong.isError
+              ? errorMessage(deleteSong.error, "This song could not be deleted.")
+              : undefined
+          }
+          onConfirm={() => deleteSong.mutate(song.id, { onSuccess: () => navigate("/") })}
+        >
+          “{song.title}” will be removed for everyone, along with its place in any lists. This
+          cannot be undone.
+        </ConfirmSheet>
+      )}
     </article>
+  );
+}
+
+/**
+ * A song's title, what it is called elsewhere, who made it, and its genres.
+ *
+ * Its own component because it is the half of the page that has to wait for the
+ * song: the shell above renders in every state, and this is what a skeleton
+ * stands in for until there is something to put here.
+ *
+ * That skeleton is shaped like this header, so the spacing below is load-bearing
+ * twice over: a field added here, or an `mb-5`/`mt-3` changed, moves the lyrics
+ * heading — a control — as the song arrives, unless the block beside the call
+ * site moves with it. Nothing catches that, jsdom laying nothing out.
+ */
+function SongHeader({ song }: { song: Song }) {
+  const creditsByRole = groupCredits(song.credits);
+
+  return (
+    /* The song's own language, like the lyrics below — a Greek title is content
+       too, and it is what a screen reader announces first. */
+    <header className="mb-5" lang={song.language}>
+      <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">{song.title}</h1>
+      {song.alt_title && (
+        <p className="mt-1 text-lg text-stone-500 dark:text-stone-400">{song.alt_title}</p>
+      )}
+
+      <dl className="mt-3 space-y-1 text-sm">
+        {creditsByRole.map(([role, names]) => (
+          <div key={role} className="flex gap-2">
+            <dt className="shrink-0 text-stone-500 dark:text-stone-400">{ROLE_LABELS[role]}</dt>
+            <dd className="font-medium">
+              {names.map((credit, index) => (
+                <span key={credit.person_id}>
+                  {index > 0 && ", "}
+                  <Link
+                    to={browseHref({ person: credit.person_id })}
+                    className="hover:text-brand-600 hover:underline"
+                  >
+                    {credit.name}
+                  </Link>
+                </span>
+              ))}
+            </dd>
+          </div>
+        ))}
+        {song.release_year && (
+          <div className="flex gap-2">
+            <dt className="text-stone-500 dark:text-stone-400">Year</dt>
+            <dd className="font-medium">{song.release_year}</dd>
+          </div>
+        )}
+      </dl>
+
+      {song.genres.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {song.genres.map((genre) => (
+            <Link
+              key={genre.id}
+              to={browseHref({ genre_slug: genre.slug })}
+              className="rounded-full bg-stone-200 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300"
+            >
+              {genre.name}
+            </Link>
+          ))}
+        </div>
+      )}
+    </header>
   );
 }
 

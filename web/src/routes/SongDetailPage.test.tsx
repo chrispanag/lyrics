@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Route, Routes, useLocation } from "react-router-dom";
 
 import { SongDetailPage } from "./SongDetailPage";
+import { keys } from "@/api/hooks";
 import { returnDestination } from "@/auth/returnTo";
+import { deferred } from "@/test/deferred";
 import { API, listById, makeList, makeSong, makeUser, notFound } from "@/test/handlers";
 import { intersectAll, observedElements } from "@/test/intersection";
 import { renderWithProviders } from "@/test/render";
@@ -182,6 +184,117 @@ describe("SongDetailPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Song was not found.");
   });
+
+  // The same failure with the song already in hand, which is not the same
+  // failure at all: react-query refetches on every return to the tab, so this is
+  // a phone that lost signal mid-song. Taking the lyrics off the screen of
+  // somebody reading them, to report a request they never made, is worse than
+  // both of the things keeping them costs — a failed refresh says nothing, and a
+  // song deleted elsewhere stays readable here until the page is reloaded.
+  it("keeps a song a reader already has when a refetch fails", async () => {
+    const { queryClient } = renderDetail();
+
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+
+    server.use(http.get(`${API}/api/v1/songs/:id`, () => notFound("Song was not found.")));
+    await act(() => queryClient.refetchQueries({ queryKey: keys.song("song-1") }));
+
+    // The refusal has to reach a *render* before anything below means anything.
+    // The promise above resolves before react-query has told the page, so
+    // asserting straight after it passes against a page that has not heard yet —
+    // which is not a hypothetical: written that way, this spec passed with the
+    // guard it exists to pin put back. Pressing a control is the least contrived
+    // way to ask for that render, being what a reader still on the song does.
+    await userEvent.click(screen.getByRole("button", { name: "Increase text size" }));
+
+    expect(screen.getByRole("heading", { name: "Θάλασσα Πλατιά" })).toBeInTheDocument();
+    expect(screen.getByText(/Στης θάλασσας τα βάθη/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * What is on screen before the song is.
+ *
+ * The chrome around a song is the same chrome for every song, so it stays while
+ * one loads rather than being replaced by a grey block: a reader who stepped
+ * into a song that is slow to arrive keeps the way back, the way into a list,
+ * and — where they have one — the way to the editor. Only the song's own half
+ * waits for the song.
+ */
+describe("SongDetailPage while the song loads", () => {
+  /** Serves the song only once the spec lets it through, answering with the release. */
+  function serveHeldSong(song = makeSong()) {
+    const [held, release] = deferred();
+
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, async () => {
+        await held;
+        return HttpResponse.json(song);
+      }),
+    );
+
+    return release;
+  }
+
+  it("keeps the way back and the way to a list on screen", async () => {
+    const release = serveHeldSong();
+
+    renderDetail();
+
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save to a list/i })).toBeInTheDocument();
+
+    release();
+    expect(await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" })).toBeInTheDocument();
+  });
+
+  // A song in flight is a song with no error about it. `!song` is true for the
+  // whole of the wait, so the guard on the failure branch has to read the
+  // request rather than the absence — without it every song paints "not
+  // available" on its way in.
+  it("does not report the song as unavailable while it is in flight", async () => {
+    const release = serveHeldSong();
+
+    renderDetail();
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    release();
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+  });
+
+  // An admin can edit every song, so their row is decided without one. Asserted
+  // against a song somebody else wrote, which is the case `canEditSong` answers
+  // on the strength of the role alone — put its `!song` guard back in front of
+  // the admin check and this link appears only once the song lands, under the
+  // finger of an admin reaching for Save.
+  it("offers an admin the editor before the song has arrived", async () => {
+    const release = serveHeldSong(makeSong({ created_by: "someone-else" }));
+
+    renderDetail({ user: makeUser({ id: "admin-1", role: "admin" }) });
+
+    expect(screen.getByRole("link", { name: /edit/i })).toHaveAttribute(
+      "href",
+      "/songs/song-1/edit",
+    );
+
+    release();
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+  });
+
+  // The confirmation names the song, so there has to be a song to name.
+  it("holds the delete control until there is a song for it to name", async () => {
+    const release = serveHeldSong();
+
+    renderDetail({ user: makeUser({ id: "admin-1", role: "admin" }) });
+
+    expect(screen.getByRole("button", { name: "Delete song" })).toBeDisabled();
+
+    release();
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(screen.getByRole("button", { name: "Delete song" })).toBeEnabled();
+  });
 });
 
 /*
@@ -239,6 +352,61 @@ describe("SongDetailPage inside a list", () => {
 
     expect(await screen.findByRole("heading", { name: "Third" })).toBeInTheDocument();
     expect(screen.getByText("3 of 3")).toBeInTheDocument();
+  });
+
+  // The bar says where the reader is in the list, and the address already says
+  // it — so a step through the list keeps the bar up while the next song loads
+  // instead of dropping it and drawing it again a moment later.
+  it("keeps the list navigation up while the next song loads", async () => {
+    serveList();
+    const [held, release] = deferred();
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, async ({ params }) => {
+        await held;
+        const found = inList.find((song) => song.id === params.id);
+        return found ? HttpResponse.json(found) : notFound("Song was not found.");
+      }),
+    );
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    // The list is what the bar is drawn from, and it is not the slow half.
+    expect(await screen.findByText("2 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Next song" })).toBeInTheDocument();
+
+    release();
+    expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
+    expect(screen.getByText("2 of 3")).toBeInTheDocument();
+  });
+
+  // The mark that explains the swipe is shown once per device, the moment it is
+  // on screen — so it must not be built over a song that has not arrived, which
+  // may yet turn out to be a song that never does. Asserted as the mark being
+  // watched by nobody rather than as the pill being absent: unspent, the pill is
+  // rendered invisible and waiting, so its absence is the whole of the claim.
+  it("does not spend the swipe mark on a song still in flight", async () => {
+    serveList();
+    const [held, release] = deferred();
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, async ({ params }) => {
+        await held;
+        const found = inList.find((song) => song.id === params.id);
+        return found ? HttpResponse.json(found) : notFound("Song was not found.");
+      }),
+    );
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    await screen.findByText("2 of 3");
+    expect(observedElements()).toHaveLength(0);
+    // And a reader who scrolled — or a browser reporting the fold — spends
+    // nothing either, there being nothing observed to report on.
+    act(() => intersectAll());
+    expect(localStorage.getItem("lyrics:swipe-hint-seen")).toBeNull();
+
+    release();
+    await screen.findByRole("heading", { name: "Second" });
+    expect(observedElements()).toHaveLength(1);
   });
 
   it("steps back with the left arrow key", async () => {
@@ -712,6 +880,31 @@ describe("SongDetailPage deletion", () => {
     await waitFor(() => expect(deleted).toBe("song-1"));
     // And the reader does not stay on the song that no longer exists.
     expect(await screen.findByRole("heading", { name: "Catalog" })).toBeInTheDocument();
+  });
+
+  // A refused delete is the one failure on this page with nowhere else to be
+  // reported: the sheet stays open with the same button on it, and nothing
+  // navigates, so silence reads as the press not having landed.
+  it("reports a delete the server refused, and forgets it on the way out", async () => {
+    server.use(
+      http.delete(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json({ error: { message: "Song is referenced by a list." } }, { status: 409 }),
+      ),
+    );
+
+    renderDetail({ user: makeUser({ role: "admin" }) });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Delete song" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Song is referenced by a list.");
+    // And the refusal belongs to the attempt that was made, not to the next
+    // opening of the sheet — which would report a failure against a press
+    // nobody has made yet.
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete song" }));
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("does nothing to a song the confirmation was dismissed for", async () => {
