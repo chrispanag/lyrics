@@ -13,6 +13,19 @@ const SIZES = {
  * One component for every place a user is shown, so the fallback cannot differ
  * between the sidebar, the profile screen and the admin console — and so the
  * decision between the two is made once, from `avatar_updated_at`.
+ *
+ * Eagerness is the second decision made here, and it is read off `size` rather
+ * than passed in. `lg` is only ever a page's focal picture — the profile
+ * screen's own — and deferring the one image a page is about is the failure:
+ * the browser holds it back behind layout, and it is the element the upload
+ * flow is watching change. A prop with a lazy default would put that choice
+ * back at the call site, which is where it went wrong to begin with — nothing
+ * chose lazy for the focal picture, it was simply what the default said, and
+ * the next focal screen would inherit the same silence. If `lg` is ever used
+ * somewhere that is *not* focal, the cost is eager fetches of pictures that may
+ * be below the fold: bounded, and visible in the network panel rather than
+ * silent. The fix then is to make eagerness its own parameter, not to hand a
+ * focal image back a lazy default nobody chose.
  */
 export function Avatar({
   user,
@@ -47,7 +60,7 @@ export function Avatar({
     <img
       src={source}
       alt=""
-      loading="lazy"
+      loading={size === "lg" ? "eager" : "lazy"}
       decoding="async"
       // Belt and suspenders: the API crops every picture to a square before
       // storing it, and this keeps a row written before it did — or by anything

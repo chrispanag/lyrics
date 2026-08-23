@@ -393,6 +393,13 @@ inventory this file records going stale under Head assets.)
   caches its own copy of that field, so without it an admin who removes their
   picture finds their own row still rendering an image — the old one out of
   their own still-fresh cache, an empty circle on anybody else's machine.
+- **The same component decides how eagerly a picture loads, and it reads that
+  off `size`.** `lg` is a page's focal picture — the profile screen's own — so it
+  loads eagerly while every other placement stays lazy. One unconditional
+  `loading="lazy"` deferred the focal picture along with the rest, and the one
+  image a reader came to look at then paints after the layout around it, so an
+  upload that has already succeeded reads as not having taken. Nothing errors,
+  and a fast machine never shows it.
 - **Both controls that touch a picture live behind the pencil on the circle,
   and the sheet closes before either one starts work.** What that buys is where
   the state goes: the busy spinner is on the badge and the failure is on the

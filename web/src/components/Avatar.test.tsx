@@ -45,6 +45,22 @@ describe("Avatar", () => {
     expect(screen.getByRole("presentation").getAttribute("src")).not.toBe(before);
   });
 
+  // The picture a page is about must not wait behind its layout, and on the
+  // profile screen it is also the element the upload flow watches change.
+  it("loads a page's focal picture eagerly", () => {
+    render(<Avatar user={makeUser({ avatar_updated_at: "2026-08-22T20:00:00Z" })} size="lg" />);
+
+    expect(screen.getByRole("presentation")).toHaveAttribute("loading", "eager");
+  });
+
+  // The other half of the same decision: a page of admin rows is fifty of these,
+  // most of them below the fold, which is what deferring is for.
+  it("leaves a picture in a list of rows lazy", () => {
+    render(<Avatar user={makeUser({ avatar_updated_at: "2026-08-22T20:00:00Z" })} size="md" />);
+
+    expect(screen.getByRole("presentation")).toHaveAttribute("loading", "lazy");
+  });
+
   // Keyed on the record rather than on the image having loaded: a picture that
   // fails to load is a picture, and initials underneath it would be worse than
   // an empty circle.
