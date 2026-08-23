@@ -17,12 +17,47 @@ interface NavItem {
   /** Only shown when signed in. */
   authOnly?: boolean;
   adminOnly?: boolean;
+  /**
+   * Rendered by the sidebar as the identity card at its foot, rather than as
+   * one of the links above it — and only while there is an identity to render.
+   *
+   * A guest gets the Sign in button where the card would be, so a guest keeps
+   * the link: the tab bar is `md:hidden`, and `/profile` is where the theme
+   * switch lives and nowhere else, so dropping the entry whatever the reader is
+   * leaves a signed-out one at a desk with no route to that screen at all.
+   * Nothing says so from a signed-in sidebar, which has its card.
+   *
+   * The phone is the other half of the same rule, and is why the item is not
+   * `authOnly`: the bar has no card, and no sign-in button either, so this
+   * entry is the only route it has to `/profile` and through it to signing in.
+   *
+   * Unlike the two flags above, this one is honored by the surface that renders
+   * its own version of the entry — a third navigation gets the entry unless it
+   * says otherwise, since there is nothing here that could withhold it.
+   */
+  identityCard?: boolean;
 }
+
+/**
+ * The lit and pressable treatments the sidebar's links share with the identity
+ * card standing in for one of them.
+ *
+ * Tokens rather than two copies: nothing pins the two agreeing, so retuning
+ * either on the links would otherwise be a change to make twice.
+ *
+ * The lit one carries its text color and the pressable one does not, which is
+ * the asymmetry between the two call sites and not an oversight: lit, both the
+ * label and the card's name take the brand color, while at rest the links state
+ * a stone the card leaves to inherit. The card's role line names its own stone
+ * either way, so it stays put under both.
+ */
+const SIDEBAR_ACTIVE = "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200";
+const SIDEBAR_HOVER = "hover:bg-stone-100 dark:hover:bg-stone-800";
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Browse", icon: Search },
   { to: "/lists", label: "Lists", icon: ListMusic, authOnly: true },
-  { to: "/profile", label: "Profile", icon: UserIcon },
+  { to: "/profile", label: "Profile", icon: UserIcon, identityCard: true },
   // The console's own section rather than one of its screens: a NavLink matches
   // on prefix, so this stays lit while an admin moves between users and genres,
   // and `/admin` redirects to the first of them.
@@ -73,14 +108,27 @@ export function Layout() {
 function DesktopSidebar({ items }: { items: NavItem[] }) {
   const { user } = useAuth();
 
+  // Asked here rather than by the caller: whether the card at the foot stands
+  // in for an entry is this navigation's own question, and it answers yes only
+  // while there is a card. Asked from outside, the next reader of this
+  // component gets the link *and* the card, both pointing at `/profile`.
+  const links = user ? items.filter((item) => !item.identityCard) : items;
+
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-stone-200 bg-white px-4 py-6 md:flex dark:border-stone-800 dark:bg-stone-900">
       <NavLink to="/" className="mb-8 flex px-2">
         <Wordmark />
       </NavLink>
 
-      <nav className="flex flex-col gap-1">
-        {items.map((item) => (
+      {/* The card and the Sign in button are inside the landmark, not beside
+          it: whichever of them is rendered is this navigation's only way to
+          `/profile`, and left outside, a reader navigating by landmark finds
+          Browse, Lists and Admin and no route to their own profile. `flex-1` is
+          what keeps that free — it gives the nav the height the aside was
+          holding, so the `mt-auto` below still has the room to push itself to
+          the bottom of the sidebar rather than to the foot of the links. */}
+      <nav className="flex flex-1 flex-col gap-1">
+        {links.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -89,8 +137,8 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
               cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200"
-                  : "text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800",
+                  ? SIDEBAR_ACTIVE
+                  : cn(SIDEBAR_HOVER, "text-stone-600 dark:text-stone-400"),
               )
             }
           >
@@ -98,26 +146,41 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
             {item.label}
           </NavLink>
         ))}
-      </nav>
 
-      <div className="mt-auto px-2 pt-6">
-        {user ? (
-          <div className="flex min-w-0 items-center gap-2.5">
-            <Avatar user={user} />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{user.display_name ?? user.email}</p>
-              <p className="text-xs capitalize text-stone-500 dark:text-stone-400">{user.role}</p>
-            </div>
-          </div>
-        ) : (
-          <NavLink
-            to="/login"
-            className={cn(buttonClasses("primary", "md"), "w-full")}
-          >
-            Sign in
-          </NavLink>
-        )}
-      </div>
+        <div className="mt-auto px-2 pt-6">
+          {user ? (
+            // The sidebar's profile entry, which is why the list above drops it.
+            // It takes the links' own treatments: without the lit one the
+            // profile screen is the one place in the app where nothing in the
+            // sidebar is lit, and without the hover one — the link being gone —
+            // nothing says the card can be pressed. `-mx-2` against its own
+            // padding widens the background out to the aside's inner edge, so it
+            // lines up with those entries while the card's contents stay where
+            // they were.
+            <NavLink
+              to="/profile"
+              className={({ isActive }) =>
+                cn(
+                  "-mx-2 flex min-w-0 items-center gap-2.5 rounded-xl px-2 py-2 transition-colors",
+                  isActive ? SIDEBAR_ACTIVE : SIDEBAR_HOVER,
+                )
+              }
+            >
+              <Avatar user={user} />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{user.display_name ?? user.email}</p>
+                <p className="text-xs capitalize text-stone-500 dark:text-stone-400">
+                  {user.role}
+                </p>
+              </div>
+            </NavLink>
+          ) : (
+            <NavLink to="/login" className={cn(buttonClasses("primary", "md"), "w-full")}>
+              Sign in
+            </NavLink>
+          )}
+        </div>
+      </nav>
     </aside>
   );
 }

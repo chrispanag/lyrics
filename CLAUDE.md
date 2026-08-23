@@ -548,6 +548,47 @@ inventory this file records going stale under Head assets.)
   needs its own check because hooks run before the redirects below them are
   rendered — without it, a visitor who is already verified opens a challenge and
   is emailed a code on their way past.
+- **`NAV_ITEMS` feeds both navigations, so an entry removed from the list is
+  removed from the phone.** The sidebar reaches the profile through the identity
+  card at its foot — the card *is* that entry, which is why the links above it
+  have none — but the tab bar has no card, and no sign-in button either, so the
+  profile tab is the only route a phone has to `/profile` and through it to
+  signing in. Dropping the item rather than filtering it out of the one
+  navigation therefore strands every guest on a phone with no way in, and reads
+  as deliberate on the desk it was designed at. `identityCard` is that filter,
+  and the reason the item is not `authOnly`. **The filter is asked of the user,
+  because the card is.** A guest gets the Sign in button where the card would
+  be, so a guest filtered out of the sidebar as well falls between the two and
+  has no route to `/profile` from a desk at all — which is where the theme
+  switch lives, and it is on no other screen. Nothing says so from the machine
+  the change is made on, whose sidebar has a card. That is also why the filter
+  sits inside `DesktopSidebar` rather than at the call site: whether the card
+  stands in for an entry is that navigation's own question, and asked from
+  outside it, the next reader of the component gets the link *and* the card.
+  What is pinned is *which* navigation holds the way to the profile, asserted of
+  each of them in `Layout.test.tsx` — and of the guest sidebar, the one state
+  with no card and so the only one the filter can strand. jsdom has no
+  breakpoints, so both navigations are in the document at once and that is the
+  only readable form of which reader is served. It is asserted of the
+  `/profile` destination rather than of the label the sidebar entry carried,
+  since a rename leaves a second route to the profile above the card with every
+  assertion about "Profile" still passing. And it is asked **inside the
+  sidebar's `<nav>`**, which is the third thing the card being the entry costs:
+  the footer it lives in sat beside that landmark, so a reader navigating by
+  landmark got Browse, Lists and Admin and no route to their own profile —
+  working perfectly for everyone who can see it. The footer moved inside the
+  nav, and `flex-1` on the nav is what keeps the layout: it takes the height the
+  aside was holding, so the footer's `mt-auto` still has room to reach the
+  bottom of the sidebar rather than stopping at the foot of the links. The last
+  piece is the card's lit and pressable treatments, which are the links' own and
+  are **shared as tokens rather than copied**, since nothing pins the two
+  agreeing: without the first, the profile screen is the one place in the app
+  where nothing in the sidebar is lit, and without the second — the link being
+  gone — nothing is left saying the card can be pressed at all. Only the lit
+  token carries a text color, and that asymmetry is deliberate: lit, the card's
+  name takes the brand color exactly as a label does, while at rest the links
+  name a stone the card leaves to inherit. The role line names its own either
+  way, so it stays put under both.
 - **The admin console is a guarded section, not a pair of guarded screens.**
   `RequireAdmin` wraps the `/admin` layout route, whose element is the console's
   own chrome around an `<Outlet/>`, so a screen added below it is admin-only by
