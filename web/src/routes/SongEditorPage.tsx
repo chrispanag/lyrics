@@ -10,6 +10,8 @@ import { PersonAutocomplete, type PersonSelection } from "@/components/PersonAut
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { Button, Chip, ErrorMessage, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
 import { songHref } from "@/lib/listContext";
+import { extractVideoId } from "@/lib/youtube";
+import { CREDIT_PICKER_LABELS } from "@/lib/credits";
 import {
   CREDIT_ROLES,
   LANGUAGE_LABELS,
@@ -23,12 +25,28 @@ interface CreditDraft extends PersonSelection {
   role: CreditRole;
 }
 
-const ROLE_LABELS: Record<CreditRole, string> = {
-  artist: "Artist",
-  composer: "Composer",
-  lyricist: "Lyricist",
-  performer: "Performer",
-};
+/**
+ * One recording being edited. Every value is a string because every one of them
+ * is an input's value — the year included, which is why it is converted at save
+ * rather than held as a number that an empty field has no honest value for.
+ */
+interface RecordingDraft {
+  label: string;
+  youtubeUrl: string;
+  releaseYear: string;
+  notes: string;
+  isFirst: boolean;
+  performers: PersonSelection[];
+}
+
+const emptyRecording = (): RecordingDraft => ({
+  label: "",
+  youtubeUrl: "",
+  releaseYear: "",
+  notes: "",
+  isFirst: false,
+  performers: [],
+});
 
 export function SongEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,11 +64,10 @@ export function SongEditorPage() {
   const [altTitle, setAltTitle] = useState("");
   const [lyrics, setLyrics] = useState("");
   const [language, setLanguage] = useState("el");
-  const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [releaseYear, setReleaseYear] = useState("");
   const [notes, setNotes] = useState("");
   const [credits, setCredits] = useState<CreditDraft[]>([]);
   const [genreIds, setGenreIds] = useState<string[]>([]);
+  const [recordings, setRecordings] = useState<RecordingDraft[]>([]);
 
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -72,8 +89,6 @@ export function SongEditorPage() {
     // the type, which allows for the listing projections that leave it out.
     setLyrics(existing.lyrics ?? "");
     setLanguage(existing.language);
-    setYoutubeUrl(existing.youtube_url ?? "");
-    setReleaseYear(existing.release_year ? String(existing.release_year) : "");
     setNotes(existing.notes ?? "");
     setCredits(
       existing.credits.map((credit) => ({
@@ -83,6 +98,27 @@ export function SongEditorPage() {
       })),
     );
     setGenreIds(existing.genres.map((genre) => genre.id));
+    // Hydrated here rather than in an effect of its own, for the reason above:
+    // keyed on `existing`, a refetch would overwrite recordings a contributor
+    // had edited and not yet saved.
+    //
+    // The link is taken verbatim, unparsed. A stored link this app cannot read
+    // is a real thing — the importer kept what it was given — and the server
+    // carries such a value through a save that resends it unchanged. Cleaning
+    // it up here would break that match and refuse the save.
+    setRecordings(
+      existing.recordings.map((recording) => ({
+        label: recording.label ?? "",
+        youtubeUrl: recording.youtube_url ?? "",
+        releaseYear: recording.release_year ? String(recording.release_year) : "",
+        notes: recording.notes ?? "",
+        isFirst: recording.is_first,
+        performers: recording.performers.map((performer) => ({
+          personId: performer.person_id,
+          name: performer.name,
+        })),
+      })),
+    );
     setDirty(false);
   }, [existing]);
 
@@ -153,6 +189,25 @@ export function SongEditorPage() {
     setDirty(true);
   };
 
+  /** Rewrites one recording, leaving the rest alone. */
+  const editRecording = (index: number, patch: Partial<RecordingDraft>) =>
+    track(setRecordings)(
+      recordings.map((recording, i) => (i === index ? { ...recording, ...patch } : recording)),
+    );
+
+  /**
+   * Marks one recording as the first, or none of them.
+   *
+   * Written across every row rather than on the one pressed, because at most one
+   * may claim it — the database enforces that with a unique index and the API
+   * refuses the payload before then, so a second `true` is not something to
+   * discover at save time.
+   */
+  const markFirst = (index: number | null) =>
+    track(setRecordings)(
+      recordings.map((recording, i) => ({ ...recording, isFirst: i === index })),
+    );
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
@@ -163,8 +218,6 @@ export function SongEditorPage() {
       alt_title: altTitle.trim() || null,
       lyrics,
       language,
-      youtube_url: youtubeUrl.trim() || null,
-      release_year: releaseYear ? Number(releaseYear) : null,
       notes: notes.trim() || null,
       // Blank rows are dropped rather than rejected: an empty credit is an
       // abandoned edit, not a mistake worth interrupting the save for.
@@ -176,6 +229,34 @@ export function SongEditorPage() {
           position: index,
         })),
       genre_ids: genreIds,
+      // A recording with nothing in it is an abandoned add, like a blank credit
+      // row — and `isFirst` alone does not rescue one, since marking an empty
+      // row as the first recording says nothing about any performance.
+      recordings: recordings
+        .filter(
+          (recording) =>
+            recording.label.trim() ||
+            recording.youtubeUrl.trim() ||
+            recording.releaseYear ||
+            recording.notes.trim() ||
+            recording.performers.some((performer) => performer.personId || performer.name.trim()),
+        )
+        .map((recording, index) => ({
+          label: recording.label.trim() || null,
+          youtube_url: recording.youtubeUrl.trim() || null,
+          release_year: recording.releaseYear ? Number(recording.releaseYear) : null,
+          notes: recording.notes.trim() || null,
+          is_first: recording.isFirst,
+          position: index,
+          performers: recording.performers
+            .filter((performer) => performer.personId || performer.name.trim())
+            .map((performer, performerIndex) => ({
+              ...(performer.personId
+                ? { person_id: performer.personId }
+                : { name: performer.name.trim() }),
+              position: performerIndex,
+            })),
+        })),
     };
 
     try {
@@ -195,7 +276,6 @@ export function SongEditorPage() {
     }
   };
 
-  const videoId = extractVideoId(youtubeUrl);
   const saving = createSong.isPending || updateSong.isPending;
   const heading = isEdit ? "Edit song" : "Add a song";
 
@@ -230,34 +310,22 @@ export function SongEditorPage() {
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Language" htmlFor="language" error={fieldErrors.language}>
-            <Select
-              id="language"
-              className="w-full"
-              value={language}
-              onChange={(event) => track(setLanguage)(event.target.value)}
-            >
-              {Object.entries(LANGUAGE_LABELS).map(([code, label]) => (
-                <option key={code} value={code}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <Field label="Year" htmlFor="release-year" error={fieldErrors.release_year}>
-            <Input
-              id="release-year"
-              type="number"
-              inputMode="numeric"
-              min={1000}
-              max={2200}
-              value={releaseYear}
-              onChange={(event) => track(setReleaseYear)(event.target.value)}
-            />
-          </Field>
-        </div>
+        {/* The year used to sit beside this. It belongs to a recording now, so
+            there is one field here rather than a grid of two. */}
+        <Field label="Language" htmlFor="language" error={fieldErrors.language}>
+          <Select
+            id="language"
+            className="w-full"
+            value={language}
+            onChange={(event) => track(setLanguage)(event.target.value)}
+          >
+            {Object.entries(LANGUAGE_LABELS).map(([code, label]) => (
+              <option key={code} value={code}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </Field>
 
         <fieldset className="space-y-2">
           <legend className="mb-1 text-sm font-medium text-stone-700 dark:text-stone-300">
@@ -292,7 +360,7 @@ export function SongEditorPage() {
               >
                 {CREDIT_ROLES.map((role) => (
                   <option key={role} value={role}>
-                    {ROLE_LABELS[role]}
+                    {CREDIT_PICKER_LABELS[role]}
                   </option>
                 ))}
               </Select>
@@ -317,7 +385,7 @@ export function SongEditorPage() {
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => track(setCredits)([...credits, { name: "", role: "artist" }])}
+            onClick={() => track(setCredits)([...credits, { name: "", role: "composer" }])}
           >
             <Plus aria-hidden className="size-4" />
             Add credit
@@ -350,26 +418,195 @@ export function SongEditorPage() {
           </div>
         </fieldset>
 
-        <Field
-          label="YouTube link"
-          htmlFor="youtube-url"
-          error={fieldErrors.youtube_url}
-          hint="A watch, youtu.be, or embed link"
-        >
-          <Input
-            id="youtube-url"
-            type="url"
-            inputMode="url"
-            value={youtubeUrl}
-            onChange={(event) => track(setYoutubeUrl)(event.target.value)}
-            aria-describedby={fieldErrors.youtube_url ? "youtube-url-error" : "youtube-url-hint"}
-          />
-        </Field>
+        <fieldset className="space-y-3">
+          <legend className="mb-1 text-sm font-medium text-stone-700 dark:text-stone-300">
+            Recordings
+          </legend>
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            Each recording has its own performers, link and year. A song can have none.
+          </p>
 
-        {/* The only confirmation that a pasted link was recognized, now that
-            there is no thumbnail to show: nothing appears until the id parses,
-            and it parses exactly what the server does — see extractVideoId. */}
-        {videoId && <WatchOnYouTube videoId={videoId} />}
+          {recordings.map((recording, index) => {
+            // Per row, in the render body like the single field this replaced.
+            // The parser is shared with every other caller — see lib/youtube.ts
+            // — because a copy per field is a copy per field to keep in step
+            // with the server.
+            const videoId = extractVideoId(recording.youtubeUrl);
+
+            return (
+              <fieldset
+                key={index}
+                className="space-y-3 rounded-2xl border border-stone-200 p-4 dark:border-stone-800"
+              >
+                <legend className="px-1 text-sm font-medium text-stone-700 dark:text-stone-300">
+                  Recording {index + 1}
+                </legend>
+
+                <Field
+                  label="Label"
+                  htmlFor={`recording-${index}-label`}
+                  error={fieldErrors[`recordings[${index}].label`]}
+                  hint="Optional — the release or version this recording appeared on"
+                >
+                  <Input
+                    id={`recording-${index}-label`}
+                    value={recording.label}
+                    onChange={(event) => editRecording(index, { label: event.target.value })}
+                  />
+                </Field>
+
+                <Field
+                  label="Year"
+                  htmlFor={`recording-${index}-year`}
+                  error={fieldErrors[`recordings[${index}].release_year`]}
+                >
+                  <Input
+                    id={`recording-${index}-year`}
+                    type="number"
+                    inputMode="numeric"
+                    min={1000}
+                    max={2200}
+                    value={recording.releaseYear}
+                    onChange={(event) => editRecording(index, { releaseYear: event.target.value })}
+                  />
+                </Field>
+
+                <Field
+                  label="YouTube link"
+                  htmlFor={`recording-${index}-youtube`}
+                  error={fieldErrors[`recordings[${index}].youtube_url`]}
+                  hint="A watch, youtu.be, or embed link"
+                >
+                  <Input
+                    id={`recording-${index}-youtube`}
+                    type="url"
+                    inputMode="url"
+                    value={recording.youtubeUrl}
+                    onChange={(event) => editRecording(index, { youtubeUrl: event.target.value })}
+                  />
+                </Field>
+
+                {/* The only confirmation that a pasted link was recognized, now
+                    that there is no thumbnail to show: nothing appears until the
+                    id parses, and it parses exactly what the server does. Its
+                    absence is not a refusal — a stored link this cannot read
+                    still saves, which is why nothing here gates on it. */}
+                {videoId && <WatchOnYouTube videoId={videoId} />}
+
+                <div className="space-y-2">
+                  <span className="block text-sm font-medium text-stone-700 dark:text-stone-300">
+                    Performers
+                  </span>
+                  {recording.performers.map((performer, performerIndex) => (
+                    <div key={performerIndex} className="flex gap-2">
+                      <div className="flex-1">
+                        <PersonAutocomplete
+                          id={`recording-${index}-performer-${performerIndex}`}
+                          value={performer}
+                          placeholder="Name"
+                          onChange={(selection) =>
+                            editRecording(index, {
+                              performers: recording.performers.map((item, i) =>
+                                i === performerIndex ? { ...item, ...selection } : item,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="md"
+                        aria-label={`Remove performer ${performerIndex + 1} from recording ${index + 1}`}
+                        onClick={() =>
+                          editRecording(index, {
+                            performers: recording.performers.filter(
+                              (_, i) => i !== performerIndex,
+                            ),
+                          })
+                        }
+                        className="shrink-0 px-2"
+                      >
+                        <Trash2 aria-hidden className="size-4 text-red-600" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      editRecording(index, {
+                        performers: [...recording.performers, { name: "" }],
+                      })
+                    }
+                  >
+                    <Plus aria-hidden className="size-4" />
+                    Add performer
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  {/* A radio, so at most one recording can claim it by
+                      construction rather than by a check at save time. */}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="first-recording"
+                      checked={recording.isFirst}
+                      onChange={() => markFirst(index)}
+                      aria-label={`Mark recording ${index + 1} as the first recording`}
+                      className="size-4"
+                    />
+                    First recording
+                  </label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Remove recording ${index + 1}`}
+                    onClick={() =>
+                      track(setRecordings)(recordings.filter((_, i) => i !== index))
+                    }
+                  >
+                    <Trash2 aria-hidden className="size-4 text-red-600" />
+                    Remove
+                  </Button>
+                </div>
+              </fieldset>
+            );
+          })}
+
+          {/* The way to say "none of them". A radio group cannot be cleared by
+              pressing a member again, and all-false is a state the data really
+              holds — first-ness is a claim a contributor may not be able to
+              make. It also means removing the marked recording needs no rule
+              about which one inherits the mark: none does. */}
+          {recordings.length > 0 && (
+            <label className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
+              <input
+                type="radio"
+                name="first-recording"
+                checked={recordings.every((recording) => !recording.isFirst)}
+                onChange={() => markFirst(null)}
+                className="size-4"
+              />
+              No recording marked as first
+            </label>
+          )}
+
+          {fieldErrors.recordings && <ErrorMessage>{fieldErrors.recordings}</ErrorMessage>}
+
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => track(setRecordings)([...recordings, emptyRecording()])}
+          >
+            <Plus aria-hidden className="size-4" />
+            Add recording
+          </Button>
+        </fieldset>
 
         <Field label="Lyrics" htmlFor="lyrics" error={fieldErrors.lyrics}>
           <Textarea
@@ -411,103 +648,4 @@ export function SongEditorPage() {
       </form>
     </div>
   );
-}
-
-// Module scope: these are evaluated once rather than on every keystroke, since
-// extractVideoId runs in the render body.
-
-/** The 11-character identifier, which is the only shape an id is ever stored in. */
-const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
-
-/**
- * The hosts the server accepts, `www.` already stripped — the same list as
- * `parseYouTubeURL`'s, and written out for the same reason it is there.
- *
- * A host missing from here reads as a link the field rejected while the save
- * would have taken it, and `youtube-nocookie.com` is not a hypothetical:
- * YouTube's own share dialog hands out `youtube-nocookie.com/embed/<id>`
- * whenever privacy-enhanced mode is checked. `m.` and `music.` are the same
- * trap one step quieter — they previewed only because the patterns this
- * replaced matched anywhere in the text, so naming the host is what keeps them.
- */
-const VIDEO_HOSTS = new Set([
-  "youtu.be",
-  "youtube.com",
-  "m.youtube.com",
-  "music.youtube.com",
-  "youtube-nocookie.com",
-]);
-
-/** The path shapes that carry the id as their second segment. */
-const VIDEO_PATHS = new Set(["embed", "v", "shorts", "live"]);
-
-/**
- * Extracts a video ID for the live preview.
- *
- * The server does the authoritative parsing and rejects anything it does not
- * recognize; this only decides whether to render a preview. But the preview is
- * now the only confirmation that a pasted link was recognized, so anything the
- * two disagree about is a verdict the save then contradicts — which makes this
- * a deliberate mirror of `parseYouTubeURL`, down to the host list and the
- * case-sensitive `v`.
- *
- * Parsing the URL rather than matching patterns against the raw text is what
- * makes the host actually the host, and it closes both directions of that
- * disagreement at once. A pattern looking for `youtube.com/watch?v=` also finds
- * it in the query string of any other site, so `example.com/?u=<a youtube
- * link>` lit the preview for a link the server refuses; and a pattern is
- * case-sensitive where the server lowercases the host, so a pasted
- * `WWW.YOUTUBE.COM/watch?v=…` — the shape `parseYouTubeURL`'s own comment
- * records arriving — left the preview dark on a link that saves fine.
- * `URL.hostname` is lowercased by the parser, so that half comes for free.
- */
-function extractVideoId(raw: string): string | null {
-  let trimmed = raw.trim();
-  if (!trimmed) return null;
-  // A bare id is a legitimate value, and the server accepts one.
-  if (VIDEO_ID.test(trimmed)) return trimmed;
-
-  // A scheme-less "youtu.be/xyz" parses as a path rather than a host. The
-  // protocol-relative form has a host already and only wants the scheme, which
-  // is the shape `url.Parse` handles for the server without being asked.
-  //
-  // The second test looks for `//` rather than `://`, which is the server's
-  // test and not a loose spelling of it. `youtube.com//watch?v=<id>` contains
-  // `//`, so neither stack prefixes a scheme, and `url.Parse` then yields no
-  // host at all and the save refuses the link. Tightened to `://` this would
-  // prefix that string instead, resolve `youtube.com` as the host, read `v` and
-  // light a preview for a link the server rejects — the exact class of
-  // disagreement this function exists to close.
-  if (trimmed.startsWith("//")) trimmed = `https:${trimmed}`;
-  else if (!trimmed.includes("//")) trimmed = `https://${trimmed}`;
-
-  let url: URL;
-  try {
-    url = new URL(trimmed);
-  } catch {
-    return null;
-  }
-
-  const host = url.hostname.replace(/^www\./, "");
-  if (!VIDEO_HOSTS.has(host)) return null;
-
-  if (host === "youtu.be") {
-    const id = trimSlashes(url.pathname);
-    return VIDEO_ID.test(id) ? id : null;
-  }
-
-  // Case-sensitive on the key, like the server's `Query().Get("v")`.
-  const v = url.searchParams.get("v");
-  if (v && VIDEO_ID.test(v)) return v;
-
-  // /embed/<id>, /v/<id>, /shorts/<id>, /live/<id> — two segments and no more,
-  // which is the length the server checks for.
-  const [shape, id, ...extra] = trimSlashes(url.pathname).split("/");
-  if (extra.length > 0 || !shape || !id) return null;
-  return VIDEO_PATHS.has(shape) && VIDEO_ID.test(id) ? id : null;
-}
-
-/** `strings.Trim(path, "/")`, which is what the server splits its segments off. */
-function trimSlashes(path: string): string {
-  return path.replace(/^\/+|\/+$/g, "");
 }

@@ -13,6 +13,7 @@ import (
 const (
 	maxTitleLen       = 300
 	maxNameLen        = 200
+	maxLabelLen       = 200
 	maxLyricsLen      = 100_000
 	maxNotesLen       = 5_000
 	maxDescriptionLen = 1_000
@@ -24,7 +25,16 @@ const (
 	// to upsert a person, and a bare UUID is 38 bytes but costs one UPDATE in
 	// an open transaction. Left uncapped, a single accepted request could hold
 	// one of the ten pooled connections for the full write timeout.
+	//
+	// maxPerformers is counted across all of a song's recordings rather than per
+	// recording, because it is the total number of person upserts that costs the
+	// round trips — sixteen recordings each allowed sixty-four performers would
+	// bound the wire and not the work at all. Worst case is now maxCredits +
+	// maxPerformers sequential upserts in one request, twice what it was before
+	// recordings existed; still bounded, still behind contributor auth.
 	maxCredits     = 64
+	maxPerformers  = 64
+	maxRecordings  = 16
 	maxGenreRefs   = 32
 	maxReorderRefs = 2_000
 )
@@ -86,7 +96,7 @@ var youTubeIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 // builds its link out of it and never renders the stored URL as an href.
 //
 // The editor's live preview mirrors this function in TypeScript — extractVideoId
-// in web/src/routes/SongEditorPage.tsx — because the preview is the only
+// in web/src/lib/youtube.ts — because the preview is the only
 // confirmation a contributor gets that a pasted link was recognized. The two
 // cannot be made to share one implementation, so a host or a path shape added
 // here and not there reads as the field refusing a link this function would

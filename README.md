@@ -453,10 +453,26 @@ page several times over. A search hit carries a highlighted `snippet` instead.
 absent rather than empty, so a song with no lyrics recorded stays
 distinguishable from one whose body simply was not asked for.
 
+Every other relation is on every read, `recordings` included. A song has 0..n of
+them — one performance each, with its own performers, YouTube link, year, label
+and notes — and they arrive **already ordered, first recording first** (marked
+first, else the earliest year, else position). Clients read `recordings[0]`
+rather than re-deriving that.
+
+The song's own `youtube_url`, `youtube_video_id` and `release_year` are
+read-only copies of that first recording's, maintained by trigger. They are what
+the year filters and sorting below read, and they are **not writable**: a
+create or update carries its link and year inside `recordings`, and a payload
+naming them at the top level is a 400 rather than a silently ignored field.
+Credits are authorship only — `composer` and `lyricist` — since performing
+belongs to a recording.
+
 ```
 GET    /health
-GET    /songs            ?q=&artist=&composer=&lyricist=&genre_slug=&language=
-                          &year_from=&year_to=&sort=&limit=&offset=
+GET    /songs            ?q=&person=&performer=&composer=&lyricist=&genre_slug=
+                          &language=&year_from=&year_to=&sort=&limit=&offset=
+                          (?artist= is kept as an alias of ?performer=; both
+                           at once is a 400)
 GET    /songs/{id}
 GET    /people           ?q=&role=
 GET    /genres
@@ -592,11 +608,19 @@ song, so the exporter and loader can be tested independently:
 | Old                                | New                     | Notes                                            |
 | ---------------------------------- | ----------------------- | ------------------------------------------------ |
 | `song.title` / `altTitle`          | `songs.title` / `alt_title` | blank alt titles become NULL              |
-| `song.year` (varchar)              | `songs.release_year` (int)  | only a bare four-digit value converts     |
+| `song.year` (varchar)              | `recordings.release_year` (int) | only a bare four-digit value converts; a year describes a performance |
 | `person.firstName` + `lastName`    | `people.name`           | upserted on `normalized_name`                    |
 | `song_to_person.role = 'composer'` | `song_credits` `composer` |                                                |
 | `song_to_person.role = 'songwriter'` | `song_credits` `lyricist` | "songwriter" means whoever wrote the words |
 | —                                  | `songs.language`        | the old schema has none; defaults to `el`        |
+
+A record saying anything about a performance — a year, a link, or a performing
+credit — gets one `is_first` recording synthesized to carry it, which is exactly
+what migration 000009 did to the rows already stored, so re-importing an export
+lands where the migration left it rather than duplicating the catalog. A record
+saying none of the three gets no recording: there would be nothing in it. The
+format also accepts an explicit `recordings` array, for a future source that
+knows about more than one; nothing produces that yet.
 
 Not carried over, because the new schema has no equivalent or no safe one:
 the old `user` table (identity now belongs to Prelude, so a local password hash

@@ -1,10 +1,19 @@
 import { HttpResponse, http } from "msw";
 
-import type { Genre, ListResponse, Person, Song, SongList, User } from "@/lib/types";
+import type { Genre, ListResponse, Person, Recording, Song, SongList, User } from "@/lib/types";
 
 /** Base URL the client talks to under test. Exported so specs cannot drift from it. */
 export const API = "http://localhost:8080";
 
+/**
+ * A song with no recordings, which is the state most of the catalog's songs are
+ * in and the one a spec should have to opt out of rather than into. A spec that
+ * needs a performer, a year on a recording or a video adds one with
+ * makeRecording.
+ *
+ * `release_year` is still here because the server denormalizes the first
+ * recording's onto the song, and the card and browse filters read it there.
+ */
 export function makeSong(overrides: Partial<Song> = {}): Song {
   return {
     id: "song-1",
@@ -20,10 +29,30 @@ export function makeSong(overrides: Partial<Song> = {}): Song {
       { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
     ],
     genres: [],
+    recordings: [],
     created_by: null,
     updated_by: null,
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/**
+ * One recording, with a performer on it. `is_first` is true by default because
+ * that is what the migration marked every recording it created.
+ */
+export function makeRecording(overrides: Partial<Recording> = {}): Recording {
+  return {
+    id: "recording-1",
+    label: null,
+    youtube_url: null,
+    youtube_video_id: null,
+    release_year: 1964,
+    notes: null,
+    is_first: true,
+    position: 0,
+    performers: [{ person_id: "person-2", name: "Γιώργος Νταλάρας", position: 0 }],
     ...overrides,
   };
 }

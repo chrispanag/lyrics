@@ -17,16 +17,25 @@ import (
 type record struct {
 	// SourceID is the old catalog's primary key. Never written to the target —
 	// it exists so a rejected row can be traced back to its origin.
-	SourceID    string   `json:"source_id,omitempty"`
-	Title       string   `json:"title"`
-	AltTitle    *string  `json:"alt_title,omitempty"`
-	Lyrics      string   `json:"lyrics,omitempty"`
-	Language    string   `json:"language,omitempty"`
+	SourceID string  `json:"source_id,omitempty"`
+	Title    string  `json:"title"`
+	AltTitle *string `json:"alt_title,omitempty"`
+	Lyrics   string  `json:"lyrics,omitempty"`
+	Language string  `json:"language,omitempty"`
+	// YouTubeURL and ReleaseYear describe a performance, not the work, so they
+	// are folded into a synthesized first recording when no explicit Recordings
+	// are given. They stay at this level because that is the shape the old
+	// catalog exports, and it is the only shape anything has ever produced.
 	YouTubeURL  *string  `json:"youtube_url,omitempty"`
 	ReleaseYear *int     `json:"release_year,omitempty"`
 	Notes       *string  `json:"notes,omitempty"`
 	Credits     []credit `json:"credits,omitempty"`
 	Genres      []string `json:"genres,omitempty"`
+	// Recordings, when present, replaces the synthesis: a source that knows
+	// about several performances states them, and the fields above are then
+	// expected to be absent. Nothing produces this yet — it exists so the next
+	// source does not have to change this format to say what it knows.
+	Recordings []recordingRecord `json:"recordings,omitempty"`
 }
 
 type credit struct {
@@ -37,26 +46,54 @@ type credit struct {
 	Position *int `json:"position,omitempty"`
 }
 
+type recordingRecord struct {
+	Label       *string     `json:"label,omitempty"`
+	YouTubeURL  *string     `json:"youtube_url,omitempty"`
+	ReleaseYear *int        `json:"release_year,omitempty"`
+	Notes       *string     `json:"notes,omitempty"`
+	IsFirst     *bool       `json:"is_first,omitempty"`
+	Performers  []performer `json:"performers,omitempty"`
+}
+
+type performer struct {
+	Name     string `json:"name"`
+	Position *int   `json:"position,omitempty"`
+}
+
 // song is a record that has passed every check the target schema imposes.
 // Producing one is the only way to reach the insert path, so a CHECK violation
 // at COMMIT would mean a bug here rather than bad input.
 type song struct {
-	sourceID       string
-	title          string
-	altTitle       *string
-	lyrics         string
-	language       string
-	youTubeURL     *string
-	youTubeVideoID *string
-	releaseYear    *int
-	notes          *string
-	credits        []resolvedCredit
-	genres         []string
+	sourceID   string
+	title      string
+	altTitle   *string
+	lyrics     string
+	language   string
+	notes      *string
+	credits    []resolvedCredit
+	genres     []string
+	recordings []resolvedRecording
 }
 
 type resolvedCredit struct {
 	name     string
 	role     store.CreditRole
+	position int
+}
+
+type resolvedRecording struct {
+	label          *string
+	youTubeURL     *string
+	youTubeVideoID *string
+	releaseYear    *int
+	notes          *string
+	isFirst        bool
+	position       int
+	performers     []resolvedPerformer
+}
+
+type resolvedPerformer struct {
+	name     string
 	position int
 }
 
@@ -97,35 +134,61 @@ func normalizeLanguage(raw string) (code string, exact bool) {
 	return defaultLanguage, false
 }
 
-// rawRoleAliases maps source vocabulary onto the four roles song_credits
-// accepts. "songwriter" is the old catalog's own enum value and means the
-// person who wrote the words, which is this schema's "lyricist". The Greek
-// terms are here because the catalog is Greek-first.
+// creditClass is where a source role sends a person: onto the song as an
+// authorship credit, or onto its first recording as a performer.
+//
+// A local type rather than store.CreditRole, because the destination is no
+// longer one column with four values — performing is a different table now, and
+// nothing about it is a role.
+type creditClass int
+
+const (
+	classComposer creditClass = iota
+	classLyricist
+	classPerformer
+)
+
+// creditRole maps the two authorship classes onto the schema's roles. Calling it
+// on classPerformer is a bug — performers do not have one.
+func (c creditClass) creditRole() store.CreditRole {
+	if c == classLyricist {
+		return store.CreditLyricist
+	}
+	return store.CreditComposer
+}
+
+// rawRoleAliases maps source vocabulary onto those three classes.
+// "songwriter" is the old catalog's own enum value and means the person who
+// wrote the words, which is this schema's "lyricist". The Greek terms are here
+// because the catalog is Greek-first.
+//
+// "artist" is a performer: it is what the old catalog called the act a song is
+// known by, which is a performance of it and not its authorship.
 //
 // Keys are written readably and folded through foldKey at init, so lookups
 // tolerate the same casing and accent variation the rest of the schema does.
-var rawRoleAliases = map[string]store.CreditRole{
-	"artist":     store.CreditArtist,
-	"performer":  store.CreditPerformer,
-	"singer":     store.CreditPerformer,
-	"vocals":     store.CreditPerformer,
-	"ερμηνευτής": store.CreditPerformer,
-	"ερμηνεία":   store.CreditPerformer,
-	"composer":   store.CreditComposer,
-	"music":      store.CreditComposer,
-	"μουσική":    store.CreditComposer,
-	"συνθέτης":   store.CreditComposer,
-	"songwriter": store.CreditLyricist,
-	"lyricist":   store.CreditLyricist,
-	"lyrics":     store.CreditLyricist,
-	"writer":     store.CreditLyricist,
-	"στίχοι":     store.CreditLyricist,
-	"στιχουργός": store.CreditLyricist,
+var rawRoleAliases = map[string]creditClass{
+	"artist":     classPerformer,
+	"performer":  classPerformer,
+	"singer":     classPerformer,
+	"vocals":     classPerformer,
+	"ερμηνευτής": classPerformer,
+	"ερμηνεία":   classPerformer,
+	"composer":   classComposer,
+	"music":      classComposer,
+	"μουσική":    classComposer,
+	"συνθέτης":   classComposer,
+	"songwriter": classLyricist,
+	"lyricist":   classLyricist,
+	"lyrics":     classLyricist,
+	"writer":     classLyricist,
+	"στίχοι":     classLyricist,
+	"στιχουργός": classLyricist,
 }
 
 // roleAliases is rawRoleAliases with folded keys, built once at startup.
-var roleAliases = func() map[string]store.CreditRole {
-	m := make(map[string]store.CreditRole, len(rawRoleAliases))
+var roleAliases = func() map[string]creditClass {
+	m := make(map[string]creditClass, len(rawRoleAliases))
 	for k, v := range rawRoleAliases {
 		m[foldKey(k)] = v
 	}
@@ -133,20 +196,22 @@ var roleAliases = func() map[string]store.CreditRole {
 }()
 
 // fallbackRole is used when a source role has no mapping. Dropping the credit
-// would silently strip attribution, which is worse than filing someone under
-// the most generic of the four roles — and every fallback is reported.
-const fallbackRole = store.CreditArtist
+// would silently strip attribution, which is worse than filing someone in the
+// likeliest place — and every fallback is reported.
+//
+// Performer, because an unrecognized label is far more often a way of saying
+// who played it than a claim about who wrote it: authorship vocabulary is
+// small and well covered above, while the ways of naming a performance are
+// not. Guessing authorship also asserts more than guessing performance does.
+const fallbackRole = classPerformer
 
 // normalizeRole resolves a source role label, reporting whether it was
 // recognized.
-func normalizeRole(raw string) (store.CreditRole, bool) {
+func normalizeRole(raw string) (creditClass, bool) {
 	if strings.TrimSpace(raw) == "" {
 		return fallbackRole, false
 	}
 	if r, ok := roleAliases[foldKey(raw)]; ok {
-		return r, true
-	}
-	if r := store.CreditRole(strings.ToLower(strings.TrimSpace(raw))); r.Valid() {
 		return r, true
 	}
 	return fallbackRole, false
@@ -266,35 +331,142 @@ func (r record) clean(w *warnings) (*song, error) {
 	}
 	s.language = lang
 
-	if raw := strings.TrimSpace(derefOr(r.YouTubeURL)); raw != "" {
-		s.youTubeURL = &raw
-		if id := youTubeVideoID(raw); id != "" {
-			s.youTubeVideoID = &id
-		} else {
-			w.add("youtube_url %q yields no video id", raw)
-		}
-	}
-
-	if r.ReleaseYear != nil {
-		if y := *r.ReleaseYear; y >= minReleaseYear && y <= maxReleaseYear {
-			s.releaseYear = &y
-		} else {
-			w.add("release_year %d outside %d-%d, stored as NULL", y, minReleaseYear, maxReleaseYear)
-		}
-	}
-
-	s.credits = cleanCredits(r.Credits, w)
+	credits, performers := cleanCredits(r.Credits, w)
+	s.credits = credits
 	s.genres = cleanGenres(r.Genres, w)
+	s.recordings = r.cleanRecordings(performers, w)
 	return s, nil
 }
 
-// cleanCredits normalizes roles, drops blank names, and de-duplicates on
-// (person, role) — the primary key of song_credits, which a source listing the
-// same artist twice in one capacity would otherwise violate mid-transaction.
-func cleanCredits(in []credit, w *warnings) []resolvedCredit {
+// cleanRecordings produces the song's recordings.
+//
+// An explicit `recordings` array is taken as given. Otherwise one is synthesized
+// from whatever the record says about a performance — the performers split out
+// of its credits, its link, its year — which is the same thing migration 000009
+// did to the rows already in the catalog, and it has to stay the same thing: a
+// re-import of the old export must land where the migration left it.
+//
+// A record with none of the three gets no recording at all. There would be
+// nothing in it, and an empty recording claims a performance nobody described.
+func (r record) cleanRecordings(performers []resolvedPerformer, w *warnings) []resolvedRecording {
+	if len(r.Recordings) > 0 {
+		if len(performers) > 0 {
+			w.add("record carries both explicit recordings and %d performer credit(s); the credits were dropped",
+				len(performers))
+		}
+		out := make([]resolvedRecording, 0, len(r.Recordings))
+		firstTaken := false
+		for i, rec := range r.Recordings {
+			cleaned := resolvedRecording{
+				label:      optionalText(rec.Label),
+				notes:      optionalText(rec.Notes),
+				position:   i,
+				performers: cleanPerformers(rec.Performers, w),
+			}
+			cleaned.youTubeURL, cleaned.youTubeVideoID = cleanVideo(rec.YouTubeURL, w)
+			cleaned.releaseYear = cleanYear(rec.ReleaseYear, w)
+			// One first per song is a unique index, so a source claiming two
+			// would fail the whole transaction. The first claim wins.
+			if rec.IsFirst != nil && *rec.IsFirst {
+				if firstTaken {
+					w.add("more than one recording marked as the first; kept the earliest such")
+				} else {
+					firstTaken = true
+					cleaned.isFirst = true
+				}
+			}
+			out = append(out, cleaned)
+		}
+		return out
+	}
+
+	url, videoID := cleanVideo(r.YouTubeURL, w)
+	year := cleanYear(r.ReleaseYear, w)
+	if len(performers) == 0 && url == nil && year == nil {
+		return nil
+	}
+	return []resolvedRecording{{
+		youTubeURL:     url,
+		youTubeVideoID: videoID,
+		releaseYear:    year,
+		isFirst:        true,
+		performers:     performers,
+	}}
+}
+
+// cleanVideo stores the link verbatim and sets the id only when it parses.
+//
+// Keeping a link this program cannot read is deliberate: the id is what the app
+// builds its watch link from, so an unparsed one costs the button and nothing
+// else, where dropping the URL would lose the only record that a video exists.
+// The API refuses such a link on a write but carries a stored one through, which
+// is the arrangement that makes this safe.
+func cleanVideo(raw *string, w *warnings) (url *string, videoID *string) {
+	trimmed := strings.TrimSpace(derefOr(raw))
+	if trimmed == "" {
+		return nil, nil
+	}
+	url = &trimmed
+	if id := youTubeVideoID(trimmed); id != "" {
+		videoID = &id
+	} else {
+		w.add("youtube_url %q yields no video id", trimmed)
+	}
+	return url, videoID
+}
+
+// cleanYear drops a year outside the CHECK's bounds rather than failing the row.
+func cleanYear(year *int, w *warnings) *int {
+	if year == nil {
+		return nil
+	}
+	if y := *year; y >= minReleaseYear && y <= maxReleaseYear {
+		return &y
+	}
+	w.add("release_year %d outside %d-%d, stored as NULL", *year, minReleaseYear, maxReleaseYear)
+	return nil
+}
+
+// cleanPerformers drops blank names and de-duplicates on the person, which is
+// the primary key of recording_credits.
+func cleanPerformers(in []performer, w *warnings) []resolvedPerformer {
 	seen := make(map[string]bool, len(in))
-	perRole := make(map[store.CreditRole]int, 4)
-	out := make([]resolvedCredit, 0, len(in))
+	out := make([]resolvedPerformer, 0, len(in))
+
+	for _, p := range in {
+		name := normalizeText(p.Name)
+		if name == "" {
+			w.add("performer with a blank name dropped")
+			continue
+		}
+		key := foldKey(name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		pos := len(out)
+		if p.Position != nil && *p.Position >= 0 {
+			pos = *p.Position
+		}
+		out = append(out, resolvedPerformer{name: name, position: pos})
+	}
+	return out
+}
+
+// cleanCredits normalizes roles, drops blank names, de-duplicates, and splits
+// the result in two: the authorship credits stay on the song, and the performers
+// go to its recording.
+//
+// Credits de-duplicate on (person, role) — the primary key of song_credits,
+// which a source listing the same writer twice in one capacity would otherwise
+// violate mid-transaction — and performers on the person alone, since
+// recording_credits has no role to tell two of them apart.
+func cleanCredits(in []credit, w *warnings) ([]resolvedCredit, []resolvedPerformer) {
+	seen := make(map[string]bool, len(in))
+	perRole := make(map[store.CreditRole]int, 2)
+	credits := make([]resolvedCredit, 0, len(in))
+	var performers []performer
 
 	for _, c := range in {
 		name := normalizeText(c.Name)
@@ -305,11 +477,19 @@ func cleanCredits(in []credit, w *warnings) []resolvedCredit {
 			w.add("credit with a blank name dropped (role %q)", strings.TrimSpace(c.Role))
 			continue // a blank name would fail the people CHECK
 		}
-		role, known := normalizeRole(c.Role)
+		class, known := normalizeRole(c.Role)
 		if !known {
-			w.add("credit role %q not recognized, stored as %q", strings.TrimSpace(c.Role), role)
+			w.add("credit role %q not recognized, treated as a performer", strings.TrimSpace(c.Role))
 		}
 
+		if class == classPerformer {
+			// Positions are resolved by cleanPerformers, which is also what the
+			// explicit path uses — one place deciding how performers are ordered.
+			performers = append(performers, performer{Name: name, Position: c.Position})
+			continue
+		}
+
+		role := class.creditRole()
 		key := foldKey(name) + "\x00" + string(role)
 		if seen[key] {
 			continue
@@ -322,9 +502,9 @@ func cleanCredits(in []credit, w *warnings) []resolvedCredit {
 		}
 		perRole[role]++
 
-		out = append(out, resolvedCredit{name: name, role: role, position: pos})
+		credits = append(credits, resolvedCredit{name: name, role: role, position: pos})
 	}
-	return out
+	return credits, cleanPerformers(performers, w)
 }
 
 // cleanGenres drops blanks, de-duplicates by slug, and rejects names that yield
@@ -374,10 +554,20 @@ func fingerprint(title string, creditNames []string) string {
 }
 
 // fingerprint for an already-cleaned song.
+//
+// Performers count towards it alongside the credits, and have to: they are the
+// same people who used to arrive as `artist` credits, so leaving them out would
+// give a re-import of the same export a different fingerprint from the one the
+// migrated row has, and every song would be inserted a second time.
 func (s *song) fingerprint() string {
-	names := make([]string, len(s.credits))
-	for i, c := range s.credits {
-		names[i] = c.name
+	names := make([]string, 0, len(s.credits))
+	for _, c := range s.credits {
+		names = append(names, c.name)
+	}
+	for _, r := range s.recordings {
+		for _, p := range r.performers {
+			names = append(names, p.name)
+		}
 	}
 	return fingerprint(s.title, names)
 }

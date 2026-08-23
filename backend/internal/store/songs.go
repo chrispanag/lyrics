@@ -22,20 +22,26 @@ const (
 // SongFilter describes a song listing request. A zero value lists everything,
 // newest first.
 type SongFilter struct {
-	Query      string
-	PersonID   *uuid.UUID // credited in any capacity
-	ArtistID   *uuid.UUID
-	ComposerID *uuid.UUID
-	LyricistID *uuid.UUID
-	GenreID    *uuid.UUID
-	GenreSlug  string
-	Language   string
-	YearFrom   *int
-	YearTo     *int
-	CreatedBy  *uuid.UUID
-	Sort       SongSort
-	Limit      int
-	Offset     int
+	Query string
+	// PersonID matches anyone involved in any capacity — credited on the work or
+	// performing on one of its recordings. Two tables, therefore, since the
+	// split in 000009: a song page links every name it shows to this filter, so
+	// missing the performers here reads as an artist being on no songs at all.
+	PersonID *uuid.UUID
+	// PerformerID matches someone who performed one of the recordings. It has no
+	// song_credits arm: performing is not a credit any more.
+	PerformerID *uuid.UUID
+	ComposerID  *uuid.UUID
+	LyricistID  *uuid.UUID
+	GenreID     *uuid.UUID
+	GenreSlug   string
+	Language    string
+	YearFrom    *int
+	YearTo      *int
+	CreatedBy   *uuid.UUID
+	Sort        SongSort
+	Limit       int
+	Offset      int
 }
 
 // songSummaryColumns is the projection every song read starts from: everything
@@ -90,19 +96,34 @@ func buildSongFilters(f SongFilter, a *args) []string {
 		if id == nil {
 			return
 		}
-		if role == "" {
-			conds = append(conds, fmt.Sprintf(
-				`EXISTS (SELECT 1 FROM song_credits sc WHERE sc.song_id = s.id AND sc.person_id = %s)`,
-				a.next(*id)))
-			return
-		}
 		conds = append(conds, fmt.Sprintf(
 			`EXISTS (SELECT 1 FROM song_credits sc WHERE sc.song_id = s.id AND sc.person_id = %s AND sc.role = %s)`,
 			a.next(*id), a.next(string(role))))
 	}
 
-	creditFilter(f.PersonID, "")
-	creditFilter(f.ArtistID, CreditArtist)
+	// The performing arm. A join inside an EXISTS is fine — it cannot multiply
+	// the outer song rows, which is the only thing the rule above is about.
+	performedBy := func(id uuid.UUID) string {
+		return fmt.Sprintf(
+			`EXISTS (SELECT 1 FROM recordings r
+			         JOIN recording_credits rc ON rc.recording_id = r.id
+			         WHERE r.song_id = s.id AND rc.person_id = %s)`,
+			a.next(id))
+	}
+
+	if f.PersonID != nil {
+		// One placeholder, referenced by both arms: the same person, asked about
+		// in the two places a person can be attached to a song.
+		p := a.next(*f.PersonID)
+		conds = append(conds, fmt.Sprintf(
+			`(EXISTS (SELECT 1 FROM song_credits sc WHERE sc.song_id = s.id AND sc.person_id = %[1]s)
+			  OR EXISTS (SELECT 1 FROM recordings r
+			             JOIN recording_credits rc ON rc.recording_id = r.id
+			             WHERE r.song_id = s.id AND rc.person_id = %[1]s))`, p))
+	}
+	if f.PerformerID != nil {
+		conds = append(conds, performedBy(*f.PerformerID))
+	}
 	creditFilter(f.ComposerID, CreditComposer)
 	creditFilter(f.LyricistID, CreditLyricist)
 
@@ -345,9 +366,13 @@ func (s *Store) collectSongs(ctx context.Context, query string, values []any, wi
 	return songs, nil
 }
 
-// attachRelations loads credits and genres for a page of songs in two queries.
+// attachRelations loads credits, genres and recordings for a page of songs.
 // Fetching them as part of the main query would multiply each song by its
 // credit count, which breaks LIMIT.
+//
+// Every read goes through here — browse, search, a single song and a list's
+// songs — so a relation attached here is attached everywhere, and only the
+// lyrics differ between a listing and a single read.
 func (s *Store) attachRelations(ctx context.Context, songs []Song) error {
 	if len(songs) == 0 {
 		return nil
@@ -410,6 +435,11 @@ func (s *Store) attachRelations(ctx context.Context, songs []Song) error {
 	if err := genreRows.Err(); err != nil {
 		return fmt.Errorf("iterate genres: %w", err)
 	}
+	genreRows.Close()
+
+	if err := s.attachRecordings(ctx, songs, ids); err != nil {
+		return err
+	}
 
 	// Normalize nil slices so the JSON encoder emits [] rather than null.
 	for i := range songs {
@@ -419,6 +449,108 @@ func (s *Store) attachRelations(ctx context.Context, songs []Song) error {
 		if songs[i].Genres == nil {
 			songs[i].Genres = []Genre{}
 		}
+		if songs[i].Recordings == nil {
+			songs[i].Recordings = []Recording{}
+		}
+		for j := range songs[i].Recordings {
+			if songs[i].Recordings[j].Performers == nil {
+				songs[i].Recordings[j].Performers = []RecordingPerformer{}
+			}
+		}
+	}
+	return nil
+}
+
+// attachRecordings loads each song's recordings and their performers.
+//
+// Two queries rather than one join, for the same reason the credits are their
+// own query: a recording with four performers would otherwise arrive four
+// times. The performers are keyed on the recording, which is why this cannot be
+// folded into the loop above — see the comment at the index below.
+func (s *Store) attachRecordings(ctx context.Context, songs []Song, ids []uuid.UUID) error {
+	// The ORDER BY is the definition of "first recording", and it is what makes
+	// that the API's answer rather than every client's calculation: the list
+	// arrives ordered and index 0 is the first recording. IsFirst leads because
+	// it is a stated fact where the year is an inference, and `id` settles the
+	// remaining ties so a page never reorders between two identical reads.
+	//
+	// refresh_songs_denorm (migration 000009) carries a mirror of this ORDER BY
+	// to pick the row whose year and link are copied onto the song. The two
+	// disagreeing would put a year on the page that belongs to a different
+	// recording than the one shown; a test pins them against each other.
+	recordingRows, err := s.pool.Query(ctx, `
+		SELECT r.song_id, r.id, r.label, r.youtube_url, r.youtube_video_id,
+		       r.release_year, r.notes, r.is_first, r.position
+		FROM recordings r
+		WHERE r.song_id = ANY($1)
+		ORDER BY r.is_first DESC, r.release_year ASC NULLS LAST, r.position ASC, r.id`, ids)
+	if err != nil {
+		return fmt.Errorf("query recordings: %w", translateErr(err))
+	}
+	defer recordingRows.Close()
+
+	index := make(map[uuid.UUID]*Song, len(songs))
+	for i := range songs {
+		index[songs[i].ID] = &songs[i]
+	}
+
+	var recordingIDs []uuid.UUID
+	for recordingRows.Next() {
+		var songID uuid.UUID
+		var r Recording
+		if err := recordingRows.Scan(&songID, &r.ID, &r.Label, &r.YouTubeURL,
+			&r.YouTubeVideoID, &r.ReleaseYear, &r.Notes, &r.IsFirst, &r.Position); err != nil {
+			return fmt.Errorf("scan recording: %w", err)
+		}
+		if song := index[songID]; song != nil {
+			song.Recordings = append(song.Recordings, r)
+			recordingIDs = append(recordingIDs, r.ID)
+		}
+	}
+	if err := recordingRows.Err(); err != nil {
+		return fmt.Errorf("iterate recordings: %w", err)
+	}
+	recordingRows.Close()
+
+	if len(recordingIDs) == 0 {
+		return nil
+	}
+
+	// Indexed only now that every recording has been appended. Taking these
+	// pointers inside the loop above would hand out addresses into a slice that
+	// the next append can reallocate, and the performers would then be written
+	// into an array nothing points at any more — silently, since the write
+	// itself succeeds.
+	byRecording := make(map[uuid.UUID]*Recording, len(recordingIDs))
+	for i := range songs {
+		for j := range songs[i].Recordings {
+			byRecording[songs[i].Recordings[j].ID] = &songs[i].Recordings[j]
+		}
+	}
+
+	performerRows, err := s.pool.Query(ctx, `
+		SELECT rc.recording_id, rc.person_id, p.name, rc.position
+		FROM recording_credits rc
+		JOIN people p ON p.id = rc.person_id
+		WHERE rc.recording_id = ANY($1)
+		ORDER BY rc.position, p.name`, recordingIDs)
+	if err != nil {
+		return fmt.Errorf("query performers: %w", translateErr(err))
+	}
+	defer performerRows.Close()
+
+	for performerRows.Next() {
+		var recordingID uuid.UUID
+		var p RecordingPerformer
+		if err := performerRows.Scan(&recordingID, &p.PersonID, &p.Name, &p.Position); err != nil {
+			return fmt.Errorf("scan performer: %w", err)
+		}
+		if recording := byRecording[recordingID]; recording != nil {
+			recording.Performers = append(recording.Performers, p)
+		}
+	}
+	if err := performerRows.Err(); err != nil {
+		return fmt.Errorf("iterate performers: %w", err)
 	}
 	return nil
 }
@@ -449,17 +581,40 @@ func actorRef(actor uuid.UUID) *uuid.UUID {
 }
 
 // SongInput is the writable shape of a song.
+//
+// No YouTube link and no release year: those belong to a recording now, and the
+// song's copies of them are written by trigger. Naming them here would give
+// them a second writer, which is the thing that lets a denormalized column
+// disagree with what it was copied from.
 type SongInput struct {
-	Title          string
-	AltTitle       *string
-	Lyrics         string
-	Language       string
+	Title      string
+	AltTitle   *string
+	Lyrics     string
+	Language   string
+	Notes      *string
+	Credits    []Credit
+	GenreIDs   []uuid.UUID
+	Recordings []RecordingInput
+}
+
+// RecordingInput is the writable shape of one recording.
+//
+// Nothing here is validated: the URL and the id are stored as given, and they
+// are allowed to disagree. That is deliberate and load-bearing — the importer
+// keeps a link it could not parse while leaving the id NULL, and the API's
+// tests plant exactly that row to check the read path copes with it. The
+// canonicalization and the refusal both live in the API layer.
+type RecordingInput struct {
+	Label          *string
 	YouTubeURL     *string
 	YouTubeVideoID *string
 	ReleaseYear    *int
 	Notes          *string
-	Credits        []Credit
-	GenreIDs       []uuid.UUID
+	IsFirst        bool
+	Position       int
+	// Performers name people by id. Name is ignored — a name that has to become
+	// a person is resolved before it reaches the store.
+	Performers []RecordingPerformer
 }
 
 // CreateSong inserts a song together with its credits and genres, atomically.
@@ -468,16 +623,16 @@ func (s *Store) CreateSong(ctx context.Context, in SongInput, actor uuid.UUID) (
 
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
-			INSERT INTO songs (title, alt_title, lyrics, language, youtube_url,
-			                   youtube_video_id, release_year, notes, created_by, updated_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+			INSERT INTO songs (title, alt_title, lyrics, language, notes,
+			                   created_by, updated_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $6)
 			RETURNING id`,
-			in.Title, in.AltTitle, in.Lyrics, in.Language, in.YouTubeURL,
-			in.YouTubeVideoID, in.ReleaseYear, in.Notes, actorRef(actor)).Scan(&id)
+			in.Title, in.AltTitle, in.Lyrics, in.Language, in.Notes,
+			actorRef(actor)).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("insert song: %w", translateErr(err))
 		}
-		return replaceRelations(ctx, tx, id, in.Credits, in.GenreIDs)
+		return replaceRelations(ctx, tx, id, in)
 	})
 	if err != nil {
 		return nil, err
@@ -490,18 +645,16 @@ func (s *Store) UpdateSong(ctx context.Context, id uuid.UUID, in SongInput, acto
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
 			UPDATE songs SET title = $2, alt_title = $3, lyrics = $4, language = $5,
-			                 youtube_url = $6, youtube_video_id = $7, release_year = $8,
-			                 notes = $9, updated_by = $10
+			                 notes = $6, updated_by = $7
 			WHERE id = $1`,
-			id, in.Title, in.AltTitle, in.Lyrics, in.Language, in.YouTubeURL,
-			in.YouTubeVideoID, in.ReleaseYear, in.Notes, actorRef(actor))
+			id, in.Title, in.AltTitle, in.Lyrics, in.Language, in.Notes, actorRef(actor))
 		if err != nil {
 			return fmt.Errorf("update song: %w", translateErr(err))
 		}
 		if tag.RowsAffected() == 0 {
 			return ErrNotFound
 		}
-		return replaceRelations(ctx, tx, id, in.Credits, in.GenreIDs)
+		return replaceRelations(ctx, tx, id, in)
 	})
 	if err != nil {
 		return nil, err
@@ -509,14 +662,19 @@ func (s *Store) UpdateSong(ctx context.Context, id uuid.UUID, in SongInput, acto
 	return s.GetSong(ctx, id)
 }
 
-// replaceRelations rewrites a song's credits and genres wholesale. Delete-then-
-// insert keeps the caller's payload authoritative and lets the denormalization
-// triggers fire once per affected row.
-func replaceRelations(ctx context.Context, tx pgx.Tx, songID uuid.UUID, credits []Credit, genreIDs []uuid.UUID) error {
+// replaceRelations rewrites a song's credits, genres and recordings wholesale.
+// Delete-then-insert keeps the caller's payload authoritative and lets the
+// denormalization triggers fire once per affected row.
+//
+// Recordings are replaced like the rest, which means their ids are minted afresh
+// on every save. A recording id is therefore stable within a read and not across
+// a write — the same property the credits list has always had, and the reason
+// the API matches a stored YouTube link by its string rather than by an id.
+func replaceRelations(ctx context.Context, tx pgx.Tx, songID uuid.UUID, in SongInput) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM song_credits WHERE song_id = $1`, songID); err != nil {
 		return fmt.Errorf("clear credits: %w", translateErr(err))
 	}
-	for _, c := range credits {
+	for _, c := range in.Credits {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO song_credits (song_id, person_id, role, position)
 			VALUES ($1, $2, $3, $4)
@@ -530,12 +688,46 @@ func replaceRelations(ctx context.Context, tx pgx.Tx, songID uuid.UUID, credits 
 	if _, err := tx.Exec(ctx, `DELETE FROM song_genres WHERE song_id = $1`, songID); err != nil {
 		return fmt.Errorf("clear genres: %w", translateErr(err))
 	}
-	for _, gid := range genreIDs {
+	for _, gid := range in.GenreIDs {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO song_genres (song_id, genre_id) VALUES ($1, $2)
 			ON CONFLICT DO NOTHING`, songID, gid)
 		if err != nil {
 			return fmt.Errorf("insert genre: %w", translateErr(err))
+		}
+	}
+
+	// The performers cascade from the recordings, so one delete covers both.
+	if _, err := tx.Exec(ctx, `DELETE FROM recordings WHERE song_id = $1`, songID); err != nil {
+		return fmt.Errorf("clear recordings: %w", translateErr(err))
+	}
+	for _, r := range in.Recordings {
+		var recordingID uuid.UUID
+		err := tx.QueryRow(ctx, `
+			INSERT INTO recordings (song_id, label, youtube_url, youtube_video_id,
+			                        release_year, notes, is_first, position)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			RETURNING id`,
+			songID, r.Label, r.YouTubeURL, r.YouTubeVideoID, r.ReleaseYear,
+			r.Notes, r.IsFirst, r.Position).Scan(&recordingID)
+		if err != nil {
+			// A second is_first lands here, as a unique violation on
+			// recordings_one_first_per_song, and is reported as a conflict. The
+			// API refuses that payload before it gets this far; this is the
+			// backstop for anything that does not go through it.
+			return fmt.Errorf("insert recording: %w", translateErr(err))
+		}
+		for _, p := range r.Performers {
+			// ON CONFLICT because a payload may name the same person twice, the
+			// same allowance the credits above make.
+			_, err := tx.Exec(ctx, `
+				INSERT INTO recording_credits (recording_id, person_id, position)
+				VALUES ($1, $2, $3)
+				ON CONFLICT (recording_id, person_id) DO UPDATE SET position = EXCLUDED.position`,
+				recordingID, p.PersonID, p.Position)
+			if err != nil {
+				return fmt.Errorf("insert performer: %w", translateErr(err))
+			}
 		}
 	}
 	return nil

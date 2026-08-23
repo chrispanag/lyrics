@@ -210,19 +210,22 @@ type importer struct {
 	genres   map[string]uuid.UUID
 }
 
-// insert writes one song with its credits and genres. The denormalized
-// credits_text and genres_text columns are left alone deliberately: the
-// triggers from migration 000003 maintain them, and the generated search vector
-// follows from those.
+// insert writes one song with its credits, genres and recordings.
+//
+// Five denormalized columns are left alone deliberately: credits_text and
+// genres_text, plus the song's copies of its first recording's link and year.
+// The triggers from migrations 000003 and 000009 maintain all of them, and the
+// generated search vector follows from the first two. Naming youtube_url or
+// release_year here would make this a second writer of a column the database
+// already owns.
 func (im *importer) insert(ctx context.Context, s *song) error {
 	var songID uuid.UUID
 	err := im.tx.QueryRow(ctx, `
-		INSERT INTO songs (title, alt_title, lyrics, language, youtube_url,
-		                   youtube_video_id, release_year, notes, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+		INSERT INTO songs (title, alt_title, lyrics, language, notes,
+		                   created_by, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $6)
 		RETURNING id`,
-		s.title, s.altTitle, s.lyrics, s.language, s.youTubeURL,
-		s.youTubeVideoID, s.releaseYear, s.notes, im.actor).Scan(&songID)
+		s.title, s.altTitle, s.lyrics, s.language, s.notes, im.actor).Scan(&songID)
 	if err != nil {
 		return fmt.Errorf("insert song: %w", err)
 	}
@@ -252,6 +255,34 @@ func (im *importer) insert(ctx context.Context, s *song) error {
 			ON CONFLICT DO NOTHING`, songID, genreID)
 		if err != nil {
 			return fmt.Errorf("genre %q: %w", name, err)
+		}
+	}
+
+	for _, rec := range s.recordings {
+		var recordingID uuid.UUID
+		err := im.tx.QueryRow(ctx, `
+			INSERT INTO recordings (song_id, label, youtube_url, youtube_video_id,
+			                        release_year, notes, is_first, position)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			RETURNING id`,
+			songID, rec.label, rec.youTubeURL, rec.youTubeVideoID, rec.releaseYear,
+			rec.notes, rec.isFirst, rec.position).Scan(&recordingID)
+		if err != nil {
+			return fmt.Errorf("insert recording: %w", err)
+		}
+		for _, p := range rec.performers {
+			personID, err := im.person(ctx, p.name)
+			if err != nil {
+				return err
+			}
+			_, err = im.tx.Exec(ctx, `
+				INSERT INTO recording_credits (recording_id, person_id, position)
+				VALUES ($1, $2, $3)
+				ON CONFLICT (recording_id, person_id) DO UPDATE SET position = EXCLUDED.position`,
+				recordingID, personID, p.position)
+			if err != nil {
+				return fmt.Errorf("performer %q: %w", p.name, err)
+			}
 		}
 	}
 	return nil
@@ -305,13 +336,24 @@ func (im *importer) genre(ctx context.Context, name string) (uuid.UUID, error) {
 // loadFingerprints reads the target catalog so already-imported songs can be
 // recognized. Names come back raw and are folded in Go, so both sides of the
 // comparison go through the identical function.
+//
+// Both ways of being attached to a song count, matching (*song).fingerprint.
+// Reading song_credits alone would leave every migrated performer out of the
+// stored fingerprint while the incoming one still had them, so no song would
+// match itself and a re-run would duplicate the entire catalog.
 func loadFingerprints(ctx context.Context, tx pgx.Tx) (map[string]struct{}, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT s.title,
-		       coalesce(array_agg(p.name) FILTER (WHERE p.name IS NOT NULL), '{}')
+		       coalesce(array_agg(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}')
 		FROM songs s
-		LEFT JOIN song_credits sc ON sc.song_id = s.id
-		LEFT JOIN people p        ON p.id = sc.person_id
+		LEFT JOIN (
+			SELECT sc.song_id, sc.person_id FROM song_credits sc
+			UNION
+			SELECT r.song_id, rc.person_id
+			FROM recordings r
+			JOIN recording_credits rc ON rc.recording_id = r.id
+		) cr ON cr.song_id = s.id
+		LEFT JOIN people p ON p.id = cr.person_id
 		GROUP BY s.id, s.title`)
 	if err != nil {
 		return nil, fmt.Errorf("read existing songs: %w", err)

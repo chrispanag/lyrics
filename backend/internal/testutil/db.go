@@ -211,7 +211,8 @@ func truncate(t *testing.T, st *store.Store) {
 
 	_, err := st.Pool().Exec(context.Background(),
 		`TRUNCATE songs, people, genres, users, lists, list_items,
-		          song_credits, song_genres RESTART IDENTITY CASCADE`)
+		          song_credits, song_genres, recordings, recording_credits
+		          RESTART IDENTITY CASCADE`)
 	if err != nil {
 		t.Fatalf("truncate tables: %v", err)
 	}

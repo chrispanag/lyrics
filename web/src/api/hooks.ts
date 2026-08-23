@@ -187,6 +187,27 @@ export function useSongLists(songId: string | undefined, enabled: boolean) {
   });
 }
 
+/**
+ * Unsettles everything an edited song is visible through.
+ *
+ * The listings are the obvious half. The other is `["list"]`: a list caches the
+ * songs on it, so what `SongRow` renders is a copy two hops down in
+ * `songs[].songs` — and the line under a title is now built from
+ * `recordings[0].performers`, so editing a recording changes a row on every
+ * cached list holding that song. This is the same shape as the genre-rename
+ * case `invalidateGenres` documents, arrived at from the other direction.
+ *
+ * Creating needs none of it: a song that has just been added is on no list. The
+ * asymmetry is stated here rather than per hook because that is how one half of
+ * it comes to be forgotten.
+ */
+function invalidateSongs(queryClient: QueryClient): Promise<unknown> {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["songs"] }),
+    queryClient.invalidateQueries({ queryKey: ["list"] }),
+  ]);
+}
+
 export function useCreateSong() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -203,7 +224,7 @@ export function useUpdateSong(id: string) {
       apiFetch<Song>(`/api/v1/songs/${id}`, { method: "PATCH", body: input }),
     onSuccess: (song) => {
       queryClient.setQueryData(keys.song(id), song);
-      void queryClient.invalidateQueries({ queryKey: ["songs"] });
+      return invalidateSongs(queryClient);
     },
   });
 }
@@ -212,7 +233,10 @@ export function useDeleteSong() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiFetch<void>(`/api/v1/songs/${id}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["songs"] }),
+    // `["lists"]` is deliberately left out: a delete does stale the item counts
+    // shown there, which is a gap that predates recordings and is worth closing
+    // on its own rather than as a side effect of this.
+    onSuccess: () => invalidateSongs(queryClient),
   });
 }
 

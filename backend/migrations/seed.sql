@@ -35,59 +35,59 @@ ON CONFLICT (normalized_name) DO NOTHING;
 -- Songs are inserted with their credits and genres resolved by name, so this
 -- script stays readable and does not hard-code any identifiers.
 WITH new_songs AS (
-  INSERT INTO songs (title, alt_title, lyrics, language, youtube_url, youtube_video_id, release_year, notes)
+  INSERT INTO songs (title, alt_title, lyrics, language, notes)
   VALUES
     (
       'Το Τραγούδι της Αγάπης',
       'To Tragoudi tis Agapis',
       E'Μια μέρα στη θάλασσα\nθα σε ξαναδώ\nκαι θα σου πω τα λόγια\nπου δεν είπα εδώ\n\nΗ αγάπη μου μεγάλη\nσαν τον ουρανό\nκαι το τραγούδι τούτο\nγια σένα το κρατώ',
-      'el', NULL, NULL, 1964,
+      'el',
       'A seed entry used to demonstrate search ranking.'
     ),
     (
       'Θάλασσα Πλατιά',
       NULL,
       E'Στης θάλασσας τα βάθη\nη αγάπη μου κοιμάται\nκι ο άνεμος τη σκεπάζει\nμε αφρό και με φεγγάρι\n\nΘάλασσα πλατιά\nπάρε με μακριά',
-      'el', NULL, NULL, 1971, NULL
+      'el', NULL
     ),
     (
       'Συννεφιασμένη Κυριακή',
       'Synnefiasmeni Kyriaki',
       E'Συννεφιασμένη Κυριακή\nμοιάζεις με την καρδιά μου\nπου έχει πάντα συννεφιά\nΧριστέ και Παναγιά μου',
-      'el', NULL, NULL, 1948,
+      'el',
       'One of the best known rebetiko songs.'
     ),
     (
       'Χάρτινο το Φεγγαράκι',
       'Hartino to Fengaraki',
       E'Θα φύγω και θα γυρίσω\nκαι θα σε βρω\nχάρτινο το φεγγαράκι\nψεύτικος ο ντουνιάς',
-      'el', NULL, NULL, 1957, NULL
+      'el', NULL
     ),
     (
       'Into My Arms',
       NULL,
       E'I do not believe in an interventionist God\nBut I know, darling, that you do\nBut if I did I would kneel down and ask Him\nNot to intervene when it came to you\n\nInto my arms, O Lord\nInto my arms',
-      'en', 'https://www.youtube.com/watch?v=y8ptCQvGQGE', 'y8ptCQvGQGE', 1997, NULL
+      'en', NULL
     ),
     (
       'Hallelujah',
       NULL,
       E'Now I''ve heard there was a secret chord\nThat David played and it pleased the Lord\nBut you don''t really care for music, do you?\n\nHallelujah, Hallelujah',
-      'en', NULL, NULL, 1984, NULL
+      'en', NULL
     ),
     (
       'Feeling Good',
       NULL,
       E'Birds flying high, you know how I feel\nSun in the sky, you know how I feel\nBreeze drifting on by, you know how I feel\n\nIt''s a new dawn, it''s a new day\nIt''s a new life for me',
-      'en', NULL, NULL, 1965, NULL
+      'en', NULL
     )
   RETURNING id, title
 ),
--- Both the credits and the genres attach to `new_songs`, so they must share one
--- statement: a CTE is not visible to the next one, and reaching for `songs`
--- instead would join on title across the whole catalog. A data-modifying CTE
--- runs to completion whether or not the primary query reads its output, so
--- nesting the credits here does not skip them.
+-- The credits, the recordings and the genres all attach to `new_songs`, so they
+-- must share one statement: a CTE is not visible to the next one, and reaching
+-- for `songs` instead would join on title across the whole catalog. A
+-- data-modifying CTE runs to completion whether or not the primary query reads
+-- its output, so nesting them here does not skip them.
 new_credits AS (
 INSERT INTO song_credits (song_id, person_id, role, position)
 SELECT s.id, p.id, c.role, c.position
@@ -95,21 +95,51 @@ FROM new_songs s
 JOIN (VALUES
   ('Το Τραγούδι της Αγάπης', 'Μίκης Θεοδωράκης',     'composer',  0),
   ('Το Τραγούδι της Αγάπης', 'Νίκος Γκάτσος',        'lyricist',  0),
-  ('Το Τραγούδι της Αγάπης', 'Γιώργος Νταλάρας',     'artist',    0),
   ('Θάλασσα Πλατιά',         'Μίκης Θεοδωράκης',     'composer',  0),
-  ('Θάλασσα Πλατιά',         'Χάρις Αλεξίου',        'artist',    0),
   ('Συννεφιασμένη Κυριακή',  'Βασίλης Τσιτσάνης',    'composer',  0),
   ('Συννεφιασμένη Κυριακή',  'Βασίλης Τσιτσάνης',    'lyricist',  0),
-  ('Συννεφιασμένη Κυριακή',  'Γιώργος Νταλάρας',     'artist',    0),
   ('Χάρτινο το Φεγγαράκι',   'Μάνος Χατζιδάκις',     'composer',  0),
   ('Χάρτινο το Φεγγαράκι',   'Νίκος Γκάτσος',        'lyricist',  0),
-  ('Into My Arms',           'Nick Cave',            'artist',    0),
   ('Into My Arms',           'Nick Cave',            'composer',  0),
-  ('Hallelujah',             'Leonard Cohen',        'artist',    0),
-  ('Hallelujah',             'Leonard Cohen',        'lyricist',  0),
-  ('Feeling Good',           'Nina Simone',          'artist',    0)
+  ('Hallelujah',             'Leonard Cohen',        'lyricist',  0)
 ) AS c(song_title, person_name, role, position) ON c.song_title = s.title
 JOIN people p ON p.normalized_name = app_norm(c.person_name)
+ON CONFLICT DO NOTHING
+RETURNING 1
+),
+-- The recordings carry the year and the link, and the performers who were
+-- `artist` credits before migration 000009. `Χάρτινο το Φεγγαράκι` deliberately
+-- gets none: a song known only as a work is a real state, and one the app has
+-- to render.
+new_recordings AS (
+  INSERT INTO recordings (song_id, youtube_url, youtube_video_id, release_year, is_first)
+  SELECT s.id, r.youtube_url, r.youtube_video_id, r.release_year, true
+  FROM new_songs s
+  JOIN (VALUES
+    ('Το Τραγούδι της Αγάπης', NULL, NULL, 1964),
+    ('Θάλασσα Πλατιά',         NULL, NULL, 1971),
+    ('Συννεφιασμένη Κυριακή',  NULL, NULL, 1948),
+    ('Into My Arms',
+     'https://www.youtube.com/watch?v=y8ptCQvGQGE', 'y8ptCQvGQGE', 1997),
+    ('Hallelujah',             NULL, NULL, 1984),
+    ('Feeling Good',           NULL, NULL, 1965)
+  ) AS r(song_title, youtube_url, youtube_video_id, release_year) ON r.song_title = s.title
+  RETURNING id, song_id
+),
+new_performers AS (
+INSERT INTO recording_credits (recording_id, person_id, position)
+SELECT nr.id, p.id, rc.position
+FROM new_recordings nr
+JOIN new_songs s ON s.id = nr.song_id
+JOIN (VALUES
+  ('Το Τραγούδι της Αγάπης', 'Γιώργος Νταλάρας',     0),
+  ('Θάλασσα Πλατιά',         'Χάρις Αλεξίου',        0),
+  ('Συννεφιασμένη Κυριακή',  'Γιώργος Νταλάρας',     0),
+  ('Into My Arms',           'Nick Cave',            0),
+  ('Hallelujah',             'Leonard Cohen',        0),
+  ('Feeling Good',           'Nina Simone',          0)
+) AS rc(song_title, person_name, position) ON rc.song_title = s.title
+JOIN people p ON p.normalized_name = app_norm(rc.person_name)
 ON CONFLICT DO NOTHING
 RETURNING 1
 )
@@ -135,3 +165,4 @@ COMMIT;
 \echo '  curl "localhost:8080/api/v1/songs?q=θάλασσα"     — accented query'
 \echo '  curl "localhost:8080/api/v1/songs?q=θαλασσα"     — unaccented, same results'
 \echo '  curl "localhost:8080/api/v1/songs?q=Θεοδορακης"  — misspelled artist, still matches'
+\echo '  curl "localhost:8080/api/v1/songs?q=Νταλάρας"    — a performer, reached through a recording'

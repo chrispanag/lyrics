@@ -725,6 +725,24 @@ func TestLastAdminIsProtected(t *testing.T) {
 	}
 }
 
+// manyRecordings and manyPerformers build a payload one over a cap, so the
+// numbers in the cases below are read from the constants rather than restated.
+func manyRecordings(n int) []map[string]any {
+	out := make([]map[string]any, n)
+	for i := range out {
+		out[i] = map[string]any{"release_year": 1900 + i}
+	}
+	return out
+}
+
+func manyPerformers(n int) []map[string]any {
+	out := make([]map[string]any, n)
+	for i := range out {
+		out[i] = map[string]any{"name": fmt.Sprintf("Performer %d", i), "position": i}
+	}
+	return out
+}
+
 func TestSongValidation(t *testing.T) {
 	h := newHarness(t)
 	token := h.tokenFor("contrib@example.com", store.RoleContributor)
@@ -737,19 +755,69 @@ func TestSongValidation(t *testing.T) {
 		{"missing title", map[string]any{"lyrics": "x"}, 422},
 		{"blank title", map[string]any{"title": "   ", "lyrics": "x"}, 422},
 		{"bad language", map[string]any{"title": "T", "language": "greek"}, 422},
-		{"bad youtube url", map[string]any{"title": "T", "youtube_url": "https://vimeo.com/123"}, 422},
-		{"bad release year", map[string]any{"title": "T", "release_year": 42}, 422},
+		{"bad youtube url", map[string]any{
+			"title":      "T",
+			"recordings": []map[string]any{{"youtube_url": "https://vimeo.com/123"}},
+		}, 422},
+		{"bad release year", map[string]any{
+			"title":      "T",
+			"recordings": []map[string]any{{"release_year": 42}},
+		}, 422},
 		{"bad credit role", map[string]any{
 			"title":   "T",
 			"credits": []map[string]any{{"name": "X", "role": "producer"}},
 		}, 422},
+		// Performing is not a credit role since 000009, so the spelling that
+		// used to be the most common one is now refused rather than stored
+		// somewhere nothing reads.
+		{"a performing role on a credit", map[string]any{
+			"title":   "T",
+			"credits": []map[string]any{{"name": "X", "role": "artist"}},
+		}, 422},
+		{"two first recordings", map[string]any{
+			"title": "T",
+			"recordings": []map[string]any{
+				{"label": "one", "is_first": true},
+				{"label": "two", "is_first": true},
+			},
+		}, 422},
+		{"a performer with neither id nor name", map[string]any{
+			"title":      "T",
+			"recordings": []map[string]any{{"performers": []map[string]any{{"position": 0}}}},
+		}, 422},
+		// The caps bound the work rather than the wire: every performer named
+		// inline is one sequential person upsert holding a pooled connection.
+		// The numbers are one over maxRecordings and maxPerformers, spelled out
+		// because this is an external test package and cannot read them — they
+		// are part of the observable contract either way, so a change to either
+		// constant should be a change here.
+		{"too many recordings", map[string]any{
+			"title":      "T",
+			"recordings": manyRecordings(17),
+		}, 422},
+		{"too many performers across the recordings", map[string]any{
+			"title":      "T",
+			"recordings": []map[string]any{{"performers": manyPerformers(65)}},
+		}, 422},
+		// The link and the year moved onto recordings, and a payload still
+		// naming them at the top level is refused rather than quietly ignored.
+		{"a song-level youtube url", map[string]any{
+			"title":       "T",
+			"youtube_url": "https://youtu.be/dQw4w9WgXcQ",
+		}, 400},
+		{"a song-level release year", map[string]any{"title": "T", "release_year": 1964}, 400},
 		{"unknown field", map[string]any{"title": "T", "colour": "blue"}, 400},
 		{"valid", map[string]any{
-			"title":       "Good Song",
-			"lyrics":      "words",
-			"language":    "en",
-			"youtube_url": "https://youtu.be/dQw4w9WgXcQ",
-			"credits":     []map[string]any{{"name": "Someone", "role": "artist"}},
+			"title":    "Good Song",
+			"lyrics":   "words",
+			"language": "en",
+			"credits":  []map[string]any{{"name": "Someone", "role": "composer"}},
+			"recordings": []map[string]any{{
+				"youtube_url":  "https://youtu.be/dQw4w9WgXcQ",
+				"release_year": 1997,
+				"is_first":     true,
+				"performers":   []map[string]any{{"name": "Someone Else", "position": 0}},
+			}},
 		}, 201},
 	}
 
@@ -766,25 +834,96 @@ func TestSongValidation(t *testing.T) {
 
 // A YouTube link must be stored canonically so tracking parameters and
 // shortened forms do not accumulate in the catalog.
+//
+// Asserted on the recording that carries it and on the song's copy, because the
+// two are written by different things now — the handler canonicalizes, and a
+// trigger copies. Either one alone leaves the other free to hold a raw link.
 func TestYouTubeURLIsCanonicalized(t *testing.T) {
 	h := newHarness(t)
 	token := h.tokenFor("contrib@example.com", store.RoleContributor)
 
+	const canonical = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 	resp := h.do("POST", "/api/v1/songs", token, map[string]any{
-		"title":       "Linked",
-		"youtube_url": "https://youtu.be/dQw4w9WgXcQ?t=42&si=tracking",
+		"title": "Linked",
+		"recordings": []map[string]any{{
+			"youtube_url": "https://youtu.be/dQw4w9WgXcQ?t=42&si=tracking",
+			"is_first":    true,
+		}},
 	})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", resp.StatusCode)
 	}
 
 	song := decode[store.Song](t, resp)
-	if song.YouTubeURL == nil || *song.YouTubeURL != "https://www.youtube.com/watch?v=dQw4w9WgXcQ" {
-		t.Errorf("youtube_url = %v, want the canonical watch URL", song.YouTubeURL)
+	if len(song.Recordings) != 1 {
+		t.Fatalf("recordings = %v, want one", song.Recordings)
+	}
+	rec := song.Recordings[0]
+	if rec.YouTubeURL == nil || *rec.YouTubeURL != canonical {
+		t.Errorf("recording youtube_url = %v, want the canonical watch URL", rec.YouTubeURL)
+	}
+	if rec.YouTubeVideoID == nil || *rec.YouTubeVideoID != "dQw4w9WgXcQ" {
+		t.Errorf("recording youtube_video_id = %v, want the extracted id", rec.YouTubeVideoID)
+	}
+
+	if song.YouTubeURL == nil || *song.YouTubeURL != canonical {
+		t.Errorf("song youtube_url = %v, want the first recording's copy", song.YouTubeURL)
 	}
 	if song.YouTubeVideoID == nil || *song.YouTubeVideoID != "dQw4w9WgXcQ" {
-		t.Errorf("youtube_video_id = %v, want the extracted id", song.YouTubeVideoID)
+		t.Errorf("song youtube_video_id = %v, want the first recording's copy", song.YouTubeVideoID)
 	}
+}
+
+// The song's year and link are the first recording's, and they have to follow it
+// — including down to nothing when the last recording goes. Nothing in the API
+// writes those three columns, so this is what says the trigger is doing it.
+func TestSongColumnsFollowRecordingEdits(t *testing.T) {
+	h := newHarness(t)
+	owner, token := h.userAndToken("contrib@example.com", store.RoleContributor)
+
+	resp := h.do("POST", "/api/v1/songs", token, map[string]any{
+		"title":      "Tracked",
+		"recordings": []map[string]any{{"release_year": 1964, "is_first": true}},
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201", resp.StatusCode)
+	}
+	song := decode[store.Song](t, resp)
+	if song.ReleaseYear == nil || *song.ReleaseYear != 1964 {
+		t.Fatalf("release_year = %v, want 1964", song.ReleaseYear)
+	}
+	_ = owner
+	path := "/api/v1/songs/" + song.ID.String()
+
+	t.Run("editing the recording's year moves the song's", func(t *testing.T) {
+		resp := h.do("PATCH", path, token, map[string]any{
+			"recordings": []map[string]any{{"release_year": 1971, "is_first": true}},
+		})
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+		patched := decode[store.Song](t, resp)
+		if patched.ReleaseYear == nil || *patched.ReleaseYear != 1971 {
+			t.Errorf("release_year = %v, want 1971", patched.ReleaseYear)
+		}
+	})
+
+	// An explicit empty array is "remove them all", and the song then has no
+	// year at all — it never had one of its own to fall back on.
+	t.Run("clearing the recordings clears the copies", func(t *testing.T) {
+		resp := h.do("PATCH", path, token, map[string]any{"recordings": []map[string]any{}})
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200", resp.StatusCode)
+		}
+		patched := decode[store.Song](t, resp)
+		if len(patched.Recordings) != 0 {
+			t.Errorf("recordings = %v, want none", patched.Recordings)
+		}
+		if patched.ReleaseYear != nil || patched.YouTubeURL != nil || patched.YouTubeVideoID != nil {
+			t.Errorf("song kept year=%v url=%v id=%v with no recording behind them",
+				patched.ReleaseYear, patched.YouTubeURL, patched.YouTubeVideoID)
+		}
+	})
 }
 
 // The catalog holds links this API would refuse: the importer stores youtube_url
@@ -804,7 +943,7 @@ func TestPatchKeepsAnUnparseableStoredYouTubeURL(t *testing.T) {
 	const stored = "https://youtube.com/watch?feature=share"
 	song, err := h.store.CreateSong(context.Background(), store.SongInput{
 		Title: "Imported", Lyrics: "first take", Language: "el",
-		YouTubeURL: ptr(stored),
+		Recordings: []store.RecordingInput{{YouTubeURL: ptr(stored), IsFirst: true}},
 	}, owner.ID)
 	if err != nil {
 		t.Fatalf("plant the imported row: %v", err)
@@ -812,14 +951,19 @@ func TestPatchKeepsAnUnparseableStoredYouTubeURL(t *testing.T) {
 	path := "/api/v1/songs/" + song.ID.String()
 
 	// Both halves of the trap, and they fail for different reasons: a patch that
-	// leaves the link out has it filled in by merge, while the editor hydrates
-	// the field from the stored value and sends the whole record every save.
+	// leaves the recordings out has them filled in by merge, while the editor
+	// hydrates the field from the stored value and sends the whole record every
+	// save. The second is also what says the match is made on the URL string,
+	// since the recording it arrives under has no id the caller could name.
 	for _, tc := range []struct {
 		name string
 		body map[string]any
 	}{
-		{"omitting the link", map[string]any{"title": "Lyrics fixed"}},
-		{"resending it unchanged", map[string]any{"title": "Fixed again", "youtube_url": stored}},
+		{"omitting the recordings", map[string]any{"title": "Lyrics fixed"}},
+		{"resending the link unchanged", map[string]any{
+			"title":      "Fixed again",
+			"recordings": []map[string]any{{"youtube_url": stored, "is_first": true}},
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resp := h.do("PATCH", path, token, tc.body)
@@ -836,13 +980,17 @@ func TestPatchKeepsAnUnparseableStoredYouTubeURL(t *testing.T) {
 			if want, _ := tc.body["title"].(string); patched.Title != want {
 				t.Errorf("title = %q, want %q", patched.Title, want)
 			}
+			if len(patched.Recordings) != 1 {
+				t.Fatalf("recordings = %v, want the one that was there", patched.Recordings)
+			}
 			// Carried through exactly as stored: there is no id to canonicalize
 			// from, so anything else here would be rewriting the catalog.
-			if patched.YouTubeURL == nil || *patched.YouTubeURL != stored {
-				t.Errorf("youtube_url = %v, want it left at %q", patched.YouTubeURL, stored)
+			rec := patched.Recordings[0]
+			if rec.YouTubeURL == nil || *rec.YouTubeURL != stored {
+				t.Errorf("youtube_url = %v, want it left at %q", rec.YouTubeURL, stored)
 			}
-			if patched.YouTubeVideoID != nil {
-				t.Errorf("youtube_video_id = %v, want it still absent", patched.YouTubeVideoID)
+			if rec.YouTubeVideoID != nil {
+				t.Errorf("youtube_video_id = %v, want it still absent", rec.YouTubeVideoID)
 			}
 		})
 	}
@@ -850,7 +998,21 @@ func TestPatchKeepsAnUnparseableStoredYouTubeURL(t *testing.T) {
 	// The exemption is for the value already stored, not for bad links in
 	// general — a link the caller actually chose is still refused.
 	t.Run("a different unrecognizable link is still refused", func(t *testing.T) {
-		resp := h.do("PATCH", path, token, map[string]any{"youtube_url": "https://vimeo.com/123"})
+		resp := h.do("PATCH", path, token, map[string]any{
+			"recordings": []map[string]any{{"youtube_url": "https://vimeo.com/123"}},
+		})
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("status = %d, want 422", resp.StatusCode)
+		}
+	})
+
+	// And a create is never exempted: there is no stored song to have kept the
+	// value, so the same string the PATCHes carry through is refused here.
+	t.Run("the same link is refused on a create", func(t *testing.T) {
+		resp := h.do("POST", "/api/v1/songs", token, map[string]any{
+			"title":      "Fresh",
+			"recordings": []map[string]any{{"youtube_url": stored}},
+		})
 		if resp.StatusCode != http.StatusUnprocessableEntity {
 			t.Fatalf("status = %d, want 422", resp.StatusCode)
 		}
@@ -1295,6 +1457,11 @@ func TestSongPatchPreservesOmittedFields(t *testing.T) {
 		t.Fatalf("create genre: %v", err)
 	}
 
+	singer, err := h.store.UpsertPerson(context.Background(), "Γιώργος Νταλάρας")
+	if err != nil {
+		t.Fatalf("upsert person: %v", err)
+	}
+
 	created, err := h.store.CreateSong(context.Background(), store.SongInput{
 		Title:    "Θάλασσα Πλατιά",
 		Lyrics:   "Μια μέρα στη θάλασσα",
@@ -1302,6 +1469,11 @@ func TestSongPatchPreservesOmittedFields(t *testing.T) {
 		Notes:    ptr("A note worth keeping."),
 		Credits:  []store.Credit{{PersonID: person.ID, Role: store.CreditComposer}},
 		GenreIDs: []uuid.UUID{genre.ID},
+		Recordings: []store.RecordingInput{{
+			ReleaseYear: ptr(1964),
+			IsFirst:     true,
+			Performers:  []store.RecordingPerformer{{PersonID: singer.ID}},
+		}},
 	}, author.ID)
 	if err != nil {
 		t.Fatalf("create song: %v", err)
@@ -1332,15 +1504,33 @@ func TestSongPatchPreservesOmittedFields(t *testing.T) {
 	if len(patched.Genres) != 1 {
 		t.Errorf("genres = %d, want the original 1 preserved", len(patched.Genres))
 	}
+	// The recordings are the deepest thing merge has to restate, performers and
+	// all: a shallow restatement leaves the recording with nobody on it.
+	if len(patched.Recordings) != 1 {
+		t.Fatalf("recordings = %d, want the original 1 preserved", len(patched.Recordings))
+	}
+	if len(patched.Recordings[0].Performers) != 1 {
+		t.Errorf("performers = %d, want the original 1 preserved",
+			len(patched.Recordings[0].Performers))
+	}
+	if patched.Recordings[0].ReleaseYear == nil || *patched.Recordings[0].ReleaseYear != 1964 {
+		t.Errorf("recording year = %v, want it untouched", patched.Recordings[0].ReleaseYear)
+	}
 
 	// An explicit empty list is the one way to say "remove them all", and must
 	// still be distinguishable from omitting the key.
-	resp = h.do("PATCH", path, token, map[string]any{"credits": []any{}})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200", resp.StatusCode)
-	}
-	if cleared := decode[store.Song](t, resp); len(cleared.Credits) != 0 {
-		t.Errorf("credits = %d, want an explicit [] to clear them", len(cleared.Credits))
+	for _, field := range []string{"credits", "recordings"} {
+		resp = h.do("PATCH", path, token, map[string]any{field: []any{}})
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("clearing %s: status = %d, want 200", field, resp.StatusCode)
+		}
+		cleared := decode[store.Song](t, resp)
+		if field == "credits" && len(cleared.Credits) != 0 {
+			t.Errorf("credits = %d, want an explicit [] to clear them", len(cleared.Credits))
+		}
+		if field == "recordings" && len(cleared.Recordings) != 0 {
+			t.Errorf("recordings = %d, want an explicit [] to clear them", len(cleared.Recordings))
+		}
 	}
 }
 

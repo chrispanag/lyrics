@@ -9,3 +9,12 @@
 export function songCount(n: number): string {
   return `${n} ${n === 1 ? "song" : "songs"}`;
 }
+
+/**
+ * Renders a recording tally with the right plural, like songCount above and for
+ * the same reason: the song page's affordance and the sheet it opens both name
+ * the count, and a third caller is one edit away.
+ */
+export function recordingCount(n: number): string {
+  return `${n} ${n === 1 ? "recording" : "recordings"}`;
+}

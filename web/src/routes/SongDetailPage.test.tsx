@@ -8,8 +8,17 @@ import { SongDetailPage } from "./SongDetailPage";
 import { keys } from "@/api/hooks";
 import { returnDestination } from "@/auth/returnTo";
 import { deferred } from "@/test/deferred";
-import { API, listById, makeList, makeSong, makeUser, notFound } from "@/test/handlers";
+import {
+  API,
+  listById,
+  makeList,
+  makeRecording,
+  makeSong,
+  makeUser,
+  notFound,
+} from "@/test/handlers";
 import { intersectAll, observedElements } from "@/test/intersection";
+import type { Recording } from "@/lib/types";
 import { renderWithProviders } from "@/test/render";
 import { scrollDown, setScrollY } from "@/test/scroll";
 import { server } from "@/test/server";
@@ -49,6 +58,27 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
     </Routes>,
     { route: "/songs/song-1", ...options },
   );
+}
+
+/**
+ * Drives a horizontal swipe across an element.
+ *
+ * At module scope because two describes read it now: the list-paging specs, and
+ * the recordings sheet's guard against being swiped through.
+ */
+function swipe(
+  target: Element,
+  fromX: number,
+  toX: number,
+  { dy = 4, fingers = 1 }: { dy?: number; fingers?: number } = {},
+) {
+  const at = (clientX: number, clientY: number) => ({ clientX, clientY });
+  const moved = at(toX, 400 + dy);
+  fireEvent.touchStart(target, { touches: [at(fromX, 400)] });
+  fireEvent.touchMove(target, {
+    touches: fingers > 1 ? [moved, at(toX + 40, 300)] : [moved],
+  });
+  fireEvent.touchEnd(target, { changedTouches: [moved] });
 }
 
 describe("SongDetailPage", () => {
@@ -298,6 +328,218 @@ describe("SongDetailPage while the song loads", () => {
 });
 
 /*
+ * The recordings on a song page: the first one's performers and year in the
+ * header, and the sheet holding all of them.
+ */
+describe("SongDetailPage recordings", () => {
+  function withRecordings(recordings: Recording[]) {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () => HttpResponse.json(makeSong({ recordings }))),
+    );
+  }
+
+  /**
+   * A two-song list where both songs have a recording, so the sheet can be
+   * opened on one of them and the page still has somewhere to page to. The
+   * guard specs below need both halves: without a list there is no paging to
+   * suppress, and the assertion would pass against a page that never moves.
+   */
+  function servePagedList() {
+    const songs = [
+      makeSong({ id: "song-2", title: "Θάλασσα Πλατιά", recordings: [makeRecording()] }),
+      makeSong({ id: "song-3", title: "Επόμενο", recordings: [makeRecording({ id: "r9" })] }),
+    ];
+    server.use(
+      listById(makeList({ id: "list-1", name: "Ρεμπέτικα", songs, item_count: songs.length })),
+      http.get(`${API}/api/v1/songs/:id`, ({ params }) => {
+        const found = songs.find((song) => song.id === params.id);
+        return found ? HttpResponse.json(found) : notFound("Song was not found.");
+      }),
+    );
+  }
+
+  it("names the first recording's performers and year", async () => {
+    withRecordings([makeRecording({ release_year: 1971 })]);
+
+    renderDetail();
+
+    expect(await screen.findByText("Performed by")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Γιώργος Νταλάρας" })).toHaveAttribute(
+      "href",
+      "/?person=person-2",
+    );
+    expect(screen.getByText("1971")).toBeInTheDocument();
+  });
+
+  // The commonest recording in the catalog by a wide margin: a year, and nobody
+  // named. The row has to be absent rather than a label above an empty value.
+  it("omits the performers row when the recording names nobody", async () => {
+    withRecordings([makeRecording({ performers: [] })]);
+
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(screen.queryByText("Performed by")).not.toBeInTheDocument();
+    expect(screen.getByText("1964")).toBeInTheDocument();
+  });
+
+  // Both halves of the video gate, per recording this time, and they fail for
+  // different reasons — see the pair above for why one spec cannot cover both.
+  it("builds the watch link from the first recording's video id", async () => {
+    withRecordings([makeRecording({ youtube_video_id: "dQw4w9WgXcQ" })]);
+
+    renderDetail();
+
+    expect(await screen.findByRole("link", { name: /watch on youtube/i })).toHaveAttribute(
+      "href",
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    );
+  });
+
+  it("offers no watch link for a recording whose link never parsed", async () => {
+    withRecordings([
+      makeRecording({
+        youtube_url: "https://youtube.com/watch?feature=share",
+        youtube_video_id: null,
+      }),
+    ]);
+
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
+  });
+
+  it("offers nothing to open when the song has no recordings", async () => {
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(screen.queryByText("Performed by")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /show all/i })).not.toBeInTheDocument();
+  });
+
+  // The commonest row in the catalog, and the one every other sheet spec here
+  // steps past: a year, `is_first`, and nothing else. The year is the row's own
+  // text when there is neither a performer nor a label, so the column on the
+  // right has to stand down — rendered anyway it read "1964 First recording
+  // 1964", and no spec using the default fixture could see it.
+  it("names a year-only recording once", async () => {
+    const user = userEvent.setup();
+    withRecordings([makeRecording({ performers: [], label: null, release_year: 1964 })]);
+
+    renderDetail();
+
+    await user.click(await screen.findByRole("button", { name: /show all/i }));
+
+    const sheet = await screen.findByRole("dialog", { name: /recordings/i });
+    expect(within(sheet).getAllByText("1964")).toHaveLength(1);
+  });
+
+  // And the year is still shown beside a row that does have its own text, which
+  // is what stops the fix above from suppressing it everywhere.
+  it("still shows the year beside a named recording", async () => {
+    const user = userEvent.setup();
+    withRecordings([makeRecording({ release_year: 1971 })]);
+
+    renderDetail();
+
+    await user.click(await screen.findByRole("button", { name: /show all/i }));
+
+    const sheet = await screen.findByRole("dialog", { name: /recordings/i });
+    expect(within(sheet).getByText("Γιώργος Νταλάρας")).toBeInTheDocument();
+    expect(within(sheet).getByText("1971")).toBeInTheDocument();
+  });
+
+  it("lists every recording in the sheet", async () => {
+    const user = userEvent.setup();
+    withRecordings([
+      makeRecording({ id: "r1", release_year: 1964 }),
+      makeRecording({
+        id: "r2",
+        is_first: false,
+        release_year: 1988,
+        label: "Live στο Λυκαβηττό",
+        performers: [{ person_id: "person-3", name: "Χάρις Αλεξίου", position: 0 }],
+      }),
+    ]);
+
+    renderDetail();
+
+    await user.click(await screen.findByRole("button", { name: "Show all 2 recordings" }));
+
+    const sheet = await screen.findByRole("dialog", { name: /recordings/i });
+    expect(within(sheet).getByText("Γιώργος Νταλάρας")).toBeInTheDocument();
+    expect(within(sheet).getByText("Χάρις Αλεξίου")).toBeInTheDocument();
+    expect(within(sheet).getByText("Live στο Λυκαβηττό")).toBeInTheDocument();
+    // The badge is on the marked recording and on nothing else. Keyed on index
+    // it would appear on the 1964 row here either way, so the assertion that
+    // matters is the count.
+    expect(within(sheet).getAllByText("First recording")).toHaveLength(1);
+  });
+
+  // A recording nobody has claimed as the first gets no badge. The mark is a
+  // statement about history, and index 0 must not make it on a reader's behalf.
+  it("badges no recording when none is marked", async () => {
+    const user = userEvent.setup();
+    withRecordings([makeRecording({ is_first: false })]);
+
+    renderDetail();
+
+    await user.click(await screen.findByRole("button", { name: "Show all 1 recording" }));
+
+    const sheet = await screen.findByRole("dialog", { name: /recordings/i });
+    expect(within(sheet).queryByText("First recording")).not.toBeInTheDocument();
+  });
+
+  // Copies of the two guard specs the save sheet has. The sheet renders inside
+  // the article the swipe is read across, so both gestures reach it and both
+  // have to stand down — which they do by the `role="dialog"`/`aria-modal` pair
+  // `Sheet` writes and `lib/modal.ts` looks for.
+  it("leaves the arrow keys to an open recordings sheet", async () => {
+    const user = userEvent.setup();
+    servePagedList();
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    await user.click(await screen.findByRole("button", { name: /show all/i }));
+    await screen.findByRole("dialog", { name: /recordings/i });
+
+    await user.keyboard("{ArrowRight}");
+
+    expect(screen.getByRole("heading", { name: "Θάλασσα Πλατιά" })).toBeInTheDocument();
+  });
+
+  it("leaves the swipe to an open recordings sheet", async () => {
+    const user = userEvent.setup();
+    servePagedList();
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    await user.click(await screen.findByRole("button", { name: /show all/i }));
+    const sheet = await screen.findByRole("dialog", { name: /recordings/i });
+
+    swipe(sheet, 500, 380);
+
+    expect(screen.getByRole("heading", { name: "Θάλασσα Πλατιά" })).toBeInTheDocument();
+  });
+
+  // Closing unmounts the control that opened it, so without the restore in
+  // `Sheet` a keyboard reader is dropped at the top of the document.
+  it("returns focus to the control that opened it", async () => {
+    const user = userEvent.setup();
+    withRecordings([makeRecording()]);
+
+    renderDetail();
+
+    const trigger = await screen.findByRole("button", { name: /show all/i });
+    await user.click(trigger);
+    await screen.findByRole("dialog", { name: /recordings/i });
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(trigger).toHaveFocus();
+  });
+});
+
+/*
  * Reading a song from inside a list.
  *
  * The list is named by a query parameter rather than router state, so these
@@ -461,21 +703,6 @@ describe("SongDetailPage inside a list", () => {
    * `fingers` is how many touches the move reports: a second one landing partway
    * through is a pinch, and the movement is no longer a swipe.
    */
-  function swipe(
-    target: Element,
-    fromX: number,
-    toX: number,
-    { dy = 4, fingers = 1 }: { dy?: number; fingers?: number } = {},
-  ) {
-    const at = (clientX: number, clientY: number) => ({ clientX, clientY });
-    const moved = at(toX, 400 + dy);
-    fireEvent.touchStart(target, { touches: [at(fromX, 400)] });
-    fireEvent.touchMove(target, {
-      touches: fingers > 1 ? [moved, at(toX + 40, 300)] : [moved],
-    });
-    fireEvent.touchEnd(target, { changedTouches: [moved] });
-  }
-
   /**
    * The middle song of the list, open, with the lyrics a thumb would be over.
    *

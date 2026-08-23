@@ -16,7 +16,7 @@ import { Snippet } from "./Snippet";
 import { useSongs } from "@/api/hooks";
 import { browseHref } from "@/lib/browse";
 import { cn } from "@/lib/cn";
-import { creditLine } from "@/lib/credits";
+import { songByline } from "@/lib/credits";
 import { songCount } from "@/lib/format";
 import { songHref } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
@@ -366,7 +366,7 @@ export function SongSearch() {
  *
  * Memoized for the reason `SongCard` records: the box holds its text in state,
  * so every keystroke re-renders the panel, and without this each row re-runs
- * `creditLine` (copy, sort, Set) and the snippet's own scan for a song that has
+ * `songByline` (copy, sort, Set) and the snippet's own scan for a song that has
  * not changed. Songs come from the query cache, so their identity is stable.
  *
  * The address carries no list. A song reached from a search has left whatever
@@ -389,7 +389,7 @@ const SongOption = memo(function SongOption({
   song: Song;
   active: boolean;
 }) {
-  const credits = creditLine(song.credits);
+  const credits = songByline(song);
 
   return (
     <Link

@@ -1,12 +1,13 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Route, Routes, createPath, useLocation } from "react-router-dom";
 
 import { SongEditorPage } from "./SongEditorPage";
 import { BackButton } from "@/components/BackButton";
-import { API, makeSong, makeUser } from "@/test/handlers";
+import type { SongInput } from "@/lib/types";
+import { API, makeRecording, makeSong, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
@@ -126,28 +127,18 @@ describe("SongEditorPage", () => {
     expect(await screen.findByRole("heading", { name: "Catalog" })).toBeInTheDocument();
   });
 
-  // The preview is the only confirmation that a pasted link was recognized, so
-  // what it recognizes has to be what the server recognizes — and the two
-  // disagreeing is silent both ways round. Every shape here is one
-  // `parseYouTubeURL` accepts, so a dark preview would be the field refusing a
-  // link the save would have taken. The uppercased host is the one the server's
-  // own comment records arriving, and the two extra hosts are on its list while
-  // being the ones a host check is likeliest to drop.
-  it.each([
-    { what: "a watch link", pasted: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
-    { what: "an uppercased host", pasted: "https://WWW.YOUTUBE.COM/watch?v=dQw4w9WgXcQ" },
-    { what: "a privacy-enhanced embed link", pasted: "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" },
-    { what: "the mobile host", pasted: "https://m.youtube.com/watch?v=dQw4w9WgXcQ" },
-    { what: "the music host", pasted: "https://music.youtube.com/watch?v=dQw4w9WgXcQ" },
-    { what: "a shorts link", pasted: "https://www.youtube.com/shorts/dQw4w9WgXcQ" },
-    { what: "a short link with tracking on it", pasted: "https://youtu.be/dQw4w9WgXcQ?si=abc123" },
-    { what: "a scheme-less short link", pasted: "youtu.be/dQw4w9WgXcQ" },
-    { what: "a protocol-relative short link", pasted: "//youtu.be/dQw4w9WgXcQ" },
-    { what: "a bare id", pasted: "dQw4w9WgXcQ" },
-  ])("previews $what", async ({ pasted }) => {
+  // Which shapes are recognized is `extractVideoId`'s own spec, in
+  // `lib/youtube.test.ts` — what these two pin is that a recording's link field
+  // is wired to it at all, in both directions. A field wired to nothing passes
+  // every shape spec in that file and previews neither of these.
+  it("previews a recognized link on a recording", async () => {
     renderEditor({ route: "/songs/new" });
 
-    await userEvent.type(await screen.findByLabelText("YouTube link"), pasted);
+    await userEvent.click(await screen.findByRole("button", { name: /add recording/i }));
+    await userEvent.type(
+      screen.getByLabelText("YouTube link"),
+      "https://youtu.be/dQw4w9WgXcQ?si=abc123",
+    );
 
     expect(screen.getByRole("link", { name: /watch on youtube/i })).toHaveAttribute(
       "href",
@@ -155,22 +146,168 @@ describe("SongEditorPage", () => {
     );
   });
 
-  // The other direction, and the one a pattern matched against the raw text got
-  // wrong: the id in the first two is real, so the preview was a working link to
-  // it — telling the contributor the field was happy while the save answers "Not
-  // a recognizable YouTube link." Which is why this reads the host as a host.
-  it.each([
-    {
-      what: "a YouTube link carried inside another site's URL",
-      pasted: "https://example.com/r?u=https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    },
-    { what: "a host that merely ends in the right one", pasted: "https://notyoutube.com/watch?v=dQw4w9WgXcQ" },
-    { what: "a playlist rather than a video", pasted: "https://www.youtube.com/playlist?list=PLdQw4w9WgXcQ" },
-  ])("shows no preview for $what", async ({ pasted }) => {
+  it("shows no preview for a link the server would refuse", async () => {
     renderEditor({ route: "/songs/new" });
 
-    await userEvent.type(await screen.findByLabelText("YouTube link"), pasted);
+    await userEvent.click(await screen.findByRole("button", { name: /add recording/i }));
+    await userEvent.type(
+      screen.getByLabelText("YouTube link"),
+      "https://www.youtube.com/playlist?list=PLdQw4w9WgXcQ",
+    );
 
     expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
+  });
+
+  // The payload was untested before recordings existed, and it is where every
+  // save-time rule lives: blank rows dropped, positions derived from the array,
+  // a person named by id or by name but never both — and, now, the absence of
+  // the two fields that moved onto recordings.
+  it("sends recordings, dropping blank rows and deriving positions", async () => {
+    let body: SongInput | undefined;
+    server.use(
+      http.post(`${API}/api/v1/songs`, async ({ request }) => {
+        body = (await request.json()) as SongInput;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+    renderEditor({ route: "/songs/new" });
+
+    await userEvent.type(await screen.findByLabelText("Title"), "Καινούριο");
+
+    // One recording worth keeping, and one abandoned empty row after it.
+    await userEvent.click(screen.getByRole("button", { name: /add recording/i }));
+    await userEvent.type(screen.getByLabelText("Year"), "1964");
+    await userEvent.click(screen.getByRole("button", { name: /add performer/i }));
+    await userEvent.type(screen.getByPlaceholderText("Name"), "Γιώργος Νταλάρας");
+    await userEvent.click(
+      screen.getByLabelText("Mark recording 1 as the first recording"),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /add recording/i }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Add song" }));
+
+    await vi.waitFor(() => expect(body).toBeDefined());
+    expect(body?.recordings).toEqual([
+      {
+        label: null,
+        youtube_url: null,
+        release_year: 1964,
+        notes: null,
+        is_first: true,
+        position: 0,
+        performers: [{ name: "Γιώργος Νταλάρας", position: 0 }],
+      },
+    ]);
+    // The link and the year are the recording's now. Sent at the top level they
+    // are a 400, so their absence here is part of the contract rather than tidy.
+    expect(body).not.toHaveProperty("youtube_url");
+    expect(body).not.toHaveProperty("release_year");
+  });
+
+  // At most one recording may claim to be the first — the database enforces it
+  // with a unique index — so the control is a radio group and marking a second
+  // has to unmark the first rather than produce a payload the server refuses.
+  it("lets only one recording be marked as the first", async () => {
+    let body: SongInput | undefined;
+    server.use(
+      http.post(`${API}/api/v1/songs`, async ({ request }) => {
+        body = (await request.json()) as SongInput;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+    renderEditor({ route: "/songs/new" });
+
+    await userEvent.type(await screen.findByLabelText("Title"), "Δύο Εκτελέσεις");
+    for (const year of ["1964", "1988"]) {
+      await userEvent.click(screen.getByRole("button", { name: /add recording/i }));
+      const years = screen.getAllByLabelText("Year");
+      await userEvent.type(years[years.length - 1]!, year);
+    }
+
+    await userEvent.click(screen.getByLabelText("Mark recording 1 as the first recording"));
+    await userEvent.click(screen.getByLabelText("Mark recording 2 as the first recording"));
+    await userEvent.click(screen.getByRole("button", { name: "Add song" }));
+
+    await vi.waitFor(() => expect(body).toBeDefined());
+    expect(body!.recordings.map((recording) => recording.is_first)).toEqual([false, true]);
+  });
+
+  // All-false is a state the data really holds: the mark is a claim about
+  // history, and a contributor who cannot make it has to be able to say so. A
+  // radio group cannot be cleared by pressing a member again, hence the extra
+  // option.
+  it("can leave every recording unmarked", async () => {
+    let body: SongInput | undefined;
+    server.use(
+      http.post(`${API}/api/v1/songs`, async ({ request }) => {
+        body = (await request.json()) as SongInput;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+    renderEditor({ route: "/songs/new" });
+
+    await userEvent.type(await screen.findByLabelText("Title"), "Άγνωστη Πρώτη");
+    await userEvent.click(screen.getByRole("button", { name: /add recording/i }));
+    await userEvent.type(screen.getByLabelText("Year"), "1964");
+
+    await userEvent.click(screen.getByLabelText("Mark recording 1 as the first recording"));
+    await userEvent.click(screen.getByLabelText("No recording marked as first"));
+    await userEvent.click(screen.getByRole("button", { name: "Add song" }));
+
+    await vi.waitFor(() => expect(body).toBeDefined());
+    expect(body!.recordings[0]!.is_first).toBe(false);
+  });
+
+  // A stored link this app cannot parse is a real thing — the importer kept
+  // whatever it was given — and the server carries such a value through a save
+  // that resends it unchanged. So the field must hydrate it verbatim and send it
+  // back untouched, with the preview simply staying dark: the preview is
+  // confirmation, never a gate.
+  it("round-trips a stored link it cannot parse", async () => {
+    const stored = "https://youtube.com/watch?feature=share";
+    let body: SongInput | undefined;
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(
+          makeSong({
+            recordings: [makeRecording({ youtube_url: stored, youtube_video_id: null })],
+          }),
+        ),
+      ),
+      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
+        body = (await request.json()) as SongInput;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+    renderEditor({ route: "/songs/song-1/edit" });
+
+    expect(await screen.findByLabelText("YouTube link")).toHaveValue(stored);
+    expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
+
+    await save();
+
+    await vi.waitFor(() => expect(body).toBeDefined());
+    expect(body!.recordings[0]!.youtube_url).toBe(stored);
+  });
+
+  // The hydration gate is keyed on the song's id, not on the object: react-query
+  // hands back a fresh one on every refetch, and an effect that re-ran then
+  // would overwrite a recording being edited and reset the unsaved-changes
+  // guard with it.
+  it("keeps an edited recording through a refetch", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(makeSong({ recordings: [makeRecording()] })),
+      ),
+      savesTheSong,
+    );
+    const { queryClient } = renderEditor({ route: "/songs/song-1/edit" });
+
+    const label = await screen.findByLabelText("Label");
+    await userEvent.type(label, "Live στο Λυκαβηττό");
+
+    await queryClient.refetchQueries({ queryKey: ["song"] });
+
+    expect(screen.getByLabelText("Label")).toHaveValue("Live στο Λυκαβηττό");
   });
 });
