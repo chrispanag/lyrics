@@ -26,8 +26,19 @@ type Server struct {
 	prelude prelude.Client
 	authn   *auth.Authenticator
 
-	// registerLimiter throttles the one unauthenticated write endpoint.
+	// registerLimiter throttles registration, keyed on the caller's address.
+	// Unauthenticated traffic carries no identity to key on, so the address is
+	// all there is — with the caveats clientIP documents.
 	registerLimiter *rateLimiter
+	// avatarLimiter throttles picture uploads, keyed on the user's id.
+	//
+	// The route is authenticated, so the id is available and is the better key
+	// in both directions: it is proven by the token, where an address is
+	// whatever the network says — an office behind one NAT shares a bucket, and
+	// the address is also the part of a request a determined caller can vary,
+	// which buys a fresh bucket per attempt. Keying on the account being
+	// charged for the work is exact.
+	avatarLimiter *rateLimiter
 }
 
 // NewServer wires the HTTP layer.
@@ -37,10 +48,19 @@ func NewServer(cfg config.Config, st *store.Store, pc prelude.Client, authn *aut
 		store:   st,
 		prelude: pc,
 		authn:   authn,
-		// Registration costs two upstream calls and creates permanent state, so
-		// it is the one endpoint worth rate limiting: 5 attempts per IP per
-		// minute is far above honest use and far below useful abuse.
+		// Registration costs two upstream calls and creates permanent state: 5
+		// attempts per IP per minute is far above honest use and far below
+		// useful abuse.
 		registerLimiter: newRateLimiter(5, time.Minute),
+		// An upload decodes an image and re-encodes a JPEG, which is the most
+		// CPU and allocation any single request in this API asks for, and a
+		// signed-in account can ask for it in a loop. 10 per minute leaves room
+		// for someone re-cropping a photo they are not happy with — honest use
+		// is a handful of pictures in the lifetime of an account — while
+		// bounding one account to ten decodes a minute, which is no use to
+		// anybody trying to spend the server's CPU. Spreading the attempt over
+		// more accounts runs into registerLimiter instead.
+		avatarLimiter: newRateLimiter(10, time.Minute),
 	}
 }
 

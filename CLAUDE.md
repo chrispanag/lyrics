@@ -344,6 +344,20 @@ inventory this file records going stale under Head assets.)
   downstream of the decode could refuse it. Pinned with a hand-built 33-byte
   header, `testutil.PNGHeader`, which is a decompression bomb with no pixels in
   it at all.
+- **`POST /me/avatar` is rate limited on the caller's *user id*, not on their
+  address.** A decode and a re-encode is the most any single request in this API
+  costs, and a signed-in account can ask for it in a loop as fast as the server
+  answers — one request at a time, so nothing about the traffic looks like an
+  attack. The route is authenticated, which is what makes the better key
+  available: the id is proven by the token, where an address is whatever the
+  network says — an office behind one NAT would share a bucket and be throttled
+  together, and the address is also the part of a request a caller can vary to
+  buy a fresh one. `DELETE` is deliberately outside the limit, being a row
+  delete with no image work behind it, and somebody refused an upload must still
+  be able to take down the picture they have. Pinned by
+  `TestProfilePictureUploadsAreRateLimited`, which asserts the *route* — the
+  counter itself is unit tested — and asserts a second account is unaffected,
+  since sharing a bucket is the failure the key choice exists to prevent.
 - **The upload is cropped and re-encoded rather than stored.** Re-encoding is
   what strips EXIF — a photo from a phone carries the GPS coordinates where it
   was taken, which nobody choosing an avatar is thinking about — and it makes the
