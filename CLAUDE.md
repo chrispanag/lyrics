@@ -155,6 +155,107 @@ of the song, and the parts below are what hold that split up.
   `parseYouTubeURL` that its own doc describes — a copy per call site would be a
   copy per call site to keep in step with the server.
 
+### Song addresses
+
+A song is addressed by `songs.slug` — `/songs/to-tragoydi-tis-agapis` — and the
+UUID form still resolves, permanently. Migration 000010 added the column, and the
+parts below are what hold it up — none of which announces itself when broken.
+(Deliberately not counted, for the reason Profile pictures gives: a number in
+prose is this file's inventory going stale.)
+
+- **The slug is written by a `BEFORE INSERT` trigger and by nothing else, and
+  never on `UPDATE`.** That is what makes "frozen through a retitle" structural
+  rather than a rule each writer has to remember — the promise `UpdateGenre`
+  keeps by hand for a genre's slug, kept here by there being no
+  `UPDATE songs SET slug` to forget. `CreateSong`, `UpdateSong` and the
+  importer's own `INSERT` therefore needed no change at all, the importer
+  included, and it bypasses the store. The one thing the trigger honors is a
+  slug that arrived with the row: that is a restored dump, and recomputing would
+  break the links the dump exists to preserve. Nothing in the API can reach that
+  path — neither `SongInput` nor `songRequest` has the field, and `DecodeJSON`
+  refuses unknown ones.
+- **`app_slugify` (SQL) is a deliberate mirror of `store.Slugify` (Go)**, like
+  `app_norm` against the `app_simple` configuration and `extractVideoId` against
+  `parseYouTubeURL`. It exists because the backfill has to run inside the
+  migration, and because Greek transliterates rather than folds: without the map
+  "Έντεχνο" strips to "Εντεχνο" and slugifies to nothing, so most of this catalog
+  would have no address. `TestSongSlugMatchesSlugify` runs inputs through both
+  and asserts they agree — it compares the two implementations rather than
+  either against expected strings, so the table only has to cover where they
+  could diverge. One class of divergence is known and left open: `unaccent`
+  expands a few Latin characters that Go only strips, so "Straße" is `strasse`
+  in SQL and `stra-e` in Go. Nothing in this catalog reaches it, and it is
+  deliberately not in the table — adding a case without reconciling the two
+  turns the suite red, and reconciling means either chasing `unaccent.rules`
+  from Go or changing how a *genre's* slug is derived, which is a decision of
+  its own.
+- **Two slugs are refused, for reasons that have nothing to do with how they
+  read.** `new` is the editor's own address and both routers rank a static
+  segment above a dynamic one, so a song slugged `new` would be permanently
+  unreachable with its URL opening a blank editor. And a UUID-shaped slug would
+  be shadowed by the resolver, which parses a UUID before it tries a slug — the
+  CHECK regex happily accepts one. That is **two** spellings and not one, since
+  `uuid.Parse` also takes the 32 hex digits with the dashes left out, which is
+  the form a reservation written from the canonical one misses and the form a
+  title could actually produce, needing no punctuation to survive slugification.
+  Both are suffixed instead, which is also what
+  a collision gets: titles are not unique here and were never meant to be (the
+  importer counts seven groups sharing one), so `-2` is the ordinary case rather
+  than an edge one. A title that slugifies to nothing at all gets `song`.
+  Concurrent inserts of one title would otherwise both read the same free suffix
+  and one would lose on the unique index — reported as "Song already exists.",
+  wrong advice for two songs legitimately sharing a title — so the trigger takes
+  a transaction-scoped advisory lock on the base slug.
+- **The backfill and the trigger call one function, and it can only be written
+  a row at a time.** The set-wise form is the one that suggests itself and is
+  wrong: numbering within a title's own group hands `o-chorismos` and
+  `o-chorismos-2` to two songs called "Ο χωρισμός" and then hands
+  `o-chorismos-2` to a song called "Ο χωρισμός 2" as its *unsuffixed* base. What
+  that costs is not a bad address but a migration that will not apply —
+  `CREATE UNIQUE INDEX` aborts on a catalog that looks perfectly ordinary, and
+  the deploy stops with the version marked dirty. `app_song_free_slug` asks the
+  table for each row in turn, which is the only form that cannot do it, and
+  being one function is what keeps the two paths from drifting apart again.
+  `songs_set_updated_at` is switched off around the backfill for a smaller
+  reason with no second chance either: every song is written, so left on, the
+  migration stamps the whole catalog with the moment it ran.
+- **An unknown address is 404, not 400.** `urlUUID` answered 400 because a
+  segment that did not parse could only be a malformed identifier; once a slug is
+  a legal address it means "no such song", and nothing can tell a mistyped slug
+  from a deleted one. **Two resolvers, and which one a handler takes is a real
+  choice**: `songRef` returns the song, for `GET` and `PATCH`, which need the
+  record anyway; `songID` returns the identity and nothing else, for the
+  handlers that only ever read `.ID` — `handleDeleteSong`,
+  `handleListsContainingSong`, and the two ways a song moves in and out of a
+  list. Reaching those through `songRef` costs the lyrics body plus
+  the four queries `attachRelations` runs, thrown away to keep sixteen bytes.
+  `songID` also returns a well-formed UUID *unlooked-up*, which is what keeps
+  those handlers answering as they always did — their own store calls map a
+  missing row onto `ErrNotFound`, and asking first would turn
+  `GET /songs/{unknown-uuid}/lists` from the empty list it has always answered
+  into a 404. **Every route whose path names a song has to take both forms**, and
+  the two under `/lists/{id}/songs/{songID}` are the ones that were missed the
+  first time: they kept `urlUUID` while the app started sending slugs, so saving
+  a song to a list answered 400 on every address the app itself builds. Nothing
+  structural prevents that — no type separates a ref from an id — so
+  `TestASongAnswersAtItsSlugAndItsID` is what stands in for it, and the subtest
+  that walks a song in and out of a list is the half that catches it.
+- **The frontend asks `songMatchesRef`, never `song.slug === ref`.** An old
+  `/songs/<uuid>?list=<id>` link still resolves, is still shared, and **nothing
+  canonicalizes it** — there is no redirect from the id form to the slug, on a
+  document load or anywhere else. `listPosition` matching the slug alone
+  therefore leaves every reader holding an old link on a song page with no list
+  bar, no swipe and no arrow keys, and nothing saying why. `SongSearch`'s "is
+  this the song already open" test has the same shape, where getting it wrong
+  pushes the duplicate history entry that test exists to
+  prevent. `lib/listContext.ts` owns the address in **both** directions —
+  `songHref` builds one and `songRefFromPath` reads one — because a pathname
+  parsed anywhere else is `/songs/` written in a second place, and only the first
+  gets found when it changes. `useUpdateSong` writes the fresh song under the ref
+  the URL held and only that one: a song has two addresses but a page asked
+  under one of them, nothing navigates between the forms in-app, and a second
+  entry would hold a whole song, lyrics included, that nothing ever reads.
+
 ### Genres
 
 - **`genres.name` is unique, and that index is the only thing holding it.** The
@@ -166,7 +267,13 @@ of the song, and the parts below are what hold that split up.
   filter, two identical options in the song editor, and no way to tell which
   songs are behind which. Folding stays with the slug, which is the folded
   identity already; the index only has to stop two rows displaying the same
-  string. Pinned by `TestRenamingGenreOntoAnotherIsRefused`.
+  string. Pinned by `TestRenamingGenreOntoAnotherIsRefused`. **`songs.slug` is
+  the same rule with a different enforcement**, and the difference is worth
+  knowing: a genre's slug is derived in Go, at each path that creates one, and
+  left alone by `UpdateGenre` because that function says so — a song's is derived
+  in SQL by a trigger that only runs on insert, so there is no update path to
+  leave anything alone. See "Song addresses" above for why that trade was taken;
+  it is the reason two entities in this schema slugify in two places.
 - **A rename or a delete has to unsettle four query keys, and the easy one to
   forget is `["list"]`.** A song carries its genres inside its own payload and
   `SongCard` renders them, so a renamed genre keeps its old name on every cached
@@ -1426,6 +1533,22 @@ no application code — but while it stands, these are the parts holding it up.
   shared database means one package truncates another's fixtures mid-test.
 - Override with `TEST_DATABASE_URL`. Tests skip (not fail) when nothing is
   reachable, which is why `make test-backend` starts the database first.
+- **A migration's backfill is run by no test, and the suite cannot see that it
+  is not.** Migrations run once per test binary against an empty database, so
+  every `UPDATE`/`INSERT … SELECT` that exists to fix up existing rows executes
+  over zero of them and reports green. Migration 000010 shipped a backfill that
+  aborted `CREATE UNIQUE INDEX` on perfectly ordinary data — two songs titled
+  "Ο χωρισμός" and one titled "Ο χωρισμός 2", where the second's suffixed slug is
+  the third's natural one — and nothing in the suite could have failed. The check
+  is manual and belongs in the PR that adds the backfill: migrate a scratch
+  database to the version *before* it, insert rows shaped like the ones in
+  production, then migrate up. Anything a backfill and a trigger both compute
+  must also come from one function, since the set-wise and row-wise forms of a
+  rule are exactly where they diverge.
+- **A migration edited after it has been applied does not re-run**, including
+  against `lyrics_test_<binary>`. So a fix to SQL already recorded in
+  `schema_migrations` passes against the old schema and says nothing; drop the
+  test databases (or `make reset`) before believing a green run.
 - **Token verification is tested against a locally generated key set** served by
   `httptest` (`testutil.TokenIssuer`) — the only way to produce expired,
   wrong-issuer, foreign-key and `alg: none` tokens on demand. `PRELUDE_JWKS_URL`

@@ -51,7 +51,7 @@ type SongFilter struct {
 // browse page several times over, and no screen that shows more than one song
 // renders them — search ships a ts_headline excerpt instead, which is the
 // point of having one.
-const songSummaryColumns = `s.id, s.title, s.alt_title, s.language, s.youtube_url,
+const songSummaryColumns = `s.id, s.title, s.slug, s.alt_title, s.language, s.youtube_url,
 	s.youtube_video_id, s.release_year, s.notes, s.created_by, s.updated_by,
 	s.created_at, s.updated_at`
 
@@ -71,7 +71,7 @@ const songColumns = songSummaryColumns + `, s.lyrics`
 // difference between the two an append at one end is what makes that structural
 // rather than a matter of reading both lists carefully.
 func songSummaryScanDest(s *Song) []any {
-	return []any{&s.ID, &s.Title, &s.AltTitle, &s.Language, &s.YouTubeURL,
+	return []any{&s.ID, &s.Title, &s.Slug, &s.AltTitle, &s.Language, &s.YouTubeURL,
 		&s.YouTubeVideoID, &s.ReleaseYear, &s.Notes, &s.CreatedBy, &s.UpdatedBy,
 		&s.CreatedAt, &s.UpdatedAt}
 }
@@ -581,9 +581,40 @@ func (s *Store) attachRecordings(
 
 // GetSong loads a single song with its credits, genres and recordings.
 func (s *Store) GetSong(ctx context.Context, id uuid.UUID) (*Song, error) {
+	return s.getSongWhere(ctx, "s.id = $1", id)
+}
+
+// GetSongBySlug is the same read by the song's address rather than its id.
+//
+// A sibling rather than one query matching either column: translateErr already
+// maps pgx.ErrNoRows onto ErrNotFound, so both forms answer 404 for free, and
+// keeping them apart is what lets the handler decide which one a path segment is
+// before it asks — which is the whole of the precedence rule.
+func (s *Store) GetSongBySlug(ctx context.Context, slug string) (*Song, error) {
+	return s.getSongWhere(ctx, "s.slug = $1", slug)
+}
+
+// SongIDBySlug resolves an address to the identity behind it, and nothing else.
+//
+// For the callers that want a song's id rather than the song: deleting it,
+// asking which of your lists hold it, and the two ways it moves in and out of
+// one. GetSongBySlug would answer them too, at
+// the cost of the whole row plus the four queries attachRelations runs — the
+// lyrics body and every credit, genre, recording and performer read, scanned and
+// thrown away to keep sixteen bytes.
+func (s *Store) SongIDBySlug(ctx context.Context, slug string) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := s.pool.QueryRow(ctx, `SELECT id FROM songs WHERE slug = $1`, slug).Scan(&id)
+	if err != nil {
+		return uuid.Nil, translateErr(err)
+	}
+	return id, nil
+}
+
+func (s *Store) getSongWhere(ctx context.Context, where string, arg any) (*Song, error) {
 	var song Song
-	query := "SELECT " + songColumns + " FROM songs s WHERE s.id = $1"
-	if err := scanSong(s.pool.QueryRow(ctx, query, id), &song); err != nil {
+	query := "SELECT " + songColumns + " FROM songs s WHERE " + where
+	if err := scanSong(s.pool.QueryRow(ctx, query, arg), &song); err != nil {
 		return nil, translateErr(err)
 	}
 

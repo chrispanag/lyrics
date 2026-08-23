@@ -85,6 +85,8 @@ describe("SongEditorPage", () => {
     renderEditor({ route: "/songs/song-1/edit" });
 
     await save();
+    // The address it came in on, verbatim — which is what deriving the fallback
+    // from the route parameter buys, rather than building one from the song.
     expect(await screen.findByText("Address: /songs/song-1")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
@@ -121,7 +123,10 @@ describe("SongEditorPage", () => {
     await userEvent.type(await screen.findByLabelText("Title"), "Καινούριο");
     await userEvent.click(screen.getByRole("button", { name: "Add song" }));
 
-    expect(await screen.findByText("Address: /songs/song-1")).toBeInTheDocument();
+    // The created song's *slug*, not its id: a reader is landed on an address,
+    // and the fixture keeps a song's two identifiers deliberately different so
+    // this cannot pass against code that confuses them.
+    expect(await screen.findByText("Address: /songs/thalassa-platia")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(await screen.findByRole("heading", { name: "Catalog" })).toBeInTheDocument();

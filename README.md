@@ -463,6 +463,16 @@ page several times over. A search hit carries a highlighted `snippet` instead.
 absent rather than empty, so a song with no lyrics recorded stays
 distinguishable from one whose body simply was not asked for.
 
+A song is addressed by its **slug** — `/songs/to-tragoydi-tis-agapis` — and every
+path segment naming a song accepts either that or the UUID, which is what links
+shared before slugs existed carry. That is `GET`, `PATCH` and `DELETE` on
+`/songs/{id}`, plus `/songs/{id}/lists` and the `{songID}` a list holds; the
+`{id}` of a list, a person or a genre is a UUID and only a UUID. The slug is
+derived from the title when the song is created and never recomputed, so
+correcting a title cannot move a bookmarked URL; it is read-only, absent from
+every write shape, and a payload naming it is refused along with any other
+unknown field.
+
 Every other relation is on every read, `recordings` included. A song has 0..n of
 them — one performance each, with its own performers, YouTube link, year, label
 and notes — and they arrive **already ordered, first recording first** (marked
@@ -483,7 +493,7 @@ GET    /songs            ?q=&person=&performer=&composer=&lyricist=&genre_slug=
                           &language=&year_from=&year_to=&sort=&limit=&offset=
                           (?artist= is kept as an alias of ?performer=; both
                            at once is a 400)
-GET    /songs/{id}
+GET    /songs/{id}                       by slug or by uuid
 GET    /people           ?q=&role=
 GET    /genres
 GET    /lists/{id}                       public lists, or your own

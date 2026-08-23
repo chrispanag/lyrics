@@ -18,6 +18,11 @@ export function makeSong(overrides: Partial<Song> = {}): Song {
   return {
     id: "song-1",
     title: "Θάλασσα Πλατιά",
+    // Deliberately not "song-1". A song has two identifiers and only one of them
+    // is its address; a fixture where they are the same string cannot tell the
+    // difference, so every spec would pass against code that confused them —
+    // which is exactly the mistake worth catching here.
+    slug: "thalassa-platia",
     alt_title: null,
     lyrics: "Στης θάλασσας τα βάθη\nη αγάπη μου κοιμάται",
     language: "el",

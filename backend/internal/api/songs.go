@@ -602,13 +602,9 @@ func queryInt(q url.Values, name string) (*int, error) {
 }
 
 func (s *Server) handleGetSong(w http.ResponseWriter, r *http.Request) error {
-	id, err := urlUUID(r, "id")
+	song, err := s.songRef(r, "id")
 	if err != nil {
 		return err
-	}
-	song, err := s.store.GetSong(r.Context(), id)
-	if err != nil {
-		return storeError(err, "Song")
 	}
 	httpx.JSON(w, http.StatusOK, song)
 	return nil
@@ -636,16 +632,13 @@ func (s *Server) handleCreateSong(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *Server) handleUpdateSong(w http.ResponseWriter, r *http.Request) error {
-	id, err := urlUUID(r, "id")
-	if err != nil {
-		return err
-	}
-
 	// The whole song is loaded rather than just its owner: the patch is overlaid
 	// on it, so every field the caller omitted keeps the value it already had.
-	existing, err := s.store.GetSong(r.Context(), id)
+	// It is also what resolves the address — the write below goes by existing.ID,
+	// since a slug is not what the store updates by.
+	existing, err := s.songRef(r, "id")
 	if err != nil {
-		return storeError(err, "Song")
+		return err
 	}
 
 	user := auth.MustFromContext(r.Context())
@@ -662,7 +655,7 @@ func (s *Server) handleUpdateSong(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
-	song, err := s.store.UpdateSong(r.Context(), id, input, user.ID)
+	song, err := s.store.UpdateSong(r.Context(), existing.ID, input, user.ID)
 	if err != nil {
 		return storeError(err, "Song")
 	}
@@ -672,7 +665,7 @@ func (s *Server) handleUpdateSong(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *Server) handleDeleteSong(w http.ResponseWriter, r *http.Request) error {
-	id, err := urlUUID(r, "id")
+	id, err := s.songID(r, "id")
 	if err != nil {
 		return err
 	}

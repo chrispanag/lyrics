@@ -19,6 +19,7 @@ import {
   notFound,
 } from "@/test/handlers";
 import { intersectAll, observedElements } from "@/test/intersection";
+import { songMatchesRef } from "@/lib/listContext";
 import type { Recording } from "@/lib/types";
 import { renderWithProviders } from "@/test/render";
 import { scrollDown, setScrollY } from "@/test/scroll";
@@ -392,13 +393,20 @@ describe("SongDetailPage recordings", () => {
    */
   function servePagedList() {
     const songs = [
-      makeSong({ id: "song-2", title: "Θάλασσα Πλατιά", recordings: [makeRecording()] }),
-      makeSong({ id: "song-3", title: "Επόμενο", recordings: [makeRecording({ id: "r9" })] }),
+      makeSong({ id: "song-2", slug: "second", title: "Θάλασσα Πλατιά", recordings: [makeRecording()] }),
+      makeSong({
+        id: "song-3",
+        slug: "third",
+        title: "Επόμενο",
+        recordings: [makeRecording({ id: "r9" })],
+      }),
     ];
     server.use(
       listById(makeList({ id: "list-1", name: "Ρεμπέτικα", songs, item_count: songs.length })),
+      // By either identifier, as the API answers: a song is addressed by its
+      // slug, and by its id for every link written before slugs existed.
       http.get(`${API}/api/v1/songs/:id`, ({ params }) => {
-        const found = songs.find((song) => song.id === params.id);
+        const found = songs.find((song) => songMatchesRef(song, String(params.id)));
         return found ? HttpResponse.json(found) : notFound("Song was not found.");
       }),
     );
@@ -593,9 +601,9 @@ describe("SongDetailPage recordings", () => {
  */
 describe("SongDetailPage inside a list", () => {
   const inList = [
-    makeSong({ id: "song-1", title: "First" }),
-    makeSong({ id: "song-2", title: "Second" }),
-    makeSong({ id: "song-3", title: "Third" }),
+    makeSong({ id: "song-1", slug: "first", title: "First" }),
+    makeSong({ id: "song-2", slug: "second", title: "Second" }),
+    makeSong({ id: "song-3", slug: "third", title: "Third" }),
   ];
 
   /**
@@ -610,16 +618,26 @@ describe("SongDetailPage inside a list", () => {
     server.use(
       listById(makeList({ id: "list-1", name: "Ρεμπέτικα", songs, item_count: songs.length })),
       http.get(`${API}/api/v1/songs/:id`, ({ params }) => {
-        const found = inList.find((song) => song.id === params.id);
+        const found = inList.find((song) => songMatchesRef(song, String(params.id)));
         return found ? HttpResponse.json(found) : notFound("Song was not found.");
       }),
     );
   }
 
-  it("shows the list a song is being read from and where it sits in it", async () => {
+  // Asked of both addresses, because a song has two and a shared list link may
+  // hold either: the slug is what every link written from here on says, and the
+  // id is what the ones already out there say. `listPosition` finds the song by
+  // either, and if it ever stops doing so the failure is silent — the page
+  // renders perfectly and the list bar, the swipe and the arrow keys are simply
+  // not there. Parameterized rather than written twice so an assertion cannot be
+  // changed in one copy and not the other.
+  it.each([
+    ["by id", "/songs/song-2?list=list-1"],
+    ["by slug", "/songs/second?list=list-1"],
+  ])("shows the list a song is being read from and where it sits in it, %s", async (_, route) => {
     serveList();
 
-    renderDetail({ route: "/songs/song-2?list=list-1" });
+    renderDetail({ route });
 
     expect(await screen.findByRole("link", { name: "Ρεμπέτικα" })).toHaveAttribute(
       "href",
@@ -715,7 +733,7 @@ describe("SongDetailPage inside a list", () => {
     server.use(
       http.get(`${API}/api/v1/songs/:id`, async ({ params }) => {
         await held;
-        const found = inList.find((song) => song.id === params.id);
+        const found = inList.find((song) => songMatchesRef(song, String(params.id)));
         return found ? HttpResponse.json(found) : notFound("Song was not found.");
       }),
     );
@@ -742,7 +760,7 @@ describe("SongDetailPage inside a list", () => {
     server.use(
       http.get(`${API}/api/v1/songs/:id`, async ({ params }) => {
         await held;
-        const found = inList.find((song) => song.id === params.id);
+        const found = inList.find((song) => songMatchesRef(song, String(params.id)));
         return found ? HttpResponse.json(found) : notFound("Song was not found.");
       }),
     );

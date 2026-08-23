@@ -18,7 +18,7 @@ import { browseHref } from "@/lib/browse";
 import { cn } from "@/lib/cn";
 import { songByline } from "@/lib/credits";
 import { songCount } from "@/lib/format";
-import { songHref } from "@/lib/listContext";
+import { songHref, songMatchesRef, songRefFromPath } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
 import { useDebounced } from "@/lib/useDebounced";
 
@@ -128,12 +128,19 @@ export function SongSearch() {
    * address is a Back press that appears to do nothing, and inside a list it eats
    * one step of the trail. That is the failure the editor's own exit documents.
    *
+   * "Already open" is asked of the song rather than of the address, because the
+   * address in the bar may be either of a song's two: a `/songs/<uuid>` link
+   * shared before slugs existed still resolves, and comparing the built href
+   * against it would never match — so jumping to the song already on screen
+   * would push the duplicate entry this exists to avoid.
+   *
    * The address carries no list, deliberately — see `SongOption`.
    */
-  const step = (songId: string) => {
-    const href = songHref(songId);
-    return { href, replace: href === location.pathname };
-  };
+  const here = songRefFromPath(location.pathname);
+  const step = (song: Song) => ({
+    href: songHref(song),
+    replace: here !== null && songMatchesRef(song, here),
+  });
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Escape") {
@@ -184,7 +191,7 @@ export function SongSearch() {
       // reader cannot see from a panel they closed.
       const song = open ? activeSong ?? results[0] : undefined;
       if (song) {
-        const { href, replace } = step(song.id);
+        const { href, replace } = step(song);
         navigate(href, { replace });
       } else if (typed !== "") {
         navigate(browseHref({ q: typed }));
@@ -256,7 +263,7 @@ export function SongSearch() {
             className="max-h-[50vh] overflow-y-auto overscroll-contain py-1"
           >
             {results.map((song, index) => {
-              const { href, replace } = step(song.id);
+              const { href, replace } = step(song);
               return (
                 <SongOption
                   key={song.id}

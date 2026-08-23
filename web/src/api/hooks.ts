@@ -223,6 +223,11 @@ export function useUpdateSong(id: string) {
     mutationFn: (input: SongInput) =>
       apiFetch<Song>(`/api/v1/songs/${id}`, { method: "PATCH", body: input }),
     onSuccess: (song) => {
+      // Keyed on the ref the URL held, which is what `useSong` keyed on — a song
+      // answers at two addresses, but only one of them is ever the one this page
+      // asked under, and nothing navigates between the two forms in-app. Writing
+      // the other as well would leave a second entry holding a whole song, lyrics
+      // included, that nothing ever reads.
       queryClient.setQueryData(keys.song(id), song);
       return invalidateSongs(queryClient);
     },

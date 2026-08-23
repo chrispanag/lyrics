@@ -203,6 +203,54 @@ func urlUUID(r *http.Request, name string) (uuid.UUID, error) {
 	return id, nil
 }
 
+// songRef loads the song a {id} path segment names, by slug or by UUID.
+//
+// A song is addressed by its slug now, and every link written before this
+// existed addresses it by its id — so both have to resolve, forever. The UUID
+// parse decides which lookup to make, and it is safe as the first question
+// because migration 000010's trigger refuses to mint a UUID-shaped slug: there
+// is no song whose address a well-formed id could shadow.
+//
+// Unlike urlUUID this cannot answer 400. Once a slug is a legal address, a path
+// segment that resolves to nothing means "no such song" rather than "that is not
+// an identifier", and the caller has no way to tell a typo'd slug from a deleted
+// one anyway.
+func (s *Server) songRef(r *http.Request, name string) (*store.Song, error) {
+	raw := chi.URLParam(r, name)
+	if id, err := uuid.Parse(raw); err == nil {
+		song, err := s.store.GetSong(r.Context(), id)
+		return song, storeError(err, "Song")
+	}
+	song, err := s.store.GetSongBySlug(r.Context(), raw)
+	return song, storeError(err, "Song")
+}
+
+// songID is the same resolution for the handlers that want the identity behind
+// an address rather than the song at it.
+//
+// Every route whose path names a song has to take both forms, but most of them
+// only need the id: handleDeleteSong, handleListsContainingSong, and the two
+// ways a song moves in and out of a list. Reaching those through songRef costs
+// the whole row plus the four queries attachRelations runs, all to read `.ID` —
+// so they come through here instead, and a UUID segment costs no query at all.
+//
+// A well-formed UUID is returned unlooked-up on purpose, which is what keeps
+// these handlers answering exactly as they did before slugs existed: their own
+// store calls already map a missing row onto ErrNotFound, and asking first would
+// turn `GET /songs/{unknown-uuid}/lists` from the empty list it has always
+// answered into a 404.
+func (s *Server) songID(r *http.Request, name string) (uuid.UUID, error) {
+	raw := chi.URLParam(r, name)
+	if id, err := uuid.Parse(raw); err == nil {
+		return id, nil
+	}
+	id, err := s.store.SongIDBySlug(r.Context(), raw)
+	if err != nil {
+		return uuid.Nil, storeError(err, "Song")
+	}
+	return id, nil
+}
+
 // queryUUID reads an optional UUID query parameter from an already-parsed query.
 func queryUUID(q url.Values, name string) (*uuid.UUID, error) {
 	raw := q.Get(name)
