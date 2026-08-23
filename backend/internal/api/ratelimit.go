@@ -13,16 +13,21 @@ import (
 //
 // In-memory and therefore per-process: with more than one API replica the
 // effective limit multiplies by the replica count. That is acceptable for the
-// single endpoint using it — the goal is to blunt scripted abuse of
-// registration, not to enforce an exact quota — but a shared store would be
-// needed before relying on it for anything stricter.
+// endpoints using it — the goal is to blunt scripted abuse, not to enforce an
+// exact quota — but a shared store would be needed before relying on it for
+// anything stricter.
+//
+// A key is whatever identifies the caller of the endpoint being limited: the
+// address for an unauthenticated one, the user's id where the route has already
+// proven who is asking. Each limiter keeps its own buckets, so the two never
+// share a counter.
 type rateLimiter struct {
 	mu      sync.Mutex
 	limit   int
 	window  time.Duration
 	buckets map[string]*bucket
-	// lastSweep bounds map growth: without eviction, every distinct client IP
-	// would be retained for the process lifetime.
+	// lastSweep bounds map growth: without eviction, every distinct key ever
+	// seen would be retained for the process lifetime.
 	lastSweep time.Time
 }
 

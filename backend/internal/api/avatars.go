@@ -21,6 +21,15 @@ import (
 const avatarCacheControl = "public, max-age=31536000, immutable"
 
 func (s *Server) handleUploadAvatar(w http.ResponseWriter, r *http.Request) error {
+	user := auth.MustFromContext(r.Context())
+
+	// Asked before a byte of the body is read, so a refused upload costs
+	// neither the megabyte's read nor the decode behind it. Only this route:
+	// the removal below is a row delete, with no image work to loop over.
+	if !s.avatarLimiter.allow(user.ID.String()) {
+		return httpx.RateLimited("Too many picture uploads. Please try again shortly.")
+	}
+
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, imaging.MaxBytes))
 	if err != nil {
 		var maxErr *http.MaxBytesError
@@ -42,7 +51,6 @@ func (s *Server) handleUploadAvatar(w http.ResponseWriter, r *http.Request) erro
 		return avatarError(err)
 	}
 
-	user := auth.MustFromContext(r.Context())
 	updated, err := s.store.SetAvatar(r.Context(), user.ID, contentType, normalized)
 	if err != nil {
 		return storeError(err, "Account")

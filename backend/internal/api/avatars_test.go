@@ -160,3 +160,47 @@ func TestProfilePictureRefusals(t *testing.T) {
 		}
 	})
 }
+
+// What this pins is the route, not the limiter — the counter has its own unit
+// tests, and the finding was that nothing was mounted in front of the one
+// handler that decodes an image. So it drives the endpoint, and from both sides
+// of the key: one account has to run out, and the account beside it must be
+// carrying none of that. Keyed on the caller's address instead, these two share
+// a bucket here exactly as an office behind one NAT would in production, and the
+// bystander is refused for something the first account did.
+func TestProfilePictureUploadsAreRateLimited(t *testing.T) {
+	h := newHarness(t)
+	token := h.tokenFor("picture.flood@example.com", store.RoleUser)
+	// Small on purpose: what is being counted is requests, and every one of
+	// them is decoded and re-encoded for real.
+	image := testutil.SolidPNG(t, 16, 16, testutil.Opaque)
+
+	first := h.doRaw("POST", "/api/v1/me/avatar", token, "image/png", image)
+	if first.StatusCode != http.StatusOK {
+		t.Fatalf("first upload = %d, want 200 — a 429 below has to be the limiter and nothing else", first.StatusCode)
+	}
+
+	var limited bool
+	for range 15 {
+		resp := h.doRaw("POST", "/api/v1/me/avatar", token, "image/png", image)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Error("uploading in a loop must start being refused: a decode and a re-encode is the most any single request in this API costs")
+	}
+
+	// Removal is deliberately outside the limit — a row delete with no image
+	// work behind it — and somebody who has just been refused an upload must
+	// still be able to take down the picture they have.
+	if removed := h.do("DELETE", "/api/v1/me/avatar", token, nil); removed.StatusCode != http.StatusOK {
+		t.Errorf("removal while uploads are limited = %d, want 200", removed.StatusCode)
+	}
+
+	other := h.tokenFor("picture.bystander@example.com", store.RoleUser)
+	if resp := h.doRaw("POST", "/api/v1/me/avatar", other, "image/png", image); resp.StatusCode != http.StatusOK {
+		t.Errorf("another account's first upload = %d, want 200 — one account's flood must not spend anyone else's limit", resp.StatusCode)
+	}
+}
