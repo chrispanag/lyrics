@@ -299,10 +299,14 @@ export function SongEditorPage() {
               <Button
                 type="button"
                 variant="ghost"
-                size="md"
+                // Nothing but an icon, so the size states that rather than a
+                // `px-2` fighting the one `md` brings: `cn` is a plain join, so
+                // both paddings stayed in the class list and the width of this
+                // button was whichever Tailwind emitted last.
+                size="icon"
                 aria-label={`Remove credit ${index + 1}`}
                 onClick={() => track(setCredits)(credits.filter((_, i) => i !== index))}
-                className="shrink-0 px-2"
+                className="shrink-0"
               >
                 <Trash2 aria-hidden className="size-4 text-red-600" />
               </Button>

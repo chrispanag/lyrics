@@ -228,6 +228,30 @@ describe("BrowsePage artist filter", () => {
   });
 });
 
+/*
+ * The filter button shares its row with the search field, so its width is the
+ * field's width. Written as text beside the icon, the count made the button
+ * wider and the field narrower — so applying a filter resized the search box in
+ * place, which is the same movement opening a song used to cause. The count is
+ * a badge over a square button now, and the size is a `ButtonSize` rather than
+ * a `px-*` a caller passes in, since `cn` is a plain join and the winner of two
+ * paddings is whichever Tailwind emitted last.
+ */
+describe("BrowsePage filter button", () => {
+  it("keeps its size, and its count, while a filter is active", async () => {
+    renderWithProviders(<BrowsePage />, { route: "/?genre_slug=rok&language=el" });
+
+    const button = await screen.findByRole("button", { name: /filters/i });
+
+    // `size="icon"` is unconditional, so one direction is enough to say the
+    // count is no longer part of the button's width.
+    expect(button).toHaveClass("size-11");
+    // An aria-label replaces the content it labels, so the badge inside the
+    // button is announced by nobody unless the name carries the number.
+    expect(button).toHaveAccessibleName("Filters (2 active)");
+  });
+});
+
 // A genre can be deleted from the admin console while a reader holds a link
 // filtered by it. The songs request still answers — with nothing, since the
 // filter is an EXISTS on a slug that now matches nothing — so a chip rendered
