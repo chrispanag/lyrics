@@ -44,29 +44,12 @@ func (o *optionalString) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// optionalInt is the integer counterpart of optionalString. Unlike a bool, nil
-// is meaningful for the columns behind it — a song with no known release year —
-// so an explicit null clears rather than being ignored.
-type optionalInt struct {
-	Set   bool
-	Value *int
-}
-
-func (o *optionalInt) UnmarshalJSON(data []byte) error {
-	o.Set = true
-
-	if string(data) == "null" {
-		o.Value = nil
-		return nil
-	}
-
-	var v int
-	if err := json.Unmarshal(data, &v); err != nil {
-		return err
-	}
-	o.Value = &v
-	return nil
-}
+// There was an optionalInt here, and its one field was a song's release year.
+// The year belongs to a recording now, and a recording is written whole — the
+// collection idiom, where nil means absent and `[]` means "remove them all" —
+// so no integer on a PATCH is nullable any more. Bring it back for the next one
+// rather than reaching for a plain *int: the distinction it drew is real, and an
+// explicit null has to be able to clear a value the schema allows to be NULL.
 
 // optionalBool is the boolean counterpart of optionalString.
 type optionalBool struct {

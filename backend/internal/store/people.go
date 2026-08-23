@@ -11,16 +11,31 @@ import (
 
 // PersonFilter narrows a people listing.
 type PersonFilter struct {
-	Query  string
-	Role   CreditRole // restrict to people credited in this capacity
-	Limit  int
-	Offset int
+	Query string
+	Role  CreditRole // restrict to people credited in this capacity
+	// Performs restricts to people who performed on a recording. It is a flag
+	// rather than another Role because performing is not a credit role any
+	// more — recording_credits has no role column to match on.
+	Performs bool
+	Limit    int
+	Offset   int
 }
 
 // personColumns is the projection shared by every person read. The credited-song
 // count is part of it so the two readers cannot disagree about how it is counted.
+//
+// Both ways of being attached to a song count, and each song counts once: a
+// person who wrote a song and also performed it is on one song. Counting
+// song_credits alone would report 0 for a singer who has never written anything,
+// which after 000009 is most of them.
 const personColumns = `p.id, p.name, p.created_at, p.updated_at,
-	(SELECT count(DISTINCT sc.song_id) FROM song_credits sc WHERE sc.person_id = p.id)`
+	(SELECT count(*) FROM (
+		SELECT sc.song_id FROM song_credits sc WHERE sc.person_id = p.id
+		UNION
+		SELECT r.song_id FROM recording_credits rc
+		JOIN recordings r ON r.id = rc.recording_id
+		WHERE rc.person_id = p.id
+	) AS credited)`
 
 // scanPerson reads the personColumns projection in order.
 func scanPerson(row pgx.Row, p *Person) error {
@@ -55,6 +70,10 @@ func (s *Store) ListPeople(ctx context.Context, f PersonFilter) ([]Person, int, 
 		conds = append(conds, fmt.Sprintf(
 			"EXISTS (SELECT 1 FROM song_credits sc WHERE sc.person_id = p.id AND sc.role = %s)",
 			a.next(string(f.Role))))
+	}
+	if f.Performs {
+		conds = append(conds,
+			"EXISTS (SELECT 1 FROM recording_credits rc WHERE rc.person_id = p.id)")
 	}
 	where := strings.Join(conds, " AND ")
 
@@ -135,14 +154,16 @@ func (s *Store) UpdatePerson(ctx context.Context, id uuid.UUID, name string) (*P
 	return &p, nil
 }
 
-// DeletePerson removes a person. The song_credits foreign key is ON DELETE
-// RESTRICT, so this fails while they are still credited — deleting them would
-// silently strip attribution from songs instead.
+// DeletePerson removes a person. Both foreign keys pointing at them are ON
+// DELETE RESTRICT, so this fails while they are still credited on a song or
+// still a performer on a recording — deleting them would silently strip
+// attribution instead.
 func (s *Store) DeletePerson(ctx context.Context, id uuid.UUID) error {
-	// song_credits.person_id is the only RESTRICT-ed reference in the schema, so
+	// The two references to people are the schema's only RESTRICT-ed ones, so
 	// people are the only rows this can actually fail on — but the ErrInUse
 	// mapping lives in execExpectingRow with the rest of the delete contract,
 	// rather than here, so callers ask a predicate instead of matching a
-	// constraint name out of the message text.
+	// constraint name out of the message text. Which is also why adding
+	// recording_credits needed nothing here: it raises the same violation.
 	return s.execExpectingRow(ctx, "delete person", `DELETE FROM people WHERE id = $1`, id)
 }

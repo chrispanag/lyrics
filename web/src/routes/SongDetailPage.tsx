@@ -23,24 +23,19 @@ import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongNavFooter, ListSongSwipe } from "@/components/ListSongNav";
 import { PageTitle } from "@/components/PageTitle";
+import { PersonLinks } from "@/components/PersonLinks";
 import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { buttonClasses } from "@/components/buttonStyles";
 import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton } from "@/components/ui";
 import { browseHref } from "@/lib/browse";
-import { CREDIT_DISPLAY_ORDER } from "@/lib/credits";
+import { CREDIT_DISPLAY_LABELS, groupCredits } from "@/lib/credits";
 import { cn } from "@/lib/cn";
 import { LIST_PARAM, listPosition } from "@/lib/listContext";
-import { canEditSong, hasRole, type Credit, type CreditRole, type Song } from "@/lib/types";
+import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
-import { songCount } from "@/lib/format";
-
-const ROLE_LABELS: Record<CreditRole, string> = {
-  artist: "Artist",
-  composer: "Music",
-  lyricist: "Lyrics",
-  performer: "Performed by",
-};
+import { recordingCount, songCount } from "@/lib/format";
+import { RecordingsSheet } from "@/components/RecordingsSheet";
 
 /** Reader font sizes, persisted so the choice survives navigation. */
 const FONT_SIZES = ["text-base", "text-lg", "text-xl", "text-2xl"] as const;
@@ -112,6 +107,7 @@ function SongArticle() {
   const surface = useRef<HTMLElement>(null);
 
   const [listSheetOpen, setListSheetOpen] = useState(false);
+  const [recordingsOpen, setRecordingsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [fontSizeIndex, setFontSizeIndex] = useState(() => {
     // The absent-key case has to be caught before Number(): localStorage returns
@@ -257,24 +253,33 @@ function SongArticle() {
       )}
 
       {song ? (
-        <SongHeader song={song} />
+        <SongHeader song={song} onShowRecordings={() => setRecordingsOpen(true)} />
       ) : (
         // The header's own margins and rhythm, so the lyrics heading below —
         // which is a control, being where the text size is set — lands within a
         // pixel or two of where the song will put it: `mb-5` under the block and
-        // `mt-3` off the title, then the two credit lines and the one genre chip
-        // most songs carry. A song with more or fewer moves it, and there is
-        // nothing here that could know which; what the shape buys is that the
-        // common case does not.
+        // `mt-3` off the title, then the two credit lines, the recordings button
+        // `mt-2` under them and the one genre chip most songs carry. A song with
+        // more or fewer moves it, and there is nothing here that could know
+        // which; what the shape buys is that the common case does not.
+        //
+        // The button's `mt-2` needs the plain wrapper around it. `space-y-*`
+        // puts a `margin-block-end` on every child of the group but the last, so
+        // a button dropped straight in would have its 8px top margin collapse
+        // against the credits' 12px bottom one and lose — the class written and
+        // then ignored, the gap silently the group's rather than the button's.
         //
         // No `rounded-full` on the chip, tempting as it is: `cn` is a plain join,
         // so it would land beside Skeleton's own `rounded-lg` and CSS source
         // order, not this line, would pick the winner.
         <div className="mb-5 space-y-3">
           <Skeleton className="h-9 w-2/3" />
-          <div className="space-y-1">
-            <Skeleton className="h-5 w-1/2" />
-            <Skeleton className="h-5 w-1/3" />
+          <div>
+            <div className="space-y-1">
+              <Skeleton className="h-5 w-1/2" />
+              <Skeleton className="h-5 w-1/3" />
+            </div>
+            <Skeleton className="mt-2 h-5 w-36" />
           </div>
           <Skeleton className="h-6 w-20" />
         </div>
@@ -366,6 +371,15 @@ function SongArticle() {
       )}
 
       {song && (
+        <RecordingsSheet
+          recordings={song.recordings}
+          language={song.language}
+          open={recordingsOpen}
+          onClose={() => setRecordingsOpen(false)}
+        />
+      )}
+
+      {song && (
         <ConfirmSheet
           open={confirmDelete}
           onClose={() => {
@@ -397,7 +411,8 @@ function SongArticle() {
 }
 
 /**
- * A song's title, what it is called elsewhere, who made it, and its genres.
+ * A song's title, what it is called elsewhere, who made and performed it, its
+ * genres, and the way into the rest of its recordings.
  *
  * Its own component because it is the half of the page that has to wait for the
  * song: the shell above renders in every state, and this is what a skeleton
@@ -408,8 +423,20 @@ function SongArticle() {
  * heading — a control — as the song arrives, unless the block beside the call
  * site moves with it. Nothing catches that, jsdom laying nothing out.
  */
-function SongHeader({ song }: { song: Song }) {
+function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: () => void }) {
   const creditsByRole = groupCredits(song.credits);
+
+  // The performers come off the first recording, which the server has already
+  // sorted to the front. The year — and the video, below the lyrics — comes off
+  // the song's own copy of it, deliberately, and not as a fallback for a
+  // recording that might be missing: those columns *are* the trigger's copy of
+  // the same row this reads index 0 of, pinned against it by
+  // TestFirstRecordingRuleHasOneAuthority. So there is one source here rather
+  // than two hedged against each other, and it is the source SongCard's badge
+  // reads, which is what makes the card and the page agree structurally instead
+  // of by a `??` that can never fire.
+  const performers = song.recordings[0]?.performers ?? [];
+  const year = song.release_year;
 
   return (
     /* The song's own language, like the lyrics below — a Greek title is content
@@ -421,31 +448,50 @@ function SongHeader({ song }: { song: Song }) {
       )}
 
       <dl className="mt-3 space-y-1 text-sm">
+        {/* The performers lead, which is the order this block has always had —
+            they were `artist` credits sorted to the front. Rendered only when
+            there are any: most of the catalog's recordings carry a year and
+            nobody's name, and a label above an empty value is the thing
+            groupCredits filters out for the other rows. */}
+        {performers.length > 0 && (
+          <div className="flex gap-2">
+            <dt className="shrink-0 text-stone-500 dark:text-stone-400">Performed by</dt>
+            <dd className="font-medium">
+              <PersonLinks people={performers} />
+            </dd>
+          </div>
+        )}
         {creditsByRole.map(([role, names]) => (
           <div key={role} className="flex gap-2">
-            <dt className="shrink-0 text-stone-500 dark:text-stone-400">{ROLE_LABELS[role]}</dt>
+            <dt className="shrink-0 text-stone-500 dark:text-stone-400">
+              {CREDIT_DISPLAY_LABELS[role]}
+            </dt>
             <dd className="font-medium">
-              {names.map((credit, index) => (
-                <span key={credit.person_id}>
-                  {index > 0 && ", "}
-                  <Link
-                    to={browseHref({ person: credit.person_id })}
-                    className="hover:text-brand-600 hover:underline"
-                  >
-                    {credit.name}
-                  </Link>
-                </span>
-              ))}
+              <PersonLinks people={names} />
             </dd>
           </div>
         ))}
-        {song.release_year && (
+        {year && (
           <div className="flex gap-2">
             <dt className="text-stone-500 dark:text-stone-400">Year</dt>
-            <dd className="font-medium">{song.release_year}</dd>
+            <dd className="font-medium">{year}</dd>
           </div>
         )}
       </dl>
+
+      {/* Offered for a single recording too, not just for several: the sheet is
+          the only place a recording's label and notes are shown, so at one
+          recording there is still something behind this that the lines above do
+          not say. */}
+      {song.recordings.length > 0 && (
+        <button
+          type="button"
+          onClick={onShowRecordings}
+          className="mt-2 text-sm font-medium text-brand-600 hover:underline"
+        >
+          Show all {recordingCount(song.recordings.length)}
+        </button>
+      )}
 
       {song.genres.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -462,22 +508,6 @@ function SongHeader({ song }: { song: Song }) {
       )}
     </header>
   );
-}
-
-/**
- * Groups credits by role, preserving the curated order within each.
- *
- * Returns entries rather than a record so the role keeps its `CreditRole` type
- * through to the caller, which is what lets ROLE_LABELS be indexed without a cast.
- */
-function groupCredits(credits: Credit[]): [CreditRole, Credit[]][] {
-  return CREDIT_DISPLAY_ORDER.map(
-    (role) =>
-      [
-        role,
-        credits.filter((credit) => credit.role === role).sort((a, b) => a.position - b.position),
-      ] as [CreditRole, Credit[]],
-  ).filter(([, matching]) => matching.length > 0);
 }
 
 function AddToListSheet({

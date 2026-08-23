@@ -303,8 +303,11 @@ export function Sheet({
   // flight, and `AddToListSheet` re-renders its page on every list it toggles.
   //
   // Reading the opener here rather than asking the caller for it is what makes
-  // it true for all seven sheets; `focus` on an element that has since left the
-  // document or gone disabled does nothing, which is right in both cases.
+  // it true for every sheet, whichever page mounts it — deliberately not "all
+  // N sheets", since a count in a comment goes stale the next time one is
+  // added and reads as though the new one were not covered. `focus` on an
+  // element that has since left the document or gone disabled does nothing,
+  // which is right in both cases.
   useEffect(() => {
     if (!open) return;
 

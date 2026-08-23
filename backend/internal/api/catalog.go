@@ -68,12 +68,22 @@ func (s *Server) handleListPeople(w http.ResponseWriter, r *http.Request) error 
 		Limit:  limit,
 		Offset: offset,
 	}
+	// All four spellings are still accepted, which is why the message still
+	// names them: `composer` and `lyricist` are credit roles and match on
+	// song_credits, while `performer` — and `artist`, kept for the links already
+	// out there — ask whether the person performed on a recording, which is a
+	// different table and so a different field on the filter.
 	if role := strings.TrimSpace(q.Get("role")); role != "" {
-		creditRole := store.CreditRole(strings.ToLower(role))
-		if !creditRole.Valid() {
-			return httpx.BadRequest("Role must be artist, composer, lyricist, or performer.")
+		switch lowered := strings.ToLower(role); lowered {
+		case "performer", "artist":
+			filter.Performs = true
+		default:
+			creditRole := store.CreditRole(lowered)
+			if !creditRole.Valid() {
+				return httpx.BadRequest("Role must be artist, composer, lyricist, or performer.")
+			}
+			filter.Role = creditRole
 		}
-		filter.Role = creditRole
 	}
 
 	people, total, err := s.store.ListPeople(r.Context(), filter)

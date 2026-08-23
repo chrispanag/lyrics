@@ -65,6 +65,96 @@ pointed at the cause, and each is pinned by a test that names the failure.
   term) is the only recall mechanism for Greek inflection. Do not "improve" this
   by switching to a stemmed configuration without handling both languages.
 
+### Recordings
+
+A song has 0..n **recordings** (εκτελέσεις): one performance each, with its own
+performers, YouTube link, year, label and notes. Migration 000009 split them out
+of the song, and the parts below are what hold that split up.
+
+- **The song still carries `youtube_url`, `youtube_video_id` and
+  `release_year`, and they are denormalized copies of the *first* recording's.**
+  Trigger-maintained, exactly like `credits_text` — which is what let browse's
+  year filters, the catalog sort and `SongCard`'s video badge survive the split
+  with no query touched at all. **Nothing but the trigger may write them.** They
+  are absent from `SongInput`, from the `INSERT`/`UPDATE` in `CreateSong` and
+  `UpdateSong`, and from the importer's insert; a second writer is how a
+  denormalized column comes to disagree with what it was copied from, and here
+  the disagreement is a year on the page belonging to a recording other than the
+  one shown beside it. Deleting a song's last recording therefore nulls all
+  three, which is the truth about it. **`SongDetailPage` reads the year and the
+  video off these columns too, and not off `recordings[0]` hedged against
+  them.** The hedge looks like the safe form and is the opposite: its right-hand
+  side is unreachable — the columns *are* the trigger's copy of the row index 0
+  is, which `TestFirstRecordingRuleHasOneAuthority` is what pins — so it asks
+  the reader to reason about a disagreement the schema forbids, and it would
+  paper over exactly the one that test exists to surface. Reading the same
+  column `SongCard`'s badge reads is what makes the card and the page agree
+  structurally; the first recording is still where the *performers* come from,
+  since those are on no column.
+- **"First" is one ORDER BY, and it exists in exactly two places that cannot
+  share an implementation** — the recordings query in `attachRelations` and the
+  sub-SELECT inside `refresh_songs_denorm`. The first hands clients an
+  already-ordered list so nothing re-derives the rule (`recordings[0]` *is* the
+  first recording); the second picks the row whose year and link are copied onto
+  the song. Disagreeing, they put a year in the header that belongs to a
+  different recording than the performers beside it. Both are commented at each
+  other and `TestFirstRecordingRuleHasOneAuthority` asserts them against one
+  another — including the case that catches it, unmarking the marked recording
+  so first place moves to another row.
+- **`is_first` is a claim about history, not a position.** It may be false on
+  every recording of a song, which is why the order falls back to the earliest
+  year and then to `position`, and why at most one may be true — a partial
+  unique index, since the rule spans rows and a CHECK would pass every second
+  `true`. The API refuses two with a 422 naming the field the radio group
+  writes; the index is the backstop under it. The sheet's **"First recording"
+  badge keys on the flag and never on index 0**: order is something the list
+  always has, and badging index 0 asserts a claim nobody made.
+- **`?person=` has to ask both tables.** It is the role-agnostic filter every
+  name on a song page links to, so missing the recording arm reads as an artist
+  being on no songs — the same shape as the `?person=` trap under Frontend, one
+  step deeper. `?artist=` is kept as an alias of the honest `?performer=`
+  because those links are bookmarked and shared, and asking for both at once is
+  a 400 rather than a precedence nobody stated.
+- **`credits_text` unions both sources, and the union is what keeps fuzzy artist
+  search working.** Performers are most of what anyone searches a song by. Left
+  out, a song stays findable by its composer and not by the singer it is known
+  for — and `TestFuzzyArtistMatchSurvivesManyCredits`, whose extra names are now
+  performers, is the test that would notice. `songs_denorm_from_person_rename`
+  needs the same widening: reading `song_credits` alone, correcting a singer's
+  spelling silently makes them findable under neither. `UNION`, not `UNION ALL`,
+  because someone who wrote a song and also performed it is one name.
+- **`people.song_count` and the delete guard span both tables too.** The count
+  is a `UNION` so a song counts once for a person who wrote *and* performed it,
+  and `recording_credits.person_id` is `ON DELETE RESTRICT` like its
+  counterpart — which needed no Go change, since it raises the violation
+  `execExpectingRow` already maps to `ErrInUse`.
+- **The importer synthesizes a first recording, and must keep matching what the
+  migration did.** `artist` and the performing vocabulary now route to a
+  recording's performers rather than to a credit role; `fallbackRole` is
+  `classPerformer`, because an unrecognized label is far likelier to name a
+  performance than to claim authorship. **Performers count towards the
+  fingerprint** — they are the same people who used to arrive as `artist`
+  credits, so leaving them out gives a re-import of the same export a different
+  fingerprint from the migrated row and duplicates the whole catalog.
+  `loadFingerprints` reads the union for that reason.
+- **The stored-unparseable-link exemption is matched by URL string, not by
+  recording id.** `replaceRelations` replaces recordings wholesale, so ids do
+  not survive a write and there is nothing durable to key on; the string is
+  exactly the "unchanged from what is stored" test the exemption turns on. The
+  editor hydrates such a link verbatim and resends it, and the preview simply
+  stays dark — it is confirmation, never a gate. Pinned from three sides in
+  `TestPatchKeepsAnUnparseableStoredYouTubeURL`, including that a create is
+  never exempted.
+- **A recording with no performers is the common case, not an edge.** Of the
+  ~910 the migration created from the live catalog, ~890 carry a year and
+  nobody's name. So the song page's "Performed by" row is conditional, and a
+  sheet row falls back to its label and then to its year rather than rendering
+  an empty line above a watch button.
+- **`extractVideoId` lives in `web/src/lib/youtube.ts`** now that a link is
+  previewed per recording. It is still the deliberate mirror of Go's
+  `parseYouTubeURL` that its own doc describes — a copy per call site would be a
+  copy per call site to keep in step with the server.
+
 ### Genres
 
 - **`genres.name` is unique, and that index is the only thing holding it.** The
@@ -85,6 +175,15 @@ pointed at the cause, and each is pinned by a test that names the failure.
   missing: it is two hops down, in `songs[].genres`. Creating one needs none of
   this, since a new genre is on no songs, and that asymmetry is the whole reason
   `invalidateGenres` is written down beside `invalidateGenreList`.
+- **`invalidateSongs` is the same shape from the other direction**, and the same
+  key is the one it exists for: editing a song has to unsettle `["list"]`,
+  because a list caches the songs on it and `SongRow` renders them through
+  `SongCard` — whose byline is built from `recordings[0].performers`, two hops
+  down in `songs[].recordings`. Creating a song needs none of it, being on no
+  list yet; the asymmetry is stated in the helper rather than per hook, since
+  that is how one half of it comes to be forgotten. A delete also stales
+  `["lists"]`'s item counts, which is a gap predating recordings and is left
+  named rather than fixed as a side effect.
 
 ### Prelude tokens
 
@@ -429,7 +528,7 @@ inventory this file records going stale under Head assets.)
   is a hole where the arrangement it replaced had none.** The control that was
   pressed unmounts, so focus goes to `<body>` and a keyboard reader is returned
   to the top of the document — `Sheet` hands focus back to whatever opened it,
-  which is written there rather than here because all seven of its callers have
+  which is written there rather than here because every one of its callers has
   the same gap and one of them will close the same way next. That handing-back
   is why **the pencil must not be `disabled` while busy**: focus cannot land on
   a disabled element, so the guard would eat the fix. Which in turn is why **the
@@ -481,8 +580,9 @@ inventory this file records going stale under Head assets.)
 - **Song pages link credits to `/?person=<id>`.** Browse must read that param,
   or clicking an artist lands on the unfiltered catalog with no error, reading
   as "this artist is on every song".
-- **A song's video is read from `youtube_video_id`, and `youtube_url` is never
-  rendered as an href.** The two columns look interchangeable and are not: the
+- **A video is read from `youtube_video_id`, and `youtube_url` is never
+  rendered as an href.** True of a recording's pair and of the song's copy of
+  it alike. The two columns look interchangeable and are not: the
   API writes them together, having parsed one from the other, but the catalog
   importer stores whatever the old database held and sets the id only when it
   parses. So a URL is validated text on one write path out of two, while an id
@@ -500,7 +600,8 @@ inventory this file records going stale under Head assets.)
   now loads nothing from YouTube at all.
 - **The link is parsed in two places that cannot be made to share one**, like
   the email-verification scope above: `parseYouTubeURL` (Go) is the authority,
-  and `extractVideoId` (TypeScript) is a deliberate mirror of it because the
+  and `extractVideoId` (`web/src/lib/youtube.ts`) is a deliberate mirror of it
+  because the
   editor's preview is the only confirmation a contributor gets that a pasted
   link was recognized. So the two disagreeing is a verdict the save then
   contradicts, and it is silent in both directions — a host on the server's list
@@ -509,6 +610,21 @@ inventory this file records going stale under Head assets.)
   `music.youtube.com` are the ones a host check written from memory drops, and
   they previewed only by accident before the mirror. Add a host or a path shape
   to both, or to neither.
+- **The credit role labels live in `lib/credits.ts` as two maps, and they
+  deliberately differ.** `CREDIT_DISPLAY_LABELS` says what a person contributed
+  ("Music") because that is what reads under a heading a reader scans;
+  `CREDIT_PICKER_LABELS` names the role being chosen ("Composer"). Held in the
+  two route files instead — where they were — the divergence looks like a
+  mistake, so one gets "fixed" to match the other, and nothing recorded that it
+  was deliberate. `CREDIT_DISPLAY_ORDER` is beside them for the reason it always
+  was: the page's grouping and the byline cannot disagree about the order.
+- **`songByline` blends two fields, and the card and the quick search both read
+  it.** Performers from `recordings[0]` lead, then the composer and lyricist —
+  which is the order that line has always had, when performing was a credit role
+  sorted to the front. Names are Set-deduped across *both* sources, so someone
+  who wrote a song and also performed it appears once. Two call sites, and the
+  quick-search one is the easy one to miss: it renders the same line and would
+  have silently lost every performer name.
 - **Browse's filter chips are keyed on what is in the URL, never on the filter
   being found.** A genre can be deleted from the admin console while someone
   holds a link filtered by it, and the request still answers — with no songs,
@@ -609,10 +725,19 @@ inventory this file records going stale under Head assets.)
   itself. Put that guard back in front and the link appears a moment late, under
   the finger of someone reaching for Save. Deletion is the other, and it waits,
   being the one confirmation that names the song it is about. The skeleton left
-  in the shell is shaped like the header most songs have, credit lines and a
-  genre chip included, because the text-size controls sit under it and they are
-  controls — so `SongHeader`'s spacing and that block have to move together, and
-  jsdom lays nothing out, so nothing says otherwise. `ListDetailPage` keeps the
+  in the shell is shaped like the header most songs have — credit lines, the
+  recordings button and a genre chip included — because the text-size controls
+  sit under it and they are controls, so `SongHeader`'s spacing and that block
+  have to move together, and jsdom lays nothing out, so nothing says otherwise.
+  The recordings line is what that rule cost the first time it was tested: the
+  button arrived with the header's new "Show all …" row and moved the heading
+  under it by 28px until the block beside the call site grew with it. Its `mt-2`
+  needs a plain wrapper of its own there, and not for the specificity reason
+  that suggests itself: `space-y-*` is emitted inside a `:where()`, which has no
+  specificity at all. What it does have is a `margin-block-end` on every child
+  but the last, so a button dropped straight into the group has its 8px top
+  margin collapse against the credits' 12px bottom one and lose — the class
+  written and then ignored, the gap the group's rather than the button's. `ListDetailPage` keeps the
   older shape on purpose: nobody pages through *lists* the way a reader pages
   through the songs in one, so the flicker this removes barely arises there, and
   its early return also stands in for the session wait.
@@ -878,6 +1003,18 @@ inventory this file records going stale under Head assets.)
   scrollbar between them, so `scrollbar-gutter: stable` is on `html`. Invisible
   on a Mac, where scrollbars overlay and reserve nothing, which is exactly why
   it is written down.
+- **Everything the editor hydrates goes in the one `hydratedFor` effect**, and
+  recordings are the deepest thing in it. Given an effect of their own — keyed on
+  `existing`, which react-query replaces on every refetch — a reconnect throws
+  away a recording that had been typed and not yet saved, silently, since the
+  form still looks filled in. The whole payload is sent on every save, so the
+  loss lands in the database on the next one.
+- **The first-recording control is a radio group with an explicit "none"
+  member.** At most one recording may claim it, which radio semantics give for
+  free; but all-false is a state the data really holds — the mark is a claim
+  about history a contributor may be unable to make — and a radio cannot be
+  cleared by pressing it again. The extra member is also what makes removing the
+  marked recording need no rule about which one inherits the mark: none does.
 - **The editor leaves by popping the history, not by navigating to the song.**
   It is only ever reached from the song's own page, so replacing its entry with
   that song — which is what saving used to do — leaves two identical song

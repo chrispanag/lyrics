@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -43,16 +44,26 @@ func seedCatalog(t *testing.T, st *store.Store) map[string]*store.Song {
 		key   string
 		input store.SongInput
 	}{
+		// "sea" is the shape most of the catalog has: written by one person,
+		// performed by another, the performance carrying the year.
 		{"sea", store.SongInput{
 			Title:    "Θάλασσα Πλατιά",
 			Lyrics:   "Στης θάλασσας τα βάθη\nη αγάπη μου κοιμάται",
 			Language: "el",
 			Credits: []store.Credit{
 				{PersonID: theodorakis.ID, Role: store.CreditComposer},
-				{PersonID: dalaras.ID, Role: store.CreditArtist},
 			},
+			Recordings: []store.RecordingInput{{
+				ReleaseYear: ptr(1964),
+				IsFirst:     true,
+				Performers: []store.RecordingPerformer{
+					{PersonID: dalaras.ID},
+				},
+			}},
 			GenreIDs: []uuid.UUID{entechno.ID},
 		}},
+		// "love" has no recording at all, which after the split is a real state
+		// and not a broken one: 85 songs in the live catalog are in it.
 		{"love", store.SongInput{
 			// Mentions the sea only in the lyrics, so it must rank below "sea"
 			// for a sea query but above nothing.
@@ -63,13 +74,22 @@ func seedCatalog(t *testing.T, st *store.Store) map[string]*store.Song {
 				{PersonID: theodorakis.ID, Role: store.CreditLyricist},
 			},
 		}},
+		// "arms" is written and performed by the same person, so it is what
+		// pins that such a name is counted once wherever names are gathered.
 		{"arms", store.SongInput{
 			Title:    "Into My Arms",
 			Lyrics:   "I do not believe in an interventionist God\nBut I know darling that you do",
 			Language: "en",
 			Credits: []store.Credit{
-				{PersonID: cave.ID, Role: store.CreditArtist},
+				{PersonID: cave.ID, Role: store.CreditComposer},
 			},
+			Recordings: []store.RecordingInput{{
+				ReleaseYear: ptr(1997),
+				IsFirst:     true,
+				Performers: []store.RecordingPerformer{
+					{PersonID: cave.ID},
+				},
+			}},
 			GenreIDs: []uuid.UUID{rock.ID},
 		}},
 	}
@@ -93,6 +113,8 @@ func seedUser(t *testing.T, st *store.Store, email string, role store.Role) *sto
 	}
 	return user
 }
+
+func ptr[T any](v T) *T { return &v }
 
 func titles(songs []store.Song) []string {
 	out := make([]string, len(songs))
@@ -185,6 +207,11 @@ func TestSearchToleratesMisspelledArtist(t *testing.T) {
 // first to stop matching a misspelling — the opposite of what anyone expects.
 // word_similarity scores against the best-matching run of words instead, which
 // is what this pins down.
+//
+// The four extra names are performers on a recording, which is also what makes
+// this the test that a performer reaches credits_text at all: without the union
+// in refresh_songs_denorm the field holds one name and the dilution being
+// guarded against cannot even occur.
 func TestFuzzyArtistMatchSurvivesManyCredits(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()
@@ -194,22 +221,23 @@ func TestFuzzyArtistMatchSurvivesManyCredits(t *testing.T) {
 		t.Fatalf("UpsertPerson: %v", err)
 	}
 
-	credits := []store.Credit{{PersonID: target.ID, Role: store.CreditComposer}}
-	for _, name := range []string{
+	var performers []store.RecordingPerformer
+	for i, name := range []string{
 		"Γιώργος Νταλάρας", "Χάρις Αλεξίου", "Νίκος Γκάτσος", "Μάνος Χατζιδάκις",
 	} {
 		person, err := st.UpsertPerson(ctx, name)
 		if err != nil {
 			t.Fatalf("UpsertPerson(%q): %v", name, err)
 		}
-		credits = append(credits, store.Credit{PersonID: person.ID, Role: store.CreditPerformer})
+		performers = append(performers, store.RecordingPerformer{PersonID: person.ID, Position: i})
 	}
 
 	if _, err := st.CreateSong(ctx, store.SongInput{
-		Title:    "Πολλοί Συντελεστές",
-		Lyrics:   "στίχοι",
-		Language: "el",
-		Credits:  credits,
+		Title:      "Πολλοί Συντελεστές",
+		Lyrics:     "στίχοι",
+		Language:   "el",
+		Credits:    []store.Credit{{PersonID: target.ID, Role: store.CreditComposer}},
+		Recordings: []store.RecordingInput{{IsFirst: true, Performers: performers}},
 	}, uuid.Nil); err != nil {
 		t.Fatalf("CreateSong: %v", err)
 	}
@@ -223,8 +251,13 @@ func TestFuzzyArtistMatchSurvivesManyCredits(t *testing.T) {
 	}
 }
 
-// A person credited in two capacities must appear once in the denormalized
-// field, not once per credit.
+// A person attached to a song twice must appear once in the denormalized field,
+// not once per attachment.
+//
+// The two attachments are deliberately one of each kind — a credit on the work
+// and a performance of it — because that is the pairing the UNION in
+// refresh_songs_denorm has to collapse, and the one a per-table DISTINCT would
+// not. Cohen wrote Hallelujah and sang it.
 func TestCreditsTextIsDeduplicated(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()
@@ -239,9 +272,13 @@ func TestCreditsTextIsDeduplicated(t *testing.T) {
 		Lyrics:   "a secret chord",
 		Language: "en",
 		Credits: []store.Credit{
-			{PersonID: person.ID, Role: store.CreditArtist},
+			{PersonID: person.ID, Role: store.CreditComposer},
 			{PersonID: person.ID, Role: store.CreditLyricist},
 		},
+		Recordings: []store.RecordingInput{{
+			IsFirst:    true,
+			Performers: []store.RecordingPerformer{{PersonID: person.ID}},
+		}},
 	}, uuid.Nil)
 	if err != nil {
 		t.Fatalf("CreateSong: %v", err)
@@ -313,16 +350,16 @@ func TestFiltersIntersect(t *testing.T) {
 	ctx := context.Background()
 
 	sea := songs["sea"]
-	var composerID, artistID uuid.UUID
+	var composerID, performerID uuid.UUID
 	for _, c := range sea.Credits {
-		switch c.Role {
-		case store.CreditComposer:
+		if c.Role == store.CreditComposer {
 			composerID = c.PersonID
-		case store.CreditArtist:
-			artistID = c.PersonID
 		}
 	}
-	if composerID == uuid.Nil || artistID == uuid.Nil {
+	if len(sea.Recordings) > 0 && len(sea.Recordings[0].Performers) > 0 {
+		performerID = sea.Recordings[0].Performers[0].PersonID
+	}
+	if composerID == uuid.Nil || performerID == uuid.Nil {
 		t.Fatal("fixture is missing expected credits")
 	}
 
@@ -336,12 +373,13 @@ func TestFiltersIntersect(t *testing.T) {
 		}
 	})
 
-	// Two credit filters must intersect. A naive JOIN would multiply rows and
-	// return songs matching either one.
+	// A credit filter and a performer filter must intersect, and they now read
+	// two different tables — so this is also what says the two EXISTS clauses
+	// compose rather than one of them widening the result.
 	t.Run("two credit filters intersect", func(t *testing.T) {
 		got, total, err := st.ListSongs(ctx, store.SongFilter{
-			ComposerID: &composerID,
-			ArtistID:   &artistID,
+			ComposerID:  &composerID,
+			PerformerID: &performerID,
 		})
 		if err != nil {
 			t.Fatalf("ListSongs: %v", err)
@@ -364,8 +402,8 @@ func TestFiltersIntersect(t *testing.T) {
 			}
 		}
 		_, total, err := st.ListSongs(ctx, store.SongFilter{
-			ArtistID:   &artistID,
-			LyricistID: &lyricistID,
+			PerformerID: &performerID,
+			LyricistID:  &lyricistID,
 		})
 		if err != nil {
 			t.Fatalf("ListSongs: %v", err)
@@ -549,11 +587,23 @@ func TestSongCRUD(t *testing.T) {
 		t.Fatalf("UpsertPerson: %v", err)
 	}
 
+	singer, err := st.UpsertPerson(ctx, "Χάρις Αλεξίου")
+	if err != nil {
+		t.Fatalf("UpsertPerson: %v", err)
+	}
+
 	created, err := st.CreateSong(ctx, store.SongInput{
 		Title:    "Χάρτινο το Φεγγαράκι",
 		Lyrics:   "Θα φύγω",
 		Language: "el",
 		Credits:  []store.Credit{{PersonID: person.ID, Role: store.CreditLyricist}},
+		Recordings: []store.RecordingInput{{
+			ReleaseYear:    ptr(1957),
+			YouTubeURL:     ptr("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+			YouTubeVideoID: ptr("dQw4w9WgXcQ"),
+			IsFirst:        true,
+			Performers:     []store.RecordingPerformer{{PersonID: singer.ID}},
+		}},
 	}, author.ID)
 	if err != nil {
 		t.Fatalf("CreateSong: %v", err)
@@ -561,12 +611,21 @@ func TestSongCRUD(t *testing.T) {
 	if created.CreatedBy == nil || *created.CreatedBy != author.ID {
 		t.Error("created_by was not recorded")
 	}
+	// The song's three columns are the trigger's copy of that recording, and
+	// nothing in the input named them.
+	if created.ReleaseYear == nil || *created.ReleaseYear != 1957 {
+		t.Errorf("release_year = %v, want the recording's 1957", created.ReleaseYear)
+	}
+	if created.YouTubeVideoID == nil || *created.YouTubeVideoID != "dQw4w9WgXcQ" {
+		t.Errorf("youtube_video_id = %v, want the recording's", created.YouTubeVideoID)
+	}
 
 	updated, err := st.UpdateSong(ctx, created.ID, store.SongInput{
-		Title:    "Χάρτινο το Φεγγαράκι",
-		Lyrics:   "Θα φύγω και θα γυρίσω",
-		Language: "el",
-		Credits:  []store.Credit{}, // credits are replaced wholesale
+		Title:      "Χάρτινο το Φεγγαράκι",
+		Lyrics:     "Θα φύγω και θα γυρίσω",
+		Language:   "el",
+		Credits:    []store.Credit{},           // credits are replaced wholesale
+		Recordings: []store.RecordingInput{{}}, // and so are recordings
 	}, author.ID)
 	if err != nil {
 		t.Fatalf("UpdateSong: %v", err)
@@ -574,14 +633,39 @@ func TestSongCRUD(t *testing.T) {
 	if len(updated.Credits) != 0 {
 		t.Errorf("credits = %v, want them cleared", updated.Credits)
 	}
-
-	// Clearing the credits must also clear them from the search index.
-	_, total, err := st.ListSongs(ctx, store.SongFilter{Query: "Γκάτσος"})
-	if err != nil {
-		t.Fatalf("ListSongs: %v", err)
+	if len(updated.Recordings) != 1 || len(updated.Recordings[0].Performers) != 0 {
+		t.Errorf("recordings = %v, want one with no performers", updated.Recordings)
 	}
-	if total != 0 {
-		t.Error("removed credit is still searchable")
+	// An empty recording carries no year and no link, so the copies follow it
+	// down to NULL rather than keeping the values of the one it replaced.
+	if updated.ReleaseYear != nil || updated.YouTubeURL != nil || updated.YouTubeVideoID != nil {
+		t.Errorf("song still holds year=%v url=%v id=%v after the recording lost them",
+			updated.ReleaseYear, updated.YouTubeURL, updated.YouTubeVideoID)
+	}
+
+	// Clearing the credits must also clear them from the search index. Both
+	// kinds: the lyricist by credit, the singer by performance.
+	for _, name := range []string{"Γκάτσος", "Αλεξίου"} {
+		_, total, err := st.ListSongs(ctx, store.SongFilter{Query: name})
+		if err != nil {
+			t.Fatalf("ListSongs: %v", err)
+		}
+		if total != 0 {
+			t.Errorf("removed %q is still searchable", name)
+		}
+	}
+
+	// Dropping the last recording takes the year and the link with it.
+	cleared, err := st.UpdateSong(ctx, created.ID, store.SongInput{
+		Title:    "Χάρτινο το Φεγγαράκι",
+		Lyrics:   "Θα φύγω και θα γυρίσω",
+		Language: "el",
+	}, author.ID)
+	if err != nil {
+		t.Fatalf("UpdateSong: %v", err)
+	}
+	if len(cleared.Recordings) != 0 {
+		t.Errorf("recordings = %v, want them cleared", cleared.Recordings)
 	}
 
 	if err := st.DeleteSong(ctx, created.ID); err != nil {
@@ -725,15 +809,44 @@ func TestListingsOmitLyricsAndSingleReadsKeepThem(t *testing.T) {
 	ctx := context.Background()
 	owner := seedUser(t, st, "curator@example.com", store.RoleUser)
 
+	singer, err := st.UpsertPerson(ctx, "Χάρις Αλεξίου")
+	if err != nil {
+		t.Fatalf("UpsertPerson: %v", err)
+	}
+
 	const body = "Θα φύγω και θα γυρίσω"
 	created, err := st.CreateSong(ctx, store.SongInput{
 		Title:    "Χάρτινο το Φεγγαράκι",
 		Lyrics:   body,
 		Language: "el",
+		Recordings: []store.RecordingInput{{
+			IsFirst:    true,
+			Performers: []store.RecordingPerformer{{PersonID: singer.ID}},
+		}},
 	}, uuid.Nil)
 	if err != nil {
 		t.Fatalf("CreateSong: %v", err)
 	}
+
+	// Recordings are the counter-case to the lyrics: they are on every read, so
+	// a listing can render the performer under a title and the card can say
+	// whether there is a video. Only the body is projected away.
+	hasPerformer := func(what string, s store.Song) {
+		t.Helper()
+		if len(s.Recordings) != 1 {
+			t.Errorf("%s recordings = %v, want one", what, s.Recordings)
+			return
+		}
+		if len(s.Recordings[0].Performers) != 1 {
+			t.Errorf("%s performers = %v, want one", what, s.Recordings[0].Performers)
+			return
+		}
+		if s.Recordings[0].Performers[0].Name != "Χάρις Αλεξίου" {
+			t.Errorf("%s performer = %q, want the name filled in",
+				what, s.Recordings[0].Performers[0].Name)
+		}
+	}
+	hasPerformer("CreateSong", *created)
 	// Create answers through GetSong, so this is the single-song read as well
 	// as the write — the client caches it as the song and would blank the
 	// detail page if it arrived without a body.
@@ -748,6 +861,7 @@ func TestListingsOmitLyricsAndSingleReadsKeepThem(t *testing.T) {
 	if full.Lyrics == nil || *full.Lyrics != body {
 		t.Errorf("GetSong lyrics = %v, want the body", full.Lyrics)
 	}
+	hasPerformer("GetSong", *full)
 
 	browsed, _, err := st.ListSongs(ctx, store.SongFilter{})
 	if err != nil {
@@ -759,6 +873,7 @@ func TestListingsOmitLyricsAndSingleReadsKeepThem(t *testing.T) {
 	if browsed[0].Lyrics != nil {
 		t.Errorf("browse lyrics = %q, want them projected away", *browsed[0].Lyrics)
 	}
+	hasPerformer("browse", browsed[0])
 
 	// Search drops the body too, and the snippet is what replaces it.
 	found, _, err := st.ListSongs(ctx, store.SongFilter{Query: "φύγω"})
@@ -791,5 +906,192 @@ func TestListingsOmitLyricsAndSingleReadsKeepThem(t *testing.T) {
 	}
 	if inList[0].Lyrics != nil {
 		t.Errorf("list lyrics = %q, want them projected away", *inList[0].Lyrics)
+	}
+	hasPerformer("SongsInList", inList[0])
+}
+
+// The ordering of a song's recordings is the API's answer to "which one is
+// first", and the same rule decides which one's year and link get copied onto
+// the song. Two SQL sites carry it — the ORDER BY in attachRelations and the one
+// inside refresh_songs_denorm — and this is what holds them to each other.
+//
+// The fixture is built so that every clause matters: the marked recording is not
+// the earliest, the earliest year is not first in insertion order, and one
+// recording has no year at all so NULLS LAST is exercised.
+func TestFirstRecordingRuleHasOneAuthority(t *testing.T) {
+	st := testutil.NewStore(t)
+	ctx := context.Background()
+
+	created, err := st.CreateSong(ctx, store.SongInput{
+		Title:    "Πολλές Εκτελέσεις",
+		Lyrics:   "στίχοι",
+		Language: "el",
+		Recordings: []store.RecordingInput{
+			{Label: ptr("no year"), Position: 0},
+			{Label: ptr("earliest"), ReleaseYear: ptr(1950), Position: 1},
+			{Label: ptr("marked"), ReleaseYear: ptr(1988), IsFirst: true, Position: 2},
+		},
+	}, uuid.Nil)
+	if err != nil {
+		t.Fatalf("CreateSong: %v", err)
+	}
+
+	labels := make([]string, len(created.Recordings))
+	for i, r := range created.Recordings {
+		labels[i] = *r.Label
+	}
+	want := []string{"marked", "earliest", "no year"}
+	if !slices.Equal(labels, want) {
+		t.Fatalf("recordings = %v, want %v", labels, want)
+	}
+
+	// And the song's copy is that same first recording's, not another's.
+	if created.ReleaseYear == nil || *created.ReleaseYear != 1988 {
+		t.Errorf("song release_year = %v, want the first recording's 1988", created.ReleaseYear)
+	}
+
+	// Unmarking it hands first place to the earliest year, and the song's copy
+	// has to move with it — which is the disagreement the mirror can produce.
+	in := store.SongInput{
+		Title:    "Πολλές Εκτελέσεις",
+		Lyrics:   "στίχοι",
+		Language: "el",
+		Recordings: []store.RecordingInput{
+			{Label: ptr("no year"), Position: 0},
+			{Label: ptr("earliest"), ReleaseYear: ptr(1950), Position: 1},
+			{Label: ptr("was marked"), ReleaseYear: ptr(1988), Position: 2},
+		},
+	}
+	updated, err := st.UpdateSong(ctx, created.ID, in, uuid.Nil)
+	if err != nil {
+		t.Fatalf("UpdateSong: %v", err)
+	}
+	if *updated.Recordings[0].Label != "earliest" {
+		t.Errorf("first recording = %q, want the earliest year to lead", *updated.Recordings[0].Label)
+	}
+	if updated.ReleaseYear == nil || *updated.ReleaseYear != 1950 {
+		t.Errorf("song release_year = %v, want 1950 — the copy did not follow the reordering",
+			updated.ReleaseYear)
+	}
+}
+
+// Two recordings claiming to be the first is refused by the schema. The API
+// answers 422 before reaching here; this is the backstop under it, and what
+// makes "at most one" a property of the data rather than of one code path.
+func TestSecondFirstRecordingIsRefused(t *testing.T) {
+	st := testutil.NewStore(t)
+
+	_, err := st.CreateSong(context.Background(), store.SongInput{
+		Title:    "Δύο Πρώτες",
+		Lyrics:   "στίχοι",
+		Language: "el",
+		Recordings: []store.RecordingInput{
+			{Label: ptr("one"), IsFirst: true},
+			{Label: ptr("two"), IsFirst: true},
+		},
+	}, uuid.Nil)
+	if err == nil {
+		t.Fatal("CreateSong accepted two first recordings")
+	}
+	if !store.IsConflict(err) {
+		t.Errorf("CreateSong error = %v, want a conflict", err)
+	}
+}
+
+// A person reached only through a recording must be as findable as one credited
+// on the song, because the song page links every name it shows to ?person=.
+func TestPersonFilterMatchesRecordingPerformers(t *testing.T) {
+	st := testutil.NewStore(t)
+	ctx := context.Background()
+	songs := seedCatalog(t, st)
+
+	performerID := songs["sea"].Recordings[0].Performers[0].PersonID
+
+	for _, tc := range []struct {
+		what   string
+		filter store.SongFilter
+	}{
+		{"person, any capacity", store.SongFilter{PersonID: &performerID}},
+		{"performer", store.SongFilter{PerformerID: &performerID}},
+	} {
+		t.Run(tc.what, func(t *testing.T) {
+			got, total, err := st.ListSongs(ctx, tc.filter)
+			if err != nil {
+				t.Fatalf("ListSongs: %v", err)
+			}
+			if total != 1 {
+				t.Fatalf("total = %d, want 1 (got %v)", total, titles(got))
+			}
+			if got[0].ID != songs["sea"].ID {
+				t.Errorf("got %q, want %q", got[0].Title, songs["sea"].Title)
+			}
+		})
+	}
+}
+
+// A person's song count spans both ways of being attached to a song, and counts
+// each song once. "arms" is written and performed by the same person, which is
+// the case a UNION gets right and a sum of two counts does not.
+func TestPeopleSongCountIncludesPerformances(t *testing.T) {
+	st := testutil.NewStore(t)
+	ctx := context.Background()
+	seedCatalog(t, st)
+
+	for _, tc := range []struct {
+		name string
+		want int
+	}{
+		{"Γιώργος Νταλάρας", 1}, // performer only
+		{"Nick Cave", 1},        // composer and performer of the same song
+		{"Μίκης Θεοδωράκης", 2}, // credited on two songs
+	} {
+		people, _, err := st.ListPeople(ctx, store.PersonFilter{Query: tc.name})
+		if err != nil {
+			t.Fatalf("ListPeople(%q): %v", tc.name, err)
+		}
+		if len(people) == 0 {
+			t.Fatalf("ListPeople(%q) found nobody", tc.name)
+		}
+		if people[0].SongCount != tc.want {
+			t.Errorf("%s song_count = %d, want %d", tc.name, people[0].SongCount, tc.want)
+		}
+	}
+}
+
+// A renamed performer must become searchable under the new spelling, which
+// needs the person-rename trigger to reach songs through recordings as well as
+// through credits. Left reading song_credits alone this is silent: the rename
+// succeeds and the song simply stops matching either spelling.
+func TestRenamingPerformerReindexesSongs(t *testing.T) {
+	st := testutil.NewStore(t)
+	ctx := context.Background()
+	songs := seedCatalog(t, st)
+
+	performerID := songs["sea"].Recordings[0].Performers[0].PersonID
+	if _, err := st.UpdatePerson(ctx, performerID, "Γιώργος Νταλάράς"); err != nil {
+		t.Fatalf("UpdatePerson: %v", err)
+	}
+
+	_, total, err := st.ListSongs(ctx, store.SongFilter{Query: "Νταλάράς"})
+	if err != nil {
+		t.Fatalf("ListSongs: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("total = %d, want the renamed performer to be searchable", total)
+	}
+}
+
+// Deleting someone who only ever performed must fail like deleting a credited
+// person does — the RESTRICT is on both references, and the classification the
+// callers rely on has to hold for the new one too.
+func TestDeletePerformerReportsInUse(t *testing.T) {
+	st := testutil.NewStore(t)
+	ctx := context.Background()
+	songs := seedCatalog(t, st)
+
+	performerID := songs["sea"].Recordings[0].Performers[0].PersonID
+	err := st.DeletePerson(ctx, performerID)
+	if !store.IsInUse(err) {
+		t.Errorf("DeletePerson = %v, want ErrInUse", err)
 	}
 }

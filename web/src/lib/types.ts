@@ -1,14 +1,18 @@
 /** Types mirroring the Go API's JSON shapes. */
 
 export type Role = "user" | "contributor" | "admin";
-export type CreditRole = "artist" | "composer" | "lyricist" | "performer";
 
-export const CREDIT_ROLES: CreditRole[] = [
-  "artist",
-  "composer",
-  "lyricist",
-  "performer",
-];
+/**
+ * The capacity a person is credited in on a song — authorship only.
+ *
+ * Performing is a property of a recording rather than of the work, so the
+ * `artist` and `performer` roles this once had live on `Recording.performers`
+ * now. The server refuses them, so a widened union here would render a picker
+ * option every save rejects.
+ */
+export type CreditRole = "composer" | "lyricist";
+
+export const CREDIT_ROLES: CreditRole[] = ["composer", "lyricist"];
 
 export const ROLES: Role[] = ["user", "contributor", "admin"];
 
@@ -110,6 +114,34 @@ export interface Credit {
   position: number;
 }
 
+/** A performer on a recording. No role: everyone here performed it. */
+export interface RecordingPerformer {
+  person_id: string;
+  name: string;
+  position: number;
+}
+
+/**
+ * One performance of a song — an εκτέλεση.
+ *
+ * A song's `recordings` arrive **already ordered, first recording first**: the
+ * server sorts by `is_first`, then the earliest year, then position. So
+ * `recordings[0]` is the first recording and nothing here re-derives that rule.
+ * `is_first` is a claim about history and may be false on every one of them,
+ * which is why the order does not depend on it alone.
+ */
+export interface Recording {
+  id: string;
+  label: string | null;
+  youtube_url: string | null;
+  youtube_video_id: string | null;
+  release_year: number | null;
+  notes: string | null;
+  is_first: boolean;
+  position: number;
+  performers: RecordingPerformer[];
+}
+
 export interface Song {
   id: string;
   title: string;
@@ -123,12 +155,22 @@ export interface Song {
    */
   lyrics?: string;
   language: string;
+  /**
+   * Denormalized copies of the first recording's, maintained server-side.
+   *
+   * They are what `SongCard` reads for its video badge and what the browse year
+   * filters sort and filter on — a listing that had to carry every recording to
+   * answer "is there a video" would pay for the whole set to draw one icon. A
+   * song with no recordings has all three null.
+   */
   youtube_url: string | null;
   youtube_video_id: string | null;
   release_year: number | null;
   notes: string | null;
   credits: Credit[];
   genres: Genre[];
+  /** Ordered first-recording-first by the server. Present on every read. */
+  recordings: Recording[];
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -165,17 +207,22 @@ export interface ApiErrorBody {
   };
 }
 
-/** Writable shape of a song, matching the API's create/update payload. */
+/**
+ * Writable shape of a song, matching the API's create/update payload.
+ *
+ * No `youtube_url` and no `release_year`: both belong to a recording now, and
+ * the server refuses a payload that still names them at this level rather than
+ * ignoring it. Recordings are replaced wholesale on every save, like credits.
+ */
 export interface SongInput {
   title: string;
   alt_title?: string | null;
   lyrics: string;
   language: string;
-  youtube_url?: string | null;
-  release_year?: number | null;
   notes?: string | null;
   credits: CreditInput[];
   genre_ids: string[];
+  recordings: RecordingInput[];
 }
 
 /**
@@ -189,9 +236,34 @@ export interface CreditInput {
   position: number;
 }
 
+/** A performer, named the same two ways a credit is. */
+export interface RecordingPerformerInput {
+  person_id?: string;
+  name?: string;
+  position: number;
+}
+
+/**
+ * Writable shape of a recording. No `youtube_video_id` — the server derives it
+ * from the link, so the two cannot be stated as disagreeing values.
+ */
+export interface RecordingInput {
+  label?: string | null;
+  youtube_url?: string | null;
+  release_year?: number | null;
+  notes?: string | null;
+  is_first: boolean;
+  position: number;
+  performers: RecordingPerformerInput[];
+}
+
 export interface SongFilters {
   q?: string;
-  artist?: string;
+  // The honest name for the filter, which is what the API calls it too. It kept
+  // `artist` as an alias for links already out in the world, and nothing here
+  // should reach for that spelling — a client type naming only the deprecated
+  // one is how the alias becomes impossible to retire.
+  performer?: string;
   composer?: string;
   lyricist?: string;
   person?: string;

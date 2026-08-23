@@ -40,19 +40,22 @@ func (r Role) AtLeast(other Role) bool { return r.rank() >= other.rank() && r.ra
 func (r Role) Valid() bool { return r.rank() > 0 }
 
 // CreditRole is the capacity in which a person is credited on a song.
+//
+// Authorship only. Performing a song is a property of a recording, not of the
+// work, so performers live in RecordingPerformer and the `artist` and
+// `performer` roles this once held were moved there by migration 000009 — which
+// also tightened the CHECK, so writing one now is refused by the database.
 type CreditRole string
 
 const (
-	CreditArtist    CreditRole = "artist"
-	CreditComposer  CreditRole = "composer"
-	CreditLyricist  CreditRole = "lyricist"
-	CreditPerformer CreditRole = "performer"
+	CreditComposer CreditRole = "composer"
+	CreditLyricist CreditRole = "lyricist"
 )
 
 // Valid reports whether the credit role is one the schema accepts.
 func (c CreditRole) Valid() bool {
 	switch c {
-	case CreditArtist, CreditComposer, CreditLyricist, CreditPerformer:
+	case CreditComposer, CreditLyricist:
 		return true
 	default:
 		return false
@@ -118,6 +121,38 @@ type Credit struct {
 	Position int        `json:"position"`
 }
 
+// RecordingPerformer links a person to a recording. There is no role: everyone
+// here performed it, which is the whole distinction from Credit.
+//
+// Name is filled on read and ignored on write — the write side names a person
+// by id, or by name for one to be created, which is recordingPerformerRequest's
+// job rather than this type's.
+type RecordingPerformer struct {
+	PersonID uuid.UUID `json:"person_id"`
+	Name     string    `json:"name"`
+	Position int       `json:"position"`
+}
+
+// Recording is one performance of a song (an εκτέλεση): who played it, when,
+// and where to watch it.
+//
+// A song's recordings arrive already ordered — first recording first — and that
+// ordering is the API's promise, not the client's calculation. IsFirst is a
+// claim about history and may be false on all of them, which is why the order
+// falls back to the year and then to Position. The rule lives in the ORDER BY
+// in attachRelations and, mirrored, in refresh_songs_denorm; see either.
+type Recording struct {
+	ID             uuid.UUID            `json:"id"`
+	Label          *string              `json:"label"`
+	YouTubeURL     *string              `json:"youtube_url"`
+	YouTubeVideoID *string              `json:"youtube_video_id"`
+	ReleaseYear    *int                 `json:"release_year"`
+	Notes          *string              `json:"notes"`
+	IsFirst        bool                 `json:"is_first"`
+	Position       int                  `json:"position"`
+	Performers     []RecordingPerformer `json:"performers"`
+}
+
 // Song is a catalog entry. Snippet and Score are populated only by search.
 type Song struct {
 	ID       uuid.UUID `json:"id"`
@@ -129,18 +164,27 @@ type Song struct {
 	// text than everything else in the response combined. Absent and empty are
 	// therefore different answers, which is why this is a pointer: a song may
 	// genuinely have no lyrics recorded, and that must not read as "not loaded".
-	Lyrics         *string    `json:"lyrics,omitempty"`
-	Language       string     `json:"language"`
-	YouTubeURL     *string    `json:"youtube_url"`
-	YouTubeVideoID *string    `json:"youtube_video_id"`
-	ReleaseYear    *int       `json:"release_year"`
-	Notes          *string    `json:"notes"`
-	Credits        []Credit   `json:"credits"`
-	Genres         []Genre    `json:"genres"`
-	CreatedBy      *uuid.UUID `json:"created_by"`
-	UpdatedBy      *uuid.UUID `json:"updated_by"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	Lyrics   *string `json:"lyrics,omitempty"`
+	Language string  `json:"language"`
+	// YouTubeURL, YouTubeVideoID and ReleaseYear are denormalized read-only
+	// copies of the first recording's, maintained by trigger like credits_text.
+	// Nothing in this package writes them — CreateSong and UpdateSong do not
+	// name them, and a second writer is how a denormalized column starts
+	// disagreeing with its source. They stay on the payload because the browse
+	// year filters, the catalog sort and the card's video badge all read them,
+	// and a listing that had to carry recordings to answer "is there a video"
+	// would be paying for the whole set to render one icon.
+	YouTubeURL     *string     `json:"youtube_url"`
+	YouTubeVideoID *string     `json:"youtube_video_id"`
+	ReleaseYear    *int        `json:"release_year"`
+	Notes          *string     `json:"notes"`
+	Credits        []Credit    `json:"credits"`
+	Genres         []Genre     `json:"genres"`
+	Recordings     []Recording `json:"recordings"`
+	CreatedBy      *uuid.UUID  `json:"created_by"`
+	UpdatedBy      *uuid.UUID  `json:"updated_by"`
+	CreatedAt      time.Time   `json:"created_at"`
+	UpdatedAt      time.Time   `json:"updated_at"`
 
 	// Snippet is a highlighted lyrics excerpt, present only on search results.
 	Snippet *string `json:"snippet,omitempty"`

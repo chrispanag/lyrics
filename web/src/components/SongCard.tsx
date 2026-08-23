@@ -5,7 +5,7 @@ import { Youtube } from "lucide-react";
 import { Snippet } from "./Snippet";
 import { cardChrome, cardHover } from "./cardStyles";
 import { cn } from "@/lib/cn";
-import { creditLine } from "@/lib/credits";
+import { songByline } from "@/lib/credits";
 import { songHref } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
 
@@ -15,7 +15,7 @@ const genreChip =
 
 /**
  * Memoized because the browse page re-renders on every keystroke of the search
- * box, and each card otherwise re-runs creditLine (copy + sort + Set) and
+ * box, and each card otherwise re-runs songByline (copy + sort + Set) and
  * parseSegments (a full scan of the snippet) for a `song` that has not changed.
  * Song objects come from the query cache, so their identity is stable.
  *
@@ -38,7 +38,7 @@ export const SongCard = memo(function SongCard({
   song: Song;
   listId?: string;
 }) {
-  const credits = creditLine(song.credits);
+  const credits = songByline(song);
 
   return (
     <Link
