@@ -530,6 +530,46 @@ inventory this file records going stale under Head assets.)
   importing the module with no React in sight. The unauthorized *handler* stays
   in an effect on purpose: it needs React state, and no response can 401 before
   the first effects have flushed.
+- **`AuthProvider` opens on the last session this browser had, read from
+  `localStorage` — and that snapshot decides what to *draw*, never where anyone
+  goes.** Restoring a session is two round trips, the SDK's token refresh and
+  then `GET /me`, and starting from `null` meant every refresh of a signed-in
+  page painted the *guest* answer first: a sidebar offering Sign in, a tab bar
+  with no Lists in it, a catalog with no Add song, all replaced a few hundred
+  milliseconds later. It is the same trade `applyTheme(storedTheme())` makes in
+  `main.tsx` — paint the last known answer rather than a wrong one — and it is
+  safe for the same reason `hasRole` is: the server is the authority, so a stale
+  role costs one paint of chrome whose every action is refused. No token is ever
+  kept there; the SDK owns those, and `auth/session` says so. What the snapshot
+  must not do is move anybody, which is why **`loading` keeps its exact meaning
+  and every redirect reads it first**: `VerificationGate`, the sign-in and
+  sign-up screens' "already signed in" redirects, and `VerifyEmailPage`'s
+  challenge-opening effect all wait for the restore, and each of them is pinned.
+  Left unguarded, a snapshot taken before an address was verified on another
+  device bounces a verified visitor to a code form and then to the catalog rather
+  than the page they opened; a snapshot outliving its session sends someone who
+  came to sign in to the catalog and leaves them there as a guest; and a step-up
+  opened on a session Prelude has not restored yet fails as "we could not send a
+  code" with nothing wrong. The write is **one effect keyed on `[user]`** rather
+  than a line at each call site — sign-in, sign-out, a dead session, a new
+  picture, a changed name all end in `setUser` already, and the call site that
+  forgets is the one that leaves an account remembered on the machine it signed
+  out of. `storedUser` **validates rather than casts**: a snapshot from an older
+  release is missing whatever the shape has gained since, and the field worth
+  naming is `email_verified_at`, which nothing draws — absent reads as
+  unverified, leaving the gate's wait on `loading` as the only other thing
+  between that and a verified visitor sitting at a code form. What is left is a
+  reverse flash, and it is deliberate: a session that has really ended paints
+  signed-in chrome for one moment — a name and an address, so on a shared machine
+  it is the last person's — and then the restore (or a 401) clears the user, the
+  query cache and the snapshot together. It is rare, it heals itself, and it is
+  the trade for not flashing guest at every signed-in refresh. A `GET /me` that
+  cannot be answered at all — a 500, a reload with no network — takes the
+  snapshot with it, and that is the existing contract rather than a new one:
+  `loadProfile` has always swallowed every failure into `null`, so an
+  unreachable API already reads as signed out for that load and the snapshot
+  only follows the state. The cost is one further guest flash on the next load,
+  and the first restore that succeeds writes it back.
 - **`useList`'s `ready` flag is belt-and-suspenders now, but the skeleton beside it
   is not.** The flag was the first fix for that 404 — gate the query until
   `useAuth().loading` clears — and it is redundant since the provider moved to
@@ -539,15 +579,16 @@ inventory this file records going stale under Head assets.)
   through to "not available" and tells the owner their list is gone.
 - **The verification gate wraps `<Routes>` and reads `user.email_verified_at`;
   `VerifyEmailPage` waits for `loading` before deciding, and its
-  challenge-opening effect checks the same flag itself.** Three separate traps.
-  The gate deliberately does *not* wait for `loading` — `user` is null while the
-  session restores, which is the guest case, and blocking there would put a
-  spinner in front of every visitor's first paint. The page is the opposite: it
-  is reached by redirect and stays in the address bar, so deciding before the
-  session is restored turns a refresh into a bounce to `/login`. And the effect
-  needs its own check because hooks run before the redirects below them are
-  rendered — without it, a visitor who is already verified opens a challenge and
-  is emailed a code on their way past.
+  challenge-opening effect checks the same flag itself.** Three separate traps,
+  and the three waits are not the same wait. The gate holds nobody until the
+  restore settles — but it renders what was asked for while waiting, rather than
+  a spinner in front of every visitor's first paint, which is what a gate that
+  *blocked* on `loading` would be. The page is the opposite: it is reached by
+  redirect and stays in the address bar, so deciding before the session is
+  restored turns a refresh into a bounce to `/login`, and a spinner is the right
+  thing to show. And the effect needs its own check because hooks run before the
+  redirects below them are rendered — without it, a visitor who is already
+  verified opens a challenge and is emailed a code on their way past.
 - **`NAV_ITEMS` feeds both navigations, so an entry removed from the list is
   removed from the phone.** The sidebar reaches the profile through the identity
   card at its foot — the card *is* that entry, which is why the links above it
@@ -603,10 +644,13 @@ inventory this file records going stale under Head assets.)
   on prefix, so an entry naming a screen — as it did, `/admin/users` — goes dark
   the moment an admin opens the other one, and the console then still works
   while no longer saying where the reader is. `/admin` therefore needs the index
-  redirect, being a section with no screen of its own. And the gate waits for
-  `loading` where the verification gate deliberately does not — `user` is null
-  while the session restores, which for an admin screen is not the guest case
-  but a reload, and deciding then bounces an admin off their own page. The
+  redirect, being a section with no screen of its own. And the gate *blocks* on
+  `loading` where the verification gate only reads it — that one renders what was
+  asked for while the restore is in flight, and this one cannot: until the
+  restore settles `user` is the snapshot of the last session this browser had, so
+  deciding then either bounces an admin off their own page on a reload or opens
+  the console on the role that snapshot merely remembers. A spinner in front of
+  one section is nothing like one in front of every visitor's first paint. The
   section's screens live in `routes/adminTabs.ts` rather than in the console
   itself, because `App.tsx` opens `/admin` on the first of them and importing
   that list from the console's own module would pull its chunk into the bundle

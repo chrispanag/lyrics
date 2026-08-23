@@ -165,9 +165,11 @@ function SongArticle() {
             variant="ghost"
             size="sm"
             aria-label="Save to a list"
-            // `user` is null until the session is restored, and acting on that
-            // sends someone who is already signed in to the sign-in screen and
-            // straight back — with the sheet they asked for never opening.
+            // `user` is the last session this browser had until the restore
+            // settles, so neither branch may be taken on it: the sheet would
+            // open on a session that has since expired, or — with no snapshot
+            // to seed it — someone already signed in is sent to the sign-in
+            // screen and straight back, the sheet they asked for never opening.
             disabled={sessionLoading}
             onClick={() =>
               user ? setListSheetOpen(true) : navigate("/login", { state: returnTo(location) })

@@ -63,9 +63,12 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
  * someone remembering the wrapper. Kept out of the pages themselves for the
  * same reason it is not a check inside them: the console's chunk is then never
  * downloaded by anyone who cannot open it. The wait on `loading` is not
- * optional either — `user` is null while the session is being restored, so
- * deciding before it settles turns a refresh on an admin screen into a bounce
- * to the catalog.
+ * optional either — until the restore settles `user` is the snapshot of the last
+ * session this browser had, so deciding then either turns a refresh on an admin
+ * screen into a bounce to the catalog or opens the console on a role that
+ * snapshot merely remembers. This gate blocks on the wait where
+ * `VerificationGate` renders through it: a spinner in front of one section is
+ * nothing like one in front of every visitor's first paint.
  *
  * A visitor who is not an admin is sent to the catalog rather than to sign in
  * the way `RequireAuth` does — being asked to sign in is an answer about what
@@ -97,14 +100,24 @@ const UNVERIFIED_ROUTES = new Set(["/verify-email", "/forgot-password"]);
  * render its own version of "something went wrong" — a list that will not load,
  * an editor that cannot save — instead of the one thing left to do.
  *
- * Guests are untouched: the catalog is public, and `user` stays null while the
- * session is still being restored, so this never delays a first paint.
+ * Guests are untouched, and nothing here delays a first paint: while the session
+ * is being restored this renders whatever was asked for, exactly as it did when
+ * `user` was null throughout that wait. It is `loading` that says so now, and it
+ * has to be asked — `user` is seeded from the last session this browser had, and
+ * a snapshot that predates a verification done on another device would bounce a
+ * verified visitor to a code form and then, one round trip later, to the catalog
+ * rather than the page they actually opened.
  */
 function VerificationGate({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const routerLocation = useLocation();
 
-  if (user && !user.email_verified_at && !UNVERIFIED_ROUTES.has(routerLocation.pathname)) {
+  if (
+    !loading &&
+    user &&
+    !user.email_verified_at &&
+    !UNVERIFIED_ROUTES.has(routerLocation.pathname)
+  ) {
     return <Navigate to="/verify-email" replace />;
   }
   return <>{children}</>;
