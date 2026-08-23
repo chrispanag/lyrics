@@ -47,9 +47,11 @@ describe("admin console routing", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Users" })).toBeInTheDocument();
   });
 
-  // `user` is null while the Prelude session is being restored, which is
-  // indistinguishable from a guest. Deciding then would make a reload of an
-  // admin screen bounce its own admin to the catalog.
+  // While the Prelude session is being restored the app holds the snapshot of
+  // the last session this browser had, or nothing — which is indistinguishable
+  // from a guest. Deciding then would make a reload of an admin screen bounce
+  // its own admin to the catalog, or open the console on a role that snapshot
+  // merely remembers.
   it("waits for the session before deciding", async () => {
     renderWithProviders(<App />, { user: null, auth: { loading: true }, route: "/admin/genres" });
 

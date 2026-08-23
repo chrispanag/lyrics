@@ -10,6 +10,7 @@ import {
   type AuthContextValue,
 } from "./context";
 import { OTP_LOGIN_CONFIG_ID, getAccessToken, sessionClient } from "./session";
+import { storeUser, storedUser } from "./storedUser";
 import type { User } from "@/lib/types";
 
 /**
@@ -80,7 +81,12 @@ function describeCompliancy(result: { criteria: string; expected: number }): str
  * Management API key.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  // Seeded from the last session this browser had, so a refresh does not paint
+  // the guest answer for as long as the restore below takes — ./storedUser is
+  // what that snapshot is, and is not. `loading` keeps its exact meaning
+  // regardless: nothing is *known* until the restore settles, which is what
+  // every redirect and every private query reads.
+  const [user, setUser] = useState<User | null>(storedUser);
   const [loading, setLoading] = useState(true);
   const queryClient = useQueryClient();
 
@@ -159,6 +165,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [loadProfile]);
+
+  // Kept in step with the user rather than written wherever one is set. Signing
+  // in, signing out, a session dying, a new picture, a changed name: every one
+  // of those already ends in `setUser`, and a snapshot written at each call site
+  // instead would be one `setUser` away from remembering an account that has
+  // since signed out — on the machine of whoever signed out on it.
+  useEffect(() => {
+    storeUser(user);
+  }, [user]);
 
   // Everything that has to happen once Prelude has minted a session, whichever
   // credential opened it. Password reset shares this: its emailed code is a

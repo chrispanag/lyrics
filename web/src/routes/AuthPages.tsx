@@ -34,7 +34,7 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
 }
 
 export function LoginPage() {
-  const { user, login } = useAuth();
+  const { user, loading, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -46,7 +46,12 @@ export function LoginPage() {
   // Wherever they were headed before being asked to sign in.
   const destination = returnDestination(location.state);
 
-  if (user) return <Navigate to={destination} replace />;
+  // Only a confirmed session sends anybody away from here. `user` is seeded from
+  // the last session this browser had, and the one visitor that guess is wrong
+  // about is the one on this page: a session that has since expired would have
+  // them bounced to the catalog and left there as a guest, having asked to sign
+  // in. The form is what the wait already showed, so this costs nothing.
+  if (user && !loading) return <Navigate to={destination} replace />;
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -247,7 +252,7 @@ function ResendCodeLink({
 }
 
 export function RegisterPage() {
-  const { user, register } = useAuth();
+  const { user, loading, register } = useAuth();
   const navigate = useNavigate();
 
   const [displayName, setDisplayName] = useState("");
@@ -258,7 +263,10 @@ export function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const passwordHints = usePasswordHints();
 
-  if (user) return <Navigate to="/" replace />;
+  // Waits for the session for the reason the sign-in screen does: `user` may be
+  // last time's answer, and being wrong here means a visitor who came to make an
+  // account is put on the catalog instead.
+  if (user && !loading) return <Navigate to="/" replace />;
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -997,8 +1005,13 @@ export function VerifyEmailPage() {
   useEffect(() => {
     // Hooks run before the redirects below are rendered, so without this guard
     // a visitor who is already verified — or not signed in at all — would open
-    // a challenge and be emailed a code on their way somewhere else.
-    if (!user || user.email_verified_at) return;
+    // a challenge and be emailed a code on their way somewhere else. `loading`
+    // guards the same thing one step earlier: `user` is seeded from the last
+    // session this browser had, so until the restore settles it can be a
+    // verified account's stale unverified copy — and a step-up asked for on a
+    // session Prelude has not restored yet fails, reporting a code that could
+    // not be sent while nothing whatsoever is wrong.
+    if (loading || !user || user.email_verified_at) return;
     if (started.current) return;
     started.current = true;
 
@@ -1023,7 +1036,7 @@ export function VerifyEmailPage() {
         setSending(false);
       }
     })();
-  }, [startEmailVerification, user]);
+  }, [loading, startEmailVerification, user]);
 
   // Unlike the other two screens, this one is reached by redirect and kept in
   // the address bar, so a refresh lands here while the session is still being

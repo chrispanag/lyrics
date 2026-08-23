@@ -2,7 +2,13 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { ChangePasswordPage, ForgotPasswordPage, LoginPage, VerifyEmailPage } from "./AuthPages";
+import {
+  ChangePasswordPage,
+  ForgotPasswordPage,
+  LoginPage,
+  RegisterPage,
+  VerifyEmailPage,
+} from "./AuthPages";
 import { App } from "@/App";
 import { ApiError } from "@/api/client";
 import {
@@ -173,6 +179,19 @@ describe("VerifyEmailPage", () => {
       route: "/verify-email",
       auth: { startEmailVerification },
     });
+
+    await waitFor(() => expect(startEmailVerification).not.toHaveBeenCalled());
+    expect(screen.queryByLabelText("Verification code")).not.toBeInTheDocument();
+  });
+
+  // The account here may be the one this browser saw last rather than the one
+  // signed in now — it is seeded from storage, so the app paints its chrome
+  // without waiting. Nothing may be asked of Prelude on that guess: the session
+  // it names has not been restored yet, and a step-up opened on it fails as a
+  // code that could not be sent.
+  it("asks for nothing until the session is confirmed", async () => {
+    const startEmailVerification = vi.fn();
+    renderVerifyPage({ startEmailVerification, loading: true });
 
     await waitFor(() => expect(startEmailVerification).not.toHaveBeenCalled());
     expect(screen.queryByLabelText("Verification code")).not.toBeInTheDocument();
@@ -839,6 +858,61 @@ describe("ChangePasswordPage", () => {
   });
 });
 
+describe("sign-in and sign-up screens", () => {
+  // The user these screens read may be last time's — the app seeds it from
+  // storage so a refresh does not flash the guest chrome. Acting on that guess
+  // here is what they cannot do: a session that has since expired would send a
+  // visitor who came to sign in to the catalog, and leave them there as a guest.
+  it("keeps the sign-in form up until the session is confirmed", () => {
+    renderWithProviders(<LoginPage />, {
+      user: makeUser(),
+      route: "/login",
+      auth: { loading: true },
+    });
+
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+  });
+
+  it("sends a signed-in visitor on their way", () => {
+    renderWithProviders(<App />, { user: makeUser(), route: "/login" });
+
+    expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+  });
+
+  // The sign-up screen makes the same decision from the same guess, and being
+  // wrong on it costs the same thing: somebody who came to make an account put
+  // on the catalog instead.
+  it("keeps the sign-up form up until the session is confirmed", () => {
+    renderWithProviders(<RegisterPage />, {
+      user: makeUser(),
+      route: "/register",
+      auth: { loading: true },
+    });
+
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+  });
+
+  // Pinned from both sides, like the sign-in screen above it: with only the
+  // waiting half, a redirect that stopped firing altogether — the `user` half of
+  // the condition lost in an edit — leaves a signed-in visitor on a form that
+  // creates the account they already have, and every spec still passes.
+  it("sends a signed-in visitor away from the sign-up form", () => {
+    renderWithProviders(<App />, { user: makeUser(), route: "/register" });
+
+    expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
+  });
+
+  // And the third side, which is the one an edit to that condition actually
+  // reaches: losing the `user` half sends *everybody* away once the restore
+  // settles, so the screen has no visitor left who can sign up. The sign-in
+  // screen has this pinned already, by every spec that renders it as a guest.
+  it("shows the sign-up form to a guest", () => {
+    renderWithProviders(<App />, { user: null, route: "/register" });
+
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+  });
+});
+
 describe("verification gate", () => {
   // Every page an unverified account can reach answers 403, so without the gate
   // the app renders a catalog of empty shelves and blames the network.
@@ -872,5 +946,16 @@ describe("verification gate", () => {
     renderWithProviders(<App />, { user: makeUser(), route: "/forgot-password" });
 
     expect(await screen.findByText("Reset your password")).toBeInTheDocument();
+  });
+
+  // The gate reads a user that may be the last session this browser saw rather
+  // than this one — seeded from storage so the chrome does not flash the guest
+  // answer on every refresh. A snapshot taken before an address was verified
+  // elsewhere would otherwise put a verified visitor on a code form, and then on
+  // the catalog rather than the page they opened.
+  it("holds nobody until the session is confirmed", async () => {
+    renderWithProviders(<App />, { user: unverified, route: "/", auth: { loading: true } });
+
+    expect(await screen.findByRole("searchbox")).toBeInTheDocument();
   });
 });
