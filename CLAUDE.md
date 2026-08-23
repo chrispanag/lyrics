@@ -650,8 +650,8 @@ inventory this file records going stale under Head assets.)
   `localStorage` — and that snapshot decides what to *draw*, never where anyone
   goes.** Restoring a session is two round trips, the SDK's token refresh and
   then `GET /me`, and starting from `null` meant every refresh of a signed-in
-  page painted the *guest* answer first: a sidebar offering Sign in, a tab bar
-  with no Lists in it, a catalog with no Add song, all replaced a few hundred
+  page painted the *guest* answer first: a navigation offering Sign in with no
+  Lists in it, a catalog with no Add song, all replaced a few hundred
   milliseconds later. It is the same trade `applyTheme(storedTheme())` makes in
   `main.tsx` — paint the last known answer rather than a wrong one — and it is
   safe for the same reason `hasRole` is: the server is the authority, so a stale
@@ -753,47 +753,125 @@ inventory this file records going stale under Head assets.)
   thing to show. And the effect needs its own check because hooks run before the
   redirects below them are rendered — without it, a visitor who is already
   verified opens a challenge and is emailed a code on their way past.
-- **`NAV_ITEMS` feeds both navigations, so an entry removed from the list is
-  removed from the phone.** The sidebar reaches the profile through the identity
-  card at its foot — the card *is* that entry, which is why the links above it
-  have none — but the tab bar has no card, and no sign-in button either, so the
-  profile tab is the only route a phone has to `/profile` and through it to
-  signing in. Dropping the item rather than filtering it out of the one
-  navigation therefore strands every guest on a phone with no way in, and reads
-  as deliberate on the desk it was designed at. `identityCard` is that filter,
-  and the reason the item is not `authOnly`. **The filter is asked of the user,
-  because the card is.** A guest gets the Sign in button where the card would
-  be, so a guest filtered out of the sidebar as well falls between the two and
-  has no route to `/profile` from a desk at all — which is where the theme
-  switch lives, and it is on no other screen. Nothing says so from the machine
-  the change is made on, whose sidebar has a card. That is also why the filter
-  sits inside `DesktopSidebar` rather than at the call site: whether the card
-  stands in for an entry is that navigation's own question, and asked from
-  outside it, the next reader of the component gets the link *and* the card.
-  What is pinned is *which* navigation holds the way to the profile, asserted of
-  each of them in `Layout.test.tsx` — and of the guest sidebar, the one state
-  with no card and so the only one the filter can strand. jsdom has no
-  breakpoints, so both navigations are in the document at once and that is the
-  only readable form of which reader is served. It is asserted of the
-  `/profile` destination rather than of the label the sidebar entry carried,
-  since a rename leaves a second route to the profile above the card with every
-  assertion about "Profile" still passing. And it is asked **inside the
-  sidebar's `<nav>`**, which is the third thing the card being the entry costs:
-  the footer it lives in sat beside that landmark, so a reader navigating by
-  landmark got Browse, Lists and Admin and no route to their own profile —
-  working perfectly for everyone who can see it. The footer moved inside the
-  nav, and `flex-1` on the nav is what keeps the layout: it takes the height the
-  aside was holding, so the footer's `mt-auto` still has room to reach the
-  bottom of the sidebar rather than stopping at the foot of the links. The last
-  piece is the card's lit and pressable treatments, which are the links' own and
-  are **shared as tokens rather than copied**, since nothing pins the two
-  agreeing: without the first, the profile screen is the one place in the app
-  where nothing in the sidebar is lit, and without the second — the link being
-  gone — nothing is left saying the card can be pressed at all. Only the lit
-  token carries a text color, and that asymmetry is deliberate: lit, the card's
-  name takes the brand color exactly as a label does, while at rest the links
-  name a stone the card leaves to inherit. The role line names its own either
-  way, so it stays put under both.
+- **The sidebar and the phone's drawer render one `NavPanel`, and that is what
+  the drawer bought.** What a phone had before was a bottom tab bar — a second
+  list, agreeing with the sidebar only by hand. It had no identity card and no
+  Sign in button, so `/profile` had to stay in `NAV_ITEMS` unfiltered on the
+  phone's account while the sidebar filtered it out, and every rule below was a
+  rule with two halves. Shared, they have one: the card stands in for the entry
+  wherever there is a card, and a guest gets the link and the Sign in button
+  wherever there is not. `identityCard` is that filter and the reason the item
+  is not `authOnly` — a guest filtered out as well has no route to `/profile` at
+  all, which is where the theme switch lives and nowhere else. Nothing says so
+  from the machine the change is made on, whose navigation has a card. The
+  filter sits **inside `NavPanel`** rather than at either call site, because
+  whether the card stands in for an entry is the panel's own question: asked
+  from outside, the next reader gets the link *and* the card, both pointing at
+  `/profile`. What is pinned in `Layout.test.tsx` is *which* navigation holds
+  the way to the profile, asserted of both — jsdom has no breakpoints, so the
+  sidebar and the drawer are in the document at once and that is the only
+  readable form of which reader is served. It is asserted of the `/profile`
+  destination rather than of the label the entry carried, since a rename leaves
+  a second route to the profile above the card with every assertion about
+  "Profile" still passing. And it is asked **inside the `<nav>`**, which is the
+  third thing the card being the entry costs: the footer it lives in sat beside
+  that landmark, so a reader navigating by landmark got Browse, Lists and Admin
+  and no route to their own profile — working perfectly for everyone who can see
+  it. The footer moved inside the nav, and `flex-1` on the nav is what keeps the
+  layout: it takes the height the container was holding, so the footer's
+  `mt-auto` still has room to reach the bottom rather than stopping at the foot
+  of the links. The last piece is the card's lit and pressable treatments, which
+  are the links' own and are **shared as tokens rather than copied**, since
+  nothing pins the two agreeing: without the first, the profile screen is the
+  one place in the app where nothing in the navigation is lit, and without the
+  second — the link being gone — nothing is left saying the card can be pressed
+  at all. Only the lit token carries a text color, and that asymmetry is
+  deliberate: lit, the card's name takes the brand color exactly as a label
+  does, while at rest the links name a stone the card leaves to inherit. The
+  role line names its own either way, so it stays put under both.
+- **The drawer stays mounted while closed, and three things follow from it.**
+  Sliding is the point — a panel that unmounts has nothing to transition from —
+  and everything here is what that costs. It carries `role="dialog"` and
+  `aria-modal` **only while open**: `lib/modal.ts` asks the DOM for exactly that
+  pair and never for anything visible, so a closed drawer wearing them puts a
+  modal on the page for the whole session, and the song page's paging swipe and
+  arrow keys stand down permanently — on phones only, silently, with the drawer
+  itself behaving perfectly. `Layout.test.tsx` asks `modalIsOpen()` of a closed
+  drawer, which is what says so. **The marking is returned by `useModal` rather
+  than written by either modal**, which is what keeps "write it conditionally"
+  from being a rule an author has to remember: a modal that stays mounted gets
+  the conditional for free, and the `<dialog>`/`showModal()` migration
+  `lib/modal.ts` names becomes a change to that one module. The same hook
+  carries Escape, the scroll lock and the focus — deliberately **two effects
+  with different keys**, which is the whole reason it is a hook rather than one:
+  every call site passes `onClose` as an inline closure, so a focus restore
+  living in the first effect's cleanup fires on any render while the modal is
+  open and pulls focus onto the trigger behind the backdrop. Only the drawer
+  passes `focus`, a modal that unmounts having focus inside it already. It is
+  `inert` while closed, so its links
+  are out of the tab order and the accessibility tree rather than being a second
+  copy of the navigation a keyboard reaches through the page, and
+  `pointer-events-none` says the same to a browser that does not know `inert` —
+  without it the invisible backdrop swallows every press on the page behind.
+  The backdrop's **blur is gated on `open` while the element is not**, since
+  `backdrop-filter` is a composited layer the size of the viewport and would
+  otherwise be one on every page for as long as the app is open; it drops at
+  once rather than fading, which is invisible behind 40% black on its way out.
+  And it closes on **the location, not the pathname**: a link to the screen the
+  reader is already on pushes a new entry with the same path, so a drawer
+  watching the path alone is left standing open with nothing having happened.
+  That is its own effect rather than a line in the scroll-to-top one beside it,
+  whose `pathname` key is deliberate — a filter written into the catalog's query
+  string must not scroll that page back to the top. **A window that grows past
+  `md` closes it too**, which is a `matchMedia` subscription in a codebase that
+  otherwise leaves every breakpoint to CSS, so it needs saying why.
+  The panel and the hamburger are both `md:hidden`, so crossing the breakpoint
+  takes the whole control off the screen while `navOpen` goes on saying it is
+  open — and an open drawer nobody can see still costs everything an open modal
+  costs: the scroll lock freezes a desk's page with no modal on it, and
+  `modalIsOpen()` reads the marking off the DOM without asking what is visible,
+  so the song page's swipe and arrow keys stand down for the rest of the
+  session. A phone turned to landscape is 812px or more, so it is one rotation
+  away. It does not contradict `StickyHeader`'s reason for refusing
+  `matchMedia`: that one keeps a *class* in step with a window and hands the job
+  to CSS, where this is a one-way close of state whose only control has gone.
+  Pinned in `Layout.test.tsx`, which installs a `matchMedia` that can be moved —
+  the suite-wide stub answers `false` forever and registers no listeners.
+- **The hamburger is rendered by the app bars, and a screen gets its bar by
+  position.** The shell has no row of its own on a phone, and giving it one
+  would hand back the vertical space the tab bar was removed to reclaim — so the
+  button goes in the header a page already carries. `SearchHeader` leads its row
+  with it, unconditionally rather than by a prop, for the reason that component
+  exists at all: a page with the choice is a page whose field starts 52px
+  further left than the next one's, and that box moves under the finger that
+  just tapped through it. Every other screen gets `MenuHeader`, the same
+  `StickyHeader` and the same column with nothing but the button in it — and
+  gets it from `MenuBarLayout`, **a layout route around the section rather than
+  a wrapper written per screen**, which is `RequireAdmin`'s shape below for
+  `RequireAdmin`'s reason. Per route, the wrapper invites the failure it exists
+  to prevent: a route copied from one of the two exceptions above it ships a
+  screen with no navigation at all on a phone. Per page is worse, a page having
+  to carry it in every state it can be in — `ListDetailPage` has three returns
+  to `ProfilePage`'s two. What is left for a spec is the part position cannot
+  rule out, and `App.test.tsx` is it: it walks every address inside the shell
+  asking each for the one hamburger, and it **has to render the real route
+  table**, since the two mechanisms cannot see each other and nothing else looks
+  at both — the drawer's own specs mount a stand-in route tree and every page's
+  specs render the page with no shell at all. The column the two bars share is
+  one string in `SearchHeader.tsx`, and the spec compares them rather than
+  naming the classes: written out, it pins a copy staying in sync, which is the
+  weaker guarantee that component exists not to rely on. `MenuHeader` is
+  `mobileOnly` and that class belongs on the `<header>` rather than on what a
+  caller puts inside it, since a bordered box with a hidden child is still a
+  bordered box — a hairline across the top of every screen at a desk; wrapping
+  it instead breaks the stickiness, a sticky element being confined to its
+  parent's box. The trigger and the drawer
+  cannot be one component: `StickyHeader`'s transform and backdrop filter each
+  make it the containing block for anything `fixed` inside it, so a drawer
+  opened from the button would slide off the top of the screen with the header.
+  `lib/navDrawer.ts` is what joins them, and its default is a drawer that cannot
+  be opened — every page's own specs render that page with no shell above it,
+  and throwing there would make `Layout` something each of them has to mount.
 - **The admin console is a guarded section, not a pair of guarded screens.**
   `RequireAdmin` wraps the `/admin` layout route, whose element is the console's
   own chrome around an `<Outlet/>`, so a screen added below it is admin-only by
@@ -877,9 +955,12 @@ inventory this file records going stale under Head assets.)
   only, clear of the edges, no open sheet, and not starting on a control. "A
   sheet is open" is `lib/modal.ts` — one question for the swipe and the arrow
   keys both, asked of the DOM rather than of a page, so the next sheet is covered
-  without being added to a list. `Sheet` is the only writer of the pair of
-  attributes it looks for, and says so where it writes them; a move to `<dialog>`
-  and `showModal()` has to be answered there. The control guard is belt
+  without being added to a list. There are two modals — `Sheet` and the phone's
+  navigation drawer — and neither writes the pair of attributes it looks for:
+  `useModal`, in that same module, hands each of them the marking already
+  resolved for the open state, so a move to `<dialog>` and `showModal()` is a
+  change to `lib/modal.ts` and nowhere else. That is also what makes it safe for
+  the drawer to stay mounted while closed; see the Layout bullets above. The control guard is belt
   and suspenders and deliberately the safe way round — a swipe over a control does
   nothing, rather than a control being unreachable under the gesture, which is
   precisely how the strips went wrong.
@@ -1190,9 +1271,14 @@ inventory this file records going stale under Head assets.)
 - **The manifest declares `display: standalone`,** so an installed copy runs
   without browser chrome. That is a navigation decision as much as a cosmetic
   one: it takes away the browser's Back button and, on iOS, the OS edge-swipe.
-  What makes it safe is already in place and should stay — `Layout` renders a
-  bottom tab bar on phones, and `BackButton` covers both pages a reader
-  navigates *into*. Note this does **not** make `lib/swipe.ts`'s edge guard
+  What makes it safe is already in place and should stay — every screen carries
+  the hamburger that opens the navigation, and `BackButton` covers both pages a
+  reader navigates *into*. That is what `MenuBarLayout` is holding up in an
+  installed window, where there is no browser chrome to fall back on: a screen
+  that slipped through without a bar is merely awkward in Safari and is a dead
+  end here. It replaced a bottom tab bar, which gave the same guarantee by
+  position — which is why the bar is a layout route around a section and not a
+  wrapper each screen has to be given. Note this does **not** make `lib/swipe.ts`'s edge guard
   redundant: it is moot only inside an installed window, and most readers arrive
   in a browser, where the guard is the whole reason a page swipe does not also
   trigger Safari's back gesture. Those numbers are pinned from both sides

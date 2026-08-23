@@ -101,9 +101,9 @@ function SongArticle() {
   // rather than a region: a swipe is a movement and not a press, so it needs no
   // box of its own to be safe in — and a song with no lyrics still has somewhere
   // to make the gesture. It stops where the song stops, though, so a very short
-  // one leaves empty page below that pages nothing; the tab bar's own strip
-  // beneath it is not the song, and reading a swipe there would page a list from
-  // a press aimed at Browse.
+  // one leaves empty page below that pages nothing — which is the safe way
+  // round, a swipe below the lyrics doing nothing rather than the lyrics having
+  // a dead strip across them.
   const surface = useRef<HTMLElement>(null);
 
   const [listSheetOpen, setListSheetOpen] = useState(false);

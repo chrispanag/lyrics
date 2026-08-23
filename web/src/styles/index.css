@@ -109,8 +109,10 @@
     appearance: none;
   }
 
-  /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the
-     bottom of the viewport, which would otherwise sit on top of the tab bar. */
+  /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the edges
+     of the viewport, so anything pinned to one of them needs the inset added:
+     the sheet's scrolling body, and the navigation drawer, which reaches both
+     edges of the screen. */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }

@@ -65,7 +65,7 @@ describe("admin console routing", () => {
   it("keeps the console lit on a screen the entry does not name", async () => {
     renderWithProviders(<App />, { user: admin, route: "/admin/genres" });
 
-    // Rendered twice: the sidebar and the phone's tab bar.
+    // Rendered twice: the sidebar and the phone's navigation drawer.
     const entries = await screen.findAllByRole("link", { name: "Admin" });
     expect(entries.length).toBeGreaterThan(0);
     for (const entry of entries) {

@@ -1,9 +1,10 @@
 import { lazy } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 
 import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { Layout } from "@/components/Layout";
+import { MenuHeader } from "@/components/SearchHeader";
 import { PageTitle } from "@/components/PageTitle";
 import { EmptyState, Spinner } from "@/components/ui";
 import { hasRole } from "@/lib/types";
@@ -94,6 +95,37 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
 const UNVERIFIED_ROUTES = new Set(["/verify-email", "/forgot-password"]);
 
 /**
+ * A section of screens with no search box, given the app bar that carries a
+ * phone's way into the navigation.
+ *
+ * The catalog and a song page are the two that go without, and they are the two
+ * that render a search box: `SearchHeader` puts the hamburger in the row it
+ * already has, which is what keeps the drawer from costing back the vertical
+ * room the tab bar was removed to reclaim. Everything else sits inside this.
+ *
+ * A **section, not a wrapper around each screen** — the same shape and the same
+ * reason as `RequireAdmin` above: a screen added inside it has the bar by
+ * position, and the bar is not something the next screen can be written without.
+ * Written per route, as it first was, the failure it exists to prevent is the
+ * one its own shape invites — a route copied from one of the two exceptions
+ * above ships a screen with no navigation at all on a phone, silently, working
+ * perfectly at a desk and with no browser chrome to fall back on under
+ * `display: standalone`. Per page is worse still, since a page has to carry it
+ * in every state it can be in and `ListDetailPage` has three returns.
+ *
+ * The guards stay *inside* it, so the navigation is on screen while a session
+ * is still being restored.
+ */
+function MenuBarLayout() {
+  return (
+    <>
+      <MenuHeader />
+      <Outlet />
+    </>
+  );
+}
+
+/**
  * Holds an unverified account on the verification screen.
  *
  * The server refuses everything else it asks for, so any other page would
@@ -147,53 +179,59 @@ export function App() {
         />
 
         <Route element={<Layout />}>
+          {/* The two exceptions, and they are stated once: both render a search
+              box, so both carry the hamburger inside it. Everything else is in
+              the section below. */}
           <Route index element={<BrowsePage />} />
-          <Route path="/songs/new" element={<SongEditorPage />} />
           <Route path="/songs/:id" element={<SongDetailPage />} />
-          <Route path="/songs/:id/edit" element={<SongEditorPage />} />
-          <Route
-            path="/lists"
-            element={
-              <RequireAuth>
-                <ListsPage />
-              </RequireAuth>
-            }
-          />
-          <Route path="/lists/:id" element={<ListDetailPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          {/* One guarded section, not two guarded screens. The navigation
-              carries a single entry and points at `/admin` itself, so that
-              entry stays lit on every screen inside — which is what the index
-              redirect is for, the section needing a screen to open on. */}
-          <Route
-            path="/admin"
-            element={
-              <RequireAdmin>
-                <AdminConsole />
-              </RequireAdmin>
-            }
-          >
-            <Route index element={<Navigate to={ADMIN_TABS[0].to} replace />} />
-            <Route path="users" element={<AdminUsersPage />} />
-            <Route path="genres" element={<AdminGenresPage />} />
-          </Route>
 
-          {/* The catch-all renders rather than redirecting, so it needs naming
-              like any other screen: without this a mistyped URL keeps whatever
-              title the previous page set, and the tab goes on claiming a song
-              that is not on screen. */}
-          <Route
-            path="*"
-            element={
-              <>
-                <PageTitle name="Page not found" />
-                <EmptyState
-                  title="Page not found"
-                  description="That link does not lead anywhere."
-                />
-              </>
-            }
-          />
+          <Route element={<MenuBarLayout />}>
+            <Route path="/songs/new" element={<SongEditorPage />} />
+            <Route path="/songs/:id/edit" element={<SongEditorPage />} />
+            <Route
+              path="/lists"
+              element={
+                <RequireAuth>
+                  <ListsPage />
+                </RequireAuth>
+              }
+            />
+            <Route path="/lists/:id" element={<ListDetailPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            {/* One guarded section, not two guarded screens. The navigation
+                carries a single entry and points at `/admin` itself, so that
+                entry stays lit on every screen inside — which is what the index
+                redirect is for, the section needing a screen to open on. */}
+            <Route
+              path="/admin"
+              element={
+                <RequireAdmin>
+                  <AdminConsole />
+                </RequireAdmin>
+              }
+            >
+              <Route index element={<Navigate to={ADMIN_TABS[0].to} replace />} />
+              <Route path="users" element={<AdminUsersPage />} />
+              <Route path="genres" element={<AdminGenresPage />} />
+            </Route>
+
+            {/* The catch-all renders rather than redirecting, so it needs naming
+                like any other screen: without this a mistyped URL keeps whatever
+                title the previous page set, and the tab goes on claiming a song
+                that is not on screen. */}
+            <Route
+              path="*"
+              element={
+                <>
+                  <PageTitle name="Page not found" />
+                  <EmptyState
+                    title="Page not found"
+                    description="That link does not lead anywhere."
+                  />
+                </>
+              }
+            />
+          </Route>
         </Route>
       </Routes>
     </VerificationGate>
