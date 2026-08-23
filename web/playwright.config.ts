@@ -32,12 +32,17 @@ export default defineConfig({
     { name: "mobile", use: { ...devices["Pixel 7"] } },
   ],
 
+  // `npm run dev` is `next dev`, which answers this URL before it has compiled
+  // the page — the first request is what triggers that, and it is slower than
+  // anything Vite did here. So the wait is longer than the 60s it was, and it
+  // covers a cold .next as well: point E2E_BASE_URL at an already-running
+  // server to skip all of it.
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
         command: "npm run dev",
         url: "http://localhost:5173",
         reuseExistingServer: !process.env.CI,
-        timeout: 60_000,
+        timeout: 180_000,
       },
 });

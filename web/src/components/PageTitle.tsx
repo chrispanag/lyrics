@@ -8,6 +8,19 @@ const SUFFIX = "Songfolio";
  * this needs no effect, no ref and no library — and it unwinds on unmount,
  * which is what stops a title outliving the page that set it.
  *
+ * What makes that work is *where* it hoists to, and it is the reason
+ * app/layout.tsx deliberately exports no `title` in its metadata. React puts a
+ * hoisted title ahead of a title it does not manage — index.html's static one,
+ * under Vite — and `document.title` is the first title element in the head, so
+ * this one was read and the static one stayed a fallback. A Next `metadata`
+ * title is not such a node: React renders it too, from the layout, which is
+ * above every route here — so it sorts *first*, wins the read, and is written
+ * again when the streamed metadata boundary resolves after hydration. Adding
+ * one back therefore pins every tab in the app to the bare product name, and
+ * only in a browser: these specs assert `document.title` in jsdom, where there
+ * is no competing title to lose to. Verified against a real document, both
+ * ways round.
+ *
  * Shared rather than inlined for the reason `Wordmark` is: the suffix is the
  * product name, and a rename that reaches one screen and misses another fails
  * silently, since a tab renders perfectly well carrying last year's name.

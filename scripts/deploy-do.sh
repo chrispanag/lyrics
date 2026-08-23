@@ -61,24 +61,27 @@ import sys
 import yaml
 
 # Which environment variable supplies each placeholder. The frontend's app id and
-# session domain are the same values as the backend's under a VITE_ name, because
-# Vite only exposes variables carrying that prefix — and for the session domain
-# that shared source is load-bearing, not a convenience: the token issuer follows
-# whichever host the browser authenticates against, so the two copies disagreeing
-# means every login is rejected.
+# session domain are the same values as the backend's under a NEXT_PUBLIC_ name,
+# because Next only exposes variables carrying that prefix — and for the session
+# domain that shared source is load-bearing, not a convenience: the token issuer
+# follows whichever host the browser authenticates against, so the two copies
+# disagreeing means every login is rejected.
 SOURCES = {
     "PRELUDE_APP_ID": "PRELUDE_APP_ID",
     "PRELUDE_API_KEY": "PRELUDE_API_KEY",
     "PRELUDE_SESSION_DOMAIN": "PRELUDE_SESSION_DOMAIN",
     "ADMIN_EMAILS": "ADMIN_EMAILS",
-    "VITE_PRELUDE_APP_ID": "PRELUDE_APP_ID",
-    "VITE_PRELUDE_SDK_KEY": "VITE_PRELUDE_SDK_KEY",
-    "VITE_PRELUDE_SESSION_DOMAIN": "PRELUDE_SESSION_DOMAIN",
-    "VITE_PRELUDE_OTP_LOGIN_CONFIG_ID": "PRELUDE_OTP_LOGIN_CONFIG_ID",
+    "NEXT_PUBLIC_PRELUDE_APP_ID": "PRELUDE_APP_ID",
+    "NEXT_PUBLIC_PRELUDE_SDK_KEY": "PRELUDE_SDK_KEY",
+    "NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN": "PRELUDE_SESSION_DOMAIN",
+    "NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID": "PRELUDE_OTP_LOGIN_CONFIG_ID",
 }
 
 # The session client works without an SDK key, so an empty one is not a failure.
-OPTIONAL = {"VITE_PRELUDE_SDK_KEY"}
+# It is still reported, on the line below: "optional and empty" and "renamed in
+# .env and therefore empty" are the same thing from here, and the second is how
+# a build silently ships without a value this script is the only guard for.
+OPTIONAL = {"NEXT_PUBLIC_PRELUDE_SDK_KEY"}
 
 PLACEHOLDER = "SET_BY_DEPLOY_SCRIPT"
 
@@ -94,8 +97,14 @@ for group in ("services", "jobs", "static_sites", "workers"):
             key = env["key"]
             source = SOURCES.get(key)
             value = os.environ.get(source, "").strip() if source else ""
-            if not value and key not in OPTIONAL:
-                missing.append("{} (from ${})".format(key, source or key))
+            if not value:
+                if key in OPTIONAL:
+                    print(
+                        "warning: {} is empty (from ${})".format(key, source or key),
+                        file=sys.stderr,
+                    )
+                else:
+                    missing.append("{} (from ${})".format(key, source or key))
             env["value"] = value
 
 if missing:

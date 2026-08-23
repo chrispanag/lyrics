@@ -2,11 +2,11 @@ import { PrldSessionClient } from "@prelude.so/js-sdk/session";
 
 import { setTokenProvider } from "@/api/client";
 
-const APP_ID = import.meta.env.VITE_PRELUDE_APP_ID ?? "";
+const APP_ID = process.env.NEXT_PUBLIC_PRELUDE_APP_ID ?? "";
 // Optional. The SDK key is a publishable client identifier, not a secret — it
 // is safe in the bundle, unlike the Management API key, which must stay
 // server-side.
-const SDK_KEY = import.meta.env.VITE_PRELUDE_SDK_KEY ?? "";
+const SDK_KEY = process.env.NEXT_PUBLIC_PRELUDE_SDK_KEY ?? "";
 
 // The host this app authenticates against. A custom domain keeps the session
 // cookies first-party — `auth.songfolio.live` is a subdomain of the site, where
@@ -18,7 +18,7 @@ const SDK_KEY = import.meta.env.VITE_PRELUDE_SDK_KEY ?? "";
 // being the local default; `localhost` is a third party to either host, so
 // development runs against the same one production does.
 const SESSION_DOMAIN =
-  (import.meta.env.VITE_PRELUDE_SESSION_DOMAIN ?? "").trim() ||
+  (process.env.NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN ?? "").trim() ||
   `${APP_ID}.session.prelude.dev`;
 
 /**
@@ -33,7 +33,7 @@ const SESSION_DOMAIN =
  * signing in with the code. See CLAUDE.md, "Password reset".
  */
 export const OTP_LOGIN_CONFIG_ID = (
-  import.meta.env.VITE_PRELUDE_OTP_LOGIN_CONFIG_ID ?? ""
+  process.env.NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID ?? ""
 ).trim();
 
 /**

@@ -104,29 +104,33 @@ lint-backend: ## Lint the backend
 # --- frontend ----------------------------------------------------------------
 
 .PHONY: web
-# Vite only exposes variables prefixed with VITE_, so the app ID, the session
-# domain and the OTP login configuration are mapped across here rather than
-# duplicated in .env under two names. Four places do this mapping — here, the
-# `mobile` target, docker-compose.yml (plus web/Dockerfile) and
+# Next only exposes variables prefixed with NEXT_PUBLIC_, so the app ID, the
+# session domain and the OTP login configuration are mapped across here rather
+# than duplicated in .env under two names. Four places do this mapping — here,
+# the `mobile` target, docker-compose.yml (plus web/Dockerfile) and
 # scripts/deploy-do.sh — so a new variable has four to be added to.
 web: ## Run the web dev server
-	cd web && VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" \
-		VITE_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" \
-		VITE_PRELUDE_OTP_LOGIN_CONFIG_ID="$(PRELUDE_OTP_LOGIN_CONFIG_ID)" npm run dev
+	cd web && NEXT_PUBLIC_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" \
+		NEXT_PUBLIC_PRELUDE_SDK_KEY="$(PRELUDE_SDK_KEY)" \
+		NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" \
+		NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID="$(PRELUDE_OTP_LOGIN_CONFIG_ID)" npm run dev
 
 .PHONY: mobile
-# Same dev server, reached from a phone on the same network — Vite prints the
-# Network URL to open. Clearing VITE_API_BASE_URL (which .env sets to
+# Same dev server, reached from a phone on the same network — the dev script
+# binds every interface (`next dev -H 0.0.0.0`), so the address to open is this
+# machine's LAN IP on :5173. Next does not print it the way Vite did; `ipconfig
+# getifaddr en0` is it. Clearing NEXT_PUBLIC_API_BASE_URL (which .env sets to
 # localhost, i.e. the phone itself) is what sends API calls to this origin and
-# through the proxy in vite.config.ts.
+# through the rewrite in next.config.ts.
 #
 # Sign-in will not work over such a URL: it is not a secure context, so the
 # browser withholds crypto.subtle, which the Prelude SDK needs. Browsing,
 # search and public lists do.
 mobile: ## Run the web dev server for testing from a phone on this network
-	cd web && VITE_API_BASE_URL= VITE_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" \
-		VITE_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" \
-		VITE_PRELUDE_OTP_LOGIN_CONFIG_ID="$(PRELUDE_OTP_LOGIN_CONFIG_ID)" npm run dev
+	cd web && NEXT_PUBLIC_API_BASE_URL= NEXT_PUBLIC_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" \
+		NEXT_PUBLIC_PRELUDE_SDK_KEY="$(PRELUDE_SDK_KEY)" \
+		NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" \
+		NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID="$(PRELUDE_OTP_LOGIN_CONFIG_ID)" npm run dev
 
 .PHONY: install
 install: ## Install frontend dependencies
@@ -154,7 +158,7 @@ icons: ## Regenerate the app icons and og card from web/icons/*.svg
 # here too: without it the browser signs in against the default host while the
 # API expects the custom issuer, and every signed-in spec fails on a valid login.
 e2e: ## Run the Playwright smoke suite (needs Prelude credentials, see README)
-	cd web && VITE_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" npm run e2e
+	cd web && NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" npm run e2e
 
 # --- deployment --------------------------------------------------------------
 

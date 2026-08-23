@@ -119,11 +119,14 @@ services:
         scope: RUN_TIME
         value: SET_BY_DEPLOY_SCRIPT
 
-# Static assets are built by the Node buildpack and served from DigitalOcean's
-# CDN — no container, and no nginx.conf. `web/nginx.conf` still describes the
-# Compose deployment; the two need to agree on SPA fallback, which is what
-# catchall_document provides here.
-static_sites:
+  # The frontend, which is a *service* and no longer a static site: Next serves
+  # every document from a running Node process, so there is no directory of
+  # assets to hand to a CDN and no `catchall_document` to declare — the optional
+  # catch-all route in src/app is what answers every path the router owns. It is
+  # a service today rather than at the point server rendering arrives, so this
+  # change and that one cannot fail together. Both stacks now run the same two
+  # commands and read the same next.config.ts; web/Dockerfile says what became
+  # of nginx.
   - name: web
     github:
       repo: chrispanag/lyrics
@@ -131,42 +134,61 @@ static_sites:
       deploy_on_push: true
     source_dir: web
     build_command: npm run build
-    output_dir: dist
-    # Every unmatched path is a React Router route, not a missing file.
-    catchall_document: index.html
+    run_command: npm start
+    # `next start -p 3000` — the port is in web/package.json's start script, and
+    # the two have to agree.
+    http_port: 3000
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    instance_count: 1
+
+    # Nothing but the shell has to render for this to pass, which is the point:
+    # it says the Node process is up and serving, and the app's own data path is
+    # the API's health check above.
+    health_check:
+      http_path: /
+      initial_delay_seconds: 15
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
 
     envs:
-      # VITE_API_BASE_URL is deliberately unset: Vite inlines these at build
-      # time, and a production build with no override targets its own origin,
-      # which is exactly the routing below. Setting it here would bake a
+      # NEXT_PUBLIC_API_BASE_URL is deliberately unset: Next inlines these at
+      # build time, and a production build with no override targets its own
+      # origin, which is exactly the routing below. Setting it here would bake a
       # hostname into the bundle for no gain.
       #
       # Both values are publishable client identifiers — unlike PRELUDE_API_KEY,
       # they are meant to reach the browser. They are still filled from .env
       # rather than written here, so there is one place to change them.
-      - key: VITE_PRELUDE_APP_ID
+      - key: NEXT_PUBLIC_PRELUDE_APP_ID
         scope: BUILD_TIME
         value: SET_BY_DEPLOY_SCRIPT
-      - key: VITE_PRELUDE_SDK_KEY
+      - key: NEXT_PUBLIC_PRELUDE_SDK_KEY
         scope: BUILD_TIME
         value: SET_BY_DEPLOY_SCRIPT
       # Same value as the API's PRELUDE_SESSION_DOMAIN, and BUILD_TIME because
-      # Vite inlines it: leave it out and the bundle keeps calling the default
+      # Next inlines it: leave it out and the bundle keeps calling the default
       # `<app_id>.session.prelude.dev` host, whose cookies are third-party.
-      - key: VITE_PRELUDE_SESSION_DOMAIN
+      - key: NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN
         scope: BUILD_TIME
         value: SET_BY_DEPLOY_SCRIPT
       # Which login configuration password reset mails its code through. Also an
       # identifier rather than a secret, and required rather than optional: the
       # deploy fails without it, because a build that silently lacks it ships a
       # reset screen that can only apologize.
-      - key: VITE_PRELUDE_OTP_LOGIN_CONFIG_ID
+      - key: NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID
         scope: BUILD_TIME
         value: SET_BY_DEPLOY_SCRIPT
 
-# Longest prefix wins, so /api reaches the service and everything else the
-# assets. preserve_path_prefix is load-bearing: the router mounts at /api/v1,
+# Longest prefix wins, so /api reaches the Go service and everything else the
+# frontend. preserve_path_prefix is load-bearing: the router mounts at /api/v1,
 # and without it App Platform strips /api and every route 404s.
+#
+# Note what the first rule costs the frontend: /api belongs to the Go service
+# for the whole app, so a Next route handler under app/api/ is unreachable here
+# and would work perfectly in `next dev`. Anything server-side the frontend
+# needs must be mounted somewhere else.
 ingress:
   rules:
     - match:

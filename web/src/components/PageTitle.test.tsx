@@ -44,8 +44,12 @@ describe("PageTitle", () => {
   // insertions of the same line and one spec covers exactly one of them — with
   // only the signed-in case here, deleting the title from the other two leaves
   // the suite green, which is the regression the comment beside them exists to
-  // prevent. A branch left without one falls back to index.html's static title,
-  // not to the previous page's.
+  // prevent. A branch left without one does not fall back to the previous
+  // page's title, and no longer falls back to a product name either: nothing
+  // else in the document declares a title now that app/layout.tsx deliberately
+  // exports none, so the head is left with no title at all and the tab reads
+  // the URL. Which is why the assertions below are on `document.title` being
+  // the page's own name rather than on it merely having changed.
   describe("titles every branch of a route that renders it", () => {
     const user = { id: "u1", email: "reader@example.com", role: "user" } as const;
 

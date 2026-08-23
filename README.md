@@ -27,7 +27,7 @@ make api                  # run the API on :8080
 make install && make web  # run the web app on :5173
 ```
 
-Vite only exposes variables prefixed with `VITE_`, so `make web` maps
+Next only exposes variables prefixed with `NEXT_PUBLIC_`, so `make web` maps
 `PRELUDE_APP_ID` and `PRELUDE_SESSION_DOMAIN` across for you — there is no second
 copy to keep in sync.
 
@@ -35,10 +35,12 @@ copy to keep in sync.
 
 ### Testing from a phone
 
-`make mobile` runs the same dev server and prints a `Network:` URL to open on
-any device on the network. It differs from `make web` in one way: it clears
-`VITE_API_BASE_URL`, so the app calls its own origin and Vite proxies `/api` to
-the API over loopback — one origin, as in production, and no CORS entry to add.
+`make mobile` runs the same dev server, bound to every interface. Next does not
+print the LAN URL the way Vite did, so open `http://$(ipconfig getifaddr
+en0):5173` yourself. It differs from `make web` in one way: it clears
+`NEXT_PUBLIC_API_BASE_URL`, so the app calls its own origin and the dev server
+rewrites `/api` to the API over loopback — one origin, as in production, and no
+CORS entry to add.
 
 Pointing a phone straight at `:8080` instead does not work: macOS blocks
 incoming connections to the unsigned binary `go run` builds, so the port answers
@@ -282,7 +284,7 @@ PRELUDE_OTP_LOGIN_CONFIG_ID=lcfg_...
 ```
 
 — which `make web` and `scripts/deploy-do.sh` map to
-`VITE_PRELUDE_OTP_LOGIN_CONFIG_ID`. The deploy refuses to run without it; a dev
+`NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID`. The deploy refuses to run without it; a dev
 server started without it shows "Password reset is not configured for this
 deployment." on the first screen rather than failing as though Prelude were down.
 
@@ -366,7 +368,8 @@ UPDATE users SET role = 'admin' WHERE email = 'you@example.com';
 
 ```
 Browser ──── loginWithPassword / refresh ────► auth.songfolio.live
-   │                                            (Prelude, custom domain)
+   │  ▲                                         (Prelude, custom domain)
+   │  └── document ─── Next.js (next start) ── serves /, no session of its own
    │  Authorization: Bearer <access token>
    ▼
  Go API ──── verify JWT against JWKS ───────► same domain
@@ -374,6 +377,13 @@ Browser ──── loginWithPassword / refresh ────► auth.songfolio.
    ▼
 PostgreSQL   users · songs · people · genres · lists
 ```
+
+The Next server hands over the document and nothing else: the session belongs
+to the browser, where the Prelude SDK owns it, and every API call goes from the
+browser to the Go API with a token the Next process never sees. That is why
+authentication is unaffected by the frontend having a server at all — and it is
+the constraint any server-rendering work has to be designed around, since a
+server-rendered page cannot know who is asking.
 
 **Registration goes through our backend.** The browser SDK can log a user in
 but cannot sign one up — creating a user is a Management API call needing the
@@ -572,11 +582,13 @@ on the verification screen with a code only a human inbox can supply. It skips
 itself unless you provide real credentials:
 
 ```bash
-VITE_PRELUDE_APP_ID=... E2E_USER_EMAIL=... E2E_USER_PASSWORD=... make e2e
+NEXT_PUBLIC_PRELUDE_APP_ID=... E2E_USER_EMAIL=... E2E_USER_PASSWORD=... make e2e
 ```
 
 Point the suite at an already-running stack with `E2E_BASE_URL=http://localhost:5173`;
-otherwise Playwright starts its own dev server.
+otherwise Playwright starts its own dev server — which under Next answers that
+URL before it has compiled the page, so the first request is slow and the wait
+is correspondingly long. Reusing a warm server is much quicker.
 
 ---
 
@@ -644,16 +656,21 @@ seven groups of genuinely different songs that share one.
 
 | Component | Kind          | Built from                | Serves                          |
 | --------- | ------------- | ------------------------- | ------------------------------- |
-| `web`     | static site   | `web/`, Node buildpack    | `/` — the built assets, via CDN |
+| `web`     | service       | `web/`, Node buildpack    | `/` — Next.js, via `next start` |
 | `api`     | service       | `backend/Dockerfile`      | `/api` — the Go API             |
 | `migrate` | pre-deploy job | `backend/Dockerfile`     | nothing; applies the schema     |
 | `db`      | dev database  | managed PostgreSQL 17     | —                               |
 
-Everything is one origin. `/api` routes to the service with the path prefix
+Everything is one origin. `/api` routes to the Go service with the path prefix
 preserved (the router mounts at `/api/v1`), and every other path falls through
-to the assets, with `catchall_document` handling client-side routes. A
-production build of the frontend has no API base URL compiled into it and calls
-its own origin, so moving the app to another domain never means rebuilding it.
+to the frontend, whose optional catch-all route answers the addresses the
+client-side router owns. A production build of the frontend has no API base URL
+compiled into it and calls its own origin, so moving the app to another domain
+never means rebuilding it.
+
+One consequence worth knowing: `/api` belongs to the Go service, so a Next route
+handler under `app/api/` is unreachable here — see the note on the ingress rule
+in `.do/app.yaml`.
 
 ### Before the first deploy
 
@@ -661,9 +678,13 @@ its own origin, so moving the app to another domain never means rebuilding it.
    DigitalOcean's GitHub app needs access to it. This is the one step with no
    API: grant it under GitHub → Settings → Applications → DigitalOcean.
 2. **Fill in `.env`** — `PRELUDE_APP_ID`, `PRELUDE_API_KEY`, `ADMIN_EMAILS`, and
-   optionally `VITE_PRELUDE_SDK_KEY`. The tracked spec holds placeholders where
-   these belong; `scripts/deploy-do.sh` substitutes them at request time so no
-   credential is ever written to a tracked file.
+   optionally `PRELUDE_SDK_KEY`. That last one carries no framework prefix in
+   `.env`, like every other Prelude value there: each mapping site adds the
+   prefix, and `scripts/deploy-do.sh` reads the unprefixed name. Under the
+   prefixed one it reads nothing, and since an empty SDK key is only a warning
+   the build ships without it. The tracked spec holds placeholders where these
+   belong; the script substitutes them at request time so no credential is ever
+   written to a tracked file.
 3. **Get an API token** with write scope and export it as
    `DIGITALOCEAN_ACCESS_TOKEN`, or add it to `.env`.
 
@@ -736,7 +757,12 @@ backend/
     config/ httpx/ testutil/
   migrations/        golang-migrate SQL, plus seed.sql
 web/
+  next.config.ts     security headers; the dev-only /api rewrite
   src/
+    app/             the Next App Router tree: root layout (head, metadata,
+                     the no-flash theme script) and one optional catch-all
+                     page, which hands every address to the router below
+    AppRoot.tsx      providers and the router, mounted client-only
     api/             typed fetch client, TanStack Query hooks
     auth/            Prelude session provider
     components/      layout, primitives, song card, autocomplete
