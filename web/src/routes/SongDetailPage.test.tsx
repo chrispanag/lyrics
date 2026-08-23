@@ -7,6 +7,7 @@ import { Route, Routes, useLocation } from "react-router-dom";
 import { SongDetailPage } from "./SongDetailPage";
 import { keys } from "@/api/hooks";
 import { returnDestination } from "@/auth/returnTo";
+import { BackButton } from "@/components/BackButton";
 import { deferred } from "@/test/deferred";
 import {
   API,
@@ -52,6 +53,20 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
     <Routes>
       <Route path="/songs/:id" element={<SongDetailPage />} />
       <Route path="/login" element={<SignInStub />} />
+      {/* The page a reader comes into a list from, and so the page Back has to
+          reach again — whether they read one song or ten. Whether a step pushed
+          or replaced is invisible in the address, so pressing Back is the only
+          way a spec can see it, and it carries the real `BackButton` for the one
+          spec that presses it from here rather than from the song. */}
+      <Route
+        path="/lists/:id"
+        element={
+          <div>
+            <h1>List page</h1>
+            <BackButton />
+          </div>
+        }
+      />
       {/* Where a deleted song leaves the reader, since the song they were on is
           gone. Stubbed so that landing is something a spec can see. */}
       <Route path="/" element={<h1>Catalog</h1>} />
@@ -627,6 +642,70 @@ describe("SongDetailPage inside a list", () => {
     expect(screen.getByText("3 of 3")).toBeInTheDocument();
   });
 
+  /*
+   * Back is the way out of the list, and the trail is the only place that shows
+   * it: the address is right either way, and it was right the whole time pushed
+   * entries made leaving a twenty-song list twenty presses of one control.
+   *
+   * Asserted of each of the three ways through a list, since each says "replace"
+   * in its own way — a prop on the bar's links, an option on the two `navigate`
+   * calls — so one of them regressing is invisible in the other two.
+   */
+
+  /** One press of the page's own Back, and the list is behind the reader. */
+  async function backLeavesTheList(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByRole("heading", { name: "List page" })).toBeInTheDocument();
+  }
+
+  // Two steps rather than one, because the claim is that the trail does not grow
+  // however far a reader reads.
+  it("leaves the list on the first Back press, however far the reader stepped", async () => {
+    const user = userEvent.setup();
+    serveList();
+
+    renderDetail({ route: ["/lists/list-1", "/songs/song-1?list=list-1"] });
+
+    await user.click(await screen.findByRole("link", { name: "Next song" }));
+    await screen.findByRole("heading", { name: "Second" });
+    await user.click(screen.getByRole("link", { name: "Next song" }));
+    await screen.findByRole("heading", { name: "Third" });
+
+    await backLeavesTheList(user);
+  });
+
+  it("leaves the list on the first Back press after an arrow-key step", async () => {
+    const user = userEvent.setup();
+    serveList();
+
+    renderDetail({ route: ["/lists/list-1", "/songs/song-1?list=list-1"] });
+    await screen.findByRole("heading", { name: "First" });
+
+    await user.keyboard("{ArrowRight}");
+    await screen.findByRole("heading", { name: "Second" });
+
+    await backLeavesTheList(user);
+  });
+
+  // The exception, and the only claim of the three that a step *not* replacing
+  // would satisfy: the list's own name is a link to another page rather than a
+  // step through this one. Given `replace` "for consistency with the arrows" it
+  // would leave a reader who came from that list holding two identical entries,
+  // and a Back press that appears not to move.
+  it("keeps the song behind the list when the bar's own name is pressed", async () => {
+    const user = userEvent.setup();
+    serveList();
+
+    renderDetail({ route: ["/lists/list-1", "/songs/song-2?list=list-1"] });
+
+    await user.click(await screen.findByRole("link", { name: "Ρεμπέτικα" }));
+    await screen.findByRole("heading", { name: "List page" });
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
+  });
+
   // The bar says where the reader is in the list, and the address already says
   // it — so a step through the list keeps the bar up while the next song loads
   // instead of dropping it and drawing it again a moment later.
@@ -753,6 +832,18 @@ describe("SongDetailPage inside a list", () => {
     swipe(await openSecond(), 500, 620);
 
     expect(await screen.findByRole("heading", { name: "First" })).toBeInTheDocument();
+  });
+
+  // The third of the three ways through a list, and the one a phone actually
+  // uses — so a swipe that pushed would put the whole trail back exactly where
+  // Back is the system gesture. See the trail specs above for why this matters.
+  it("leaves the list on the first Back press after a swipe", async () => {
+    const user = userEvent.setup();
+
+    swipe(await openSecond({ route: ["/lists/list-1", "/songs/song-2?list=list-1"] }), 500, 380);
+    await screen.findByRole("heading", { name: "Third" });
+
+    await backLeavesTheList(user);
   });
 
   // Both screen edges are already spoken for — back and forward in Safari, the
@@ -1004,27 +1095,29 @@ describe("SongDetailPage inside a list", () => {
     expect(observed[0]).toContainElement(screen.getByText("Swipe through the list"));
   });
 
-  it("names them again where the lyrics end", async () => {
-    serveList();
-
-    renderDetail({ route: "/songs/song-2?list=list-1" });
-
-    const footer = await screen.findByRole("navigation", { name: /more from this list/i });
-    expect(within(footer).getByRole("link", { name: "Previous First" })).toBeInTheDocument();
-    expect(within(footer).getByRole("link", { name: "Next Third" })).toBeInTheDocument();
-  });
-
-  // A list of one has nothing on either side, and the footer's border alone
-  // under the lyrics reads as a section that failed to load.
-  it("draws no footer on a list of one", async () => {
+  // A list of one has nowhere to swipe to, and the mark that says the gesture is
+  // there is spent once per device — so building it here would spend that showing
+  // on a page with no gesture on it, which is the failure `useSwipeHint`'s
+  // observer exists to prevent, arriving from a third side. The bar stays: "1 of
+  // 1", two dead arrows, and the link to the list, which is still the way back
+  // for a shared link. The one spec that served a one-song list was the footer's,
+  // and it went with the footer — leaving this guard pinned by nothing.
+  it("draws no swipe mark on a list of one, and spends no showing on it", async () => {
     serveList([inList[1]!]);
 
     renderDetail({ route: "/songs/song-2?list=list-1" });
 
-    expect(await screen.findByText("1 of 1")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("navigation", { name: /more from this list/i }),
-    ).not.toBeInTheDocument();
+    // The song, not just the list: the swipe waits for one, so asserting before
+    // it lands would pass against a mark that simply had not been built yet.
+    await screen.findByRole("heading", { name: "Second" });
+    expect(screen.getByText("1 of 1")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Next song" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Previous song" })).not.toBeInTheDocument();
+
+    expect(screen.queryByText("Swipe through the list")).not.toBeInTheDocument();
+    expect(observedElements()).toHaveLength(0);
+    act(() => intersectAll());
+    expect(localStorage.getItem("lyrics:swipe-hint-seen")).toBeNull();
   });
 
   // A song taken out of the list in another tab, or a parameter typed by hand.

@@ -21,7 +21,7 @@ import {
 } from "@/api/hooks";
 import { returnTo } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
-import { ListSongNavBar, ListSongNavFooter, ListSongSwipe } from "@/components/ListSongNav";
+import { ListSongNavBar, ListSongSwipe } from "@/components/ListSongNav";
 import { PageTitle } from "@/components/PageTitle";
 import { PersonLinks } from "@/components/PersonLinks";
 import { SongSearch } from "@/components/SongSearch";
@@ -356,8 +356,6 @@ function SongArticle() {
           </p>
         </section>
       )}
-
-      {position && <ListSongNavFooter position={position} />}
 
       {/* The song itself is not wanted here — a list holds ids — so the sheet
           opens on a song still loading, which is what lets Save be pressed the

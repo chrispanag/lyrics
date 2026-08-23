@@ -925,14 +925,40 @@ inventory this file records going stale under Head assets.)
   Dropped anywhere along the way, the next song is a dead end: the page still
   renders, the reader is simply out of the list with nothing saying so. Which is
   why `lib/listContext.ts` builds every destination — a `ListPosition` hands the
-  navigation steps that already carry their `href`, so no component below it can
-  forget the parameter, and only `SongCard` (whose row passes `listId`) composes
-  one itself. Steps are **pushed, not replaced**: the back gesture — and
-  `BackButton`, which is the same thing — walks back through the songs a reader
-  came through and reaches the list at the end of them. Replacing instead would
-  collapse the trail to one entry and send the first press to the list, which is
-  the same two controls behaving differently; the list's name in the bar is the
-  press that skips the trail.
+  navigation the `previousHref` and `nextHref` it steps to, so no component below
+  it can forget the parameter, and only `SongCard` (whose row passes `listId`)
+  composes one itself.
+- **Steps through a list are `replace`d, not pushed.** Back — the browser's
+  button, the phone's gesture and `BackButton`, which are all one history — is
+  the way *out* of the list, landing on whatever the *song* was opened from —
+  which, for a reader who came in through the list, is the list itself. Pushing
+  was the earlier answer and the trail it built is what this undoes: the way out
+  of a twenty-song list was twenty presses of one control, each landing
+  on a song page that looks like the one before it, with nothing on screen saying
+  how many were left. Three things step through a list and no more — the bar's
+  two arrows, the swipe, the arrow keys — and each says "replace" in its own way,
+  a prop on a `<Link>` against an option on two `navigate` calls, so **one of
+  them regressing is invisible in the other two**: it changes no address, and
+  shows up only as Back refusing to leave the list. All three are pinned
+  separately in `SongDetailPage.test.tsx`, against a route array, since a trail
+  is not something an address can show. A fourth was dropped in the same change,
+  and its own cost is worth knowing: the footer naming the songs either side was
+  the one thing at the end of long lyrics saying where they led, so a reader at a
+  desk who has scrolled the bar away now has no visible way on — the arrow keys
+  are undiscoverable and the mark that advertises the swipe is `md:hidden`. The
+  neighbors' *titles* went with it, `ListPosition` carrying addresses only, so
+  naming them anywhere again means putting that field back.
+- **The list's own name in the bar is the exception and still pushes**, being a
+  link to another page rather than a step through this one. Given `replace` for
+  consistency with the arrows, a reader who arrived from that list is left
+  holding two identical entries in a row and a Back press that appears not to
+  move — the duplicate-entry trap the editor's way out documents below, and
+  pinned here by the spec that presses the name and then goes back to the song.
+  What replacing everything else costs is the shared link: a reader who opened a
+  song cold has one entry and no page behind it, so a step replaces the only
+  thing Back could have returned to and the next press leaves the site. That
+  reader is exactly who the list's name has always been there for, and it is the
+  accepted cost — a song opened cold was never in a trail to keep.
 - **A search jump is the one destination that leaves `?list=` behind, and it has
   to.** Every other address on the song page carries the list forward, so this
   reads as the omission the bullet above warns about and is the opposite: a song
