@@ -2,32 +2,43 @@ import { useEffect, useState, type RefObject } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ListMusic } from "lucide-react";
 
-import { cardChrome, cardHover } from "./cardStyles";
+import { cardChrome } from "./cardStyles";
 import { cn } from "@/lib/cn";
-import type { ListPosition, ListStep } from "@/lib/listContext";
+import type { ListPosition } from "@/lib/listContext";
 import { modalIsOpen } from "@/lib/modal";
 import { startsClearOfEdges, swipeDirection } from "@/lib/swipe";
 
 /*
  * Moving through a list without leaving it.
  *
- * Three ways through one list, because they are reached differently: the bar is
- * there before the song is read, the swipe is under the thumb while it is being
- * read on a phone, and the footer is what the end of long lyrics arrives at. The
- * two that can be pressed are <Link>s rather than buttons — the destination is a
- * URL, so opening a neighbor in a new tab, and everything else a browser does
- * with links, comes for free.
+ * Three ways through one list, because they are reached differently: the bar's
+ * arrows are on screen before the song is read, the arrow keys are under the
+ * hands at a desk, and the swipe is under the thumb on a phone. Only the first
+ * is something to press, and those are <Link>s rather than buttons — the
+ * destination is a URL, so opening a neighbor in a new tab, and everything else
+ * a browser does with links, comes for free.
  *
  * Nothing here builds an address. A step arrives with its own href (see
  * `lib/listContext`), so the list cannot be dropped from the URL on the way
  * down — the one failure that would leave a reader out of the list with the page
  * looking perfectly correct.
  *
- * Steps are pushed rather than replaced, so the back gesture — and the Back
- * button, which is the same thing — walks back through the songs the reader came
- * through, one at a time, and out to the list at the end of them. The cost is
- * accepted deliberately: twenty steps forward is twenty entries to come back
- * through, and the list's own name in the bar is the one press that skips them.
+ * Every step *replaces* the entry it leaves rather than pushing onto it — all
+ * three of them, each saying so in its own way, which is why each is pinned on
+ * its own — so the trail behind a reader is the one they walked to get into the
+ * list and not the songs they have read since. Back — the browser's, the
+ * gesture, and the page's own button, which are all the same history — therefore
+ * leaves the list for whatever the song was opened from. Pushing was the earlier
+ * answer and the cost was not worth it: the way out of a twenty-song list was
+ * twenty presses of one control, each landing on a song page that looks like the
+ * one before, with nothing on screen to say how many were left. Moving inside
+ * the list is what the bar and the swipe are for; Back is the way out of it.
+ *
+ * The list's own name is the exception and pushes, being a link to another page
+ * rather than a step through this one. Replacing there would leave a reader who
+ * arrived from that list holding two identical entries in a row, and a Back press
+ * that appears not to move — the duplicate-entry trap the editor's own way out
+ * documents.
  */
 
 // The chrome of the bar's arrows. Deliberately not `rowControlChrome`, whose
@@ -66,8 +77,8 @@ export function ListSongNavBar({ position }: { position: ListPosition }) {
         {position.index + 1} of {position.total}
       </span>
 
-      <StepArrow step={position.previous} back />
-      <StepArrow step={position.next} />
+      <StepArrow href={position.previousHref} back />
+      <StepArrow href={position.nextHref} />
     </nav>
   );
 }
@@ -82,10 +93,10 @@ export function ListSongNavBar({ position }: { position: ListPosition }) {
  * hover state, and a dead arrow that lights up under the pointer reads as a
  * control that has stopped working.
  */
-function StepArrow({ step, back }: { step?: ListStep; back?: boolean }) {
+function StepArrow({ href, back }: { href?: string; back?: boolean }) {
   const Icon = back ? ChevronLeft : ChevronRight;
 
-  if (!step) {
+  if (!href) {
     return (
       <span aria-hidden className="shrink-0 p-2 opacity-30">
         <Icon className="size-5" />
@@ -93,8 +104,15 @@ function StepArrow({ step, back }: { step?: ListStep; back?: boolean }) {
     );
   }
 
+  // `replace` is this step's whole share of the rule at the top of the file, and
+  // the one statement of it that is markup rather than a call.
   return (
-    <Link to={step.href} aria-label={back ? "Previous song" : "Next song"} className={stepChrome}>
+    <Link
+      to={href}
+      replace
+      aria-label={back ? "Previous song" : "Next song"}
+      className={stepChrome}
+    >
       <Icon aria-hidden className="size-5" />
     </Link>
   );
@@ -164,7 +182,7 @@ export function ListSongSwipe({
   // spent mark anyway would leave an invisible fixed box over every song page
   // for good, which is the shape of thing this page has just got rid of.
   if (hinting === null) return null;
-  if (!position.previous && !position.next) return null;
+  if (!position.previousHref && !position.nextHref) return null;
 
   return (
     <div
@@ -176,11 +194,11 @@ export function ListSongSwipe({
       // same allowance the page itself makes for it.
       //
       // `md:hidden` is also what keeps the single showing from being spent at a
-      // desk, where the arrows and the footer are the way through and there is
-      // no swipe to explain: a hidden element has no box, so it never comes into
-      // view and `useSwipeHint` never fires. Which matters most on the machines
-      // that are both — a tablet in landscape spends nothing, and has the mark
-      // waiting when it is turned.
+      // desk, where the bar's arrows and the arrow keys are the way through and
+      // there is no swipe to explain: a hidden element has no box, so it never
+      // comes into view and `useSwipeHint` never fires. Which matters most on
+      // the machines that are both — a tablet in landscape spends nothing, and
+      // has the mark waiting when it is turned.
       className="pointer-events-none fixed inset-x-0 bottom-24 z-30 flex justify-center md:hidden"
     >
       {/* Opaque and inverted, because it floats over the lyrics: a translucent
@@ -194,26 +212,12 @@ export function ListSongSwipe({
           hinting ? "opacity-100" : "opacity-0",
         )}
       >
-        {position.previous && <ChevronLeft className="size-4" />}
+        {position.previousHref && <ChevronLeft className="size-4" />}
         Swipe through the list
-        {position.next && <ChevronRight className="size-4" />}
+        {position.nextHref && <ChevronRight className="size-4" />}
       </span>
     </div>
   );
-}
-
-/**
- * The addresses either side, apart from the steps that carry them.
- *
- * Both gestures below hold these rather than `position`, which is built during
- * render and so is a new object every time: holding it would rebuild their
- * listeners on every re-render the page has — a query settling, the reader
- * changing the text size. Two strings and `navigate` are also the whole of what
- * either listener reads, which keeps what it holds for the life of the window
- * down to that.
- */
-function stepHrefs(position: ListPosition): { previousHref?: string; nextHref?: string } {
-  return { previousHref: position.previous?.href, nextHref: position.next?.href };
 }
 
 /**
@@ -233,7 +237,12 @@ function stepHrefs(position: ListPosition): { previousHref?: string; nextHref?: 
  */
 function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement | null>): void {
   const navigate = useNavigate();
-  const { previousHref, nextHref } = stepHrefs(position);
+  // The two strings rather than `position` itself, which is built during render
+  // and so is a new object every time: held whole, the listeners below would be
+  // torn down and rebuilt on every re-render the page has — a query settling,
+  // the reader changing the text size. These and `navigate` are also the whole
+  // of what either one reads.
+  const { previousHref, nextHref } = position;
 
   useEffect(() => {
     const element = surface.current;
@@ -312,7 +321,9 @@ function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement |
       const href = direction === "next" ? nextHref : previousHref;
       if (!href) return;
 
-      navigate(href);
+      // Replaced, not pushed — the rule at the top of the file, which is what
+      // leaves the back gesture as the way out of the list.
+      navigate(href, { replace: true });
     };
 
     element.addEventListener("touchstart", onStart, { passive: true });
@@ -405,62 +416,6 @@ function useSwipeHint(): [boolean | null, (element: HTMLElement | null) => void]
 }
 
 /**
- * The songs on either side, named, where long lyrics end.
- *
- * The bar has scrolled away by the time a reader reaches here, and the swipe that
- * replaced it says nothing about what it leads to. This is the one place with the
- * room to name both.
- *
- * A list of one has neither, and the empty rule its border would draw under the
- * lyrics reads as a section that failed to load. The bar stays in that case: "1
- * of 1" and a link to the list is still the way back for a shared link.
- */
-export function ListSongNavFooter({ position }: { position: ListPosition }) {
-  if (!position.previous && !position.next) return null;
-
-  return (
-    <nav
-      aria-label="More from this list"
-      className="mt-10 grid gap-2 border-t border-stone-200 pt-5 sm:grid-cols-2 dark:border-stone-800"
-    >
-      <StepCard step={position.previous} back />
-      <StepCard step={position.next} />
-    </nav>
-  );
-}
-
-function StepCard({ step, back }: { step?: ListStep; back?: boolean }) {
-  if (!step) return null;
-
-  const Icon = back ? ChevronLeft : ChevronRight;
-
-  return (
-    <Link
-      to={step.href}
-      className={cn(
-        cardChrome,
-        cardHover,
-        "flex items-center gap-2 px-3 py-3",
-        // The second column is claimed rather than left to auto-placement, which
-        // only puts it there when there is a step back to fill the first — so on
-        // the opening song the way forward would otherwise slide across to where
-        // a way back would have been. A no-op in every other case.
-        back ? undefined : "justify-end text-right sm:col-start-2",
-      )}
-    >
-      {back && <Icon aria-hidden className="size-5 shrink-0 text-stone-400" />}
-      <span className="min-w-0">
-        <span className="block text-xs uppercase tracking-wide text-stone-500 dark:text-stone-400">
-          {back ? "Previous" : "Next"}
-        </span>
-        <span className="block truncate font-medium">{step.title}</span>
-      </span>
-      {!back && <Icon aria-hidden className="size-5 shrink-0 text-stone-400" />}
-    </Link>
-  );
-}
-
-/**
  * Arrow keys, for reading a list at a desk.
  *
  * Left and right rather than up and down, which scroll the lyrics. A modifier
@@ -475,7 +430,9 @@ function StepCard({ step, back }: { step?: ListStep; back?: boolean }) {
  */
 function useArrowKeyPaging(position: ListPosition): void {
   const navigate = useNavigate();
-  const { previousHref, nextHref } = stepHrefs(position);
+  // The two strings rather than `position` itself, for the reason
+  // `useSwipePaging` gives above.
+  const { previousHref, nextHref } = position;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -494,7 +451,9 @@ function useArrowKeyPaging(position: ListPosition): void {
       // document sideways by default, so without this a song whose lyrics
       // overflow the column pages *and* scrolls on one press.
       event.preventDefault();
-      navigate(href);
+      // Replaced, not pushed — the rule at the top of the file, stated a third
+      // time because this is the third place it can be dropped from.
+      navigate(href, { replace: true });
     };
 
     window.addEventListener("keydown", onKeyDown);
