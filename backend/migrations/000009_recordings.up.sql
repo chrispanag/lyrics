@@ -201,10 +201,18 @@ $$;
 -- each recomputing a tsvector over the whole lyrics — and the rebuild at the end
 -- makes every one of them dead work. Nothing observes the gap: the file runs as
 -- one implicit transaction, and that rebuild closes it.
+--
+-- youtube_video_id is in the predicate as well as the URL, and it is not
+-- redundant: both writers of that pair set them together, so an id without a
+-- link is a state nothing produces today — but this is the one moment such a
+-- row could be rescued, and left out of the test it would get no recording and
+-- the rebuild at the end would then null the id it was the only record of. A
+-- column this block copies has to be a column it looks at.
 WITH source AS (
   SELECT s.id AS song_id, s.youtube_url, s.youtube_video_id, s.release_year
   FROM songs s
   WHERE s.youtube_url IS NOT NULL
+     OR s.youtube_video_id IS NOT NULL
      OR s.release_year IS NOT NULL
      OR EXISTS (
           SELECT 1 FROM song_credits sc

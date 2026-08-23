@@ -354,6 +354,17 @@ func (r record) cleanRecordings(performers []resolvedPerformer, w *warnings) []r
 			w.add("record carries both explicit recordings and %d performer credit(s); the credits were dropped",
 				len(performers))
 		}
+		// The other two record-level fields this branch cannot use, reported for
+		// the same reason as the performers above. Left silent, a source that
+		// stated its recordings *and* kept the legacy pair lost the link and the
+		// year of every such row behind a successful import — and the asymmetry
+		// read as though these two were being handled somewhere.
+		if strings.TrimSpace(derefOr(r.YouTubeURL)) != "" {
+			w.add("record carries both explicit recordings and a record-level youtube_url; the link was dropped")
+		}
+		if r.ReleaseYear != nil {
+			w.add("record carries both explicit recordings and a record-level release_year; the year was dropped")
+		}
 		out := make([]resolvedRecording, 0, len(r.Recordings))
 		firstTaken := false
 		for i, rec := range r.Recordings {

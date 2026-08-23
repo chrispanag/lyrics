@@ -310,4 +310,42 @@ describe("SongEditorPage", () => {
 
     expect(screen.getByLabelText("Label")).toHaveValue("Live στο Λυκαβηττό");
   });
+
+  // A field error has to land on the row that earned it, and the row's index in
+  // the form is not the index the server counted: blank rows are dropped from
+  // the payload, so the server keys `recordings[0]` on what is Recording 2 here.
+  // Read by the draft index instead, the message appears under the empty row —
+  // which has no link in it at all — and the row that does looks fine. Both
+  // halves are asserted, because the wrong-row version satisfies "the message is
+  // on screen" perfectly.
+  it("puts a recording's error on the row the server counted", async () => {
+    server.use(
+      http.post(`${API}/api/v1/songs`, () =>
+        HttpResponse.json(
+          {
+            error: {
+              code: "validation_failed",
+              message: "The song could not be saved.",
+              details: { "recordings[0].youtube_url": "Not a recognizable YouTube link." },
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderEditor({ route: "/songs/new" });
+
+    await userEvent.type(await screen.findByLabelText("Title"), "Λάθος Σύνδεσμος");
+    // An abandoned empty row, then the one carrying the bad link.
+    await userEvent.click(screen.getByRole("button", { name: /add recording/i }));
+    await userEvent.click(screen.getByRole("button", { name: /add recording/i }));
+    const links = screen.getAllByLabelText("YouTube link");
+    await userEvent.type(links[1]!, "https://vimeo.com/123");
+
+    await userEvent.click(screen.getByRole("button", { name: "Add song" }));
+
+    const message = await screen.findByText("Not a recognizable YouTube link.");
+    expect(links[1]!).toHaveAttribute("aria-describedby", message.id);
+    expect(links[0]!).not.toHaveAttribute("aria-describedby", message.id);
+  });
 });

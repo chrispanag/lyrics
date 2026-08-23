@@ -579,7 +579,7 @@ func (s *Store) attachRecordings(
 	return nil
 }
 
-// GetSong loads a single song with its credits and genres.
+// GetSong loads a single song with its credits, genres and recordings.
 func (s *Store) GetSong(ctx context.Context, id uuid.UUID) (*Song, error) {
 	var song Song
 	query := "SELECT " + songColumns + " FROM songs s WHERE s.id = $1"

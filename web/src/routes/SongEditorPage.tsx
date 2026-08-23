@@ -257,6 +257,28 @@ export function SongEditorPage() {
       recordings.map((recording, i) => ({ ...recording, isFirst: i === index })),
     );
 
+  /**
+   * A recording's field error, looked up by the index the server keyed it on.
+   *
+   * That is not the row's index in the form. Blank rows are dropped from the
+   * payload, so the server counts only the rows it was actually sent — and read
+   * by the draft index instead, a message lands on whichever row happens to sit
+   * at the payload's position: with one abandoned empty row above a bad link,
+   * "Not a recognizable YouTube link." appears under the empty row, which has no
+   * link in it at all, and the row that does shows nothing wrong. With two, the
+   * key matches no row and the message disappears, leaving only "The song could
+   * not be saved."
+   *
+   * A blank row is sent nothing and so can own no error, which is what the guard
+   * says; without it a blank row would claim the message belonging to the next
+   * row down.
+   */
+  const recordingError = (index: number, field: string): string | undefined => {
+    if (isBlankRecording(recordings[index]!)) return undefined;
+    const sent = recordings.slice(0, index).filter((r) => !isBlankRecording(r)).length;
+    return fieldErrors[`recordings[${sent}].${field}`];
+  };
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
@@ -487,12 +509,20 @@ export function SongEditorPage() {
                 <Field
                   label="Label"
                   htmlFor={`recording-${index}-label`}
-                  error={fieldErrors[`recordings[${index}].label`]}
+                  error={recordingError(index, "label")}
                   hint="Optional — the release or version this recording appeared on"
                 >
                   <Input
                     id={`recording-${index}-label`}
                     value={recording.label}
+                    // Field renders the hint and the error under ids derived
+                    // from htmlFor and leaves pointing at them to the caller,
+                    // so an input that names neither has a hint nobody hears.
+                    aria-describedby={
+                      recordingError(index, "label")
+                        ? `recording-${index}-label-error`
+                        : `recording-${index}-label-hint`
+                    }
                     onChange={(event) => editRecording(index, { label: event.target.value })}
                   />
                 </Field>
@@ -500,7 +530,7 @@ export function SongEditorPage() {
                 <Field
                   label="Year"
                   htmlFor={`recording-${index}-year`}
-                  error={fieldErrors[`recordings[${index}].release_year`]}
+                  error={recordingError(index, "release_year")}
                 >
                   <Input
                     id={`recording-${index}-year`}
@@ -509,6 +539,11 @@ export function SongEditorPage() {
                     min={1000}
                     max={2200}
                     value={recording.releaseYear}
+                    aria-describedby={
+                      recordingError(index, "release_year")
+                        ? `recording-${index}-year-error`
+                        : undefined
+                    }
                     onChange={(event) => editRecording(index, { releaseYear: event.target.value })}
                   />
                 </Field>
@@ -516,7 +551,7 @@ export function SongEditorPage() {
                 <Field
                   label="YouTube link"
                   htmlFor={`recording-${index}-youtube`}
-                  error={fieldErrors[`recordings[${index}].youtube_url`]}
+                  error={recordingError(index, "youtube_url")}
                   hint="A watch, youtu.be, or embed link"
                 >
                   <Input
@@ -524,6 +559,14 @@ export function SongEditorPage() {
                     type="url"
                     inputMode="url"
                     value={recording.youtubeUrl}
+                    // The song-level field this replaced carried the same pair,
+                    // and it is the only thing saying which link shapes are
+                    // accepted — dropped, a screen reader hears the label alone.
+                    aria-describedby={
+                      recordingError(index, "youtube_url")
+                        ? `recording-${index}-youtube-error`
+                        : `recording-${index}-youtube-hint`
+                    }
                     onChange={(event) => editRecording(index, { youtubeUrl: event.target.value })}
                   />
                 </Field>
@@ -585,6 +628,30 @@ export function SongEditorPage() {
                     Add performer
                   </Button>
                 </div>
+
+                {/* The notes a recording carries are rendered on the song page's
+                    recordings sheet and validated per row by the server, so
+                    without a control here they were a value nothing could write
+                    and nothing could correct — and isBlankRecording consulting a
+                    field no input sets was dead logic. */}
+                <Field
+                  label="Notes"
+                  htmlFor={`recording-${index}-notes`}
+                  error={recordingError(index, "notes")}
+                  hint="Optional — anything worth saying about this performance"
+                >
+                  <Textarea
+                    id={`recording-${index}-notes`}
+                    rows={2}
+                    value={recording.notes}
+                    aria-describedby={
+                      recordingError(index, "notes")
+                        ? `recording-${index}-notes-error`
+                        : `recording-${index}-notes-hint`
+                    }
+                    onChange={(event) => editRecording(index, { notes: event.target.value })}
+                  />
+                </Field>
 
                 <div className="flex items-center justify-between gap-2">
                   {/* A radio, so at most one recording can claim it by
