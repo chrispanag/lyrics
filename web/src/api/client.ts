@@ -5,18 +5,25 @@ import type { ApiErrorBody } from "@/lib/types";
 // else to these assets. Baking an absolute URL in would survive until the
 // domain changed and then serve a bundle pointing at the old one.
 //
-// Development is the case that needs an override — Vite serves :5173 and the
-// API listens on :8080 — so the fallback is only reached there. An explicit
-// VITE_API_BASE_URL still wins in either mode, including when set to "".
+// Development is the case that needs an override — the dev server serves :5173
+// and the API listens on :8080 — so the fallback is only reached there. An
+// explicit NEXT_PUBLIC_API_BASE_URL still wins in either mode, including when
+// set to "", which is what `make mobile` relies on: emptied, every call goes to
+// this origin and through the rewrite in next.config.ts.
+//
+// The guard is `!== "production"` rather than `=== "development"` because
+// vitest runs as "test", and its specs expect the same :8080 fallback they got
+// from Vite's `import.meta.env.DEV`.
 const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://localhost:8080" : "");
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  (process.env.NODE_ENV !== "production" ? "http://localhost:8080" : "");
 
 /**
  * The absolute URL of an API path.
  *
  * For the things the browser fetches by itself: an `<img src>` does not go
- * through `apiFetch`, and left relative it would ask Vite on :5173 for an image
- * the API serves on :8080.
+ * through `apiFetch`, and left relative it would ask the dev server on :5173
+ * for an image the API serves on :8080.
  */
 export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;

@@ -68,9 +68,9 @@ export function ProfilePage() {
   //
   // What is not optional is having one on each. React unmounts the hoisted
   // title with the branch that rendered it, so a branch without one does not
-  // inherit the previous page's name — it falls back to the static title in
-  // index.html, and the tab reads a bare "Songfolio" for as long as that state
-  // lasts. On the guest branch that is until they sign in.
+  // inherit the previous page's name — the head is left with no title at all
+  // and the tab falls back to the URL for as long as that state lasts. On the
+  // guest branch that is until they sign in.
   if (loading)
     return (
       <>

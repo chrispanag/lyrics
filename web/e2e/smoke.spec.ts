@@ -12,7 +12,9 @@ import { expect, test } from "@playwright/test";
  */
 
 const hasPreludeCredentials = Boolean(
-  process.env.VITE_PRELUDE_APP_ID && process.env.E2E_USER_EMAIL && process.env.E2E_USER_PASSWORD,
+  process.env.NEXT_PUBLIC_PRELUDE_APP_ID &&
+    process.env.E2E_USER_EMAIL &&
+    process.env.E2E_USER_PASSWORD,
 );
 
 test.describe("browsing as a guest", () => {
@@ -30,6 +32,25 @@ test.describe("browsing as a guest", () => {
     await firstResult.click();
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Θάλασσα");
     await expect(page.getByRole("heading", { name: /lyrics/i })).toBeVisible();
+  });
+
+  // The only place the title rule can be checked at all. `PageTitle` renders a
+  // <title> that React hoists into a head it does not own alone, and whichever
+  // one sits first is the one read — so a `metadata.title` added to
+  // app/layout.tsx would pin every tab to the bare product name. jsdom has no
+  // competing title, so the unit specs pass either way; this needs a browser.
+  test("a page's own name reaches the tab", async ({ page }) => {
+    await page.goto("/");
+    await expect(page).toHaveTitle("Browse — Songfolio");
+
+    await page.goto("/?q=θαλασσα");
+    const song = page.getByRole("link").filter({ hasText: "Θάλασσα" }).first();
+    await expect(song).toBeVisible({ timeout: 10_000 });
+    await song.click();
+
+    // The song's own name, so this also covers the title following a
+    // client-side navigation rather than only the first paint.
+    await expect(page).toHaveTitle(/^Θάλασσα.* — Songfolio$/);
   });
 
   test("an unaccented query finds the accented song", async ({ page }) => {
@@ -60,7 +81,7 @@ test.describe("browsing as a guest", () => {
 test.describe("signed in", () => {
   test.skip(
     !hasPreludeCredentials,
-    "Set VITE_PRELUDE_APP_ID, E2E_USER_EMAIL, and E2E_USER_PASSWORD to run the " +
+    "Set NEXT_PUBLIC_PRELUDE_APP_ID, E2E_USER_EMAIL, and E2E_USER_PASSWORD to run the " +
       "signed-in flow against a real Prelude application.",
   );
 

@@ -386,7 +386,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // cause, and the deploy script refuses to ship without it.
       throw namedError(
         RESET_UNCONFIGURED_ERROR,
-        "Password reset is unconfigured: VITE_PRELUDE_OTP_LOGIN_CONFIG_ID is empty.",
+        "Password reset is unconfigured: NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID is empty.",
       );
     }
     // A fresh reset abandons whatever a previous attempt opened — "Start over"

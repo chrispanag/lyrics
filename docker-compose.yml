@@ -54,13 +54,16 @@ services:
     build:
       context: ./web
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
-        VITE_PRELUDE_APP_ID: ${PRELUDE_APP_ID:-}
-        VITE_PRELUDE_SDK_KEY: ${VITE_PRELUDE_SDK_KEY:-}
-        VITE_PRELUDE_SESSION_DOMAIN: ${PRELUDE_SESSION_DOMAIN:-}
-        VITE_PRELUDE_OTP_LOGIN_CONFIG_ID: ${PRELUDE_OTP_LOGIN_CONFIG_ID:-}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+        NEXT_PUBLIC_PRELUDE_APP_ID: ${PRELUDE_APP_ID:-}
+        NEXT_PUBLIC_PRELUDE_SDK_KEY: ${PRELUDE_SDK_KEY:-}
+        NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN: ${PRELUDE_SESSION_DOMAIN:-}
+        NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID: ${PRELUDE_OTP_LOGIN_CONFIG_ID:-}
+    # The container listens on 3000 now that `next start` serves the app rather
+    # than nginx. The published port stays 5173, which is what the API's
+    # CORS_ORIGINS default above names.
     ports:
-      - "5173:80"
+      - "5173:3000"
     depends_on:
       - api
 

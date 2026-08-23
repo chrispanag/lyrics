@@ -108,11 +108,13 @@ jobs:
         working-directory: web
         run: npm run test
 
+      # A base URL is set only because this is a smoke test of the build; the
+      # real production build leaves it unset so the bundle calls its own origin.
       - name: Build
         working-directory: web
         env:
-          VITE_API_BASE_URL: http://localhost:8080
-        run: npx vite build
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+        run: npx next build
 
   docker:
     name: Docker images
@@ -138,6 +140,6 @@ jobs:
           context: ./web
           push: false
           build-args: |
-            VITE_API_BASE_URL=http://localhost:8080
+            NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
           cache-from: type=gha
           cache-to: type=gha,mode=max

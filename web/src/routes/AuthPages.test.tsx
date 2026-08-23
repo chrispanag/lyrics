@@ -530,7 +530,7 @@ describe("ForgotPasswordPage", () => {
     const startPasswordReset = vi
       .fn()
       .mockRejectedValue(
-        namedError(RESET_UNCONFIGURED_ERROR, "VITE_PRELUDE_OTP_LOGIN_CONFIG_ID is empty."),
+        namedError(RESET_UNCONFIGURED_ERROR, "NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID is empty."),
       );
 
     renderWithProviders(<ForgotPasswordPage />, {

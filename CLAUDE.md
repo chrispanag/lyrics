@@ -198,7 +198,7 @@ invalid or has expired"*:
   stacks.** `PRELUDE_SESSION_DOMAIN` (`auth.songfolio.live`, registered so the
   session cookies are first-party rather than blockable third-party ones) is what
   the API derives its JWKS URL and expected `iss` from, and the same value
-  reaches the frontend build as `VITE_PRELUDE_SESSION_DOMAIN` to become the SDK's
+  reaches the frontend build as `NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN` to become the SDK's
   `domain` — one `.env` entry mapped twice by `scripts/deploy-do.sh`, because the
   two halves naming different hosts rejects every token while both hosts look
   perfectly healthy on their own. Blank falls back to the app-id host, which is
@@ -336,7 +336,7 @@ Everything below follows from that one fact, and none of it announces itself.
   is advice no password satisfies. The page names that one case and offers the way
   out ("Start again with a new code"), which is also why the password step has an
   exit at all: the steps are state, not routes, so the back button is not one.
-- **A missing `VITE_PRELUDE_OTP_LOGIN_CONFIG_ID` is reported, not hidden.**
+- **A missing `NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID` is reported, not hidden.**
   `errorMessage` only carries through our API's own messages, so an unnamed
   `Error` would render as "we could not send a code" and send whoever reads it
   hunting a Prelude outage. The provider throws with
@@ -570,6 +570,87 @@ inventory this file records going stale under Head assets.)
   reaches the 404. What is left is that the person who removed their picture
   sees it gone at once and nobody else is promised that for another five
   minutes.
+
+### The Next.js shell
+
+The app is a Next application whose every route is still a react-router route:
+`src/app` holds a root layout and one optional catch-all page, and everything
+under `src/AppRoot.tsx` is the app that used to be mounted by `main.tsx`. That
+arrangement is deliberate and temporary — it is what let the move off Vite change
+no application code — but while it stands, these are the parts holding it up.
+
+- **`AppRoot` is imported through `dynamic(..., { ssr: false })`, and that is
+  what makes every rule below the shell keep applying unchanged.** The providers,
+  `BrowserRouter`, the module-scope `QueryClient` and every route run in the
+  browser and only there, exactly as they did under Vite — so the module-scope
+  `localStorage` reads, the import-time `setTokenProvider`, the `useState`
+  initializers that read storage and `window.location.origin` in a render body
+  are all still safe. Remove the `ssr: false` and they are not; that is the first
+  work any server-rendering change has to do, and doing it needs the four
+  render-phase reads found in `ListsPages`, `SongDetailPage`, `ListSongNav` and
+  `lib/theme.ts` fixed first. `ssr: false` is legal only inside a client
+  component, which is why `app/[[...slug]]/client.tsx` exists between the page
+  and `AppRoot` rather than the page importing it directly.
+- **The theme is applied by an inline script in `app/layout.tsx`, which is a
+  hand-written copy of `applyTheme(storedTheme())` and of the `lyrics:theme`
+  key.** Nothing bundled runs early enough: the script has to execute while the
+  parser is still ahead of anything with a background color, and the app's own
+  JavaScript now arrives later than it did under Vite. So the rule lives in two
+  places, the same trade `extractVideoId` makes against Go's `parseYouTubeURL`,
+  and `lib/theme.ts` says so at the definition. Change one and change the other;
+  miss the script and every dark-theme load flashes light first, on every page.
+  `theme.test.ts` is what makes that instruction more than an instruction — it
+  runs the exported string case by case against `applyTheme(storedTheme())`, the
+  way `youtube.test.ts` holds `extractVideoId` to the Go parser it mirrors, since
+  a divergence here shows only as one white frame and only to a visitor whose
+  theme is dark. `suppressHydrationWarning` on `<html>` is part of it — the
+  script legitimately makes the client's markup differ from the server's. And
+  the script declares its two temporaries with `let`: an inline `<script>` runs
+  in global scope, where `var` inside a block is still function-scoped, so `var`
+  put `window.t` and `window.d` on every page in the app. That is the other
+  thing the spec pins, by asking for the globals rather than the class.
+- **The `/api` proxy is a `rewrites()` entry in `next.config.ts` and is
+  development-only.** It replaces the Vite dev-server proxy, and `make mobile`
+  is what depends on it: emptied `NEXT_PUBLIC_API_BASE_URL` sends every call
+  same-origin, and this is what forwards it to :8080. It is guarded on
+  `NODE_ENV` because in production the App Platform ingress routes `/api` to the
+  Go service before Next sees it — left ungated it would be dead config that
+  looks live, and would quietly become the thing serving `/api` if that ingress
+  rule were ever dropped.
+- **`allowedDevOrigins` is the other half of `make mobile`, and without it that
+  workflow does not merely degrade — the app never boots.** Next blocks
+  cross-origin requests to `/_next/*` in development, and `next dev -H 0.0.0.0`
+  puts `localhost` and the *bound* hostname on the allowlist, which is
+  `0.0.0.0` and never this machine's LAN address. Some of the app's own script
+  tags carry `crossorigin`, so their fetches send an `Origin` header and are
+  answered 403: `http://<lan-ip>:5173` on a phone serves the document, fails
+  three chunks including `AppRoot`, and leaves a blank page with an untitled
+  tab. Nothing about it is visible from the machine being developed on, whose
+  origin is `localhost`. The entries are hostnames matched segment by segment —
+  no scheme, no port — so they are the private ranges rather than one address,
+  and `172.*.*.*` is wider than RFC 1918's `172.16–31` because the matcher has
+  no numeric ranges; the list is read by `next dev` alone, where it decides
+  which other private host may read dev assets and nothing else.
+- **The security headers are a `headers()` entry in the same file**, ported from
+  the deleted `web/nginx.conf`: `X-Content-Type-Options`, `Referrer-Policy` and
+  `X-Frame-Options: DENY`. They were repeated per-location there because nginx's
+  `add_header` does not merge across levels; one entry covers everything here,
+  and nothing else sets them. `poweredByHeader: false` is beside them and is
+  not one of them: `headers()` can add a header and not remove one, so the
+  `X-Powered-By: Next.js` that nginx never sent is switched off at the source.
+- **`web/AGENTS.md` and `web/CLAUDE.md` are written by `next dev`, not by
+  anyone here.** Next 16 generates them and re-adds the block on every run, so
+  they are tracked rather than ignored — deleting them only produces the same
+  uncommitted change again. `web/CLAUDE.md` is one line importing `AGENTS.md`;
+  this file is still the authority, and that one carries Next's own warning that
+  the installed version differs from what a model was trained on, with the
+  bundled docs under `node_modules/next/dist/docs/` as the reference.
+- **Vitest keeps its own Vite pipeline, in `vitest.config.ts`.** The app is built
+  by Next and the tests are transformed by `@vitejs/plugin-react`, which is why
+  that package is still a devDependency and why `tsconfig.json`'s `jsx` setting
+  is read by neither. `next build` rewrites `jsx`, `allowJs` and
+  `esModuleInterop` if they disagree with it, so they are not choices to make
+  there.
 
 ### Frontend
 
@@ -1145,15 +1226,33 @@ inventory this file records going stale under Head assets.)
 ### Head assets
 
 - **A missing file under `public/` does not 404 — it serves the app.** Every
-  unmatched path is a React Router route, by `catchall_document` on App Platform
-  and `try_files` under nginx, so `/favicon.ico` answered `200 text/html` with
-  `index.html` in it. That is worse than a 404 in the one way that matters: the
-  client succeeded, so it has nothing to fall back to, and anything that does
-  not read SVG favicons (crawlers, feed readers, link-preview bots) showed no
-  icon at all while `/favicon.svg` sat there working. The same swallowed
-  `/apple-touch-icon.png`, `/manifest.json` and `/robots.txt`. **Deleting one
-  of the four `<link>`s in `index.html` therefore breaks nothing visibly** —
-  check the content type, not the status.
+  unmatched path is a React Router route, and the thing that makes it one has
+  changed identity twice without the hazard changing at all: it was
+  `catchall_document` on App Platform and `try_files` under nginx, and it is now
+  the optional catch-all page under `src/app`, which matches any path Next did
+  not already answer from `public/`. So `/favicon.ico` answered `200 text/html`
+  with the app in it, and **still does** for a path with no file behind it —
+  verified against `next start`, not assumed from the routing. That is worse
+  than a 404 in the one way that matters: the client succeeded, so it has
+  nothing to fall back to, and anything that does not read SVG favicons
+  (crawlers, feed readers, link-preview bots) showed no icon at all while
+  `/favicon.svg` sat there working. The same swallows `/apple-touch-icon.png`,
+  `/manifest.json` and `/robots.txt`. **Deleting one of the four icon entries in
+  `app/layout.tsx` therefore breaks nothing visibly** — check the content type,
+  not the status.
+- **`app/layout.tsx` exports no `metadata.title`, and adding one pins every tab
+  in the app to "Songfolio".** `PageTitle` works by rendering a `<title>` that
+  React 19 hoists into the head, and `document.title` is the *first* title
+  element there. React puts a hoisted title ahead of one it does not manage,
+  which is why index.html's static title was a fallback and this worked under
+  Vite. A `metadata` title is not such a node: React renders it too, from the
+  layout, which is above every route — so it sorts first, wins the read, and is
+  written again when the streamed metadata boundary resolves after hydration.
+  The specs cannot catch it, because jsdom has no competing title to lose to.
+  What is given up is a title in the server HTML for a reader running no
+  JavaScript, which today is a reader getting no content either; `og:title`
+  still carries the name to link previews. Both directions verified in a real
+  browser, including against the deployed Vite build.
 - **The rasters come from `icons/icon-square.svg`, not from
   `public/favicon.svg`.** The favicon has `rx="7"` and is transparent outside
   that radius; iOS composites its own mask over an opaque square, so
@@ -1185,7 +1284,8 @@ inventory this file records going stale under Head assets.)
   that actually happens, someone updating two of four. The manifest is **not**
   a carrier: its colors are the stone grounds.
 - **The manifest's `theme_color`/`background_color` are the *dark* ground, and
-  one value is all it gets.** `index.html` declares two media-scoped
+  one value is all it gets.** The `viewport` export in `app/layout.tsx` declares
+  two media-scoped
   `theme-color` metas and Chrome honors those at runtime, but the manifest paints
   the launch splash before any of that is read. Light was the first choice and is
   the wrong one: it flashes white into a near-black app on every cold start for
@@ -1195,18 +1295,17 @@ inventory this file records going stale under Head assets.)
   from `start_url`, so changing that later makes Chrome treat the app as a new
   one: existing installs are orphaned rather than updated, and a second copy
   appears alongside. Adding it afterwards does not repair those installs.
-- **The manifest is `manifest.json`, not the spec's `site.webmanifest`.** nginx
-  ships no mime type for `.webmanifest` (it goes out as
-  `application/octet-stream`), and on App Platform the type is stamped at upload
-  with no knob in `.do/app.yaml` to override it. So the spec extension means
-  patching the one stack where the problem is observable and leaving the stack
-  that actually serves users unverifiable — the two "need to agree", and that is
-  how they quietly stop. Every mime table knows `.json`, and a browser parses a
-  manifest regardless of its media type, so the rename makes both stacks agree
-  by construction and needs no nginx `location` at all. Had one been needed, it
-  could not have been a `types { }` block: `types` does not merge across levels
-  any more than `add_header` does, so declaring one in the server block strips
-  the content type off every other file.
+- **The manifest is `manifest.json`, not the spec's `site.webmanifest`.** The
+  reason was a mime type: nginx shipped none for `.webmanifest` (it went out as
+  `application/octet-stream`) and on App Platform the type was stamped at upload
+  with no knob in `.do/app.yaml` to override it, so the spec extension meant
+  patching the one stack where the problem was observable and leaving the stack
+  that actually served users unverifiable — the two "need to agree", and that is
+  how they quietly stop. Both of those servers are gone: Next serves `public/`
+  on both stacks and answers `.json` as `application/json`. The name stays
+  anyway, because it costs nothing, a browser parses a manifest regardless of
+  its media type, and renaming it would orphan nothing but would put a
+  `.webmanifest` back in front of whatever serves this next.
 - **`lang` is two halves and shipping one of them is worse than shipping
   neither.** `<html lang>` said `el`, which had screen readers pronouncing the
   entire English interface as Greek. Flipping it to `en` is only correct
@@ -1216,7 +1315,9 @@ inventory this file records going stale under Head assets.)
   gets its right voice and the lyrics, which are the reason the site exists,
   get the wrong one.
 - **Titles come from `PageTitle`, which works because React 19 hoists a
-  `<title>` out of the tree.** No effect, no library, and it unwinds on unmount
+  `<title>` out of the tree** — and, just as load-bearing, because
+  `app/layout.tsx` declares no title for it to sort behind; see the bullet on
+  that above. No effect, no library, and it unwinds on unmount
   — which is what stops the editor's name sticking to the song page it pops
   back to. Two shells cover most of the app in one line each: `AuthShell` names
   every auth screen from the `title` it already takes, so the steps of a reset
@@ -1286,9 +1387,13 @@ inventory this file records going stale under Head assets.)
 - **No service worker, so there is no automatic install prompt on Android.**
   Both platforms can install from a menu with the manifest alone, but Chrome's
   `beforeinstallprompt` additionally wants a service worker with a non-empty
-  fetch handler. Adding one is not a small step: it runs straight into
-  `index.html must never be cached`, which is what points at the current asset
-  hashes, and a stale copy pins the browser to a deleted bundle.
+  fetch handler. Adding one is not a small step: the document must never be
+  cached, being what points at the current asset hashes, and a stale copy pins
+  the browser to a deleted bundle. Next changes the shape of that problem
+  without removing it — the document is server-rendered rather than a file, and
+  Next already answers it `no-store`, so a service worker caching it is
+  overriding a deliberate header rather than merely disagreeing with a build
+  step.
 
 ---
 
@@ -1360,16 +1465,18 @@ inventory this file records going stale under Head assets.)
 - `.env` is **gitignored and holds live Prelude credentials**. Never copy secrets
   into tracked files, and note that the recursive `grep` here is gitignore-aware,
   so it will silently skip `.env` when scanning.
-- The Management API key is server-side only. `VITE_PRELUDE_SDK_KEY` is a
-  publishable client identifier and is safe in the bundle.
-- Vite only exposes `VITE_`-prefixed variables; `make web` maps `PRELUDE_APP_ID`
-  and `PRELUDE_OTP_LOGIN_CONFIG_ID` across rather than keeping a second copy in
+- The Management API key is server-side only. `PRELUDE_SDK_KEY` — reaching the
+  build as `NEXT_PUBLIC_PRELUDE_SDK_KEY` — is a publishable client identifier
+  and is safe in the bundle.
+- Next only exposes `NEXT_PUBLIC_`-prefixed variables; `make web` maps
+  `PRELUDE_APP_ID`, `PRELUDE_SDK_KEY`, `PRELUDE_SESSION_DOMAIN` and
+  `PRELUDE_OTP_LOGIN_CONFIG_ID` across rather than keeping a second copy in
   `.env`. **Every mapping exists in four places** — `make web`, `make mobile`,
   `docker-compose.yml` (whose build args must match `web/Dockerfile`'s `ARG`/`ENV`
   pair) and `scripts/deploy-do.sh` — and a new variable is easy to add to only
-  some of them. Only the deploy script complains: the others build happily with
-  an empty value, so the failure is a screen that reports itself unconfigured on
-  one stack while working on another.
+  some of them. Only the deploy script complains, and for the SDK key it only
+  *warns*: the others build happily with an empty value, so the failure is a
+  screen that reports itself unconfigured on one stack while working on another.
 - The Makefile reads `.env` from the directory it runs in, and a **git worktree
   has none** — so `make web` there serves a build with every Prelude variable
   empty. Sign-in and password reset then fail in ways that look like bugs in the
@@ -1400,10 +1507,21 @@ these four are the parts that break quietly.
   second API and hangs until the deploy times out rather than migrating. With no
   `ENTRYPOINT` the question does not arise, which is the only reason the image
   gives one up.
-- **A production frontend build must leave `VITE_API_BASE_URL` unset**, which
-  makes it call its own origin. Vite inlines the value at build time, so setting
-  it bakes in a hostname that a domain change then invalidates — and the failure
-  appears only in the browser, long after a green deploy.
+- **A production frontend build must leave `NEXT_PUBLIC_API_BASE_URL` unset**,
+  which makes it call its own origin. Next inlines the value at build time, so
+  setting it bakes in a hostname that a domain change then invalidates — and the
+  failure appears only in the browser, long after a green deploy. Note "unset"
+  and "empty" are different things and both are used: `make mobile` sets it
+  *empty*, which `api/client.ts` distinguishes with `??` so the explicit empty
+  string wins over the development fallback.
+- **The `web` component is a service, not a static site, and `/api` can never
+  reach it.** Next serves every document from a running process, so there is no
+  `output_dir` and no `catchall_document`; the optional catch-all route under
+  `src/app` is what answers the addresses the client-side router owns. The
+  ingress gives `/api` to the Go service for the whole app, so a Next route
+  handler under `app/api/` is unreachable in production while working perfectly
+  in `next dev` — anything server-side the frontend needs must be mounted
+  elsewhere.
 - **`CLIENT_IP_HEADER` must be `DO-Connecting-IP` here, and must stay unset
   locally.** Registration is rate limited per caller, and behind the ingress the
   peer address is the ingress — so the whole world shared one bucket of five per

@@ -2,28 +2,65 @@
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
-
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
+    // `next build` sets jsx, allowJs and esModuleInterop itself if they
+    // disagree with it, and rewrites this file to say so — so they are not
+    // choices to make here. Neither is read by a build: Next compiles JSX with
+    // SWC and vitest with @vitejs/plugin-react.
     "jsx": "react-jsx",
-
+    "incremental": true,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,
-
-    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"],
+    "types": [
+      "node",
+      "vitest/globals",
+      "@testing-library/jest-dom"
+    ],
     "baseUrl": ".",
-    "paths": { "@/*": ["./src/*"] }
+    // Next resolves these itself, which is what replaced the alias
+    // vite.config.ts used to declare beside them.
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "allowJs": true,
+    "esModuleInterop": true
   },
-  "include": ["src", "vitest.setup.ts", "vite.config.ts", "e2e"]
+  // Both config files are named, because a pattern matching nothing is
+  // ignored in silence: `vite.config.ts` stayed in this list for a while after
+  // it was deleted, and neither replacement was typechecked at all.
+  "include": [
+    "src",
+    "vitest.setup.ts",
+    "vitest.config.ts",
+    "next.config.ts",
+    "e2e",
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

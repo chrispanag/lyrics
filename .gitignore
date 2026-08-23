@@ -10,8 +10,12 @@ backend/tmp/
 
 # Node
 node_modules/
-web/dist/
-web/.vite/
+web/.next/
+# Written by `next dev`/`next build` on every run, and it is generated rather
+# than authored — tsconfig.json includes it so the typechecker sees Next's
+# ambient types.
+web/next-env.d.ts
+web/tsconfig.tsbuildinfo
 web/playwright-report/
 web/test-results/
 web/coverage/
