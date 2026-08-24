@@ -26,9 +26,18 @@ import sitemap from "./sitemap";
 
 const ORIGIN = "https://songfolio.live";
 
-/** A page of the catalog, answered from a numbered set as `sort=oldest` would. */
-function catalogOf(total: number) {
+/**
+ * A page of the catalog, answered from a numbered set as `sort=oldest` would.
+ *
+ * `failFrom` is which request onwards to fail, counting from zero — the walk's
+ * later pages are what a partial failure means, and describing a catalog page in
+ * two places is how the second description drifts from the first.
+ */
+function catalogOf(total: number, failFrom = Infinity) {
+  let asked = 0;
   return http.get(`${API}/api/v1/songs`, ({ request }) => {
+    if (asked++ >= failFrom) return HttpResponse.error();
+
     const query = new URL(request.url).searchParams;
     // The parameters the walk depends on. Asserted here rather than in a case of
     // its own, because a walk that asked for the default page size or the
@@ -78,20 +87,10 @@ describe("sitemap", () => {
   });
 
   it("keeps nothing from a walk that failed part-way", async () => {
-    // The second request fails, so a version that returned what it had would
-    // answer with the first hundred songs and no sign that eight hundred were
-    // missing.
-    let asked = 0;
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        if (asked++ > 0) return HttpResponse.error();
-        const offset = Number(new URL(request.url).searchParams.get("offset"));
-        const songs = Array.from({ length: 100 }, (_, index) =>
-          makeSong({ slug: `song-${offset + index}` }),
-        );
-        return HttpResponse.json(list(songs, { total: 250, offset, limit: 100 }));
-      }),
-    );
+    // The first page arrives and the rest do not, so a version that returned
+    // what it had would answer with a hundred songs of two hundred and fifty and
+    // nothing at all to say the other hundred and fifty were missing.
+    server.use(catalogOf(250, 1));
 
     expect(await sitemap()).toEqual([{ url: `${ORIGIN}/` }]);
   });

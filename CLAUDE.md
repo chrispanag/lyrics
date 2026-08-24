@@ -853,10 +853,14 @@ each of them is written down.
 - **A route's `openGraph` *replaces* the layout's rather than merging into it.**
   Next merges metadata shallowly, so a block naming only `og:type` and `og:title`
   silently drops the card image and the site name with it. `lib/site.ts` holds
-  `OG_IMAGE` for that reason — the shape Next's own docs recommend — and
-  `SITE_ORIGIN` beside it because a sitemap entry and the JSON-LD both need an
-  absolute URL and **neither reads `metadataBase`**, which resolves the relative
-  URLs inside metadata and nothing else.
+  `OG_BASE` for that reason — the site name and the card *together*, so a route
+  spreads one thing and cannot forget half of it, which is the shared-constant
+  shape Next's own docs recommend. `SITE_NAME` is beside it because the product
+  name was in five places and a rename that misses one is silent; `PageTitle` and
+  `Wordmark` read it too, both having argued for exactly that in their own
+  comments. And `SITE_ORIGIN`, because a sitemap entry and the JSON-LD both need
+  an absolute URL and **neither reads `metadataBase`**, which resolves the
+  relative URLs inside metadata and nothing else.
 - **The JSON-LD is escaped, and `songJsonLd` returns text rather than an object
   so that it cannot be forgotten.** Lyrics are contributor-typed text going into
   a raw `<script>` body, where the HTML parser is still looking for `</script`: a
@@ -899,11 +903,15 @@ each of them is written down.
   which is `created_at ASC, id ASC` — a total order in which a song added
   mid-walk appends rather than shifting a row across a page boundary and handing
   a crawler one song twice while dropping another — and `meta.total` is the
-  authority for how far to go. A failure yields the static routes **alone rather
-  than what had been collected**: a truncated sitemap is indistinguishable from a
-  small catalog, so half the songs going unindexed would look exactly like
-  success. `app/sitemap.test.ts` runs under `@vitest-environment node`, which is
-  also the only spec that exercises the server branch of `API_BASE` above.
+  authority for how far to go — and it is also what lets every page after the
+  first go out at once, the offsets all being fixed by the first answer. A
+  failure yields the static routes **alone rather than what had been collected**:
+  a truncated sitemap is indistinguishable from a small catalog, so half the songs
+  going unindexed would look exactly like success. `Promise.all` keeps that,
+  one rejection being the whole walk's. `app/sitemap.test.ts` runs under
+  `@vitest-environment node`, which is also the only spec that exercises the
+  server branch of `API_BASE` above, and its fourth case is what pins the
+  all-or-nothing half by failing every page but the first.
 - **`robots.txt` stays a static file.** A file under `public/` and an
   `app/robots.ts` claim the same path, and there is nothing in it worth
   generating. Its `Sitemap:` line therefore names a path with no file behind it,
@@ -1670,7 +1678,12 @@ each of them is written down.
 - **Style modules over co-exports.** `buttonStyles.ts`, `fieldStyles.ts`,
   `lib/snippet.ts`, `lib/credits.ts`, `lib/theme.ts`, `auth/context.ts` exist so
   component files export *only* components — that is what keeps fast refresh
-  working, and eslint enforces it.
+  working, and eslint enforces it. The App Router's own export vocabulary
+  (`metadata`, `viewport`, `generateMetadata`) is allowed in an override scoped to
+  `src/app/**` rather than added to the rule for the whole app: that vocabulary
+  keeps growing, and each widening would otherwise stop the rule catching a hook
+  exported beside a component in `src/components` — which is where the convention
+  above actually lives.
 - **`cn()` is a plain join, not tailwind-merge.** Later classes do not override
   earlier ones; share the chrome rather than passing overrides through.
 - **Filter state lives in the URL**, so a filtered search is shareable and the

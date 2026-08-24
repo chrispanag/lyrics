@@ -7,7 +7,7 @@ import { ClientOnly } from "@/app/client";
 import { songByline } from "@/lib/credits";
 import { songJsonLd } from "@/lib/jsonLd";
 import { songCanonicalHref, songHref, songRefIsId } from "@/lib/listContext";
-import { OG_IMAGE, SITE_ORIGIN } from "@/lib/site";
+import { OG_BASE, SITE_ORIGIN } from "@/lib/site";
 import type { Song } from "@/lib/types";
 
 /*
@@ -111,12 +111,11 @@ export async function generateMetadata({
     description,
     alternates: { canonical: path },
     openGraph: {
+      ...OG_BASE,
       type: "music.song",
-      siteName: "Songfolio",
       url: path,
       title: song.title,
       description,
-      images: [OG_IMAGE],
     },
   };
 }

@@ -1,4 +1,5 @@
-import type { Credit, Recording, Song } from "./types";
+import { groupCredits } from "./credits";
+import type { Recording, Song } from "./types";
 import { watchUrl } from "./youtube";
 
 /*
@@ -11,6 +12,13 @@ import { watchUrl } from "./youtube";
  * lyrics therefore appear twice in the document — once here and once in the app
  * that hydrates below it — and that is accepted rather than worked around.
  */
+
+/**
+ * Every `<` in the script body, which is every character the HTML parser could
+ * react to. Module scope so it is compiled once rather than per render, the same
+ * reason `listContext`'s address patterns are.
+ */
+const TAG_OPENER = /</g;
 
 /**
  * A song as schema.org `MusicComposition`, as the text of a script body.
@@ -31,38 +39,44 @@ import { watchUrl } from "./youtube";
  * and not to a script this renders itself.
  */
 export function songJsonLd(song: Song, url: string): string {
-  const composers = named(song.credits, "composer");
-  const lyricists = named(song.credits, "lyricist");
+  // The song page's own grouping, so the two cannot disagree about who wrote
+  // what: same display order, same dropping of the roles nobody is credited in.
+  // The property names stay written out below rather than being taken from the
+  // role — `composer` and `lyricist` happening to be spelled the same on both
+  // sides is not a rule, and a third role added to `CreditRole` would otherwise
+  // be emitted as a MusicComposition property that does not exist.
+  const credited = new Map(groupCredits(song.credits));
+  const composer = people(credited.get("composer"));
+  const lyricist = people(credited.get("lyricist"));
 
+  // Absent rather than empty, throughout — and `undefined` is how, because the
+  // one thing this function does with the object is stringify it, and
+  // `JSON.stringify` drops a property whose value is undefined. That is what
+  // keeps the shape readable down the left margin; it is also the reason this
+  // returns text rather than the object, since a caller stringifying it for
+  // itself would work identically and a caller doing anything else would not.
+  //
+  // Empty is a positive claim, and each of these would be the wrong one: that
+  // nobody wrote the song, that it was never recorded, that its lyrics are known
+  // to be blank. A catalog whose credits are mostly partial says none of that.
   const composition = {
     "@context": "https://schema.org",
     "@type": "MusicComposition",
     name: song.title,
     url,
     inLanguage: song.language,
-    // Each of these is omitted rather than sent empty. An empty array is a
-    // positive claim that a song has no composer, where absence is the truth
-    // about a catalog most of whose credits are partial.
-    ...(composers.length > 0 ? { composer: composers } : {}),
-    ...(lyricists.length > 0 ? { lyricist: lyricists } : {}),
-    ...(song.recordings.length > 0
-      ? { recordedAs: song.recordings.map((item) => recording(song.title, item)) }
-      : {}),
+    composer: composer.length > 0 ? composer : undefined,
+    lyricist: lyricist.length > 0 ? lyricist : undefined,
+    recordedAs:
+      song.recordings.length > 0
+        ? song.recordings.map((item) => recording(song.title, item))
+        : undefined,
     // `lyrics` is absent from every listing read and may legitimately be empty
-    // on a single-song read, which are different things and produce the same
-    // omission here — the alternative is a CreativeWork whose text is "".
-    ...(song.lyrics ? { lyrics: { "@type": "CreativeWork", text: song.lyrics } } : {}),
+    // on a single-song read; both arrive here as nothing to say.
+    lyrics: song.lyrics ? { "@type": "CreativeWork", text: song.lyrics } : undefined,
   };
 
-  return JSON.stringify(composition).replace(/</g, "\\u003c");
-}
-
-/** The people credited in one role, in the order the song page reads them. */
-function named(credits: Credit[], role: Credit["role"]) {
-  return credits
-    .filter((credit) => credit.role === role)
-    .sort((a, b) => a.position - b.position)
-    .map((credit) => person(credit.name));
+  return JSON.stringify(composition).replace(TAG_OPENER, "\\u003c");
 }
 
 /**
@@ -82,18 +96,17 @@ function recording(title: string, item: Recording) {
   return {
     "@type": "MusicRecording",
     name: title,
-    ...(item.label ? { alternateName: item.label } : {}),
-    ...(item.performers.length > 0
-      ? { byArtist: item.performers.map((performer) => person(performer.name)) }
-      : {}),
+    alternateName: item.label ?? undefined,
+    byArtist: item.performers.length > 0 ? people(item.performers) : undefined,
     // A year alone is a legal `datePublished` — the property takes a Date and
     // ISO 8601 admits `YYYY` — which matters because a year is all this schema
     // ever holds.
-    ...(item.release_year ? { datePublished: String(item.release_year) } : {}),
-    ...(item.youtube_video_id ? { url: watchUrl(item.youtube_video_id) } : {}),
+    datePublished: item.release_year ? String(item.release_year) : undefined,
+    url: item.youtube_video_id ? watchUrl(item.youtube_video_id) : undefined,
   };
 }
 
-function person(name: string) {
-  return { "@type": "Person", name };
+/** Named people, in the order they arrived. */
+function people(named: { name: string }[] | undefined) {
+  return (named ?? []).map(({ name }) => ({ "@type": "Person", name }));
 }

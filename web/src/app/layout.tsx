@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
-import { OG_IMAGE, SITE_ORIGIN } from "@/lib/site";
+import { OG_BASE, SITE_NAME, SITE_ORIGIN } from "@/lib/site";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 import "@/styles/index.css";
 
@@ -18,8 +18,7 @@ export const metadata: Metadata = {
   // for the same reason: app/songs/[id] declares no title either — a metadata
   // title from any segment above a route wins the read and then never moves,
   // since react-router does every in-app navigation from there on.
-  description:
-    "Songfolio is a Greek and English song lyrics catalog: browse, search, and collect songs into lists.",
+  description: `${SITE_NAME} is a Greek and English song lyrics catalog: browse, search, and collect songs into lists.`,
   // manifest.json, not the spec's preferred site.webmanifest extension. Every
   // mime table knows .json and browsers parse a manifest regardless of its
   // media type, so the two deployment stacks agree by construction rather than
@@ -44,17 +43,17 @@ export const metadata: Metadata = {
   // context to be relative to, and most scrapers do not resolve a relative one.
   // This is what resolves the relative URLs below against the origin — and it
   // resolves nothing outside metadata, which is why the sitemap and a song's
-  // JSON-LD read `SITE_ORIGIN` themselves. The image descriptor is shared for a
-  // reason of Next's own; `lib/site.ts` has both.
+  // JSON-LD read `SITE_ORIGIN` themselves. `OG_BASE` is the site name and the
+  // card together, spread first because a route's own openGraph replaces this
+  // whole block rather than merging into it; `lib/site.ts` says why.
   metadataBase: new URL(SITE_ORIGIN),
   openGraph: {
+    ...OG_BASE,
     type: "website",
-    siteName: "Songfolio",
     url: "/",
-    title: "Songfolio",
+    title: SITE_NAME,
     description:
       "A Greek and English song lyrics catalog: browse, search, and collect songs into lists.",
-    images: [OG_IMAGE],
   },
   twitter: { card: "summary_large_image" },
 };

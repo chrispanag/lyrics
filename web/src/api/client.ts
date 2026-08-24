@@ -29,11 +29,16 @@ import type { ApiErrorBody } from "@/lib/types";
 //
 // One resolution and not a second server-side fetcher, so `apiFetch` works
 // unchanged from either side and where the API lives stays decided in one place.
+// The two branches are independent on purpose: the server's deliberately does
+// not fall back through NEXT_PUBLIC_API_BASE_URL, because `make mobile` sets that
+// to the empty string — which is precisely the value a server cannot use.
+const LOCAL_API = "http://localhost:8080";
+
 const API_BASE =
   typeof window === "undefined"
-    ? (process.env.API_ORIGIN ?? "http://localhost:8080")
+    ? (process.env.API_ORIGIN ?? LOCAL_API)
     : (process.env.NEXT_PUBLIC_API_BASE_URL ??
-      (process.env.NODE_ENV !== "production" ? "http://localhost:8080" : ""));
+      (process.env.NODE_ENV !== "production" ? LOCAL_API : ""));
 
 /**
  * The absolute URL of an API path.

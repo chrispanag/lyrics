@@ -1,5 +1,4 @@
-/** Appended to every page's own name. */
-const SUFFIX = "Songfolio";
+import { SITE_NAME } from "@/lib/site";
 
 /**
  * Sets the document title for the route that renders it.
@@ -32,5 +31,5 @@ const SUFFIX = "Songfolio";
  * the page under it is still a skeleton.
  */
 export function PageTitle({ name }: { name?: string }) {
-  return <title>{name ? `${name} — ${SUFFIX}` : SUFFIX}</title>;
+  return <title>{name ? `${name} — ${SITE_NAME}` : SITE_NAME}</title>;
 }

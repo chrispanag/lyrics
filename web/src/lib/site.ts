@@ -17,28 +17,50 @@
  * whatever origin served it. Here the opposite is needed: the value has to be
  * right in a document nobody is reading from a browser.
  *
- * Shared because it was already written in two places and the sitemap and a
- * song's JSON-LD wanted two more. What stays outside is `icons/og-card.svg`,
- * which bakes the domain into the picture itself — so a rename visits this
- * constant and that drawing, and `make icons` is what redraws the second.
+ * Two things stay outside and neither can be helped: `icons/og-card.svg` bakes
+ * the domain into the picture itself, and `public/robots.txt` names the sitemap
+ * in a directive the specification requires be absolute. So a rename visits this
+ * constant, that drawing and that file — and this sentence is the inventory
+ * CLAUDE.md warns prose inventories become, which is why there are only three
+ * and why `make icons` redraws the second one.
  */
 export const SITE_ORIGIN = "https://songfolio.live";
 
 /**
- * The link-preview picture, shared for a reason particular to Next's metadata.
+ * The product name, in the one place the *server* says it.
  *
- * A route's `openGraph` **replaces** the layout's rather than merging into it,
- * field by field — so a song page that names `og:type` and `og:title` and stops
- * there has silently dropped the card image and the site name along with them.
- * Every route that opens an `openGraph` block therefore restates the image, and
- * restating it from here is what keeps the four numbers in it from being four
- * numbers per route: a width that disagrees with the file is a card most
- * scrapers decline to draw at all.
+ * `PageTitle` and `Wordmark` read it too, both of them having argued for exactly
+ * this in their own comments before there was anywhere to put it: a rename that
+ * reaches one screen and misses another is silent, a tab or a sidebar rendering
+ * perfectly well under last year's name. A link card is the worst of those to
+ * miss, being the copy nothing in the app renders at all.
+ */
+export const SITE_NAME = "Songfolio";
+
+/**
+ * The link-preview picture.
+ *
+ * The four numbers are why it is worth naming once: a width that disagrees with
+ * the file is a card most scrapers decline to draw at all, and a per-route copy
+ * is four chances at that per route. Reached through `OG_BASE` below rather than
+ * directly, which is what makes forgetting it impossible rather than unlikely.
  */
 export const OG_IMAGE = {
   url: "/og-card.png",
   type: "image/png",
   width: 1200,
   height: 630,
-  alt: "Songfolio — a Greek and English song lyrics catalog",
+  alt: `${SITE_NAME} — a Greek and English song lyrics catalog`,
 };
+
+/**
+ * What every route's `openGraph` block has to restate, whatever else it says.
+ *
+ * A route's `openGraph` **replaces** the layout's rather than merging into it,
+ * field by field, so a page naming `og:type` and `og:title` and stopping there
+ * has silently dropped the card image and the site name with them. Sharing the
+ * *pair* rather than the image alone is what closes that for the next route as
+ * well as this one: spread this first and a block cannot be written that forgets
+ * either half.
+ */
+export const OG_BASE = { siteName: SITE_NAME, images: [OG_IMAGE] };

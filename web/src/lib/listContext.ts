@@ -106,6 +106,11 @@ const COMPACT_UUID = /^[0-9a-f]{32}$/i;
  *
  * The parameter shape is Next's awaited `searchParams` written out, so this stays
  * a plain function that a spec can call and this module keeps its one import.
+ *
+ * It reads like `toQuery` in `api/client.ts` and cannot be merged with it: that
+ * one uses `set`, so it collapses a repeated parameter to its last value, and it
+ * drops an empty one. Both of those are what a filter query wants and both would
+ * silently rewrite a link somebody shared. Each is pinned by its own spec.
  */
 export function songCanonicalHref(
   slug: string,
@@ -113,11 +118,10 @@ export function songCanonicalHref(
 ): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue;
     // A repeated parameter arrives as an array, and appending each is what keeps
     // `?a=1&a=2` from collapsing to one of them.
-    for (const single of Array.isArray(value) ? value : [value ?? null]) {
-      if (single !== null) query.append(key, single);
-    }
+    for (const single of Array.isArray(value) ? value : [value]) query.append(key, single);
   }
   const search = query.toString();
   const path = songHref({ slug });
