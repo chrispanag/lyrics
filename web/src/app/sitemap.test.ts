@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { API, list, makeSong } from "@/test/handlers";
 import { server } from "@/test/server";
@@ -83,7 +83,7 @@ describe("sitemap", () => {
   it("answers with the static routes alone when the API cannot be reached", async () => {
     server.use(http.get(`${API}/api/v1/songs`, () => HttpResponse.error()));
 
-    expect(await sitemap()).toEqual([{ url: `${ORIGIN}/` }]);
+    await expectStaticRoutesOnly();
   });
 
   it("keeps nothing from a walk that failed part-way", async () => {
@@ -92,6 +92,43 @@ describe("sitemap", () => {
     // nothing at all to say the other hundred and fifty were missing.
     server.use(catalogOf(250, 1));
 
-    expect(await sitemap()).toEqual([{ url: `${ORIGIN}/` }]);
+    await expectStaticRoutesOnly();
+  });
+
+  it("refuses a catalog whose songs carry no address", async () => {
+    // What an API predating migration 000010 answers: the field is not there at
+    // all rather than empty, which `Song` cannot express and so the compiler
+    // cannot catch. `songHref` then builds `/songs/undefined`, and the sitemap
+    // that used to come out of this was that one dead address repeated once per
+    // song — a shape a filter would turn into "a catalog of no songs", which
+    // reads exactly like success.
+    server.use(
+      http.get(`${API}/api/v1/songs`, () =>
+        HttpResponse.json(list([makeSong({ slug: undefined })])),
+      ),
+    );
+
+    await expectStaticRoutesOnly();
   });
 });
+
+/**
+ * The whole of what a failed walk may produce: the static routes, and a logged
+ * cause.
+ *
+ * The log is asserted rather than merely tolerated because it is the only report
+ * this route has — a sitemap of one URL is a green deploy otherwise. Silenced
+ * with a spy for the reason `AuthPages.test.tsx` gives at its own: the suite
+ * prints no stderr, and three deliberate failures dumping a stack each would
+ * bury a real one. Restored from a `finally`, so a failing assertion cannot
+ * leave `console.error` mocked for every spec after it.
+ */
+async function expectStaticRoutesOnly() {
+  const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    expect(await sitemap()).toEqual([{ url: `${ORIGIN}/` }]);
+    expect(logged).toHaveBeenCalled();
+  } finally {
+    logged.mockRestore();
+  }
+}

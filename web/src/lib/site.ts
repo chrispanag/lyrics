@@ -1,12 +1,18 @@
 /*
  * Who this deployment says it is.
  *
- * Both values below are read by things that render on the *server*, where there
- * is no page to be relative to: a link-preview card is fetched by a scraper with
- * no page context, and a sitemap entry must be an absolute URL by
- * specification. Next's `metadataBase` resolves the relative URLs inside
- * metadata and nothing else — a sitemap entry does not read it, and neither does
- * JSON-LD.
+ * Mostly for things that render on the *server*, where there is no page to be
+ * relative to: a link-preview card is fetched by a scraper with no page context,
+ * and a sitemap entry must be an absolute URL by specification. Next's
+ * `metadataBase` resolves the relative URLs inside metadata and nothing else — a
+ * sitemap entry does not read it, and neither does JSON-LD.
+ *
+ * `SITE_NAME` is the exception and is read by client components too, which is
+ * why this is not "the server's module": `PageTitle` and `Wordmark` both import
+ * it. The metadata constants do not follow them into the bundle — verified by
+ * grepping the built client chunks for the card's filename, which is absent —
+ * but that is the bundler's tree-shaking rather than anything stated here, so
+ * this module is not the place to put something that must never reach a browser.
  */
 
 /**

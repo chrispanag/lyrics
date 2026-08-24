@@ -841,7 +841,27 @@ each of them is written down.
   value is `${APP_URL}`, so a server fetch goes out through the public ingress
   and back: there is no private service-to-service address configured, and that
   is a known cost. Every server fetch passes `{ anonymous: true }` — a server
-  render is a guest by construction.
+  render is a guest by construction. **Whether `${APP_URL}` resolves to the
+  primary custom domain or to the default `*.ondigitalocean.app` host was never
+  confirmed against a live deploy** — recorded the way `DO-Connecting-IP` and
+  Prelude's `iss` host are, and with the same shape of consequence: App Platform
+  redirects its default domain to the primary one and `fetch` follows a redirect
+  silently, so the default host costs an extra hop per server fetch that nothing
+  in logs or metrics tells apart from a healthy call. It can cost latency, never
+  correctness.
+- **Everything the server says is about the *entry* document only, and nothing
+  updates it afterwards.** Next renders this route once; from then on
+  react-router does every navigation and Next's router never runs — so a reader
+  who swipes from song A to song B is looking at B under A's description,
+  canonical, `og:*` and JSON-LD. Crawlers execute no JavaScript and so only ever
+  see the document they asked for, which is what makes this acceptable rather
+  than a bug; what sees the stale copy is anything reading the live DOM, a
+  share-sheet scraper or an extension. `PageTitle` is the one thing that does
+  track, because a `<title>` React hoists also unwinds on unmount — there is no
+  equivalent for a `<meta>` this route renders, and adding one would mean the app
+  maintaining the server's metadata from the client, which is a second authority
+  over it. Do not read the presence of correct metadata on one song page as a
+  promise it follows the reader.
 - **`generateMetadata` must never return a `title`.** It is the same rule
   `app/layout.tsx` keeps and for the same mechanism, one level down: React
   renders a metadata title from a segment above every route, so it sorts ahead of
@@ -909,9 +929,30 @@ each of them is written down.
   a truncated sitemap is indistinguishable from a small catalog, so half the songs
   going unindexed would look exactly like success. `Promise.all` keeps that,
   one rejection being the whole walk's. `app/sitemap.test.ts` runs under
-  `@vitest-environment node`, which is also the only spec that exercises the
-  server branch of `API_BASE` above, and its fourth case is what pins the
-  all-or-nothing half by failing every page but the first.
+  `@vitest-environment node`, one of the two specs that exercise the server
+  branch of `API_BASE` above, and its fourth case is what pins the all-or-nothing
+  half by failing every page but the first.
+- **A payload with no `slug` is a failure, and both server readers treat it as
+  one.** It is not corruption and not something `Song` can express: an API
+  predating migration 000010 answers with the field simply *not there*, on every
+  row at once, so TypeScript cannot catch it and the two components deploy
+  separately. `songHref` then builds `/songs/undefined` — which on `/songs/[id]`
+  is a **permanent** redirect to a dead address plus a canonical naming it that a
+  search index keeps long after the skew heals, and in the sitemap is that one
+  address repeated once per song. `loadSong` answers null (one check, because all
+  three of its uses go through `songHref`) and the sitemap's `entry` throws into
+  the existing catch — a throw and not a filter, since a shorter sitemap is
+  indistinguishable from a smaller catalog and so reads as success. Both observed
+  live against a stale local `make api`, and pinned by a case in each spec.
+- **The route module has its own spec, and the helpers having theirs is why it
+  needs one.** `listContext.test.ts` pins the two address helpers and
+  `jsonLd.test.ts` the payload; the `/songs/undefined` redirect above passed all
+  of them and the whole suite besides, because what was wrong was the wiring. So
+  `app/songs/[id]/page.test.tsx` *calls* the async component and reads the tree
+  it returns rather than rendering it — `<ClientOnly/>` has nothing to render
+  outside a Next build — and it mocks `permanentRedirect` to throw, which is what
+  the real one does and what stops the render continuing. Each of its cases was
+  checked against the regression it names.
 - **`robots.txt` stays a static file.** A file under `public/` and an
   `app/robots.ts` claim the same path, and there is nothing in it worth
   generating. Its `Sitemap:` line therefore names a path with no file behind it,

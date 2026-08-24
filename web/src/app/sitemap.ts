@@ -47,6 +47,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
  * `Promise.all` keeps that — one rejection is the whole walk's. Swallowing at all
  * is belt to the suspenders above: however this route comes to be classified, a
  * build can never fail on the API being unreachable.
+ *
+ * The cause goes to `console.error`, which is the same trade the auth screens
+ * make for the failures they refuse to describe — and here nothing else could
+ * report it. A listing request has no legitimate failure, unlike the single-song
+ * read on `songs/[id]`: this catch only ever fires on a fault, so a wrong
+ * `API_ORIGIN` or an API that never came up would otherwise be a green deploy
+ * serving a sitemap of one URL with nothing anywhere saying why.
  */
 async function songEntries(): Promise<MetadataRoute.Sitemap> {
   try {
@@ -59,7 +66,8 @@ async function songEntries(): Promise<MetadataRoute.Sitemap> {
     );
 
     return [first, ...rest].flatMap((page) => page.data.map(entry));
-  } catch {
+  } catch (caught) {
+    console.error("sitemap: could not enumerate the catalog", caught);
     return [];
   }
 }
@@ -78,7 +86,21 @@ function songPage(offset: number): Promise<ListResponse<Song>> {
   );
 }
 
-/** Through `songHref`, so `/songs/` is not written here as well. */
+/**
+ * Through `songHref`, so `/songs/` is not written here as well.
+ *
+ * A row with no `slug` **throws**, which lands in `songEntries`' catch and so
+ * yields the static routes alone. Two things make that the right shape rather
+ * than a filter. It is the failure mode the function above is written around:
+ * filtering would publish a shorter sitemap, which is indistinguishable from a
+ * smaller catalog and therefore looks like success. And the cause is version
+ * skew rather than one bad row — an API predating migration 000010 answers with
+ * the field simply not there, on every row at once, which `Song` cannot express
+ * and TypeScript therefore cannot catch. `songHref` would build
+ * `/songs/undefined`, so left alone this publishes one dead address repeated
+ * once per song. Observed live against a stale local `make api`.
+ */
 function entry(song: Song): MetadataRoute.Sitemap[number] {
+  if (!song.slug) throw new Error(`song ${song.id} has no slug`);
   return { url: `${SITE_ORIGIN}${songHref(song)}`, lastModified: song.updated_at };
 }

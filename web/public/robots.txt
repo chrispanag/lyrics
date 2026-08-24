@@ -1,15 +1,34 @@
 # This file exists mostly so the path stops answering with the app itself. Every
 # unmatched path falls through to the catch-all route, so a crawler asking for
 # /robots.txt was handed an HTML document with a 200 — read as "no rules", which
-# is what this file says too, but only by accident.
+# is what this file said too, but only by accident.
 #
 # A static file rather than app/robots.ts, and it stays one: a file under public/
 # and a metadata route claim the same path, and there is nothing here worth
 # generating. The sitemap is generated — src/app/sitemap.ts enumerates the
 # catalog from the API — which is why the line below names a path with no file
-# behind it.
+# behind it, and why the origin is written out here as a third copy of
+# SITE_ORIGIN: a Sitemap directive must be absolute by specification.
+#
+# The Disallow lines arrived with that Sitemap line and are the other half of it.
+# Every one of these addresses answers 200 with the same empty client shell —
+# they are behind a session, or they are a form — so before there was a sitemap
+# nothing was pointing a crawler at them and it cost nothing that they were
+# allowed. Pointed at the catalog, the same budget now gets spent on
+# contentless pages that then become indexable. /lists is deliberately absent:
+# the index needs a session, but a list itself is meant to be shared, and no
+# standard directive excludes the one without the other.
 
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /profile
+Disallow: /login
+Disallow: /register
+Disallow: /verify-email
+Disallow: /forgot-password
+Disallow: /change-password
+Disallow: /songs/new
+Disallow: /songs/*/edit
 
 Sitemap: https://songfolio.live/sitemap.xml

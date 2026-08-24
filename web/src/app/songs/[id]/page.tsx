@@ -58,13 +58,27 @@ const CACHE_SECONDS = 300;
  * `{ anonymous: true }` because a server render is a guest by construction: there
  * is no session here to read, and the flag also stops the 401 retry that exists
  * for one.
+ *
+ * **A song with no `slug` is one of those failures**, and the check is here
+ * rather than at each use because all three uses need it: the 308's destination,
+ * `alternates.canonical` and the JSON-LD `url` are each `songHref(song)`, which
+ * with the field absent builds `/songs/undefined` — a *permanent* redirect to a
+ * dead address, and a canonical naming it that a search index keeps long after
+ * the cause is gone. The cause is version skew rather than corruption: an API
+ * predating migration 000010 answers with the field simply not there, which
+ * `Song` cannot express and TypeScript therefore cannot catch, and the two
+ * components deploy separately. Observed live against a stale local `make api`,
+ * and pinned by the last case in this route's own spec. Null puts all three back
+ * on the fallback the paragraph above describes, serving the app at the address
+ * that was asked for.
  */
 const loadSong = cache(async (ref: string): Promise<Song | null> => {
   try {
-    return await apiFetch<Song>(`/api/v1/songs/${encodeURIComponent(ref)}`, {
+    const song = await apiFetch<Song>(`/api/v1/songs/${encodeURIComponent(ref)}`, {
       anonymous: true,
       revalidate: CACHE_SECONDS,
     });
+    return song.slug ? song : null;
   } catch {
     return null;
   }
