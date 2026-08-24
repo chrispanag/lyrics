@@ -153,6 +153,26 @@ services:
       failure_threshold: 3
 
     envs:
+      # Where the Node process itself reaches the API, for the fetches a server
+      # render makes — a song's metadata and the sitemap, neither of which has a
+      # page origin to be relative to. RUN_TIME rather than BUILD_TIME, and with
+      # no NEXT_PUBLIC_ prefix, so nothing about it is inlined into the bundle a
+      # browser downloads.
+      #
+      # ${APP_URL} sends those fetches back out through the public ingress, which
+      # then routes /api to the api component beside this one. There is no
+      # private service-to-service address configured on App Platform today, so
+      # that is a known cost rather than an oversight: a server render pays a
+      # round trip out and back for a request that never leaves the platform.
+      #
+      # Not filled by scripts/deploy-do.sh, unlike everything below it — this is
+      # a platform value rather than one from .env, which is why it is the one
+      # mapping that does not exist in four places. api/client.ts's own default
+      # covers `make web`, `make mobile` and the test suite.
+      - key: API_ORIGIN
+        scope: RUN_TIME
+        value: ${APP_URL}
+
       # NEXT_PUBLIC_API_BASE_URL is deliberately unset: Next inlines these at
       # build time, and a production build with no override targets its own
       # origin, which is exactly the routing below. Setting it here would bake a

@@ -1,6 +1,7 @@
 import { Disc3 } from "lucide-react";
 
 import { cn } from "@/lib/cn";
+import { SITE_NAME } from "@/lib/site";
 
 /**
  * The product name beside its mark.
@@ -28,7 +29,7 @@ export function Wordmark({ size = "md" }: { size?: keyof typeof markSizes }) {
   return (
     <span className="inline-flex items-center gap-2">
       <Disc3 aria-hidden className={cn(markSizes[size], "text-brand-600")} />
-      <span className="text-xl font-semibold tracking-tight">Songfolio</span>
+      <span className="text-xl font-semibold tracking-tight">{SITE_NAME}</span>
     </span>
   );
 }
