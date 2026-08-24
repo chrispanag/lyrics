@@ -241,17 +241,22 @@ prose is this file's inventory going stale.)
   `TestASongAnswersAtItsSlugAndItsID` is what stands in for it, and the subtest
   that walks a song in and out of a list is the half that catches it.
 - **The frontend asks `songMatchesRef`, never `song.slug === ref`.** An old
-  `/songs/<uuid>?list=<id>` link still resolves, is still shared, and **nothing
-  canonicalizes it** — there is no redirect from the id form to the slug, on a
-  document load or anywhere else. `listPosition` matching the slug alone
-  therefore leaves every reader holding an old link on a song page with no list
-  bar, no swipe and no arrow keys, and nothing saying why. `SongSearch`'s "is
-  this the song already open" test has the same shape, where getting it wrong
-  pushes the duplicate history entry that test exists to
+  `/songs/<uuid>?list=<id>` link still resolves and is still shared. A **document
+  load** of one is now answered with a 308 to the slug — `app/songs/[id]/page.tsx`
+  is where, and it is the only layer that can, a client-side router seeing an
+  address only after something has already answered it. That does **not** retire
+  this rule, and reading it as a canonicalization that covers everything is the
+  trap: the redirect needs the song, so an API having a bad minute serves the app
+  at the id address instead, and nothing in-app navigates between the forms at
+  all. `listPosition` matching the slug alone therefore still leaves a reader on
+  a song page with no list bar, no swipe and no arrow keys, and nothing saying
+  why. `SongSearch`'s "is this the song already open" test has the same shape,
+  where getting it wrong pushes the duplicate history entry that test exists to
   prevent. `lib/listContext.ts` owns the address in **both** directions —
-  `songHref` builds one and `songRefFromPath` reads one — because a pathname
-  parsed anywhere else is `/songs/` written in a second place, and only the first
-  gets found when it changes. `useUpdateSong` writes the fresh song under the ref
+  `songHref` builds one, `songRefFromPath` reads one, and `songRefIsId` plus
+  `songCanonicalHref` are the redirect's own half — because a pathname parsed
+  anywhere else is `/songs/` written in a second place, and only the first gets
+  found when it changes. `useUpdateSong` writes the fresh song under the ref
   the URL held and only that one: a song has two addresses but a page asked
   under one of them, nothing navigates between the forms in-app, and a second
   entry would hold a whole song, lyrics included, that nothing ever reads.
@@ -703,8 +708,10 @@ no application code — but while it stands, these are the parts holding it up.
   mismatch on every signed-in load rather than on one screen. The layout-effect
   shape below costs that snapshot nothing, since it runs before paint. Do not
   read this list as an inventory; grep for the reads. `ssr: false` is legal only inside a client component,
-  which is why `app/[[...slug]]/client.tsx` exists between the page and
-  `AppRoot` rather than the page importing it directly.
+  which is why `app/client.tsx` exists between a page and `AppRoot` rather than
+  the page importing it directly. It sits beside the route folders rather than
+  inside one because three pages render it now: the catch-all, `/songs/[id]` and
+  `/songs/new`.
 - **A value only the browser has may not be read while rendering, and a
   try/catch is not the fix.** Wrapping stops the throw and leaves the worse
   half: the server renders one answer and the client's first render another,
@@ -812,6 +819,96 @@ no application code — but while it stands, these are the parts holding it up.
   `esModuleInterop` if they disagree with it, so they are not choices to make
   there.
 
+### What the server says while the app is still client-only
+
+`generateMetadata`, a `<script type="application/ld+json">` and `sitemap.xml` are
+rendered by the Node process whatever the body does, so all three ship with
+`ssr: false` still standing. Nothing below is visible from inside the app — every
+one of these is read by a crawler or a scraper and by nothing else — which is why
+each of them is written down.
+
+- **A server render needs an origin, and `""` is not one.** `API_BASE` in
+  `api/client.ts` is two branches now: the browser's, unchanged, and the Node
+  process's, which resolves `API_ORIGIN` and falls back to `:8080`. It is one
+  resolution rather than a second server-side fetcher, so `apiFetch` works from
+  either side. **`API_ORIGIN` is deliberately not `NEXT_PUBLIC_`** — it must never
+  be inlined into the bundle — and it is the one variable that does **not** exist
+  in the four places under Environment below: it is a platform value, set
+  `RUN_TIME` in `.do/app.yaml` and in `docker-compose.yml`'s `environment:` (not
+  its build `args:`, where it would silently do nothing, there being no
+  `ARG`/`ENV` pair in `web/Dockerfile` and deliberately so), with the development
+  default covering `make web`, `make mobile` and the specs. On App Platform its
+  value is `${APP_URL}`, so a server fetch goes out through the public ingress
+  and back: there is no private service-to-service address configured, and that
+  is a known cost. Every server fetch passes `{ anonymous: true }` — a server
+  render is a guest by construction.
+- **`generateMetadata` must never return a `title`.** It is the same rule
+  `app/layout.tsx` keeps and for the same mechanism, one level down: React
+  renders a metadata title from a segment above every route, so it sorts ahead of
+  the one `PageTitle` hoists, wins `document.title` — and then never changes
+  again, because react-router does every in-app navigation and Next's router
+  never runs. Paging through a list would leave the tab naming the first song
+  forever. `og:title` is a different property and is what the card reads. Verified
+  against `next start`: a song page's server HTML carries no `<title>` at all.
+- **A route's `openGraph` *replaces* the layout's rather than merging into it.**
+  Next merges metadata shallowly, so a block naming only `og:type` and `og:title`
+  silently drops the card image and the site name with it. `lib/site.ts` holds
+  `OG_IMAGE` for that reason — the shape Next's own docs recommend — and
+  `SITE_ORIGIN` beside it because a sitemap entry and the JSON-LD both need an
+  absolute URL and **neither reads `metadataBase`**, which resolves the relative
+  URLs inside metadata and nothing else.
+- **The JSON-LD is escaped, and `songJsonLd` returns text rather than an object
+  so that it cannot be forgotten.** Lyrics are contributor-typed text going into
+  a raw `<script>` body, where the HTML parser is still looking for `</script`: a
+  lyric containing one closes the tag and the rest is parsed as markup a
+  contributor wrote. Same stored-XSS shape as the `⟦…⟧` snippet sentinels,
+  arriving from the server. Every `<` becomes `\u003c`, which is total rather than
+  a filter — every sequence the parser reacts to in there starts with that one
+  character. Pinned in `lib/jsonLd.test.ts` by asserting the body contains no `<`
+  whatsoever, and verified in the served document.
+- **The 308 from the id form to the slug carries the query string**, and dropping
+  it is the dead end `lib/listContext.ts`'s header is about: an old link is very
+  often `/songs/<uuid>?list=<id>`, and the next song then has nowhere to go with
+  nothing saying so. `songRefIsId` matches **two** spellings, because Go's
+  `uuid.Parse` takes the 32 hex digits with the dashes left out and migration
+  000010 reserves both out of slug space. And `permanentRedirect` **works by
+  throwing**, so it sits outside the `try` that swallows a failed fetch —
+  inside, the redirect is swallowed along with it and the old address quietly
+  serves the app exactly as before.
+- **`/songs/new` needs a segment of its own beside `/songs/[id]`.** Without it the
+  editor's address is a song's: `generateMetadata` goes looking for a song called
+  "new" and the redirect branch reasons about the form as though it were one. A
+  static segment outranks a dynamic one, which is the same precedence the
+  react-router table already relies on for this pair. `/songs/[id]/edit` is two
+  segments and still reaches the catch-all.
+- **`revalidate` as a segment export does nothing here; the caching is on the
+  request.** A dynamic segment with no `generateStaticParams` is rendered per
+  request whatever that export says. Measured against `next start`: three page
+  requests made three API calls with `export const revalidate = 300` in place and
+  one with `apiFetch`'s `revalidate` option instead, which is Next's own `fetch`
+  extension. The option is per call site on purpose — a stale answer is right for
+  a crawler and wrong for the app, where a reader who just saved an edit would be
+  shown the version before it. There is no `generateStaticParams` either way:
+  `next build` runs with no API on :8080.
+- **The sitemap must not be evaluated at build time, and must survive a dead API
+  anyway.** Metadata routes are cached by default, and a build has nothing on
+  :8080 — so a sitemap evaluated then ships empty and stays empty until the next
+  deploy. `export const dynamic = "force-dynamic"` is the forcing config; the
+  `try` around the enumeration is belt to that, so a build can never fail on it
+  however the route comes to be classified. It walks with **`sort=oldest`**,
+  which is `created_at ASC, id ASC` — a total order in which a song added
+  mid-walk appends rather than shifting a row across a page boundary and handing
+  a crawler one song twice while dropping another — and `meta.total` is the
+  authority for how far to go. A failure yields the static routes **alone rather
+  than what had been collected**: a truncated sitemap is indistinguishable from a
+  small catalog, so half the songs going unindexed would look exactly like
+  success. `app/sitemap.test.ts` runs under `@vitest-environment node`, which is
+  also the only spec that exercises the server branch of `API_BASE` above.
+- **`robots.txt` stays a static file.** A file under `public/` and an
+  `app/robots.ts` claim the same path, and there is nothing in it worth
+  generating. Its `Sitemap:` line therefore names a path with no file behind it,
+  which is fine and is worth knowing before someone goes looking for one.
+
 ### Frontend
 
 - **`BrowsePage`'s debounced-search effect needs its guard.** `setParams` is not
@@ -830,6 +927,10 @@ no application code — but while it stands, these are the parts holding it up.
   is eleven characters of `[A-Za-z0-9_-]` or it is absent. `WatchOnYouTube`
   therefore takes the id and builds the link, which is the same idiom the search
   snippets use — a wrong destination is impossible by construction, not filtered.
+  The building itself is `watchUrl` in `lib/youtube.ts`, and it is shared rather
+  than inlined there because a song page's JSON-LD names the same video from the
+  server: the promise this bullet makes is that the canonical shape is written in
+  one place per stack, and a second copy is what ends it.
   Gating on the URL instead also disagrees with `SongCard`'s badge, which reads
   the id: the card says there is no video and the page offers one. What the link
   replaced was **not an embed but a click-to-load facade**, and the difference
@@ -1412,7 +1513,11 @@ no application code — but while it stands, these are the parts holding it up.
   What is given up is a title in the server HTML for a reader running no
   JavaScript, which today is a reader getting no content either; `og:title`
   still carries the name to link previews. Both directions verified in a real
-  browser, including against the deployed Vite build.
+  browser, including against the deployed Vite build. **The rule reaches the
+  routes that server-render, not just this layout**: `/songs/[id]`'s
+  `generateMetadata` returns no `title` for exactly the same mechanism one level
+  down, so a song page's server HTML still carries no `<title>` at all — verified
+  against `next start`.
 - **The rasters come from `icons/icon-square.svg`, not from
   `public/favicon.svg`.** The favicon has `rx="7"` and is transparent outside
   that radius; iOS composites its own mask over an opaque square, so
@@ -1653,6 +1758,16 @@ no application code — but while it stands, these are the parts holding it up.
   some of them. Only the deploy script complains, and for the SDK key it only
   *warns*: the others build happily with an empty value, so the failure is a
   screen that reports itself unconfigured on one stack while working on another.
+- **`API_ORIGIN` is the deliberate exception to that rule, and it is not one to
+  "fix".** It is where the *Node process* reaches the API for the fetches a server
+  render makes, so it is a `RUN_TIME` platform value rather than a build input
+  filled from `.env`: it exists in `.do/app.yaml` and in `docker-compose.yml`'s
+  `environment:` block and in neither of the other two, with `api/client.ts`'s own
+  `:8080` default covering `make web`, `make mobile` and the test suite. Adding it
+  to `web/Dockerfile` as an `ARG`/`ENV` pair or to `scripts/deploy-do.sh` would
+  bake a build-time value into a variable read at run time. No `NEXT_PUBLIC_`
+  prefix, for the same reason and one further one: nothing about where the server
+  reaches the API belongs in a bundle a browser downloads.
 - The Makefile reads `.env` from the directory it runs in, and a **git worktree
   has none** — so `make web` there serves a build with every Prelude variable
   empty. Sign-in and password reset then fail in ways that look like bugs in the

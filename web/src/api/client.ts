@@ -14,9 +14,26 @@ import type { ApiErrorBody } from "@/lib/types";
 // The guard is `!== "production"` rather than `=== "development"` because
 // vitest runs as "test", and its specs expect the same :8080 fallback they got
 // from Vite's `import.meta.env.DEV`.
+//
+// A server render is the case that breaks all of that, which is why there are
+// two branches: "the page's own origin" is the empty string, and relative to
+// nothing is not a URL. So the Node process resolves API_ORIGIN instead — a
+// platform variable rather than one filled from `.env`, and deliberately *not*
+// NEXT_PUBLIC_, so it is never inlined into the bundle a browser downloads. It
+// is set on App Platform (`${APP_URL}`, so server fetches go back out through
+// the public ingress — there is no private service address configured today, and
+// that is a known cost) and in docker-compose (`http://api:8080`); `make web`,
+// `make mobile` and every node-environment spec are covered by the default
+// below, which is why this is the one mapping that does not exist in four
+// places.
+//
+// One resolution and not a second server-side fetcher, so `apiFetch` works
+// unchanged from either side and where the API lives stays decided in one place.
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  (process.env.NODE_ENV !== "production" ? "http://localhost:8080" : "");
+  typeof window === "undefined"
+    ? (process.env.API_ORIGIN ?? "http://localhost:8080")
+    : (process.env.NEXT_PUBLIC_API_BASE_URL ??
+      (process.env.NODE_ENV !== "production" ? "http://localhost:8080" : ""));
 
 /**
  * The absolute URL of an API path.
@@ -89,6 +106,23 @@ export interface RequestOptions {
   /** Skip the Authorization header even when a session exists. */
   anonymous?: boolean;
   signal?: AbortSignal;
+  /**
+   * Server only: seconds this response may be reused before being fetched
+   * again. Omitted, nothing is cached.
+   *
+   * Next's own extension to `fetch`, so it does nothing in a browser and
+   * nothing under vitest — which is why it belongs to the caller rather than
+   * being a default here: a stale answer is fine for a crawler reading a song's
+   * metadata and is exactly wrong for the app, where a reader who just saved an
+   * edit would be shown the version before it.
+   *
+   * The measured reason it is on the request and not on the page: a
+   * `revalidate` segment export on `/songs/[id]` changes nothing, because a
+   * dynamic segment with no `generateStaticParams` is rendered per request
+   * whatever it says — verified against `next start`, one API request per page
+   * request with the export in place and one per five minutes with this.
+   */
+  revalidate?: number;
 }
 
 /**
@@ -132,6 +166,10 @@ async function send(
     headers,
     body: payload?.body,
     signal: options.signal,
+    // Spread rather than passed as `undefined`, so a request that asked for no
+    // caching is a request with no `next` key at all — which is what leaves the
+    // browser's own fetch and MSW looking at the init object they always saw.
+    ...(options.revalidate === undefined ? {} : { next: { revalidate: options.revalidate } }),
   });
 }
 

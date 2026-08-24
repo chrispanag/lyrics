@@ -1,4 +1,4 @@
-import { ClientOnly } from "./client";
+import { ClientOnly } from "@/app/client";
 
 // An optional catch-all, so every address the react-router table knows about
 // reaches this one page — the replacement for nginx's `try_files … /index.html`
@@ -11,9 +11,11 @@ import { ClientOnly } from "./client";
 // still load-bearing for the reason CLAUDE.md gives under Head assets, and
 // deleting one still fails open. Check the content type, not the status.
 //
-// This is where the SSR work will start: a real route for a song or the catalog
-// takes its address back off this catch-all, and the two coexist because a
-// static segment always wins over it.
+// `/songs/[id]` is the first address taken back off it, for its metadata and its
+// JSON-LD, and `/songs/new` the second — and the two coexist with this one
+// because a more specific segment always outranks a catch-all. What that route
+// does *not* take is `/songs/[id]/edit`, which is two segments and so still
+// arrives here.
 export default function Page() {
   return <ClientOnly />;
 }

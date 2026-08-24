@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
+import { OG_IMAGE, SITE_ORIGIN } from "@/lib/site";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 import "@/styles/index.css";
 
@@ -13,8 +14,10 @@ export const metadata: Metadata = {
   // What is given up is a title in the server HTML for a reader that runs no
   // JavaScript, which today is a reader that also gets no content: the app is
   // client-rendered. `og:title` below is what link previews read and is
-  // unaffected. Per-route titles come back into the HTML with SSR, as
-  // generateMetadata on the routes that get server-rendered.
+  // unaffected. The rule holds for the routes that *do* server-render, too, and
+  // for the same reason: app/songs/[id] declares no title either — a metadata
+  // title from any segment above a route wins the read and then never moves,
+  // since react-router does every in-app navigation from there on.
   description:
     "Songfolio is a Greek and English song lyrics catalog: browse, search, and collect songs into lists.",
   // manifest.json, not the spec's preferred site.webmanifest extension. Every
@@ -38,13 +41,12 @@ export const metadata: Metadata = {
   // carries the name in og:title, so it does not repeat it.
   //
   // The image URL must be absolute: a card is fetched by a server with no page
-  // context to be relative to, and most scrapers do not resolve a relative
-  // one. So the origin is written out here, as it is in `url` below and in
-  // icons/og-card.svg, which bakes the domain into the picture — a rename has
-  // to visit all three. It is deployment identity rather than a build input,
-  // unlike NEXT_PUBLIC_API_BASE_URL, which is left unset so the bundle calls
-  // its own origin at runtime.
-  metadataBase: new URL("https://songfolio.live"),
+  // context to be relative to, and most scrapers do not resolve a relative one.
+  // This is what resolves the relative URLs below against the origin — and it
+  // resolves nothing outside metadata, which is why the sitemap and a song's
+  // JSON-LD read `SITE_ORIGIN` themselves. The image descriptor is shared for a
+  // reason of Next's own; `lib/site.ts` has both.
+  metadataBase: new URL(SITE_ORIGIN),
   openGraph: {
     type: "website",
     siteName: "Songfolio",
@@ -52,15 +54,7 @@ export const metadata: Metadata = {
     title: "Songfolio",
     description:
       "A Greek and English song lyrics catalog: browse, search, and collect songs into lists.",
-    images: [
-      {
-        url: "/og-card.png",
-        type: "image/png",
-        width: 1200,
-        height: 630,
-        alt: "Songfolio — a Greek and English song lyrics catalog",
-      },
-    ],
+    images: [OG_IMAGE],
   },
   twitter: { card: "summary_large_image" },
 };

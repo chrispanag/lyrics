@@ -68,6 +68,62 @@ export function songMatchesRef(song: Pick<Song, "id" | "slug">, ref: string): bo
   return song.slug === ref || song.id === ref;
 }
 
+/**
+ * Whether a route parameter holds a song's *identifier* rather than its slug.
+ *
+ * Only the server-rendered `/songs/[id]` segment asks, and it is the one place
+ * in the stack that can answer an old link with a real 308 — nothing else
+ * canonicalizes the id form, which is why `songMatchesRef` above has to keep
+ * accepting it forever. It lives here because `/songs/…` is this module's shape
+ * in both directions already, and a third reading of a song's address written
+ * somewhere else is the one that does not get found when the rule changes.
+ *
+ * Two spellings, and the second is not padding: Go's `uuid.Parse` also takes the
+ * 32 hex digits with the dashes left out, which is why migration 000010's CHECK
+ * reserves *both* out of slug space. No slug can be either shape, so matching one
+ * is unambiguous. The brace and `urn:uuid:` forms `uuid.Parse` also accepts are
+ * deliberately absent: neither survives slugification, so neither is a shape a
+ * title could produce or a link this app ever built.
+ */
+export function songRefIsId(ref: string): boolean {
+  return CANONICAL_UUID.test(ref) || COMPACT_UUID.test(ref);
+}
+
+const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const COMPACT_UUID = /^[0-9a-f]{32}$/i;
+
+/**
+ * The slug address an id-form address redirects to, query string intact.
+ *
+ * Carrying the query is the whole difficulty. An old link is very often
+ * `/songs/<uuid>?list=<id>`, so a redirect that keeps only the path drops the
+ * reader out of the list on the way in — which is the dead end this module's
+ * header is about, and it arrives silently: the song renders, there is simply no
+ * list bar, no swipe and no arrow keys. It does not go through `songHref`
+ * because that one composes the list parameter itself — here the parameters are
+ * whatever the old link happened to carry rather than something to reconstruct —
+ * but the path still comes from it, so `/songs/` stays written once.
+ *
+ * The parameter shape is Next's awaited `searchParams` written out, so this stays
+ * a plain function that a spec can call and this module keeps its one import.
+ */
+export function songCanonicalHref(
+  slug: string,
+  params: Record<string, string | string[] | undefined>,
+): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    // A repeated parameter arrives as an array, and appending each is what keeps
+    // `?a=1&a=2` from collapsing to one of them.
+    for (const single of Array.isArray(value) ? value : [value ?? null]) {
+      if (single !== null) query.append(key, single);
+    }
+  }
+  const search = query.toString();
+  const path = songHref({ slug });
+  return search ? `${path}?${search}` : path;
+}
+
 /** Where a song sits in a list, and the addresses on either side of it. */
 export interface ListPosition {
   listName: string;
