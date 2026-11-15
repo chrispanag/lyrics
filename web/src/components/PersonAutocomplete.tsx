@@ -22,15 +22,19 @@ export function PersonAutocomplete({
   value,
   onChange,
   placeholder,
-  id,
+  label,
 }: {
   value: PersonSelection;
   onChange: (selection: PersonSelection) => void;
   placeholder?: string;
-  id?: string;
+  /**
+   * The field's accessible name. Required: it sits in rows with no visible
+   * label, and a placeholder is only a fallback name — the same "Name" on
+   * every row, telling one row from the next not at all.
+   */
+  label: string;
 }) {
-  const generatedId = useId();
-  const inputId = id ?? generatedId;
+  const inputId = useId();
   const listId = `${inputId}-suggestions`;
 
   const [open, setOpen] = useState(false);
@@ -47,6 +51,13 @@ export function PersonAutocomplete({
   // Placeholder data outlives the enabled flag, so the emptied input has to be
   // gated here too or clearing the field would leave stale names showing.
   const suggestions = query.trim() ? (data?.data ?? []) : [];
+  const listShown = open && suggestions.length > 0;
+  // Focus never leaves the field, so the highlight reaches assistive tech only
+  // through `aria-activedescendant` — the same shape as `SongSearch`.
+  const activeId =
+    listShown && highlighted >= 0 && highlighted < suggestions.length
+      ? optionId(listId, highlighted)
+      : undefined;
 
   const select = (person: { id: string; name: string }) => {
     onChange({ personId: person.id, name: person.name });
@@ -58,9 +69,13 @@ export function PersonAutocomplete({
     <div className="relative">
       <Input
         id={inputId}
+        aria-label={label}
         role="combobox"
-        aria-expanded={open && suggestions.length > 0}
-        aria-controls={listId}
+        aria-expanded={listShown}
+        // Only while the listbox is rendered: an id naming nothing is a
+        // dangling reference.
+        aria-controls={listShown ? listId : undefined}
+        aria-activedescendant={activeId}
         aria-autocomplete="list"
         autoComplete="off"
         placeholder={placeholder}
@@ -103,7 +118,7 @@ export function PersonAutocomplete({
         }}
       />
 
-      {open && suggestions.length > 0 && (
+      {listShown && (
         <ul
           id={listId}
           // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: the ARIA combobox pattern's listbox.
@@ -111,10 +126,16 @@ export function PersonAutocomplete({
           className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-line-strong bg-surface py-1 shadow-lg"
         >
           {suggestions.map((person, index) => (
-            <li key={person.id}>
+            // `presentation`, or the listbox owns list items rather than options.
+            <li key={person.id} role="presentation">
               <button
+                id={optionId(listId, index)}
                 type="button"
                 role="option"
+                // Out of the tab order: a row reached by Tab takes focus from
+                // the field, whose blur then unmounts the row under it, and the
+                // row answers only to a mouse.
+                tabIndex={-1}
                 aria-selected={index === highlighted}
                 onMouseDown={() => {
                   // mousedown beats the input's blur, so the deferred close
@@ -138,4 +159,9 @@ export function PersonAutocomplete({
       )}
     </div>
   );
+}
+
+/** The id of one suggestion, for `aria-activedescendant`. */
+function optionId(base: string, index: number): string {
+  return `${base}-option-${index}`;
 }

@@ -40,6 +40,7 @@ function renderField(initial: PersonSelection = { name: "" }) {
         }}
       >
         <PersonAutocomplete
+          label="Performer"
           value={value}
           placeholder="Name"
           onChange={(selection) => {
@@ -53,7 +54,7 @@ function renderField(initial: PersonSelection = { name: "" }) {
   }
 
   renderWithProviders(<Harness />);
-  return { changes, submitted, field: screen.getByRole("combobox") };
+  return { changes, submitted, field: screen.getByRole("combobox", { name: "Performer" }) };
 }
 
 /** Types a query and waits for the debounced suggestions to arrive. */
@@ -116,6 +117,28 @@ describe("PersonAutocomplete", () => {
     expect(highlighted()).toEqual(["Μάρκος Βαμβακάρης"]);
     await userEvent.keyboard("{ArrowDown}");
     expect(highlighted()).toEqual(["Μίκης Θεοδωράκης12"]);
+  });
+
+  // Focus stays on the field, so the highlight is announced only through the
+  // field pointing at the row; and a row must not be a tab stop, or Tab moves
+  // focus into a listbox the field's blur is about to unmount.
+  it("names the highlighted row as the field's active descendant, rows out of the tab order", async () => {
+    const { field } = renderField();
+    await typeAndOpen(field);
+
+    expect(field).toHaveAttribute("aria-controls", screen.getByRole("listbox").id);
+    expect(field).not.toHaveAttribute("aria-activedescendant");
+    for (const option of screen.getAllByRole("option")) {
+      expect(option).toHaveAttribute("tabindex", "-1");
+    }
+
+    await userEvent.keyboard("{ArrowDown}");
+    const [first] = screen.getAllByRole("option");
+    expect(field).toHaveAttribute("aria-activedescendant", first!.id);
+
+    await userEvent.keyboard("{Escape}");
+    expect(field).not.toHaveAttribute("aria-controls");
+    expect(field).not.toHaveAttribute("aria-activedescendant");
   });
 
   it("picks the highlighted suggestion on Enter without submitting the form", async () => {
