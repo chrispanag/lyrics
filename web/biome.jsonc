@@ -97,12 +97,13 @@
       }
     },
     {
-      // The seam's Next backend; and the route files, for the server's own
-      // `notFound`, `redirect` and `permanentRedirect` and nothing else.
+      // The seam's Next backend.
       "includes": ["src/lib/nextNavigation.tsx"],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },
     {
+      // Route files, for the server's own `notFound`, `redirect` and
+      // `permanentRedirect`, and nothing else.
       "includes": ["src/app/**"],
       "linter": {
         "rules": {

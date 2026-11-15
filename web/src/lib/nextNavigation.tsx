@@ -38,6 +38,15 @@ export function NextNavigation({ children }: { children: ReactNode }) {
       push: (href: string) => router.push(href, { scroll: false }),
       replace: (href: string) => router.replace(href, { scroll: false }),
       back: () => router.back(),
+      // The History API rather than the router: Next keeps `useSearchParams`
+      // in step with it and asks the server for nothing, where `router.replace`
+      // re-renders the route on the server for every keystroke typed into the
+      // catalog's search box. The search string is the screen's own state; a
+      // document load still renders it on the server.
+      writeSearch: (href: string, { replace }: { replace: boolean }) => {
+        if (replace) window.history.replaceState(null, "", href);
+        else window.history.pushState(null, "", href);
+      },
     }),
     [router],
   );

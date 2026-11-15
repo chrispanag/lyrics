@@ -45,6 +45,12 @@ export interface NavigationBackend {
   push(href: string): void;
   replace(href: string): void;
   back(): void;
+  /**
+   * Writes a new search string for the path showing. Its own method because a
+   * router may do it more cheaply than a navigation: Next's re-renders the
+   * route on the server for a push, which the screen's own state never needs.
+   */
+  writeSearch(href: string, options: { replace: boolean }): void;
   Link: ComponentType<BackendLinkProps>;
 }
 
@@ -91,13 +97,11 @@ export function useSetSearchParams(): (
   edit: (next: URLSearchParams) => void,
   options?: { replace?: boolean },
 ) => void {
-  const { pathname, searchParams, push, replace } = useBackend();
+  const { pathname, searchParams, writeSearch } = useBackend();
   return (edit, options = {}) => {
     const next = new URLSearchParams(searchParams.toString());
     edit(next);
-    const href = withSearch(pathname, next.toString());
-    if (options.replace) replace(href);
-    else push(href);
+    writeSearch(withSearch(pathname, next.toString()), { replace: Boolean(options.replace) });
   };
 }
 
@@ -379,6 +383,7 @@ export function TestRouter({ entries, children }: { entries: string[]; children:
       push,
       replace,
       back,
+      writeSearch: (href, options) => (options.replace ? replace(href) : push(href)),
       Link: MemoryLink,
     }),
     [pathname, search, push, replace, back],

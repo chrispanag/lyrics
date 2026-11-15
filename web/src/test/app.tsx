@@ -1,6 +1,7 @@
 import { getURLFromRedirectError } from "next/dist/client/components/redirect";
 import type { ComponentType, ReactNode } from "react";
 
+import NotFound from "@/app/not-found";
 import { RouteParams, Redirect, usePathname } from "@/lib/navigation";
 import { VerificationGate } from "@/routes/guards";
 import { SongDetailPage } from "@/routes/SongDetailPage";
@@ -28,7 +29,6 @@ const pages = import.meta.glob<Module>("/src/app/**/page.tsx", { eager: true });
 const layouts = import.meta.glob<Module>(["/src/app/**/layout.tsx", "!/src/app/layout.tsx"], {
   eager: true,
 });
-const notFound = import.meta.glob<Module>("/src/app/not-found.tsx", { eager: true });
 
 /** The screen each async page renders, by route pattern. */
 const SERVER_PAGES: Record<string, ReactNode> = {
@@ -88,25 +88,25 @@ function render(pattern: string, page: Module["default"]): ReactNode {
 
 /** Whatever the app directory renders at the current address. */
 export function TestApp() {
-  const pathname = usePathname();
+  return (
+    <VerificationGate>
+      <Route pathname={usePathname()} />
+    </VerificationGate>
+  );
+}
+
+function Route({ pathname }: { pathname: string }) {
   const match = bestMatch(Object.keys(routes), pathname);
   const route = match && routes[match.pattern];
-
-  if (!match || !route) {
-    const NotFound = notFound["/src/app/not-found.tsx"]?.default;
-    return <VerificationGate>{NotFound && <NotFound />}</VerificationGate>;
-  }
+  if (!match || !route) return <NotFound />;
 
   const tree = layoutsFor(route.file).reduceRight<ReactNode>(
     (children, { default: Layout }) => <Layout>{children}</Layout>,
     render(match.pattern, route.module.default),
   );
-
   return (
-    <VerificationGate>
-      <RouteParams key={match.pattern} params={match.params}>
-        {tree}
-      </RouteParams>
-    </VerificationGate>
+    <RouteParams key={match.pattern} params={match.params}>
+      {tree}
+    </RouteParams>
   );
 }

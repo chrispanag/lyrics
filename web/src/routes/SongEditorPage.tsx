@@ -8,6 +8,7 @@ import { useCreateSong, useGenres, useSong, useUpdateSong } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { cardChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
+import { Waiting } from "@/routes/guards";
 import { PersonAutocomplete, type PersonSelection } from "@/components/PersonAutocomplete";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import {
@@ -19,7 +20,6 @@ import {
   FieldError,
   Input,
   Select,
-  Spinner,
   Textarea,
 } from "@/components/ui";
 import { songHref, songRefHref } from "@/lib/listContext";
@@ -191,19 +191,12 @@ export function SongEditorPage() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
 
-  // Named after the form, so its history entry differs from the song page —
-  // while waiting too, since that is what a server renders.
+  // Named after the form, so its history entry differs from the song page.
   const heading = isEdit ? "Edit song" : "Add a song";
-  const waiting = (
-    <>
-      <PageTitle name={heading} />
-      <Spinner />
-    </>
-  );
 
-  if (authLoading) return waiting;
+  if (authLoading) return <Waiting title={heading} />;
   if (!hasRole(user?.role, "contributor")) return <Redirect href="/" />;
-  if (isEdit && loadingSong) return waiting;
+  if (isEdit && loadingSong) return <Waiting title={heading} />;
 
   // A failed load must not fall through to the form: every save sends the whole
   // song, so saving an empty form would blank it.

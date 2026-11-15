@@ -732,8 +732,10 @@ The parts below hold that up.
   spec rather than a phone.
 - **Each `page.tsx` is thin, and the screens stay client components.** A page
   renders one component from `src/routes` (inside a guard if it needs one);
-  that module carries `"use client"`, as do `Layout` and `SearchHeader`, which
-  layouts import. The App Router splits per route already, so the
+  that module carries `"use client"`, as do `Layout`, `SearchHeader` and
+  `ui.tsx`, which layouts and the root not-found import. `next build` is what
+  catches a server file reaching a hook through a module without it; the specs
+  run no RSC boundary and cannot. The App Router splits per route already, so the
   `React.lazy` that kept the editor and the admin console out of every visitor's
   bundle is gone with the route table: a route's code reaches only those who open
   it. **`Layout` has no Suspense boundary around its children any more**, and
@@ -759,8 +761,11 @@ The parts below hold that up.
   renders.** On a server the session is always still being restored, so
   `RequireAuth`, `RequireAdmin`, the editor and the verification screen show
   their waiting state there and never the screen that would name the tab.
-  `RequireAuth` takes the `title`; `RequireAdmin` says "Admin". The
-  `routes/guards.tsx` module holds all three guards.
+  `RequireAuth` takes the `title` (the one the screen behind it uses);
+  `RequireAdmin` says "Admin". All of them, and the profile, render the one
+  `Waiting` from `routes/guards.tsx`, so the next screen that waits finds the
+  title already in the shape it copies; a bare `<Spinner/>` there is a page
+  with no `<title>` in its server HTML.
 - **`/admin` redirects on the server, and on a document load the redirect is
   still the browser's.** Its `page.tsx` calls `redirect()` to the first tab, but
   `RequireAdmin` sits above it and withholds the page while the session
@@ -956,7 +961,7 @@ scraper rather than by anyone inside the app, which is why each is written down.
   the `try`, it would be swallowed with the failures it sits beside. An outage
   renders the page with nothing handed over, and the browser asks again and
   says so in its own words. Any other unmatched address renders
-  `app/not-found.tsx` — server-rendered, 404, inside the shell it composes
+  `app/not-found.tsx` — server-rendered, 404, inside the group layouts it mounts
   itself, since the root's not-found sits outside the route groups.
 - **A server render needs an origin, and `""` is not one.** `API_BASE` in
   `api/client.ts` is two branches now: the browser's, unchanged, and the Node
@@ -1119,7 +1124,12 @@ screen changed for it.
   and `canGoBack`; `Link` and `NavLink` take an `href` string and `replace`;
   `usePathname`, `useSearchParams` (read-only) and `useParams` read the address;
   `useSetSearchParams` writes the search string from what it holds now, and is
-  not counted as a navigation; and `<Redirect>` replaces from an effect — every
+  not counted as a navigation — through the backend's `writeSearch`, which on
+  Next is the History API rather than the router: Next keeps `useSearchParams`
+  in step with `pushState`/`replaceState` and asks the server for nothing, where
+  `router.replace` re-rendered the catalog on the server for every keystroke
+  typed into its search box (verified: one API request per query, no RSC
+  request); and `<Redirect>` replaces from an effect — every
   guard's redirect is decided in the browser, since on a server every guard is
   still waiting for the session. An address is a string, and there is no hash in
   `useCurrentHref`, because no Next hook exposes one. `NavLink` is written here
@@ -1545,7 +1555,7 @@ screen changed for it.
   with no navigation at all on a phone, and a page would have to carry it in
   every state it can be in — `ListDetailPage` has three returns to
   `ProfilePage`'s two. The root `app/not-found.tsx` is the one screen outside the
-  groups, so it composes the shell and the bar itself. What is left for a spec is
+  groups, so it mounts the two group layouts itself. What is left for a spec is
   the part position cannot rule out, and `src/appRoutes.test.tsx` is it: it walks
   every address inside the shell asking each for the one hamburger, and it **has
   to render the real route tree** (`test/app.tsx`, composed from the app

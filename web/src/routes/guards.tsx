@@ -40,7 +40,11 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function Waiting({ title }: { title: string }) {
+/**
+ * A screen's waiting state, which names the tab: on a server it is all that
+ * renders, so without the title the HTML would have none.
+ */
+export function Waiting({ title }: { title: string }) {
   return (
     <>
       <PageTitle name={title} />
