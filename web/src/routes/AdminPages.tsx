@@ -93,6 +93,14 @@ export function AdminConsole({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The users count. The screen asks for one page of rows, so a total past it
+ * says how many are shown, or "73 users" would sit over 50 rows.
+ */
+function userTally(shown: number, total: number): string {
+  return shown < total ? `${shown} of ${pluralize(total, "user")}` : pluralize(total, "user");
+}
+
 export function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -130,9 +138,14 @@ export function AdminUsersPage() {
         </Select>
       </div>
 
+      {/* Blank when nothing matched: "No users matched." below says so once. */}
       {!isError && (
         <Tally className="mb-3">
-          {isLoading ? "Searching…" : pluralize(data?.meta.total ?? 0, "user")}
+          {isLoading
+            ? "Searching…"
+            : data?.meta.total
+              ? userTally(data.data.length, data.meta.total)
+              : ""}
         </Tally>
       )}
 
@@ -279,7 +292,10 @@ export function AdminGenresPage() {
   return (
     <>
       <div className="mb-3 flex items-center gap-3">
-        {!isLoading && !isError && <Tally>{pluralize(genres.length, "genre")}</Tally>}
+        {/* Mounted from the start: a live region that arrives with its text
+            already in it is not read out. Blank with no genres, which the
+            empty state says. */}
+        <Tally>{genres.length > 0 && pluralize(genres.length, "genre")}</Tally>
         <Button size="sm" className="ml-auto" onClick={() => openSheet({ kind: "create" })}>
           <Plus aria-hidden className="size-4" />
           New genre

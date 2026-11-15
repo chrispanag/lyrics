@@ -146,11 +146,13 @@ export function ListsPage() {
           <li key={list.id}>
             <Link
               href={listHref(list.id)}
-              className={cn(cardChrome, cardHover, "flex items-center gap-3 bg-surface p-4")}
+              className={cn(cardChrome, cardHover, "group flex items-center gap-3 bg-surface p-4")}
             >
               <span
                 aria-hidden
-                className="flex size-11 shrink-0 items-center justify-center rounded-control bg-accent-subtle text-fg-accent-subtle"
+                // Swaps to the surface under the pointer, where the card takes
+                // the tile's own tint and would swallow it.
+                className="flex size-11 shrink-0 items-center justify-center rounded-control bg-accent-subtle text-fg-accent-subtle transition-colors group-hover:bg-surface"
               >
                 <ListMusic className="size-5" />
               </span>
@@ -316,7 +318,9 @@ export function ListDetailPage() {
             disabled={sessionLoading}
           >
             <Copy aria-hidden className="size-4" />
-            <span className={actionLabel}>Save to my lists</span>
+            {/* Shown on a phone too: a reader's one action, and a copy icon
+                alone reads as "copy link". */}
+            Save to my lists
           </Button>
         )}
 
@@ -341,7 +345,9 @@ export function ListDetailPage() {
               loading={updateList.isPending}
             >
               <VisibilityIcon aria-hidden className="size-4" />
-              <span className={actionLabel}>{visibilityAction}</span>
+              {/* Shown on a phone too: its icon is the state it switches to,
+                  beside a tag showing the state it is in. */}
+              {visibilityAction}
             </Button>
 
             {/* The default list cannot be deleted (the server 403s). */}
