@@ -10,5 +10,7 @@ coverage
 icons
 playwright-report
 test-results
+storybook-static
+debug-storybook.log
 .env
 .env.local

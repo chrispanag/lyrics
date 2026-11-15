@@ -22,8 +22,9 @@ const config: StorybookConfig = {
     };
     // Next inlines `process.env.NEXT_PUBLIC_*` at build time and Vite does not,
     // so `api/client.ts` would throw on `process` in the browser. Mirror Next:
-    // what is set is inlined, and the rest of `process.env` is empty, which
-    // gives the API base its development fallback.
+    // what is set in the shell is inlined (unlike Next, `.env*` files are not
+    // read), and the rest of `process.env` is empty, which gives the API base
+    // its development fallback.
     const nextPublic = Object.entries(process.env)
       .filter(([name]) => name.startsWith("NEXT_PUBLIC_"))
       .map(([name, value]) => [`process.env.${name}`, JSON.stringify(value)]);

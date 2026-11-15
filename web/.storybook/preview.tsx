@@ -26,6 +26,8 @@ const withTheme: Decorator = (Story, context) => {
 
 const preview: Preview = {
   decorators: [withRouter, withTheme],
+  // A docs page per component, built from its stories and props.
+  tags: ["autodocs"],
   globalTypes: {
     theme: {
       description: "Color theme",

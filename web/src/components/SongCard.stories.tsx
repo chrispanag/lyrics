@@ -26,8 +26,9 @@ export const Minimal: Story = {};
 export const Complete: Story = {
   args: {
     song: makeSong({
+      // The song's video is the trigger's copy of its first recording's.
       youtube_video_id: "dQw4w9WgXcQ",
-      recordings: [makeRecording()],
+      recordings: [makeRecording({ youtube_video_id: "dQw4w9WgXcQ" })],
       genres: [makeGenre(), makeGenre({ id: "genre-2", name: "Λαϊκό", slug: "laiko" })],
       snippet: "Στης ⟦θάλασσας⟧ τα βάθη\nη αγάπη μου κοιμάται",
     }),
