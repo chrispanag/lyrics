@@ -7,6 +7,25 @@ import { ROLES, type User } from "@/lib/types";
  */
 const KEY = "lyrics:last-user";
 
+/**
+ * Set on <html> by `SESSION_BOOT_SCRIPT` until `AuthProvider` takes over;
+ * styles/index.css hides `[data-guest-only]` under it.
+ */
+export const SESSION_ATTRIBUTE = "data-session";
+
+/**
+ * Source for the inline <script> app/layout.tsx renders. The server draws every
+ * visitor as a guest, so without it a returning reader sees Sign in until the
+ * bundle hydrates. Presence only, not `asUser`: a value `storedUser` would
+ * refuse still hides the guest chrome, but only until `AuthProvider`'s layout
+ * effect drops the attribute.
+ */
+export const SESSION_BOOT_SCRIPT =
+  `try{` +
+  `if(localStorage.getItem(${JSON.stringify(KEY)})!==null)` +
+  `document.documentElement.setAttribute(${JSON.stringify(SESSION_ATTRIBUTE)},"")` +
+  `}catch(e){}`;
+
 /** The profile to paint until the real one arrives, if there is one. */
 export function storedUser(): User | null {
   try {

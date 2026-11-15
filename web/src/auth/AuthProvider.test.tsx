@@ -11,7 +11,7 @@ import {
   RESET_UNCONFIGURED_ERROR,
   type AuthContextValue,
 } from "./context";
-import { storeUser, storedUser } from "./storedUser";
+import { SESSION_ATTRIBUTE, storeUser, storedUser } from "./storedUser";
 import { useAuth } from "./useAuth";
 import { API, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
@@ -86,6 +86,7 @@ beforeEach(() => {
   session.otpConfigId = "otp-config";
   challengeIds = ["challenge-1", "challenge-2", "challenge-3"];
   answerStepUp("review");
+  document.documentElement.removeAttribute(SESSION_ATTRIBUTE);
 });
 
 /**
@@ -132,6 +133,7 @@ describe("AuthProvider", () => {
   // No guest flash while restoring: asserted before the held token resolves.
   it("paints the last session's profile while the real one is on its way", async () => {
     storeUser(makeUser({ display_name: "Νίκος" }));
+    document.documentElement.setAttribute(SESSION_ATTRIBUTE, "");
 
     let landed: (token: string | null) => void = () => {};
     session.getAccessToken.mockImplementation(
@@ -142,12 +144,27 @@ describe("AuthProvider", () => {
 
     expect(screen.getByText("Νίκος")).toBeInTheDocument();
     expect(screen.getByText("restoring")).toBeInTheDocument();
+    // React draws the chrome now; the boot script's hint must not outlive it.
+    expect(document.documentElement.hasAttribute(SESSION_ATTRIBUTE)).toBe(false);
 
     landed("token");
 
     // The confirmed profile (no seeded name) replaces the guess.
     expect(await screen.findByText("singer@example.com")).toBeInTheDocument();
     expect(screen.getByText("settled")).toBeInTheDocument();
+  });
+
+  // The boot script keys on presence alone, so a snapshot `storedUser` refuses
+  // still set the hint. Left in place, it would hide Sign in from a guest.
+  it("drops the boot script's hint when the snapshot is refused", () => {
+    localStorage.setItem("lyrics:last-user", "not json at all");
+    document.documentElement.setAttribute(SESSION_ATTRIBUTE, "");
+    session.getAccessToken.mockImplementation(() => new Promise<string | null>(() => {}));
+
+    renderProvider();
+
+    expect(screen.getByText("guest")).toBeInTheDocument();
+    expect(document.documentElement.hasAttribute(SESSION_ATTRIBUTE)).toBe(false);
   });
 
   // A session found dead mid-restore must not stay remembered: the write keys
