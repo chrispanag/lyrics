@@ -18,7 +18,9 @@ import { PageTitle } from "@/components/PageTitle";
 import { PersonLinks } from "@/components/PersonLinks";
 import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
+import { CreditRow } from "@/components/CreditRow";
 import { buttonClasses } from "@/components/buttonStyles";
+import { genreLinkChrome } from "@/components/songStyles";
 import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton, Spinner } from "@/components/ui";
 import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_LABELS, groupCredits } from "@/lib/credits";
@@ -304,27 +306,16 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
         {/* Performers lead; the row is conditional, since most recordings
             name nobody. */}
         {performers.length > 0 && (
-          <div className="flex gap-2">
-            <dt className="shrink-0 text-fg-muted">Performed by</dt>
-            <dd className="font-medium">
-              <PersonLinks people={performers} />
-            </dd>
-          </div>
+          <CreditRow label="Performed by">
+            <PersonLinks people={performers} />
+          </CreditRow>
         )}
         {creditsByRole.map(([role, names]) => (
-          <div key={role} className="flex gap-2">
-            <dt className="shrink-0 text-fg-muted">{CREDIT_DISPLAY_LABELS[role]}</dt>
-            <dd className="font-medium">
-              <PersonLinks people={names} />
-            </dd>
-          </div>
+          <CreditRow key={role} label={CREDIT_DISPLAY_LABELS[role]}>
+            <PersonLinks people={names} />
+          </CreditRow>
         ))}
-        {year && (
-          <div className="flex gap-2">
-            <dt className="text-fg-muted">Year</dt>
-            <dd className="font-medium">{year}</dd>
-          </div>
-        )}
+        {year && <CreditRow label="Year">{year}</CreditRow>}
       </dl>
 
       {/* Offered for one recording too: only the sheet shows labels and notes. */}
@@ -344,7 +335,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
             <Link
               key={genre.id}
               to={browseHref({ genre_slug: genre.slug })}
-              className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-fg-secondary hover:bg-muted-hover"
+              className={cn(genreLinkChrome, "hover:bg-muted-hover")}
             >
               {genre.name}
             </Link>
