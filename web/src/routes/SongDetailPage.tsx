@@ -23,7 +23,7 @@ import { buttonClasses } from "@/components/buttonStyles";
 import { genreLinkChrome } from "@/components/songStyles";
 import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton, Spinner } from "@/components/ui";
 import { browseHref } from "@/lib/browse";
-import { CREDIT_DISPLAY_LABELS, groupCredits } from "@/lib/credits";
+import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
 import { cn } from "@/lib/cn";
 import { DEFAULT_FONT_SIZE, FONT_SIZES, storeFontSize, storedFontSize } from "@/lib/fontSize";
 import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
@@ -293,7 +293,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
   // Performers come from the first recording; the year and video from the
   // song's columns, which are the trigger's copy of that same row. No `??`
   // hedge between them. See CLAUDE.md, "Recordings".
-  const performers = song.recordings[0]?.performers ?? [];
+  const performers = songPerformers(song);
   const year = song.release_year;
 
   return (

@@ -1,4 +1,4 @@
-import type { Credit, CreditRole, Song } from "./types";
+import type { Credit, CreditRole, RecordingPerformer, Song } from "./types";
 
 /**
  * Display order for the authorship credits, shared by the song page's grouping
@@ -25,14 +25,21 @@ export const CREDIT_PICKER_LABELS: Record<CreditRole, string> = {
 };
 
 /**
+ * Who a song is performed by: the first recording's performers. The server
+ * already orders recordings and their performers, so `recordings[0]` is the
+ * first recording and nothing here re-sorts it.
+ */
+export function songPerformers(song: Pick<Song, "recordings">): RecordingPerformer[] {
+  return song.recordings[0]?.performers ?? [];
+}
+
+/**
  * The one line of names under a song title, on a card and in quick search.
  *
- * The first recording's performers lead, then the authorship credits, with each
- * name once. The server already orders recordings and their performers, so
- * `recordings[0]` is the first recording and nothing here re-sorts it.
+ * The performers lead, then the authorship credits, with each name once.
  */
 export function songByline(song: Pick<Song, "credits" | "recordings">): string {
-  const performers = (song.recordings[0]?.performers ?? []).map((performer) => performer.name);
+  const performers = songPerformers(song).map((performer) => performer.name);
 
   const credited = [...song.credits]
     .sort((a, b) => CREDIT_PRIORITY[a.role] - CREDIT_PRIORITY[b.role] || a.position - b.position)

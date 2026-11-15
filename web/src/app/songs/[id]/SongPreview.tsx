@@ -3,7 +3,7 @@ import { PageTitle } from "@/components/PageTitle";
 import { genreLinkChrome } from "@/components/songStyles";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { browseHref } from "@/lib/browse";
-import { CREDIT_DISPLAY_LABELS, groupCredits } from "@/lib/credits";
+import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
 import { DEFAULT_FONT_SIZE, FONT_SIZES } from "@/lib/fontSize";
 import { recordingCount } from "@/lib/format";
 import type { Song } from "@/lib/types";
@@ -20,7 +20,7 @@ import type { Song } from "@/lib/types";
  * so the text does not jump when the app takes over. Change them together.
  */
 export function SongPreview({ song }: { song: Song }) {
-  const performers = song.recordings[0]?.performers ?? [];
+  const performers = songPerformers(song);
 
   return (
     <div className="md:pl-60">
