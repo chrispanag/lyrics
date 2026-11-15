@@ -1,12 +1,12 @@
 import type { Decorator, Preview } from "@storybook/react-vite";
 import { setupWorker } from "msw/browser";
 import { createPreviewAnnotations } from "msw-storybook-addon/preview";
-import { Route, Routes } from "react-router-dom";
 import { useLayoutEffect } from "react";
 
 import { applyTheme, type Theme } from "@/lib/theme";
 import type { User } from "@/lib/types";
 import { API, handlers } from "@/test/handlers";
+import { TestRoutes } from "@/test/routes";
 import { TestProviders } from "@/test/TestProviders";
 import "@/styles/index.css";
 
@@ -33,13 +33,7 @@ const withProviders: Decorator = (Story, { parameters }) => {
       user={parameters.user as User | null | undefined}
       route={parameters.route as string | string[] | undefined}
     >
-      {path ? (
-        <Routes>
-          <Route path={path} element={<Story />} />
-        </Routes>
-      ) : (
-        <Story />
-      )}
+      {path ? <TestRoutes routes={{ [path]: <Story /> }} /> : <Story />}
     </TestProviders>
   );
 };

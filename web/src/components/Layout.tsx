@@ -1,6 +1,6 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { ListMusic, Menu, Search, Shield, User as UserIcon } from "lucide-react";
 import {
+  type ReactNode,
   type RefObject,
   Suspense,
   useEffect,
@@ -17,6 +17,7 @@ import { Button, Spinner } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { FIELDS, useHomeEndInside } from "@/lib/modal";
+import { Link, NavLink, useNavigationKey, usePathname } from "@/lib/navigation";
 import { NAV_DRAWER_ID, NavDrawerContext, useNavDrawer } from "@/lib/navDrawer";
 import { hasRole } from "@/lib/types";
 
@@ -54,8 +55,9 @@ const NAV_ITEMS: NavItem[] = [
  * App shell: a fixed sidebar from `md` up, and the same navigation behind a
  * hamburger on a phone.
  */
-export function Layout() {
-  const location = useLocation();
+export function Layout({ children }: { children?: ReactNode }) {
+  const pathname = usePathname();
+  const navigationKey = useNavigationKey();
   const [navOpen, setNavOpen] = useState(false);
 
   // Route changes start at the top. Keyed on `pathname` so a filter written
@@ -63,14 +65,14 @@ export function Layout() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: the key is the trigger, not a value read.
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
-  }, [location.pathname]);
+  }, [pathname]);
 
   // Any navigation closes the drawer, before the new screen is drawn. Keyed on
-  // the location, not the pathname, so a link to the current screen closes it
+  // the navigation, not the pathname, so a link to the current screen closes it
   // too.
-  const [navKey, setNavKey] = useState(location.key);
-  if (navKey !== location.key) {
-    setNavKey(location.key);
+  const [navKey, setNavKey] = useState(navigationKey);
+  if (navKey !== navigationKey) {
+    setNavKey(navigationKey);
     setNavOpen(false);
   }
 
@@ -100,9 +102,7 @@ export function Layout() {
         <main className="min-w-0 flex-1 pb-12 md:pb-8">
           {/* One boundary for every lazy route, rather than one per route element.
               The shell stays mounted while a chunk loads. */}
-          <Suspense fallback={<Spinner />}>
-            <Outlet />
-          </Suspense>
+          <Suspense fallback={<Spinner />}>{children}</Suspense>
         </main>
       </div>
     </NavDrawerContext.Provider>
@@ -129,9 +129,9 @@ function NavPanel() {
 
   return (
     <>
-      <NavLink to="/" className="mb-8 flex px-2">
+      <Link href="/" className="mb-8 flex px-2">
         <Wordmark />
-      </NavLink>
+      </Link>
 
       {/* The card stays inside the <nav> landmark: it is the way to
           `/profile`. `flex-1` gives the `mt-auto` below room to reach the
@@ -140,7 +140,7 @@ function NavPanel() {
         {links.map((item) => (
           <NavLink
             key={item.to}
-            to={item.to}
+            href={item.to}
             end={item.to === "/"}
             className={({ isActive }) =>
               cn(
@@ -159,7 +159,7 @@ function NavPanel() {
             // The profile entry, with the links' lit and hover treatments.
             // `-mx-2` lines its background up with the links above.
             <NavLink
-              to="/profile"
+              href="/profile"
               className={({ isActive }) =>
                 cn(
                   "-mx-2 flex min-w-0 items-center gap-2.5 rounded-xl px-2 py-2 transition-colors",
@@ -174,9 +174,9 @@ function NavPanel() {
               </div>
             </NavLink>
           ) : (
-            <NavLink to="/login" className={cn(buttonClasses("primary", "md"), "w-full")}>
+            <Link href="/login" className={cn(buttonClasses("primary", "md"), "w-full")}>
               Sign in
-            </NavLink>
+            </Link>
           )}
         </div>
       </nav>

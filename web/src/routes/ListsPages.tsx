@@ -1,5 +1,4 @@
 import { lazy, Suspense, useState, useSyncExternalStore, type SubmitEvent } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
 import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash } from "lucide-react";
 
 import { ApiError, errorMessage } from "@/api/client";
@@ -13,7 +12,7 @@ import {
   useReorderList,
   useUpdateList,
 } from "@/api/hooks";
-import { returnTo } from "@/auth/returnTo";
+import { signInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { cardChrome, cardHover } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
@@ -33,7 +32,7 @@ import { BackButton } from "@/components/BackButton";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
 import type { Song } from "@/lib/types";
-import { useNavigate } from "@/lib/navigation";
+import { Link, useCurrentHref, useParams, useRouter } from "@/lib/navigation";
 
 // Only an owner can reorder, so the drag machinery loads on demand.
 const SortableSongList = lazy(() =>
@@ -121,7 +120,7 @@ export function ListsPage() {
         {data?.data.map((list) => (
           <li key={list.id}>
             <Link
-              to={`/lists/${list.id}`}
+              href={`/lists/${list.id}`}
               className={cn(
                 cardChrome,
                 cardHover,
@@ -172,8 +171,8 @@ function subscribeToNothing() {
 
 export function ListDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
+  const here = useCurrentHref();
   const { user, loading: sessionLoading } = useAuth();
 
   // Waiting on the session is redundant now that auth/session registers the
@@ -218,7 +217,7 @@ export function ListDetailPage() {
       <div className="mx-auto max-w-2xl px-4 py-6">
         <PageTitle name="List not available" />
         <ErrorMessage>This list is not available.</ErrorMessage>
-        <Link to="/lists" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
+        <Link href="/lists" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
           Back to lists
         </Link>
       </div>
@@ -250,7 +249,7 @@ export function ListDetailPage() {
     try {
       const copied = await copyList.mutateAsync({ id: list.id, name });
       setNaming(false);
-      navigate(`/lists/${copied.id}`);
+      router.push(`/lists/${copied.id}`);
     } catch (caught) {
       // Names are unique per owner, so a 409 opens the rename step.
       if (caught instanceof ApiError && caught.status === 409) {
@@ -263,7 +262,7 @@ export function ListDetailPage() {
 
   const onSave = () => {
     if (!user) {
-      navigate("/login", { state: returnTo(location) });
+      router.push(signInHref(here));
       return;
     }
     void saveCopy();
@@ -468,9 +467,7 @@ export function ListDetailPage() {
         onClose={() => setConfirmDelete(false)}
         title="Delete this list?"
         pending={deleteList.isPending}
-        onConfirm={() =>
-          deleteList.mutate(list.id, { onSuccess: () => navigate("/lists", { replace: true }) })
-        }
+        onConfirm={() => deleteList.mutate(list.id, { onSuccess: () => router.replace("/lists") })}
       >
         “{list.name}” will be removed. The songs themselves are not affected.
       </ConfirmSheet>

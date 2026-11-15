@@ -36,18 +36,17 @@
           "level": "error",
           "options": { "allowConstantExport": true }
         },
+        // The routing seam: react-router is reached through @/lib/navigation,
+        // whose API `next/navigation` can implement too, so changing routers is
+        // a change to that module. The route table, the router's mount and the
+        // spec and story harness are the only other importers (the override
+        // below). See CLAUDE.md, "The routing seam".
         "noRestrictedImports": {
           "level": "error",
           "options": {
             "paths": {
-              "react-router-dom": {
-                "importNames": ["useNavigate"],
-                "message": "Import useNavigate from @/lib/navigation, which says what it returns under BrowserRouter."
-              },
-              "react-router": {
-                "importNames": ["useNavigate"],
-                "message": "Import useNavigate from @/lib/navigation, which says what it returns under BrowserRouter."
-              }
+              "react-router-dom": "Import routing from @/lib/navigation, the app's routing seam.",
+              "react-router": "Import routing from @/lib/navigation, the app's routing seam."
             }
           }
         }
@@ -96,6 +95,19 @@
           }
         }
       }
+    },
+    {
+      // The router's mount and route table, and the harness that stands in for
+      // them in specs and stories. The seam itself says so in its own file.
+      "includes": ["src/App.tsx", "src/AppRoot.tsx", "src/test/**", ".storybook/**"],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
+      // The routing seam exports its links beside its hooks on purpose: being
+      // one module is what makes changing routers a one-file change. The cost
+      // is a full reload rather than a fast refresh when this file is edited.
+      "includes": ["src/lib/navigation.tsx"],
+      "linter": { "rules": { "style": { "useComponentExportOnlyModules": "off" } } }
     },
     {
       // A command-line script, whose output is the console.

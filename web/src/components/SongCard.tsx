@@ -1,5 +1,4 @@
 import { memo } from "react";
-import { Link } from "react-router-dom";
 import { SquarePlay } from "lucide-react";
 
 import { Snippet } from "./Snippet";
@@ -7,6 +6,7 @@ import { cardChrome, cardHover } from "./cardStyles";
 import { cn } from "@/lib/cn";
 import { songByline } from "@/lib/credits";
 import { songHref } from "@/lib/listContext";
+import { Link } from "@/lib/navigation";
 import type { Song } from "@/lib/types";
 
 /** One genre as the card shows it, and the box that holds its row open without one. */
@@ -26,7 +26,7 @@ export const SongCard = memo(function SongCard({ song, listId }: { song: Song; l
 
   return (
     <Link
-      to={songHref(song, listId)}
+      href={songHref(song, listId)}
       className={cn(cardChrome, cardHover, "block bg-surface p-4 active:bg-accent-subtle")}
     >
       <div className="flex items-start justify-between gap-3">

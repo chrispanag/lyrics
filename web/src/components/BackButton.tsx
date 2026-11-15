@@ -1,5 +1,5 @@
 import { ArrowLeft } from "lucide-react";
-import { useNavigate } from "@/lib/navigation";
+import { useRouter } from "@/lib/navigation";
 
 import { cn } from "@/lib/cn";
 
@@ -10,12 +10,12 @@ import { cn } from "@/lib/cn";
  * `cn` is a plain join: `className` may only add non-colliding utilities.
  */
 export function BackButton({ className }: { className?: string }) {
-  const navigate = useNavigate();
+  const router = useRouter();
 
   return (
     <button
       type="button"
-      onClick={() => navigate(-1)}
+      onClick={() => router.back()}
       className={cn(
         "-ml-2 flex items-center gap-1 rounded-lg p-2 text-sm text-fg-tertiary hover:bg-subtle",
         className,

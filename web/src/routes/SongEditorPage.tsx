@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type SubmitEvent } from "react";
-import { Navigate, useLocation, useParams } from "react-router-dom";
 import { Plus, Trash } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
@@ -25,7 +24,7 @@ import { songHref, songRefHref } from "@/lib/listContext";
 import { extractVideoId } from "@/lib/youtube";
 import { cn } from "@/lib/cn";
 import { CREDIT_PICKER_LABELS } from "@/lib/credits";
-import { useNavigate } from "@/lib/navigation";
+import { Redirect, useParams, useRouter } from "@/lib/navigation";
 import {
   CREDIT_ROLES,
   LANGUAGE_LABELS,
@@ -118,8 +117,7 @@ const sentAt = (keys: string[] | undefined, key: string): number | undefined => 
 export function SongEditorPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
   const { data: existing, isLoading: loadingSong, isError: songFailed } = useSong(id);
@@ -192,7 +190,7 @@ export function SongEditorPage() {
   }, [dirty]);
 
   if (authLoading) return <Spinner />;
-  if (!hasRole(user?.role, "contributor")) return <Navigate to="/" replace />;
+  if (!hasRole(user?.role, "contributor")) return <Redirect href="/" />;
   if (isEdit && loadingSong) return <Spinner />;
 
   // A failed load must not fall through to the form: every save sends the whole
@@ -211,17 +209,17 @@ export function SongEditorPage() {
 
   // Display only; the server enforces this too.
   if (isEdit && existing && !canEditSong(user, existing)) {
-    return <Navigate to={songHref(existing)} replace />;
+    return <Redirect href={songHref(existing)} />;
   }
 
   /**
    * Leaves the editor by popping history: navigating to the song duplicates its
-   * entry and drops `?list=`. A fresh tab (`key === "default"`) has nothing
+   * entry and drops `?list=`. A fresh tab (`canGoBack()` false) has nothing
    * behind it, so it replaces with the song instead. See CLAUDE.md, "Frontend".
    */
   const leaveEditor = () => {
-    if (location.key === "default") navigate(id ? songRefHref(id) : "/", { replace: true });
-    else navigate(-1);
+    if (router.canGoBack()) router.back();
+    else router.replace(id ? songRefHref(id) : "/");
   };
 
   const track =
@@ -336,7 +334,7 @@ export function SongEditorPage() {
       setDirty(false);
       // A new song lands the reader on it rather than popping back.
       if (isEdit) leaveEditor();
-      else navigate(songHref(saved), { replace: true });
+      else router.replace(songHref(saved));
     } catch (caught) {
       setError(errorMessage(caught, "The song could not be saved."));
       setSentRows(rows);

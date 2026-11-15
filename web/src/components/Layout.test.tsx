@@ -1,6 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Layout, StickyHeader } from "./Layout";
@@ -59,11 +58,9 @@ describe("Mobile navigation drawer", () => {
   /** The shell plus a header to render the trigger, which the shell does not. */
   const renderShell = () =>
     renderWithProviders(
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<MenuHeader />} />
-        </Route>
-      </Routes>,
+      <Layout>
+        <MenuHeader />
+      </Layout>,
       { user: null },
     );
 

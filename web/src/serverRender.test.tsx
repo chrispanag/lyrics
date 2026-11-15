@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { renderToString } from "react-dom/server";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ListSongSwipe } from "@/components/ListSongNav";
 import { DEFAULT_FONT_SIZE, storeFontSize, storedFontSize } from "@/lib/fontSize";
 import type { ListPosition } from "@/lib/listContext";
 import { storeTheme, storedTheme } from "@/lib/theme";
+import { TestProviders } from "@/test/TestProviders";
 
 /*
  * Browser-only reads, run without a browser: jsdom hands `localStorage` to
@@ -58,10 +58,10 @@ describe("rendering without a browser", () => {
     vi.stubGlobal("localStorage", { getItem, setItem: vi.fn() });
 
     const html = renderToString(
-      // `useSwipePaging` needs `useNavigate`; the address is irrelevant.
-      <MemoryRouter>
+      // `useSwipePaging` needs the router; the address is irrelevant.
+      <TestProviders>
         <ListSongSwipe position={POSITION} surface={{ current: null }} />
-      </MemoryRouter>,
+      </TestProviders>,
     );
 
     expect(html).toBe("");

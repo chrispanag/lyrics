@@ -2,13 +2,13 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
-import { Route, Routes, createPath, useLocation } from "react-router-dom";
 
 import { SongEditorPage } from "./SongEditorPage";
 import { BackButton } from "@/components/BackButton";
 import type { Song, SongInput } from "@/lib/types";
 import { API, apiError, list, makeGenre, makeRecording, makeSong, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
+import { CurrentAddress, TestRoutes } from "@/test/routes";
 import { server } from "@/test/server";
 
 /**
@@ -20,7 +20,7 @@ function SongStub() {
   return (
     <div>
       <h1>Song page</h1>
-      <p>Address: {createPath(useLocation())}</p>
+      <CurrentAddress label="Address:" />
       <BackButton />
     </div>
   );
@@ -28,13 +28,15 @@ function SongStub() {
 
 function renderEditor(options: Parameters<typeof renderWithProviders>[1] = {}) {
   return renderWithProviders(
-    <Routes>
-      <Route path="/songs/new" element={<SongEditorPage />} />
-      <Route path="/songs/:id/edit" element={<SongEditorPage />} />
-      <Route path="/songs/:id" element={<SongStub />} />
-      <Route path="/lists/:id" element={<h1>List page</h1>} />
-      <Route path="/" element={<h1>Catalog</h1>} />
-    </Routes>,
+    <TestRoutes
+      routes={{
+        "/songs/new": <SongEditorPage />,
+        "/songs/:id/edit": <SongEditorPage />,
+        "/songs/:id": <SongStub />,
+        "/lists/:id": <h1>List page</h1>,
+        "/": <h1>Catalog</h1>,
+      }}
+    />,
     { user: makeUser({ role: "admin" }), ...options },
   );
 }

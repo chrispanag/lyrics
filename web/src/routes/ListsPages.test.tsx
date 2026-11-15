@@ -1,7 +1,6 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, delay, http } from "msw";
-import { Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { ListDetailPage, ListsPage } from "./ListsPages";
@@ -9,6 +8,7 @@ import { keys } from "@/api/hooks";
 import { API, apiError, list, listById, makeList, makeSong, makeUser } from "@/test/handlers";
 import { stubRowRects } from "@/test/rects";
 import { renderWithProviders } from "@/test/render";
+import { TestRoutes } from "@/test/routes";
 import { server } from "@/test/server";
 
 /**
@@ -20,12 +20,14 @@ function serveLists(...lists: ReturnType<typeof makeList>[]) {
 
 function renderDetail(route: string, options: Parameters<typeof renderWithProviders>[1] = {}) {
   return renderWithProviders(
-    <Routes>
-      <Route path="/lists/:id" element={<ListDetailPage />} />
-      <Route path="/login" element={<h1>Sign in</h1>} />
-      {/* Where a deleted list leaves its owner. */}
-      <Route path="/lists" element={<h1>Your lists</h1>} />
-    </Routes>,
+    <TestRoutes
+      routes={{
+        "/lists/:id": <ListDetailPage />,
+        "/login": <h1>Sign in</h1>,
+        // Where a deleted list leaves its owner.
+        "/lists": <h1>Your lists</h1>,
+      }}
+    />,
     { route, ...options },
   );
 }

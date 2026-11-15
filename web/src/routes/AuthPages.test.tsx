@@ -1,6 +1,5 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -18,9 +17,12 @@ import {
   namedError,
   type AuthContextValue,
 } from "@/auth/context";
+import { signInHref } from "@/auth/returnTo";
+import { Redirect } from "@/lib/navigation";
 import { makeUser } from "@/test/handlers";
 import { ProfilePage } from "./ProfilePage";
 import { renderWithProviders } from "@/test/render";
+import { CurrentAddress, TestRoutes } from "@/test/routes";
 
 /** An account that has signed in but not yet confirmed its address. */
 const unverified = makeUser({ email: "new@example.com", email_verified_at: null });
@@ -192,10 +194,9 @@ describe("VerifyEmailPage", () => {
   // The session can end with the screen open; there is nothing here to verify.
   it("sends a signed-out visitor to sign in", () => {
     renderWithProviders(
-      <Routes>
-        <Route path="/verify-email" element={<VerifyEmailPage />} />
-        <Route path="/login" element={<p>Sign-in screen</p>} />
-      </Routes>,
+      <TestRoutes
+        routes={{ "/verify-email": <VerifyEmailPage />, "/login": <p>Sign-in screen</p> }}
+      />,
       { user: null, route: "/verify-email" },
     );
 
@@ -962,7 +963,7 @@ describe("sign-in and sign-up screens", () => {
 
   /** Arrives at sign-in the way a guard sends a visitor: with where they were headed. */
   function SentToSignIn() {
-    return <Navigate to="/login" state={{ from: "/lists/list-1?sort=title" }} replace />;
+    return <Redirect href={signInHref("/lists/list-1?sort=title")} />;
   }
 
   // The guard recorded the address, search string included; losing it lands
@@ -970,11 +971,13 @@ describe("sign-in and sign-up screens", () => {
   it("signs in and returns to where the visitor was headed", async () => {
     const login = vi.fn().mockResolvedValue(undefined);
     renderWithProviders(
-      <Routes>
-        <Route path="/start" element={<SentToSignIn />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/lists/:id" element={<LocationProbe />} />
-      </Routes>,
+      <TestRoutes
+        routes={{
+          "/start": <SentToSignIn />,
+          "/login": <LoginPage />,
+          "/lists/:id": <CurrentAddress />,
+        }}
+      />,
       { route: "/start", auth: { login } },
     );
 
@@ -1006,10 +1009,9 @@ describe("sign-in and sign-up screens", () => {
   it("creates the account and goes straight to the code screen", async () => {
     const register = vi.fn().mockResolvedValue(undefined);
     renderWithProviders(
-      <Routes>
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/verify-email" element={<p>Code screen</p>} />
-      </Routes>,
+      <TestRoutes
+        routes={{ "/register": <RegisterPage />, "/verify-email": <p>Code screen</p> }}
+      />,
       { route: "/register", auth: { register } },
     );
 
@@ -1068,12 +1070,6 @@ describe("sign-in and sign-up screens", () => {
     expect(validatePassword).toHaveBeenCalledWith("short");
   });
 });
-
-/** Renders the address it is reached at, for specs that assert a destination. */
-function LocationProbe() {
-  const location = useLocation();
-  return <p data-testid="location">{location.pathname + location.search}</p>;
-}
 
 describe("verification gate", () => {
   // The API refuses an unverified account everything, so it is held on verification.

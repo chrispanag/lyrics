@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Route, Routes } from "react-router-dom";
 import { expect, userEvent, within } from "storybook/test";
 
 import { Layout } from "./Layout";
@@ -16,22 +15,13 @@ const meta = {
   component: Layout,
   parameters: { layout: "fullscreen" },
   render: () => (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route
-          path="*"
-          element={
-            <>
-              <MenuHeader />
-              <div className="mx-auto max-w-2xl px-4 py-6">
-                <h1 className="text-2xl font-semibold">A page</h1>
-                <p className="mt-2 text-fg-tertiary">The screen a route renders goes here.</p>
-              </div>
-            </>
-          }
-        />
-      </Route>
-    </Routes>
+    <Layout>
+      <MenuHeader />
+      <div className="mx-auto max-w-2xl px-4 py-6">
+        <h1 className="text-2xl font-semibold">A page</h1>
+        <p className="mt-2 text-fg-tertiary">The screen a route renders goes here.</p>
+      </div>
+    </Layout>
   ),
 } satisfies Meta<typeof Layout>;
 

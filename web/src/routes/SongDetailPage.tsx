@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
@@ -11,7 +10,7 @@ import {
   useSongLists,
   useToggleSongInList,
 } from "@/api/hooks";
-import { returnTo } from "@/auth/returnTo";
+import { signInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongSwipe } from "@/components/ListSongNav";
 import { PageTitle } from "@/components/PageTitle";
@@ -30,7 +29,7 @@ import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { recordingCount, songCount } from "@/lib/format";
-import { useNavigate } from "@/lib/navigation";
+import { Link, useCurrentHref, useParams, useRouter, useSearchParams } from "@/lib/navigation";
 import { RecordingsSheet } from "@/components/RecordingsSheet";
 
 /**
@@ -53,9 +52,9 @@ export function SongDetailPage() {
  */
 function SongArticle() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [params] = useSearchParams();
+  const router = useRouter();
+  const here = useCurrentHref();
+  const params = useSearchParams();
   const { user, loading: sessionLoading } = useAuth();
 
   // No `isError`, deliberately; see the guard below.
@@ -100,7 +99,7 @@ function SongArticle() {
       <div className="mx-auto max-w-3xl px-4 py-6">
         <PageTitle name="Song not available" />
         <ErrorMessage>{errorMessage(error, "This song could not be loaded.")}</ErrorMessage>
-        <Link to="/" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
+        <Link href="/" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
           Back to browse
         </Link>
       </div>
@@ -128,15 +127,13 @@ function SongArticle() {
             // `user` is only a snapshot until the restore settles; neither branch
             // may be decided on it.
             disabled={sessionLoading}
-            onClick={() =>
-              user ? setListSheetOpen(true) : navigate("/login", { state: returnTo(location) })
-            }
+            onClick={() => (user ? setListSheetOpen(true) : router.push(signInHref(here)))}
           >
             <ListPlus aria-hidden className="size-4" />
             <span className="hidden sm:inline">Save</span>
           </Button>
           {canEdit && (
-            <Link to={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
+            <Link href={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
               <Pencil aria-hidden className="size-4" />
               <span className="hidden sm:inline">Edit</span>
             </Link>
@@ -273,7 +270,7 @@ function SongArticle() {
               ? errorMessage(deleteSong.error, "This song could not be deleted.")
               : undefined
           }
-          onConfirm={() => deleteSong.mutate(song.id, { onSuccess: () => navigate("/") })}
+          onConfirm={() => deleteSong.mutate(song.id, { onSuccess: () => router.push("/") })}
         >
           “{song.title}” will be removed for everyone, along with its place in any lists. This
           cannot be undone.
@@ -334,7 +331,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
           {song.genres.map((genre) => (
             <Link
               key={genre.id}
-              to={browseHref({ genre_slug: genre.slug })}
+              href={browseHref({ genre_slug: genre.slug })}
               className={cn(genreLinkChrome, "hover:bg-muted-hover")}
             >
               {genre.name}
@@ -411,7 +408,7 @@ function AddToListSheet({
       </ul>
 
       <Link
-        to="/lists"
+        href="/lists"
         onClick={onClose}
         className="mt-3 block rounded-xl border border-dashed border-line-strong px-3 py-3 text-center text-sm text-fg-tertiary hover:border-line-accent hover:text-fg-accent"
       >

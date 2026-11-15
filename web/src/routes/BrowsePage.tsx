@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
 import { Plus, SixteenthNotes, SlidersHorizontal } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
@@ -14,6 +13,7 @@ import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Skeletons } from
 import { useDebounced } from "@/lib/useDebounced";
 import { LANGUAGE_LABELS, hasRole, type SongFilters } from "@/lib/types";
 import { songCount } from "@/lib/format";
+import { Link, useSearchParams, useSetSearchParams } from "@/lib/navigation";
 
 const PAGE_SIZE = 20;
 
@@ -30,7 +30,8 @@ function pageNumber(raw: string | null): number {
 
 /** Browse and search. Filter state lives in the URL, so it is shareable. */
 export function BrowsePage() {
-  const [params, setParams] = useSearchParams();
+  const params = useSearchParams();
+  const setParams = useSetSearchParams();
   const { user } = useAuth();
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -58,12 +59,10 @@ export function BrowsePage() {
 
     // biome-ignore lint/nursery/useReactCompiler: syncing the debounced input out to the URL is what this effect is for.
     setParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
+      (next) => {
         if (debounced) next.set("q", debounced);
         else next.delete("q");
         next.delete("page");
-        return next;
       },
       { replace: true },
     );
@@ -105,11 +104,9 @@ export function BrowsePage() {
     mutate: (next: URLSearchParams) => void,
     options: { keepPage?: boolean } = {},
   ) => {
-    setParams((previous) => {
-      const next = new URLSearchParams(previous);
+    setParams((next) => {
       mutate(next);
       if (!options.keepPage) next.delete("page");
-      return next;
     });
   };
 
@@ -204,7 +201,7 @@ export function BrowsePage() {
           </p>
           {hasRole(user?.role, "contributor") && (
             // A styled Link: an anchor nested in a button is invalid.
-            <Link to="/songs/new" className={buttonClasses("secondary", "sm")}>
+            <Link href="/songs/new" className={buttonClasses("secondary", "sm")}>
               <Plus aria-hidden className="size-4" />
               Add song
             </Link>

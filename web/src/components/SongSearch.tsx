@@ -8,7 +8,6 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { Link, useLocation } from "react-router-dom";
 
 import { SearchField } from "./SearchField";
 import { SearchHeader } from "./SearchHeader";
@@ -21,7 +20,7 @@ import { songCount } from "@/lib/format";
 import { songHref, songMatchesRef, songRefFromPath } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
 import { useDebounced } from "@/lib/useDebounced";
-import { useNavigate } from "@/lib/navigation";
+import { Link, useNavigationKey, usePathname, useRouter } from "@/lib/navigation";
 
 /** How many songs the panel offers before deferring to the catalog. */
 const PANEL_SIZE = 6;
@@ -42,8 +41,9 @@ const noteChrome = "px-4 py-3 text-sm";
  * Renders its own header because its own state decides when that is pinned.
  */
 export function SongSearch() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
+  const pathname = usePathname();
+  const navigationKey = useNavigationKey();
   const wrapper = useRef<HTMLDivElement>(null);
   const listboxId = useId();
 
@@ -56,14 +56,15 @@ export function SongSearch() {
   const [focused, setFocused] = useState(false);
 
   // Whatever was on screen is gone by the time the next page is. Keyed on the
-  // history entry rather than on a click, because there are four ways out of the
+  // navigation (`useNavigationKey`, which also changes for the song already
+  // open) rather than on a click, because there are four ways out of the
   // panel — a press, Enter, a middle click, the catalog row — and one of them
   // would have been forgotten. Landing on a song with the box still full of the
   // search that found it is the failure this avoids. Reset while rendering, so
   // the next page is never drawn with the old search still in the box.
-  const [searchedAt, setSearchedAt] = useState(location.key);
-  if (searchedAt !== location.key) {
-    setSearchedAt(location.key);
+  const [searchedAt, setSearchedAt] = useState(navigationKey);
+  if (searchedAt !== navigationKey) {
+    setSearchedAt(navigationKey);
     setDraft("");
     setDismissed(false);
     setActive(-1);
@@ -105,7 +106,7 @@ export function SongSearch() {
    * "Already open" uses `songMatchesRef`, since the bar may hold the UUID form.
    * The address carries no list; see `SongOption`.
    */
-  const here = songRefFromPath(location.pathname);
+  const here = songRefFromPath(pathname);
   const step = (song: Song) => ({
     href: songHref(song),
     replace: here !== null && songMatchesRef(song, here),
@@ -145,9 +146,10 @@ export function SongSearch() {
       const song = listShown ? (activeSong ?? results[0]) : undefined;
       if (song) {
         const { href, replace } = step(song);
-        navigate(href, { replace });
+        if (replace) router.replace(href);
+        else router.push(href);
       } else if (typed !== "") {
-        navigate(browseHref({ q: typed }));
+        router.push(browseHref({ q: typed }));
       }
       return;
     }
@@ -205,7 +207,7 @@ export function SongSearch() {
 
           {total > results.length && (
             <Link
-              to={browseHref({ q: query })}
+              href={browseHref({ q: query })}
               className="block border-t border-line px-4 py-3 text-sm font-medium text-fg-accent hover:bg-subtle"
             >
               See all {songCount(total)}
@@ -310,7 +312,7 @@ const SongOption = memo(function SongOption({
       role="option"
       aria-selected={active}
       tabIndex={-1}
-      to={href}
+      href={href}
       replace={replace}
       className={cn("block px-4 py-2.5 transition-colors hover:bg-subtle", active && "bg-subtle")}
     >

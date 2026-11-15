@@ -1,6 +1,5 @@
-import { Link } from "react-router-dom";
-
 import { browseHref } from "@/lib/browse";
+import { Link } from "@/lib/navigation";
 
 /**
  * A comma-separated run of people, each linked to the catalog filtered by them.
@@ -23,7 +22,7 @@ export function PersonLinks({
         <span key={person.person_id}>
           {index > 0 && ", "}
           <Link
-            to={browseHref({ person: person.person_id })}
+            href={browseHref({ person: person.person_id })}
             // Lets a modal close itself, since the navigation happens beneath it.
             onClick={onNavigate}
             className="hover:text-fg-accent hover:underline"

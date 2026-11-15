@@ -1,5 +1,4 @@
 import { useId, useState, type ChangeEvent, type SubmitEvent } from "react";
-import { Link } from "react-router-dom";
 import { KeyRound, LoaderCircle, LogOut, Moon, Pencil, Sun, Trash, Upload } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
@@ -17,6 +16,7 @@ import {
   MAX_SOURCE_MB,
   toSquareJpeg,
 } from "@/lib/image";
+import { Link } from "@/lib/navigation";
 import { applyTheme, storeTheme, storedTheme, type Theme } from "@/lib/theme";
 
 const THEME_OPTIONS: { value: Theme; label: string; icon?: typeof Sun }[] = [
@@ -73,10 +73,10 @@ export function ProfilePage() {
         <h1 className="text-2xl font-bold tracking-tight">You are browsing as a guest</h1>
         <p className="mt-2 text-sm text-fg-muted">Sign in to build lists of songs.</p>
         <div className="mt-6 flex flex-col gap-2">
-          <Link to="/login" className={buttonClasses("primary", "lg")}>
+          <Link href="/login" className={buttonClasses("primary", "lg")}>
             Sign in
           </Link>
-          <Link to="/register" className={buttonClasses("secondary", "lg")}>
+          <Link href="/register" className={buttonClasses("secondary", "lg")}>
             Create an account
           </Link>
         </div>
@@ -192,7 +192,7 @@ export function ProfilePage() {
       <div className="mt-8">
         <SectionHeading>Security</SectionHeading>
         {/* A link: changing a password is its own emailed-code flow. */}
-        <Link to="/change-password" className={buttonClasses("secondary", "lg", "w-full")}>
+        <Link href="/change-password" className={buttonClasses("secondary", "lg", "w-full")}>
           <KeyRound aria-hidden className="size-4" />
           Change password
         </Link>
