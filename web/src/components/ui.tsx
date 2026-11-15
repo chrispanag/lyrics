@@ -350,9 +350,9 @@ export function Sheet({
             // On opening it rises from the bottom edge, or from `sm` grows into
             // place. `@starting-style` applies on every `showModal()`, because
             // the panel has no style while the dialog is `display: none`. The
-            // offsets are literal `translate` values, not `translate-y-*`:
-            // WebKit ignores that utility's `--tw-translate-*` variables in a
-            // starting style, and the sheet appeared without moving in Safari.
+            // offsets are literal `translate`, not `translate-y-*`: WebKit
+            // ignores that utility's `--tw-translate-*` variables in a
+            // starting style.
             "transition-[translate,scale,opacity] duration-250 ease-out",
             "starting:[translate:0_100%] sm:starting:[translate:0_--spacing(2)]",
             "sm:starting:scale-95 sm:starting:opacity-0",
