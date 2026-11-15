@@ -277,6 +277,18 @@ export function Notice({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * How many records a screen is showing, above them. Polite, so a new search's
+ * count is read out without interrupting the reader.
+ */
+export function Tally({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <p className={cn("text-sm text-fg-muted", className)} aria-live="polite">
+      {children}
+    </p>
+  );
+}
+
 export function ErrorMessage({ children }: { children: ReactNode }) {
   return (
     <div

@@ -19,7 +19,7 @@ import { PageTitle } from "@/components/PageTitle";
 import { PersonLinks } from "@/components/PersonLinks";
 import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
-import { buttonClasses } from "@/components/buttonStyles";
+import { actionLabel, buttonClasses } from "@/components/buttonStyles";
 import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton, Spinner } from "@/components/ui";
 import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
@@ -34,7 +34,8 @@ import {
 } from "@/lib/fontSize";
 import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
-import { BackButton } from "@/components/BackButton";
+import { PageBar } from "@/components/PageBar";
+import { sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
 import { Link, useParams, useRouter, useSearchParams } from "@/lib/navigation";
 import { useStoredState } from "@/lib/useStoredState";
@@ -135,44 +136,40 @@ function SongArticle() {
     <article ref={surface} aria-busy={isLoading} className="mx-auto max-w-3xl px-4 py-4">
       {/* The title alone; nameless while in flight. */}
       <PageTitle name={song?.title} />
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <BackButton />
-
-        <div className="flex items-center gap-1">
-          {/* Shown to guests too, who are sent to sign in. Labeled because the
-              visible text is dropped on small screens. */}
+      <PageBar>
+        {/* Shown to guests too, who are sent to sign in. Labeled because "Save"
+            alone does not say where to. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Save to a list"
+          // `user` is only a snapshot until the restore settles; neither branch
+          // may be decided on it.
+          disabled={sessionLoading}
+          onClick={() => (user ? setListSheetOpen(true) : router.push(signIn))}
+        >
+          <ListPlus aria-hidden className="size-4" />
+          <span className={actionLabel}>Save</span>
+        </Button>
+        {canEdit && (
+          <Link href={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
+            <Pencil aria-hidden className="size-4" />
+            <span className={actionLabel}>Edit</span>
+          </Link>
+        )}
+        {hasRole(user?.role, "admin") && (
           <Button
             variant="ghost"
             size="sm"
-            aria-label="Save to a list"
-            // `user` is only a snapshot until the restore settles; neither branch
-            // may be decided on it.
-            disabled={sessionLoading}
-            onClick={() => (user ? setListSheetOpen(true) : router.push(signIn))}
+            aria-label="Delete song"
+            // Waits for the song: the confirmation names it.
+            disabled={!song}
+            onClick={() => setConfirmDelete(true)}
           >
-            <ListPlus aria-hidden className="size-4" />
-            <span className="hidden sm:inline">Save</span>
+            <Trash aria-hidden className="size-4 text-fg-danger" />
           </Button>
-          {canEdit && (
-            <Link href={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
-              <Pencil aria-hidden className="size-4" />
-              <span className="hidden sm:inline">Edit</span>
-            </Link>
-          )}
-          {hasRole(user?.role, "admin") && (
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="Delete song"
-              // Waits for the song: the confirmation names it.
-              disabled={!song}
-              onClick={() => setConfirmDelete(true)}
-            >
-              <Trash aria-hidden className="size-4 text-fg-danger" />
-            </Button>
-          )}
-        </div>
-      </div>
+        )}
+      </PageBar>
 
       {position && (
         <>
@@ -205,7 +202,7 @@ function SongArticle() {
 
       <section aria-label="Lyrics">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-fg-muted">Lyrics</h2>
+          <h2 className={sectionLabel}>Lyrics</h2>
           {/* A fieldset is the native group; preflight zeroes its border, margin
               and padding. Named by `aria-label`, not a <legend>: the controls
               are icons, and a visible "Text size" would crowd the heading row. */}

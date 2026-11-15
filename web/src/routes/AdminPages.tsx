@@ -13,9 +13,10 @@ import {
   useUsers,
 } from "@/api/hooks";
 import { Avatar } from "@/components/Avatar";
-import { buttonClasses } from "@/components/buttonStyles";
+import { actionLabel, segmentClasses, segmentedTrack } from "@/components/buttonStyles";
 import { cardChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
+import { sectionLabel } from "@/components/textStyles";
 import {
   Button,
   ConfirmSheet,
@@ -26,10 +27,11 @@ import {
   Select,
   Sheet,
   Skeletons,
+  Tally,
 } from "@/components/ui";
 import { ADMIN_TABS } from "@/routes/adminTabs";
 import { cn } from "@/lib/cn";
-import { songCount } from "@/lib/format";
+import { pluralize, songCount } from "@/lib/format";
 import { NavLink, pathMatches, usePathname } from "@/lib/navigation";
 import { useDebounced } from "@/lib/useDebounced";
 import { ROLES, type Genre, type Role } from "@/lib/types";
@@ -41,10 +43,13 @@ const ROLE_DESCRIPTIONS: Record<Role, string> = {
 };
 
 /** The row both console screens list records in, shared so they cannot drift. */
-const adminRowChrome = cn(
-  cardChrome,
-  "flex flex-col gap-3 bg-surface p-4 sm:flex-row sm:items-center sm:justify-between",
-);
+const adminRowChrome = cn(cardChrome, "flex gap-3 bg-surface p-4");
+
+/** A user's role picker drops below them on a phone. */
+const userRowChrome = cn(adminRowChrome, "flex-col sm:flex-row sm:items-center sm:justify-between");
+
+/** A genre's actions are icons on a phone, so its row stays one line. */
+const genreRowChrome = cn(adminRowChrome, "items-center justify-between");
 
 /** The wait both screens show: rows the height of the cards they become. */
 function RowSkeletons() {
@@ -65,14 +70,18 @@ export function AdminConsole({ children }: { children: ReactNode }) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
       <PageTitle name={current ? `Admin · ${current.label}` : "Admin"} />
-      {current && <h1 className="text-2xl font-bold tracking-tight">{current.label}</h1>}
+      {/* The section's name above the screen's, in the song page's label style. */}
+      <p className={sectionLabel}>Admin</p>
+      {current && <h1 className="mt-1 text-2xl font-bold tracking-tight">{current.label}</h1>}
 
-      <nav aria-label="Admin" className="my-5 flex gap-2">
+      {/* Views of one console, so drawn as the segmented control the theme
+          switch is, not as buttons that read as actions. */}
+      <nav aria-label="Admin" className={cn(segmentedTrack, "my-5 sm:w-fit")}>
         {ADMIN_TABS.map((tab) => (
           <NavLink
             key={tab.to}
             href={tab.to}
-            className={({ isActive }) => buttonClasses(isActive ? "primary" : "ghost", "md")}
+            className={({ isActive }) => segmentClasses(isActive, "flex-1 px-5")}
           >
             {tab.label}
           </NavLink>
@@ -82,6 +91,14 @@ export function AdminConsole({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+/**
+ * The users count. The screen asks for one page of rows, so a total past it
+ * says how many are shown, or "73 users" would sit over 50 rows.
+ */
+function userTally(shown: number, total: number): string {
+  return shown < total ? `${shown} of ${pluralize(total, "user")}` : pluralize(total, "user");
 }
 
 export function AdminUsersPage() {
@@ -102,7 +119,9 @@ export function AdminUsersPage() {
           aria-label="Search users"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          className="flex-1"
+          // Only once the row is a row: in the phone's column, `flex-1`'s zero
+          // basis is a height, and the field collapses to its border.
+          className="sm:flex-1"
         />
         <Select
           aria-label="Filter by role"
@@ -119,6 +138,17 @@ export function AdminUsersPage() {
         </Select>
       </div>
 
+      {/* Blank when nothing matched: "No users matched." below says so once. */}
+      {!isError && (
+        <Tally className="mb-3">
+          {isLoading
+            ? "Searching…"
+            : data?.meta.total
+              ? userTally(data.data.length, data.meta.total)
+              : ""}
+        </Tally>
+      )}
+
       {error && <ErrorMessage>{error}</ErrorMessage>}
       {/* A failure must not read as "No users matched." */}
       {isError && (
@@ -129,7 +159,7 @@ export function AdminUsersPage() {
 
       <ul className="space-y-2">
         {data?.data.map((row) => (
-          <li key={row.id} className={adminRowChrome}>
+          <li key={row.id} className={userRowChrome}>
             {/* Grouped so `sm:justify-between` keeps picture and name together. */}
             <div className="flex min-w-0 items-center gap-3">
               <Avatar user={row} size="md" />
@@ -261,8 +291,12 @@ export function AdminGenresPage() {
 
   return (
     <>
-      <div className="mb-4 flex justify-end">
-        <Button size="sm" onClick={() => openSheet({ kind: "create" })}>
+      <div className="mb-3 flex items-center gap-3">
+        {/* Mounted from the start: a live region that arrives with its text
+            already in it is not read out. Blank with no genres, which the
+            empty state says. */}
+        <Tally>{genres.length > 0 && pluralize(genres.length, "genre")}</Tally>
+        <Button size="sm" className="ml-auto" onClick={() => openSheet({ kind: "create" })}>
           <Plus aria-hidden className="size-4" />
           New genre
         </Button>
@@ -285,7 +319,7 @@ export function AdminGenresPage() {
 
       <ul className="space-y-2">
         {genres.map((genre) => (
-          <li key={genre.id} className={adminRowChrome}>
+          <li key={genre.id} className={genreRowChrome}>
             <div className="min-w-0">
               <p className="truncate font-medium">{genre.name}</p>
               <p className="mt-0.5 text-xs text-fg-muted">
@@ -293,15 +327,16 @@ export function AdminGenresPage() {
               </p>
             </div>
 
-            <div className="flex shrink-0 gap-2">
+            {/* Labeled with the genre, which the visible text leaves out. */}
+            <div className="flex shrink-0 items-center gap-1">
               <Button
-                variant="secondary"
+                variant="ghost"
                 size="sm"
                 aria-label={`Rename ${genre.name}`}
                 onClick={() => openSheet({ kind: "rename", genre })}
               >
                 <Pencil aria-hidden className="size-4" />
-                Rename
+                <span className={actionLabel}>Rename</span>
               </Button>
               <Button
                 variant="ghost"
@@ -310,7 +345,7 @@ export function AdminGenresPage() {
                 onClick={() => openSheet({ kind: "delete", genre })}
               >
                 <Trash aria-hidden className="size-4 text-fg-danger" />
-                Delete
+                <span className={actionLabel}>Delete</span>
               </Button>
             </div>
           </li>

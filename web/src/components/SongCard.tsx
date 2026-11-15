@@ -2,15 +2,12 @@ import { memo } from "react";
 import { SquarePlay } from "lucide-react";
 
 import { Snippet } from "./Snippet";
-import { cardChrome, cardHover } from "./cardStyles";
+import { cardChrome, cardHover, tagChrome } from "./cardStyles";
 import { cn } from "@/lib/cn";
 import { songByline } from "@/lib/credits";
 import { songHref } from "@/lib/listContext";
 import { Link } from "@/lib/navigation";
 import type { Song } from "@/lib/types";
-
-/** One genre as the card shows it, and the box that holds its row open without one. */
-const genreChip = "rounded-full bg-subtle px-2 py-0.5 text-xs text-fg-tertiary";
 
 /**
  * Memoized: browse re-renders on every keystroke, and song objects from the
@@ -59,12 +56,12 @@ export const SongCard = memo(function SongCard({ song, listId }: { song: Song; l
       <div className="mt-3 flex flex-wrap gap-1.5">
         {song.genres.length > 0 ? (
           song.genres.map((genre) => (
-            <span key={genre.id} className={genreChip}>
+            <span key={genre.id} className={tagChrome}>
               {genre.name}
             </span>
           ))
         ) : (
-          <span aria-hidden className={cn(genreChip, "invisible")}>
+          <span aria-hidden className={cn(tagChrome, "invisible")}>
             {"\u00A0"}
           </span>
         )}

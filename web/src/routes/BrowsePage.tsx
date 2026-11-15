@@ -12,7 +12,16 @@ import { PageTitle } from "@/components/PageTitle";
 import { SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
-import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Skeletons } from "@/components/ui";
+import {
+  Button,
+  Chip,
+  EmptyState,
+  ErrorMessage,
+  Select,
+  Sheet,
+  Skeletons,
+  Tally,
+} from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
 import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
 import { catalogName, catalogView, viewGenre } from "@/lib/browse";
@@ -154,9 +163,7 @@ export function BrowsePage() {
 
       <div className="mx-auto max-w-3xl px-4 py-4">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-sm text-fg-muted" aria-live="polite">
-            {isLoading ? "Searching…" : songCount(total)}
-          </p>
+          <Tally>{isLoading ? "Searching…" : songCount(total)}</Tally>
           {hasRole(user?.role, "contributor") && (
             // A styled Link: an anchor nested in a button is invalid.
             <Link href="/songs/new" className={buttonClasses("secondary", "sm")}>

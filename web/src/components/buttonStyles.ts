@@ -52,3 +52,25 @@ export function buttonClasses(
  */
 export const rowControlChrome =
   "shrink-0 rounded-compact p-2 text-fg-subtle transition-colors focus-visible:ring-2 focus-visible:outline-hidden";
+
+/**
+ * The text of an action that shows as an icon alone on a phone. Hidden from
+ * sight there, not removed, so it still names the control at every width and
+ * a separate `aria-label` is needed only where the name says more than it.
+ */
+export const actionLabel = "sr-only sm:not-sr-only";
+
+/**
+ * A segmented control: the track, and one segment in it. Shared by the theme
+ * switch (radios) and the admin console's tabs (links), so a choice between
+ * views looks the same wherever it is offered.
+ */
+export const segmentedTrack = "flex gap-1 rounded-control bg-muted p-1";
+
+export function segmentClasses(selected: boolean, className?: string): string {
+  return cn(
+    "flex h-10 items-center justify-center gap-1.5 rounded-compact text-sm font-medium transition-colors",
+    selected ? "bg-canvas text-fg shadow-raised" : "text-fg-tertiary hover:text-fg",
+    className,
+  );
+}
