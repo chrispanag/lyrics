@@ -295,12 +295,12 @@ export function StickyHeader({
     const header = ref.current;
     if (!header) return;
     const root = document.documentElement.style;
-    // The border box, so the safe-area padding at the top is counted too.
-    const observer = new ResizeObserver(([entry]) => {
-      const height = entry?.borderBoxSize[0]?.blockSize ?? 0;
-      root.setProperty("--sticky-header-height", `${height}px`);
+    // `offsetHeight` is the border box, so the safe-area padding counts too.
+    const observer = new ResizeObserver(() => {
+      root.setProperty("--sticky-header-height", `${header.offsetHeight}px`);
     });
-    observer.observe(header);
+    // Border box here too, or a rotation that changes only the inset is missed.
+    observer.observe(header, { box: "border-box" });
     return () => {
       observer.disconnect();
       root.removeProperty("--sticky-header-height");
