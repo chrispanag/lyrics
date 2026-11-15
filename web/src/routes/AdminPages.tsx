@@ -333,8 +333,6 @@ export function AdminGenresPage() {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder={nameForm.placeholder}
-                // `Field` requires the control to point at its hint or error.
-                aria-describedby={failure?.field ? "genre-name-error" : "genre-name-hint"}
               />
             </Field>
             <Button

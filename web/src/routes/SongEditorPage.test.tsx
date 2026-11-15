@@ -381,6 +381,12 @@ describe("SongEditorPage", () => {
     const title = await screen.findByLabelText("Title");
     await userEvent.clear(title);
     await userEvent.type(title, "  Sea  ");
+    expect(screen.getByLabelText("Alternative title")).toHaveAccessibleDescription(
+      "Optional — a transliteration or a well-known variant",
+    );
+    expect(screen.getByLabelText("Notes")).toHaveAccessibleDescription(
+      "Optional — context, sources, or variations",
+    );
     // Whitespace alone is no alternative title, and no notes.
     await userEvent.clear(screen.getByLabelText("Alternative title"));
     await userEvent.type(screen.getByLabelText("Alternative title"), "   ");
@@ -558,6 +564,87 @@ describe("SongEditorPage", () => {
     expect(
       screen.getByLabelText("Notes", { selector: "#recording-0-notes" }),
     ).toHaveAccessibleDescription("Notes are too long.");
+  });
+
+  const byId = (id: string) => document.getElementById(id) as HTMLElement;
+
+  // The server numbers rows as sent, and blank rows are not: a row's error
+  // belongs to the row it names in the payload, not the form row at that index.
+  it("puts a credit's or performer's error on the row the server meant, past blank ones", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(
+          makeSong({
+            credits: [
+              { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
+              { person_id: "person-3", name: "Νίκος Γκάτσος", role: "lyricist", position: 1 },
+            ],
+            recordings: [
+              // Nothing on it: a blank row, which is not sent.
+              makeRecording({
+                id: "rec-1",
+                label: null,
+                youtube_url: null,
+                youtube_video_id: null,
+                release_year: null,
+                notes: null,
+                is_first: false,
+                performers: [],
+              }),
+              makeRecording({
+                id: "rec-2",
+                performers: [
+                  { person_id: "person-2", name: "Γιώργος Νταλάρας", position: 0 },
+                  { person_id: "person-4", name: "Μαρία Φαραντούρη", position: 1 },
+                ],
+              }),
+            ],
+          }),
+        ),
+      ),
+      http.patch(`${API}/api/v1/songs/song-1`, () =>
+        apiError(422, "validation_failed", "The song could not be saved.", {
+          "credits[0].name": "Name is too long.",
+          "recordings[0].performers[0].name": "Name is too long.",
+        }),
+      ),
+    );
+    renderEditor({ route: "/songs/song-1/edit" });
+
+    // Emptied, the first credit and the first performer are dropped at save.
+    await userEvent.clear(await screen.findByDisplayValue("Μίκης Θεοδωράκης"));
+    await userEvent.clear(screen.getByDisplayValue("Γιώργος Νταλάρας"));
+    await save();
+
+    await screen.findByText("The song could not be saved.");
+    expect(byId("credit-name-1")).toHaveAccessibleDescription("Name is too long.");
+    expect(byId("credit-name-0")).not.toHaveAttribute("aria-describedby");
+    expect(byId("recording-1-performer-1")).toHaveAccessibleDescription("Name is too long.");
+    expect(byId("recording-1-performer-0")).not.toHaveAttribute("aria-describedby");
+    // Refilling a dropped row must not move the error: the server named the
+    // rows of the save that failed, not of the form as it now stands.
+    await userEvent.type(byId("credit-name-0"), "Μάνος Χατζιδάκις");
+    expect(byId("credit-name-1")).toHaveAccessibleDescription("Name is too long.");
+    expect(byId("credit-name-0")).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("puts a credit's role error on the role, not the name", async () => {
+    server.use(
+      http.patch(`${API}/api/v1/songs/song-1`, () =>
+        apiError(422, "validation_failed", "The song could not be saved.", {
+          "credits[0].role": "Role must be composer or lyricist.",
+        }),
+      ),
+    );
+    renderEditor({ route: "/songs/song-1/edit" });
+
+    await screen.findByDisplayValue("Μίκης Θεοδωράκης");
+    await save();
+
+    expect(await screen.findByLabelText("Role for credit 1")).toHaveAccessibleDescription(
+      "Role must be composer or lyricist.",
+    );
+    expect(byId("credit-name-0")).not.toHaveAttribute("aria-describedby");
   });
 
   // A failed load must not fall through to an empty form: saving it would blank

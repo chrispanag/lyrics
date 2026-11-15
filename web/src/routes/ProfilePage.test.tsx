@@ -96,6 +96,9 @@ describe("ProfilePage", () => {
       user: makeUser({ display_name: null }),
       auth: { reload },
     });
+    expect(screen.getByLabelText("Display name")).toHaveAccessibleDescription(
+      "Shown instead of your email",
+    );
     await userEvent.type(screen.getByLabelText("Display name"), "  Μαρία  ");
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
