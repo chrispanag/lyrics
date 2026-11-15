@@ -50,4 +50,4 @@ export function buttonClasses(
  * accent, cursor and disabled treatment.
  */
 export const rowControlChrome =
-  "shrink-0 rounded-lg p-2 text-stone-400 transition-colors focus-visible:ring-2 focus-visible:outline-none";
+  "shrink-0 rounded-lg p-2 text-stone-400 transition-colors focus-visible:ring-2 focus-visible:outline-hidden";

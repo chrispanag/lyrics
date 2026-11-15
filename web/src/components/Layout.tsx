@@ -217,7 +217,9 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
       {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: `marking` spreads role="dialog" while open. */}
       <div
         ref={panel}
-        // Focusable only as `useModal`'s focus target.
+        // Focusable only as `useModal`'s focus target. `outline-none`, not
+        // `outline-hidden`: that one is unconditional, so forced colors would
+        // draw it on the panel permanently, a sliver of it even while closed.
         tabIndex={-1}
         {...marking}
         aria-label="Navigation"

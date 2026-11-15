@@ -1,5 +1,5 @@
 import { type ComponentProps, type ReactNode, useId } from "react";
-import { LoaderCircle, X } from "lucide-react";
+import { ChevronDown, LoaderCircle, X } from "lucide-react";
 
 import { buttonClasses, type ButtonSize, type ButtonVariant } from "./buttonStyles";
 import { fieldChrome } from "@/components/fieldStyles";
@@ -38,8 +38,7 @@ export function Button({
 }
 
 // The shape the field primitives share. Size, padding and width are stated per
-// primitive, since `cn` cannot override a shared class. <Select> sets no width:
-// its caller does.
+// primitive, since `cn` cannot override a shared class.
 const fieldLayout = "rounded-xl";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
@@ -57,18 +56,28 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
   );
 }
 
+// The native arrow ignores the field's padding, sits hard against the border
+// and is drawn at each engine's own size, so it is switched off and replaced.
+// An icon rather than a background image, so its color follows the theme.
+// `className` sizes the wrapper, which is what a caller's width has to reach.
+// The select inherits `text-transform` from it explicitly: the UA stylesheet
+// resets it on form controls, so a caller's `capitalize` would stop there.
 export function Select({ className, ...props }: ComponentProps<"select">) {
   return (
-    <select
-      // select-chevron replaces the native arrow; see styles/index.css.
-      className={cn(
-        fieldChrome,
-        fieldLayout,
-        "select-chevron h-11 appearance-none pl-3 pr-9",
-        className,
-      )}
-      {...props}
-    />
+    <div className={cn("relative", className)}>
+      <select
+        className={cn(
+          fieldChrome,
+          fieldLayout,
+          "peer h-11 w-full appearance-none pl-3 pr-9 [text-transform:inherit]",
+        )}
+        {...props}
+      />
+      <ChevronDown
+        aria-hidden
+        className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-stone-500 peer-disabled:opacity-50 dark:text-stone-400"
+      />
+    </div>
   );
 }
 
@@ -287,7 +296,7 @@ export function Sheet({
         // bottom, centered from `sm`. The margins are stated because preflight
         // zeroes the UA's `auto`, which is what places a modal dialog at all.
         // `display` only while open, or it would override the closed state.
-        "m-auto mb-0 max-h-[85vh] w-full max-w-full flex-col border-0 p-0 text-inherit open:flex",
+        "m-auto mb-0 max-h-[85dvh] w-full max-w-full flex-col border-0 p-0 text-inherit open:flex",
         "rounded-t-3xl bg-white shadow-2xl",
         "sm:mb-auto sm:max-w-lg sm:rounded-3xl",
         "dark:bg-stone-900",
@@ -307,7 +316,9 @@ export function Sheet({
           <X aria-hidden className="size-5" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-safe">
+      {/* Not `py-4 pb-safe`: as utilities, the later `pb-safe` wins and is 0
+          wherever there is no inset, leaving the body no bottom padding. */}
+      <div className="flex-1 overflow-y-auto overscroll-contain px-5 pt-4 pb-[max(--spacing(4),env(safe-area-inset-bottom))]">
         {shown && children}
       </div>
     </dialog>

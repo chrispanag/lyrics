@@ -1,8 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 
 import { OG_BASE, SITE_NAME, SITE_ORIGIN } from "@/lib/site";
 import { THEME_BOOT_SCRIPT, THEME_COLORS } from "@/lib/theme";
 import "@/styles/index.css";
+
+// Self-hosted at build time; `--font-sans` in styles/index.css reads the
+// variable. Greek because most of the catalog is.
+const inter = Inter({ subsets: ["latin", "greek"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   // Never add a `title`: it sorts ahead of PageTitle's and pins every tab to
@@ -51,7 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     // lang is the chrome's; SongDetailPage marks each song's own. Change both or
     // neither. suppressHydrationWarning: the theme script edits this element.
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body>
         {/* Must run before anything with a background color paints. */}
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a constant written here, with no input in it. */}

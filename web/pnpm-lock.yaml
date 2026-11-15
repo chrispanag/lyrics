@@ -204,7 +204,7 @@ importers:
         specifier: ^1.49.0
         version: 1.65.1
       '@tailwindcss/postcss':
-        specifier: ^4.3.3
+        specifier: ^4.3.5
         version: 4.3.5
       '@testing-library/jest-dom':
         specifier: ^7.0.1
@@ -234,7 +234,7 @@ importers:
         specifier: ^3.0.5
         version: 3.0.5(@types/node@26.6.6)(graphql@16.15.0)(typescript@7.0.2)(vite@8.3.8(@types/node@26.6.6)(jiti@2.7.0))
       tailwindcss:
-        specifier: ^4.3.3
+        specifier: ^4.3.5
         version: 4.3.5
       typescript:
         specifier: ^7.0.2

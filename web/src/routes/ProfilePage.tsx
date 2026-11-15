@@ -286,7 +286,7 @@ function PictureMenu({
             buttonClasses("secondary", "lg", "w-full"),
             // Focus and disabled styles live on the label: the `sr-only` input
             // shows no focus, and `disabled:` cannot match a label.
-            "cursor-pointer focus-within:ring-2 focus-within:outline-none",
+            "cursor-pointer focus-within:ring-2 focus-within:outline-hidden",
             busy && "cursor-not-allowed opacity-60",
           )}
         >

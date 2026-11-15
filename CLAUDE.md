@@ -1908,6 +1908,12 @@ these four are the parts that break quietly.
   and "empty" are different things and both are used: `make mobile` sets it
   *empty*, which `api/client.ts` distinguishes with `??` so the explicit empty
   string wins over the development fallback.
+- **`next build` downloads Inter from Google Fonts.** `next/font/google` in
+  `app/layout.tsx` fetches and self-hosts it at build time, so a builder that
+  cannot reach `fonts.googleapis.com` fails the build with no code changed.
+  Nothing is fetched at run time. And `weight: "400 700"`, which Next's own docs
+  show for a variable font, is rejected by this version's Turbopack as an
+  unknown weight, so the full axis ships.
 - **The `web` component is a service, not a static site, and `/api` can never
   reach it.** Next serves every document from a running process, so there is no
   `output_dir` and no `catchall_document`; the optional catch-all route under
