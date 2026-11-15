@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, type ReactNode, type SubmitEvent } from "react";
 import { Pencil, Plus, Tags, Trash } from "lucide-react";
 

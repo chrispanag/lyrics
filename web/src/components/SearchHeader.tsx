@@ -1,3 +1,5 @@
+"use client";
+
 import type { ReactNode } from "react";
 
 import { MenuButton, StickyHeader } from "./Layout";
@@ -50,7 +52,7 @@ export function SearchHeader({
  * the place every other screen keeps it. `mobileOnly`, since at a desk the
  * sidebar is the navigation.
  *
- * Applied by a layout route in `App.tsx`, not per page, so no screen or state
+ * Applied by the `(menu)` route group's layout, not per page, so no screen or state
  * can forget it.
  */
 export function MenuHeader() {

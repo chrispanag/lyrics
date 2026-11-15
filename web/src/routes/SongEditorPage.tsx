@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useState, type SubmitEvent } from "react";
 import { Plus, Trash } from "lucide-react";
 
@@ -189,9 +191,19 @@ export function SongEditorPage() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
 
-  if (authLoading) return <Spinner />;
+  // Named after the form, so its history entry differs from the song page —
+  // while waiting too, since that is what a server renders.
+  const heading = isEdit ? "Edit song" : "Add a song";
+  const waiting = (
+    <>
+      <PageTitle name={heading} />
+      <Spinner />
+    </>
+  );
+
+  if (authLoading) return waiting;
   if (!hasRole(user?.role, "contributor")) return <Redirect href="/" />;
-  if (isEdit && loadingSong) return <Spinner />;
+  if (isEdit && loadingSong) return waiting;
 
   // A failed load must not fall through to the form: every save sends the whole
   // song, so saving an empty form would blank it.
@@ -343,11 +355,9 @@ export function SongEditorPage() {
   };
 
   const saving = createSong.isPending || updateSong.isPending;
-  const heading = isEdit ? "Edit song" : "Add a song";
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
-      {/* Named after the form, so its history entry differs from the song page. */}
       <PageTitle name={heading} />
       <h1 className="mb-6 text-2xl font-bold tracking-tight">{heading}</h1>
 

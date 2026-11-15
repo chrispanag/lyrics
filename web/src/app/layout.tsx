@@ -5,13 +5,24 @@ import { OG_BASE, SITE_NAME, SITE_ORIGIN } from "@/lib/site";
 import { THEME_BOOT_SCRIPT, THEME_COLORS } from "@/lib/theme";
 import "@/styles/index.css";
 
+import { Providers } from "./Providers";
+
+/*
+ * Every route renders per request. The shell reads the search string through
+ * `useSearchParams`, and on a route Next prerenders that hands the whole tree
+ * up to the nearest Suspense boundary to the browser — the server HTML would be
+ * an empty shell again. Per request, it renders with the real search params.
+ */
+export const dynamic = "force-dynamic";
+
 // Self-hosted at build time; `--font-sans` in styles/index.css reads the
 // variable. Greek because most of the catalog is.
 const inter = Inter({ subsets: ["latin", "greek"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  // Never add a `title`: it sorts ahead of PageTitle's and pins every tab to
-  // "Songfolio". Same for app/songs/[id]. See CLAUDE.md, Head assets.
+  // No `title` here or in any route: `PageTitle` names every screen, and a
+  // second mechanism means two <title>s racing for `document.title`. See
+  // CLAUDE.md, Head assets.
   description: `${SITE_NAME} is a Greek and English song lyrics catalog: browse, search, and collect songs into lists.`,
   // manifest.json rather than .webmanifest: every server knows the .json type.
   manifest: "/manifest.json",
@@ -61,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Must run before anything with a background color paints. */}
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a constant written here, with no input in it. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

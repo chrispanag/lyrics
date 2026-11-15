@@ -5,7 +5,6 @@ import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { App } from "./App";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { storeUser } from "@/auth/storedUser";
 import { storeFontSize } from "@/lib/fontSize";
@@ -16,6 +15,7 @@ import { listById, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 import { TestProviders } from "@/test/TestProviders";
+import { TestApp } from "@/test/app";
 
 /*
  * The hydration check CLAUDE.md asks for under "The Next.js shell": each screen
@@ -56,10 +56,10 @@ function clientWith(state: DehydratedState): QueryClient {
 /**
  * What the screen at `route` fetches, read by mounting it once against the
  * stubbed API. The server half has nothing to fetch with, so it renders from
- * this, exactly as `dehydratedState` reaches `AppRoot` from a server page.
+ * this, exactly as a server page hands its reads to `HydrationBoundary`.
  */
 async function dataFor(route: string, user: User | null): Promise<DehydratedState> {
-  const { queryClient, unmount } = renderWithProviders(<App />, { route, user });
+  const { queryClient, unmount } = renderWithProviders(<TestApp />, { route, user });
   await waitFor(() => expect(queryClient.isFetching()).toBe(0));
   // Twice: a query enabled by another's answer starts a beat later.
   await act(async () => {});
@@ -117,7 +117,7 @@ async function hydrationProblems(
 function stubbed(route: string, user: User | null) {
   return (client: QueryClient) => (
     <TestProviders queryClient={client} route={route} user={user}>
-      <App />
+      <TestApp />
     </TestProviders>
   );
 }
@@ -181,7 +181,7 @@ describe("hydrating over a server render", () => {
       (client) => (
         <TestProviders queryClient={client} route="/">
           <AuthProvider>
-            <App />
+            <TestApp />
           </AuthProvider>
         </TestProviders>
       ),

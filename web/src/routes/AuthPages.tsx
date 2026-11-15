@@ -1,3 +1,5 @@
+"use client";
+
 import { useCallback, useEffect, useRef, useState, type SubmitEvent } from "react";
 
 import { errorDetails, errorMessage } from "@/api/client";
@@ -869,8 +871,15 @@ export function VerifyEmailPage() {
   }, [loading, startEmailVerification, user]);
 
   // Reached by redirect, so a reload lands here mid-restore; wait, or it bounces
-  // to sign-in.
-  if (loading) return <Spinner />;
+  // to sign-in. Named while waiting: it is what a server renders.
+  if (loading) {
+    return (
+      <>
+        <PageTitle name="Check your email" />
+        <Spinner />
+      </>
+    );
+  }
   if (!user) return <Redirect href="/login" />;
   if (user.email_verified_at) return <Redirect href="/" />;
 

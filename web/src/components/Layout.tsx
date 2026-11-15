@@ -1,8 +1,9 @@
+"use client";
+
 import { ListMusic, Menu, Search, Shield, User as UserIcon } from "lucide-react";
 import {
   type ReactNode,
   type RefObject,
-  Suspense,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -13,7 +14,7 @@ import {
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { buttonClasses } from "@/components/buttonStyles";
-import { Button, Spinner } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { FIELDS, useHomeEndInside } from "@/lib/modal";
@@ -100,9 +101,10 @@ export function Layout({ children }: { children?: ReactNode }) {
 
         {/* Extra bottom room on a phone to clear the home indicator. */}
         <main className="min-w-0 flex-1 pb-12 md:pb-8">
-          {/* One boundary for every lazy route, rather than one per route element.
-              The shell stays mounted while a chunk loads. */}
-          <Suspense fallback={<Spinner />}>{children}</Suspense>
+          {/* No Suspense boundary here: a server streams the shell the moment
+              one sits above a page, so a page's `notFound()` or redirect
+              arrives as a 200 with a meta tag rather than a 404 or a 308. */}
+          {children}
         </main>
       </div>
     </NavDrawerContext.Provider>

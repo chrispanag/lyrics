@@ -1,3 +1,5 @@
+"use client";
+
 import { useId, useState, type ChangeEvent, type SubmitEvent } from "react";
 import { KeyRound, LoaderCircle, LogOut, Moon, Pencil, Sun, Trash, Upload } from "lucide-react";
 

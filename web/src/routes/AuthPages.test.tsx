@@ -9,7 +9,7 @@ import {
   RegisterPage,
   VerifyEmailPage,
 } from "./AuthPages";
-import { App } from "@/App";
+import { TestApp } from "@/test/app";
 import { ApiError } from "@/api/client";
 import {
   PASSWORD_CHANGE_UNAVAILABLE_ERROR,
@@ -912,7 +912,7 @@ describe("ChangePasswordPage", () => {
 
   // A guest is sent to sign in by the route's guard.
   it("sends a guest to sign in", async () => {
-    renderWithProviders(<App />, { user: null, route: "/change-password" });
+    renderWithProviders(<TestApp />, { user: null, route: "/change-password" });
 
     expect(await screen.findByText("Welcome back")).toBeInTheDocument();
   });
@@ -931,7 +931,7 @@ describe("sign-in and sign-up screens", () => {
   });
 
   it("sends a signed-in visitor on their way", () => {
-    renderWithProviders(<App />, { user: makeUser(), route: "/login" });
+    renderWithProviders(<TestApp />, { user: makeUser(), route: "/login" });
 
     expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
   });
@@ -949,14 +949,14 @@ describe("sign-in and sign-up screens", () => {
 
   // The other side: once restored, a signed-in visitor is redirected.
   it("sends a signed-in visitor away from the sign-up form", () => {
-    renderWithProviders(<App />, { user: makeUser(), route: "/register" });
+    renderWithProviders(<TestApp />, { user: makeUser(), route: "/register" });
 
     expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
   });
 
   // And a restored guest stays.
   it("shows the sign-up form to a guest", () => {
-    renderWithProviders(<App />, { user: null, route: "/register" });
+    renderWithProviders(<TestApp />, { user: null, route: "/register" });
 
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
   });
@@ -1074,34 +1074,34 @@ describe("sign-in and sign-up screens", () => {
 describe("verification gate", () => {
   // The API refuses an unverified account everything, so it is held on verification.
   it("holds an unverified account on the verification screen", async () => {
-    renderWithProviders(<App />, { user: unverified, route: "/lists" });
+    renderWithProviders(<TestApp />, { user: unverified, route: "/lists" });
 
     expect(await screen.findByText("Check your email")).toBeInTheDocument();
   });
 
   it("lets a verified account through", async () => {
-    renderWithProviders(<App />, { user: makeUser(), route: "/" });
+    renderWithProviders(<TestApp />, { user: makeUser(), route: "/" });
 
     expect(await screen.findByRole("searchbox")).toBeInTheDocument();
   });
 
   // The reset signs the visitor in mid-flow; the gate must not bounce it.
   it("leaves an unverified account on the reset screen", async () => {
-    renderWithProviders(<App />, { user: unverified, route: "/forgot-password" });
+    renderWithProviders(<TestApp />, { user: unverified, route: "/forgot-password" });
 
     expect(await screen.findByText("Reset your password")).toBeInTheDocument();
   });
 
   // Nor may the reset itself redirect a signed-in visitor.
   it("does not send a signed-in visitor away from the reset screen", async () => {
-    renderWithProviders(<App />, { user: makeUser(), route: "/forgot-password" });
+    renderWithProviders(<TestApp />, { user: makeUser(), route: "/forgot-password" });
 
     expect(await screen.findByText("Reset your password")).toBeInTheDocument();
   });
 
   // The gate waits for the restore: a stale snapshot may predate verification.
   it("holds nobody until the session is confirmed", async () => {
-    renderWithProviders(<App />, { user: unverified, route: "/", auth: { loading: true } });
+    renderWithProviders(<TestApp />, { user: unverified, route: "/", auth: { loading: true } });
 
     expect(await screen.findByRole("searchbox")).toBeInTheDocument();
   });
