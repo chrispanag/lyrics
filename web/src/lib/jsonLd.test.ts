@@ -1,8 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { makeList, makeRecording, makeSong } from "@/test/handlers";
 
-import { listJsonLd, songJsonLd } from "./jsonLd";
+import { listJsonLd, songJsonLd, websiteJsonLd } from "./jsonLd";
+
+// A hostile site name, so the WebSite case can show its escaping: the real one
+// has no `<` in it, and a constant is exactly what a later edit makes not one.
+vi.mock("./site", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./site")>()),
+  SITE_NAME: "Songfolio</script><script>alert(1)</script>",
+}));
 
 /*
  * The first case is a stored-XSS test: a lyric must not close the script tag.
@@ -119,6 +126,23 @@ describe("listJsonLd", () => {
         { "@type": "ListItem", position: 1, url: `${ORIGIN}/songs/first`, name: "A" },
         { "@type": "ListItem", position: 2, url: `${ORIGIN}/songs/second`, name: "B" },
       ],
+    });
+  });
+});
+
+describe("websiteJsonLd", () => {
+  it("names the site at its home, escaped like every script body", () => {
+    const body = websiteJsonLd();
+
+    expect(body).not.toContain("<");
+    expect(JSON.parse(body)).toEqual({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "Songfolio</script><script>alert(1)</script>",
+      // Absolute, and the home page's own address: what Google reads the
+      // site name from.
+      url: "https://songfolio.live/",
+      inLanguage: ["el", "en"],
     });
   });
 });

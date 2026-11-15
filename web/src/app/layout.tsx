@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 
-import { OG_BASE, SITE_NAME, SITE_ORIGIN } from "@/lib/site";
+import { OG_BASE, SITE_NAME, SITE_ORIGIN, SITE_SUMMARY } from "@/lib/site";
 import { FONT_SIZE_BOOT_SCRIPT } from "@/lib/fontSize";
 import { THEME_BOOT_SCRIPT, THEME_COLORS } from "@/lib/theme";
 import "@/styles/index.css";
@@ -43,8 +43,7 @@ export const metadata: Metadata = {
     type: "website",
     url: "/",
     title: SITE_NAME,
-    description:
-      "A Greek and English song lyrics catalog: browse, search, and collect songs into lists.",
+    description: SITE_SUMMARY,
   },
   twitter: { card: "summary_large_image" },
 };

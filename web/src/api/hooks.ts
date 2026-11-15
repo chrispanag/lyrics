@@ -1,4 +1,5 @@
 import {
+  queryOptions,
   useMutation,
   useQuery,
   useQueryClient,
@@ -6,7 +7,7 @@ import {
   type UseQueryOptions,
 } from "@tanstack/react-query";
 
-import { apiFetch, toQuery } from "./client";
+import { type RequestOptions, apiFetch, toQuery } from "./client";
 import type {
   Genre,
   ListResponse,
@@ -32,14 +33,42 @@ export const keys = {
 };
 
 /**
+ * The catalog's reads as whole query definitions — key, request and result
+ * type together — which the hooks below use and a server page prefetches with
+ * the same object, so the entry it hands over cannot hold an answer to a
+ * different question under the right key. `request` is for the server, which
+ * reads as a guest (`anonymous`).
+ */
+export const queries = {
+  songs: (filters: SongFilters, request?: RequestOptions) =>
+    queryOptions({
+      queryKey: keys.songs(filters),
+      queryFn: () =>
+        apiFetch<ListResponse<Song>>(`/api/v1/songs${toQuery({ ...filters })}`, request),
+    }),
+  person: (id: string, request?: RequestOptions) =>
+    queryOptions({
+      queryKey: keys.person(id),
+      // Encoded: the id comes straight from the address bar.
+      queryFn: () => apiFetch<Person>(`/api/v1/people/${encodeURIComponent(id)}`, request),
+      staleTime: 5 * 60_000,
+    }),
+  genres: (request?: RequestOptions) =>
+    queryOptions({
+      queryKey: keys.genres(),
+      queryFn: () => apiFetch<ListResponse<Genre>>("/api/v1/genres", request),
+      staleTime: 5 * 60_000,
+    }),
+};
+
+/**
  * A page of songs. `enabled` lets the quick search ask for nothing while empty
  * (an absent `q` means the whole catalog); it is a boolean, not an options bag,
  * so no caller can override `queryKey` or `placeholderData`.
  */
 export function useSongs(filters: SongFilters, enabled = true) {
   return useQuery({
-    queryKey: keys.songs(filters),
-    queryFn: () => apiFetch<ListResponse<Song>>(`/api/v1/songs${toQuery({ ...filters })}`),
+    ...queries.songs(filters),
     // Keeps the previous page on screen while the next query loads.
     placeholderData: (previous) => previous,
     enabled,
@@ -66,20 +95,11 @@ export function usePeople(query: string, options?: Partial<UseQueryOptions<ListR
 
 /** A single person, used to label an active artist filter with their name. */
 export function usePerson(id: string | undefined) {
-  return useQuery({
-    queryKey: keys.person(id ?? ""),
-    queryFn: () => apiFetch<Person>(`/api/v1/people/${id}`),
-    enabled: Boolean(id),
-    staleTime: 5 * 60_000,
-  });
+  return useQuery({ ...queries.person(id ?? ""), enabled: Boolean(id) });
 }
 
 export function useGenres() {
-  return useQuery({
-    queryKey: keys.genres(),
-    queryFn: () => apiFetch<ListResponse<Genre>>("/api/v1/genres"),
-    staleTime: 5 * 60_000,
-  });
+  return useQuery(queries.genres());
 }
 
 /** The chips themselves, which is all a brand new genre can be seen in. */

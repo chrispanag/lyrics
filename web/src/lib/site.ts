@@ -16,6 +16,13 @@ export const SITE_ORIGIN = "https://songfolio.live";
 export const SITE_NAME = "Songfolio";
 
 /**
+ * The site in a sentence, as a link preview says it. Shared because a route
+ * that sets `openGraph` restates it: the layout's block is replaced, not merged.
+ */
+export const SITE_SUMMARY =
+  "A Greek and English song lyrics catalog: browse, search, and collect songs into lists.";
+
+/**
  * The link-preview picture. Its dimensions must match the file, or scrapers
  * decline to draw the card. Use it through `OG_BASE`.
  */

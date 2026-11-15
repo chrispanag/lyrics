@@ -1,15 +1,39 @@
 import { groupCredits } from "./credits";
 import { listHref, songHref } from "./listContext";
+import { SITE_NAME, SITE_ORIGIN } from "./site";
 import type { Recording, Song, SongList } from "./types";
 import { watchUrl } from "./youtube";
 
 /*
  * The machine-readable description of a song, server-rendered for crawlers. See
- * "What the server says while the app is still client-only" in CLAUDE.md.
+ * "What the server renders" in CLAUDE.md.
  */
 
 /** Every `<` in the script body: every character the HTML parser reacts to. */
 const TAG_OPENER = /</g;
+
+/**
+ * A value as the text of a script body: every `<` becomes `\u003c`, so nothing
+ * in it can close the tag (stored XSS). Every JSON-LD this app emits goes
+ * through here, constant or not, so the next one copies a safe shape.
+ */
+function scriptBody(value: unknown): string {
+  return JSON.stringify(value).replace(TAG_OPENER, "\\u003c");
+}
+
+/**
+ * The site itself, as schema.org `WebSite`: what a search engine reads the
+ * site's name from in results. On the catalog, the site's home.
+ */
+export function websiteJsonLd(): string {
+  return scriptBody({
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: SITE_NAME,
+    url: `${SITE_ORIGIN}/`,
+    inLanguage: ["el", "en"],
+  });
+}
 
 /**
  * A song as schema.org `MusicComposition`, as the text of a script body.
@@ -72,11 +96,6 @@ export function listJsonLd(list: SongList, origin: string): string {
       name: song.title,
     })),
   });
-}
-
-/** JSON safe inside a raw `<script>`: every `<` becomes `\u003c`. */
-function scriptBody(value: unknown): string {
-  return JSON.stringify(value).replace(TAG_OPENER, "\\u003c");
 }
 
 /**

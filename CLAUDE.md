@@ -969,6 +969,87 @@ scraper rather than by anyone inside the app, which is why each is written down.
   in-app navigation the boundary only fills what the client cache lacks, so a
   song already cached is not replaced by an older server read. `page.test.tsx`
   pins the key, the stamp and the HTML (rendered to a string under Node).
+- **The catalog's HTML carries its first page of songs, read through the hooks'
+  own query definitions.** `app/(shell)/page.tsx` reads exactly what
+  `BrowsePage` asks for on its first render — the songs page, the genres (the
+  chip's name and the filter sheet) and, for `?person=`, the person (the chip's
+  and the title's name) — as a guest, in parallel, and hands them over through a
+  `HydrationBoundary`. **Two things are shared so the handover cannot miss.**
+  The request is derived from the address by `catalogView` in `lib/browse.ts`,
+  which `BrowsePage` calls too; and each read is a `queries` entry in
+  `api/hooks.ts` — key, request and result type in one `queryOptions` — which
+  the hooks spread and the route `prefetchQuery`s, with `{ anonymous: true }` as
+  the factory's request argument. Built by hand beside the hook instead, the key
+  can match while the request does not, and an entry under the right key holds
+  the answer to another question; with the key off, the failure is invisible —
+  the page renders, the browser fetches the same page again, and the server's
+  read was wasted. `page.test.tsx` writes the expected keys out rather than
+  deriving them, renders the tree to a string to show the hooks found the
+  entries (titles, links, the chip's name, no "Searching…"), and was checked
+  against a key drifted by one field; `hydration.test.tsx` hydrates over the
+  route's own handover. **The reads go into one `QueryClient` per request**,
+  made through React's `cache` so `generateMetadata` and the page share it — no
+  retry (a server render must not wait out an outage) and fresh for the
+  request. **Each read has a time budget, `READ_BUDGET_MS` (3s)**, on a signal
+  made per read: with no `loading.tsx`, an in-app link to the catalog waits on
+  these reads as well as a document load does, and an API that *hangs* rather
+  than fails would otherwise freeze the old screen until the socket gives up,
+  minutes later. Past the budget the read counts as failed, exactly like one
+  refused. The song route's `loadSong` has no such budget yet. **The client alone does not make a read once**: a query that failed
+  holds no data, so a second `prefetchQuery` asks again and the page waits out
+  the outage a second time after the metadata did. `readNamed` is wrapped in
+  `cache` as well for that, and takes the client as an argument rather than
+  calling `requestClient()` itself — outside a server render React's `cache`
+  memoizes nothing, and the specs would read into one client and hand over
+  another. `prefetchQuery` never throws and
+  `dehydrate` keeps only successes, so a failed read is simply not handed over:
+  the page renders and the browser fetches and reports in its own words, never
+  a 500. Metadata waits on the genre and the person only, never the songs page.
+  **Unlike a song, these reads are not cached across requests**, and so are
+  stamped with when they were read rather than as stale: every search string is
+  its own address, so a data cache there is keyed by text anyone can type, and
+  a fresh read is what lets the browser trust it for the client's `staleTime`
+  instead of asking again on load (verified: no API request from the browser on
+  a document load of a filtered view). Typing in the search box still asks
+  nothing of the server, `writeSearch` being the History API.
+- **What a view is of is decided once, as `CatalogView.subject`** — a search,
+  one person, one genre, both at once, or the catalog — and the name, the
+  description and the indexing below all switch on it, since the three drifting
+  apart is the tab disagreeing with `og:title`. The view is **named** by
+  `catalogName` — "Search: …", "Songs by …", "… songs" — which `PageTitle`, the
+  hidden `<h1>` and `og:title` all read, so the server's document and an in-app
+  visit name a view alike. It answers `undefined` for a view with no name of its
+  own, including a filter whose record has not resolved (rather than naming it
+  by its id), and each caller says what it calls that: "Browse" for the tab, the
+  site's name for `og:title`. A sentinel word there would rename the card
+  whenever the tab's label changed. Which genre a slug names is `viewGenre`, for
+  the chip and the route alike.
+- **Which catalog views are pages is decided in one place, `canonicalOf` in the
+  route, and a view gets a canonical or `noindex`, never both.** The landing
+  pages are the plain catalog, one person's songs and one genre's: a stable
+  list somebody searches for by name, each described in its own words and
+  canonical under its own filter *alone*, so a sort folds into it (the same
+  songs, reordered). Everything else is `noindex, follow` — crawled through for
+  the song links, never listed: a search (an address space anyone can mint, of
+  thin overlapping results — what Google's guidelines say to keep out), a later
+  page (a different slice, so canonicalizing it to page one would be a false
+  claim, and the sitemap lists every song anyway), a language, two filters at
+  once, and a filter that names nothing. "Names nothing" is the song route's
+  rule: only the API's own `not_found` counts (`isNotFound` in `api/client.ts`;
+  the song route still writes the same test inline), and a person id that is
+  not a UUID (`isUuid`: canonical or undashed, either case) is not asked about
+  at all — the API would only refuse it. A person's page is canonical under the
+  person's **own** id rather than the address's spelling of it, since the API
+  also resolves upper case and the undashed form, each a duplicate of the page.
+  A person who could not be read for an outage keeps a canonical, normalized
+  to that same lower-case dashed form from the address.
+  **A filter that could not be resolved for an
+  outage stays indexable**, with the site's own words, for the reason the song
+  route refuses to 404 on one: an outage must not deindex a page. `noindex` and
+  a canonical are not combined because they contradict each other — one says
+  "drop this", the other "this is a copy of that". The filter is `genre_slug`,
+  not `genre`, since that is what the app has always written. The landing pages
+  are not in the sitemap yet; that is the obvious next step.
 - **A step through a list is loaded before it is taken.** An in-app navigation
   fetches the next route's payload, which reads the song first, so a step that
   has to ask for it waits a whole server round trip with nothing changing on
@@ -1078,9 +1159,11 @@ scraper rather than by anyone inside the app, which is why each is written down.
 - **Metadata now follows the reader.** Next's router does every navigation, so
   `generateMetadata`'s description, canonical, `og:*` and the JSON-LD are those
   of the page on screen after a step through a list, not of the document the
-  tab first loaded — the gap the client-only app documented is closed. Songs
-  and public lists carry their own; the catalog and the rest still carry only
-  the layout's site-wide metadata.
+  tab first loaded — the gap the client-only app documented is closed. Songs,
+  public lists and the catalog carry their own; the rest still carry only the
+  layout's site-wide metadata. A route that sets `openGraph` restates the
+  site's own description from `SITE_SUMMARY` when it has none of its own, since
+  the layout's block is replaced, not merged.
 - **`generateMetadata` must never return a `title`.** Titles have one
   mechanism, `PageTitle`, and a metadata title is a second `<title>` racing it
   for `document.title` — see Head assets. `og:title` is a different property and
@@ -1105,6 +1188,12 @@ scraper rather than by anyone inside the app, which is why each is written down.
   character. Pinned in `lib/jsonLd.test.ts` by asserting the body contains no `<`
   whatsoever, and verified in the served document. `listJsonLd` goes through
   the same `scriptBody`, a list's name and description being owner-typed.
+  **So does the catalog's `WebSite`** (`websiteJsonLd`, what Google names a
+  site's results by), although nothing in it is typed by anyone: a constant is
+  exactly what a later edit turns into a value, and the next JSON-LD copies the
+  shape beside it. Its spec mocks a hostile site name to show the escape, since
+  the real one cannot. It names no `SearchAction`; Google retired the sitelinks
+  search box that read one.
 - **The 308 from the id form to the slug carries the query string**, and dropping
   it is the dead end `lib/listContext.ts`'s header is about: an old link is very
   often `/songs/<uuid>?list=<id>`, and the next song then has nowhere to go with
