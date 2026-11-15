@@ -72,7 +72,7 @@ function StaticSongList({
 }
 
 export function ListsPage() {
-  const { data, isLoading } = useLists(true);
+  const { data, isLoading, isError, error: loadError } = useLists(true);
   const createList = useCreateList();
 
   const [creating, setCreating] = useState(false);
@@ -103,6 +103,10 @@ export function ListsPage() {
       </div>
 
       {isLoading && <Skeletons count={3} className="h-20 w-full" />}
+
+      {isError && (
+        <ErrorMessage>{errorMessage(loadError, "Your lists could not be loaded.")}</ErrorMessage>
+      )}
 
       {!isLoading && data?.data.length === 0 && (
         <EmptyState

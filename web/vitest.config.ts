@@ -19,6 +19,9 @@ export default defineConfig({
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
       exclude: ["src/**/*.test.{ts,tsx}", "src/test/**", "src/**/*.d.ts"],
+      // A floor just under what the suite measures, so coverage cannot erode
+      // unnoticed. Raise it when the suite rises; lowering it is a decision.
+      thresholds: { statements: 96, branches: 90, functions: 94, lines: 97 },
     },
   },
 });

@@ -60,6 +60,17 @@ describe("ListsPage", () => {
     expect(await screen.findByText("No lists yet")).toBeInTheDocument();
   });
 
+  it("says the lists could not be loaded rather than showing none", async () => {
+    server.use(
+      http.get(`${API}/api/v1/lists`, () => apiError(500, "internal", "Something went wrong.")),
+    );
+
+    renderWithProviders(<ListsPage />, { user: makeUser() });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong.");
+    expect(screen.queryByText("No lists yet")).not.toBeInTheDocument();
+  });
+
   it("creates a list under the trimmed name and shows it once created", async () => {
     const user = userEvent.setup();
     const created: ReturnType<typeof makeList>[] = [];

@@ -15,6 +15,7 @@
     "lint": "biome check --error-on-warnings .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
     "format": "biome check --write ."
   },

@@ -1816,6 +1816,11 @@ each of them is written down.
   and `PRELUDE_ISSUER` point the app at it.
 - Frontend uses vitest + RTL + MSW, with `onUnhandledFrame: "error"` — an
   unstubbed request is a bug in the test, not something to pass through.
+- **CI runs the frontend suite with coverage, and `vitest.config.ts` sets a
+  floor.** `make test-web` does not, so a local run passes where CI fails on a
+  threshold; `pnpm run test:coverage` is the same check. The Next shell files
+  (`app/layout.tsx`, `AppRoot.tsx`, the route `page.tsx` wrappers) sit at zero
+  on purpose: they do anything only inside a Next build, which jsdom is not.
 - `renderWithProviders` stubs the auth context rather than mounting the real
   provider, so tests never touch the Prelude SDK.
 - Playwright's guest specs need only a running seeded stack. The signed-in spec
