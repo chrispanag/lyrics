@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Pencil, Plus, Tags, Trash2 } from "lucide-react";
+import { Pencil, Plus, Tags, Trash } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import {
@@ -319,7 +319,7 @@ export function AdminGenresPage() {
                 aria-label={`Delete ${genre.name}`}
                 onClick={() => openSheet({ kind: "delete", genre })}
               >
-                <Trash2 aria-hidden className="size-4 text-red-600" />
+                <Trash aria-hidden className="size-4 text-red-600" />
                 Delete
               </Button>
             </div>

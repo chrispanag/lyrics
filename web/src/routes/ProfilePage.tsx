@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { KeyRound, Loader2, LogOut, Moon, Pencil, Sun, Trash2, Upload } from "lucide-react";
+import { KeyRound, LoaderCircle, LogOut, Moon, Pencil, Sun, Trash, Upload } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import { useRemoveAvatar, useUpdateProfile, useUploadAvatar } from "@/api/hooks";
@@ -257,7 +257,7 @@ function PictureButton({
           !busy && "group-hover:bg-brand-700 group-active:bg-brand-800",
         )}
       >
-        {busy ? <Loader2 className="size-4 animate-spin" /> : <Pencil className="size-3.5" />}
+        {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Pencil className="size-3.5" />}
       </span>
     </button>
   );
@@ -309,7 +309,7 @@ function PictureMenu({
         {hasPicture && (
           // Ghost, with no color override: `cn` is a plain join, so one would lose.
           <Button variant="ghost" className="w-full" disabled={busy} onClick={onRemove}>
-            <Trash2 aria-hidden className="size-4" />
+            <Trash aria-hidden className="size-4" />
             Remove picture
           </Button>
         )}

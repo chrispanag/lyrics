@@ -1,4 +1,4 @@
-import { Youtube } from "lucide-react";
+import { SquarePlay } from "lucide-react";
 
 import { buttonClasses } from "@/components/buttonStyles";
 import { watchUrl } from "@/lib/youtube";
@@ -18,7 +18,7 @@ export function WatchOnYouTube({ videoId, className }: { videoId: string; classN
       rel="noopener noreferrer"
       className={buttonClasses("secondary", "sm", className)}
     >
-      <Youtube aria-hidden className="size-4" />
+      <SquarePlay aria-hidden className="size-4" />
       Watch on YouTube{" "}
       {/* A reader who cannot see the new tab appear needs telling. The space
           stays outside the span, since a name computation may trim it. */}

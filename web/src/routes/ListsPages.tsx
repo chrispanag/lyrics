@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useSyncExternalStore, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash2 } from "lucide-react";
+import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash } from "lucide-react";
 
 import { ApiError, errorMessage } from "@/api/client";
 import {
@@ -335,7 +335,7 @@ export function ListDetailPage() {
             {/* The default list cannot be deleted (the server 403s). */}
             {!list.is_default && (
               <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
-                <Trash2 aria-hidden className="size-4 text-red-600" />
+                <Trash aria-hidden className="size-4 text-red-600" />
                 Delete list
               </Button>
             )}
