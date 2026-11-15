@@ -116,7 +116,7 @@ web: ## Run the web dev server
 	cd web && NEXT_PUBLIC_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" \
 		NEXT_PUBLIC_PRELUDE_SDK_KEY="$(PRELUDE_SDK_KEY)" \
 		NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" \
-		NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID="$(PRELUDE_OTP_LOGIN_CONFIG_ID)" npm run dev
+		NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID="$(PRELUDE_OTP_LOGIN_CONFIG_ID)" pnpm run dev
 
 .PHONY: mobile
 # Open this machine's LAN IP on :5173 (`ipconfig getifaddr en0`). Emptying
@@ -127,32 +127,31 @@ mobile: ## Run the web dev server for testing from a phone on this network
 	cd web && NEXT_PUBLIC_API_BASE_URL= NEXT_PUBLIC_PRELUDE_APP_ID="$(PRELUDE_APP_ID)" \
 		NEXT_PUBLIC_PRELUDE_SDK_KEY="$(PRELUDE_SDK_KEY)" \
 		NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" \
-		NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID="$(PRELUDE_OTP_LOGIN_CONFIG_ID)" npm run dev
+		NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID="$(PRELUDE_OTP_LOGIN_CONFIG_ID)" pnpm run dev
 
 .PHONY: install
 install: ## Install frontend dependencies
-	cd web && npm install
+	cd web && pnpm install
 
 .PHONY: test-web
 test-web: ## Run frontend unit tests
-	cd web && npm run test
+	cd web && pnpm run test
 
 .PHONY: lint-web
 lint-web: ## Typecheck and lint the frontend
-	cd web && npm run typecheck && npm run lint
+	cd web && pnpm run typecheck && pnpm run lint
 
 .PHONY: icons
-# sharp and png-to-ico are installed ad hoc so `npm ci` does not pay for them.
-# Not `npx -p`: that install is not on node's ESM resolution path.
+# web/icons is a pnpm project of its own; its package.json says why.
 icons: ## Regenerate the app icons and og card from web/icons/*.svg
-	cd web/icons && npm install --no-save sharp png-to-ico && node generate.mjs
+	cd web/icons && pnpm install --frozen-lockfile && node generate.mjs
 
 .PHONY: e2e
-# Playwright starts its own `npm run dev`, so the session domain has to be mapped
+# Playwright starts its own `pnpm run dev`, so the session domain has to be mapped
 # here too: without it the browser signs in against the default host while the
 # API expects the custom issuer, and every signed-in spec fails on a valid login.
 e2e: ## Run the Playwright smoke suite (needs Prelude credentials, see README)
-	cd web && NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" npm run e2e
+	cd web && NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN="$(PRELUDE_SESSION_DOMAIN)" pnpm run e2e
 
 .PHONY: deploy-check
 deploy-check: ## Validate .do/app.yaml against the DigitalOcean API, changing nothing

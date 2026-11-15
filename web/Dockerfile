@@ -12,8 +12,12 @@ FROM node:${NODE_VERSION}-alpine AS build
 WORKDIR /app
 
 # Lockfile-only install layer, reused whenever dependencies are unchanged.
-COPY package.json package-lock.json ./
-RUN npm ci
+# pnpm-workspace.yaml carries the build-script policy, without which the
+# install refuses to finish. Node 26 ships no corepack, so pnpm is installed
+# with npm at the version `packageManager` pins, read rather than repeated.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN npm install -g "$(node -p 'require("./package.json").packageManager')" \
+    && pnpm install --frozen-lockfile
 
 COPY . .
 
@@ -44,7 +48,7 @@ ENV NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID=$NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFI
 # under this same path at run time. That one is created by the running process
 # for itself, so dropping the build cache here does not switch it off — and
 # there is nothing to carry over, a build having no API to have fetched from.
-RUN npm run build && rm -rf .next/cache
+RUN pnpm run build && rm -rf .next/cache
 
 # --- runtime -----------------------------------------------------------------
 # A Node runtime rather than the nginx one this image used to end in: the app is
@@ -60,8 +64,9 @@ ENV NODE_ENV=production
 # Production dependencies only. `next start` needs `next` itself and nothing
 # that built the app, and it reads next.config.ts with its own bundled
 # toolchain, so typescript does not have to be here for a .ts config.
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN npm install -g "$(node -p 'require("./package.json").packageManager')" \
+    && pnpm install --frozen-lockfile --prod
 
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
@@ -75,4 +80,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
 # CMD rather than ENTRYPOINT, for the reason .do/app.yaml gives about the API
 # image: `run_command` replaces a component's command, and with an ENTRYPOINT in
 # place it may be appended to it as arguments instead.
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]

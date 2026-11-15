@@ -580,7 +580,7 @@ Token verification is tested against a locally generated key set served by
 Browsers are downloaded separately, once:
 
 ```bash
-cd web && npx playwright install chromium
+cd web && pnpm exec playwright install chromium
 make e2e
 ```
 
