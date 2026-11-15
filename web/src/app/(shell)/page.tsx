@@ -139,9 +139,9 @@ function canonicalUuid(id: string): string {
   ].join("-");
 }
 
-/** "12 songs", or "songs" when the API did not count them. */
+/** "12 songs". The API omits a count of zero rather than leaving one uncounted. */
 function songsOf(count: number | undefined): string {
-  return count === undefined ? "songs" : songCount(count);
+  return songCount(count ?? 0);
 }
 
 /** What a result or a link preview says about the view, beyond the site's own words. */

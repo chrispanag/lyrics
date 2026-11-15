@@ -84,12 +84,12 @@ export function makePerson(overrides: Partial<Person> = {}): Person {
   };
 }
 
+/** No `song_count` unless given: the API omits a count of zero. */
 export function makeGenre(overrides: Partial<Genre> = {}): Genre {
   return {
     id: "genre-1",
     name: "Ρεμπέτικο",
     slug: "rempetiko",
-    song_count: 0,
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
     ...overrides,
