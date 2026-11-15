@@ -1,7 +1,6 @@
 // @vitest-environment node
-import { type DehydratedState, HydrationBoundary } from "@tanstack/react-query";
+import type { DehydratedState } from "@tanstack/react-query";
 import { HttpResponse, http } from "msw";
-import type { ReactElement } from "react";
 import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,7 +8,9 @@ import { keys } from "@/api/hooks";
 import { RouteParams } from "@/lib/navigation";
 import { TestProviders } from "@/test/TestProviders";
 import { API, apiError, makeSong, makeUnaddressedSong, songByRef } from "@/test/handlers";
+import { hanging, shortenReadBudget } from "@/test/readBudget";
 import { server } from "@/test/server";
+import { handover, structuredData } from "@/test/serverTree";
 
 /*
  * Pins the route's wiring (the 308, the absent title, the JSON-LD, the song
@@ -58,25 +59,6 @@ const props = (id: string, search: Record<string, string | string[]> = {}) => ({
   searchParams: Promise.resolve(search),
 });
 
-/** The page's top-level elements, a `false` from each `&&` left out. */
-function topLevel(tree: ReactElement): ReactElement<Record<string, unknown>>[] {
-  return (tree.props as { children: unknown[] }).children.flat().filter(Boolean) as ReactElement<
-    Record<string, unknown>
-  >[];
-}
-
-/** The JSON-LD script's body, or null when the page rendered no script at all. */
-function structuredData(tree: ReactElement): string | null {
-  const script = topLevel(tree).find((node) => node.props.type === "application/ld+json");
-  const inner = script?.props.dangerouslySetInnerHTML as { __html: string } | undefined;
-  return inner?.__html ?? null;
-}
-
-/** The page's top-level element of a given component, if it rendered one. */
-function child<P>(tree: ReactElement, type: unknown): ReactElement<P> | undefined {
-  return topLevel(tree).find((node) => node.type === type) as ReactElement<P> | undefined;
-}
-
 beforeEach(() => server.use(servingSong()));
 
 describe("a song's server-rendered document", () => {
@@ -119,10 +101,7 @@ describe("a song's server-rendered document", () => {
   it("renders the song page, handed the song it read", async () => {
     const tree = await SongPage(props(SLUG));
 
-    const boundary = child<{ children: ReactElement; state?: DehydratedState }>(
-      tree,
-      HydrationBoundary,
-    );
+    const boundary = handover(tree);
     expect(boundary?.props.children.type).toBe(SongDetailPage);
     const entries = boundary?.props.state?.queries ?? [];
     expect(entries).toHaveLength(1);
@@ -170,7 +149,7 @@ describe("a song's server-rendered document", () => {
 
     const tree = await SongPage(props(SLUG));
 
-    expect(child(tree, HydrationBoundary)).toBeDefined();
+    expect(handover(tree)).toBeDefined();
   });
 
   it("renders the page to ask again, rather than redirecting, when the song cannot be read", async () => {
@@ -180,8 +159,19 @@ describe("a song's server-rendered document", () => {
     const tree = await SongPage(props(UUID, { list: "list-1" }));
 
     expect(structuredData(tree)).toBeNull();
-    expect(child<{ state?: unknown }>(tree, HydrationBoundary)?.props.state).toBeUndefined();
+    expect(handover(tree)?.props.state).toBeUndefined();
     expect(await generateMetadata(props(UUID))).toEqual({});
+  });
+
+  it("gives up on an API that hangs rather than fails, within its budget", async () => {
+    shortenReadBudget();
+    server.use(hanging(`${API}/api/v1/songs/:ref`));
+
+    // Past the budget the read is an outage: the page, never a 404.
+    const tree = await SongPage(props(SLUG));
+
+    expect(structuredData(tree)).toBeNull();
+    expect(handover(tree)?.props.state).toBeUndefined();
   });
 
   it("refuses a song carrying no address rather than redirecting to one", async () => {

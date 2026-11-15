@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { cache } from "react";
 
-import { ApiError, apiFetch } from "@/api/client";
+import { apiFetch, guestRead, isNotFound } from "@/api/client";
 import { keys } from "@/api/hooks";
 import { songByline } from "@/lib/credits";
 import { songJsonLd } from "@/lib/jsonLd";
@@ -40,11 +40,10 @@ function songApiPath(ref: string): string {
  * when the API says no song has the address.
  *
  * `cache` shares one request, and that throw, between `generateMetadata` and
- * the render. Only the API's own `not_found` 404s: a bare 404 from whatever
- * sits in front of the API, or the router's `no_route` when an ingress drops
- * the /api prefix, is an outage, and an outage must not 404 a real song.
- * An outage renders the page with no song handed over, and the browser asks
- * again and says so in its own words. A server render is always a guest, hence `anonymous`.
+ * the render. Only the API's own `not_found` 404s (`isNotFound`): an outage
+ * must not 404 a real song. An outage, a read past `guestRead`'s budget
+ * included, renders the page with no song handed over, and the browser asks
+ * again and says so in its own words.
  *
  * A song with no `slug` (an API older than migration 000010) is also null:
  * otherwise `songHref` builds `/songs/undefined` for the 308, the canonical and
@@ -53,14 +52,12 @@ function songApiPath(ref: string): string {
 const loadSong = cache(async (ref: string): Promise<Song | null> => {
   try {
     const song = await apiFetch<Song>(songApiPath(ref), {
-      anonymous: true,
+      ...guestRead(),
       revalidate: CACHE_SECONDS,
     });
     return song.slug ? song : null;
   } catch (caught) {
-    if (caught instanceof ApiError && caught.status === 404 && caught.code === "not_found") {
-      notFound();
-    }
+    if (isNotFound(caught)) notFound();
     return null;
   }
 });
