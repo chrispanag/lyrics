@@ -101,6 +101,22 @@ export function extractVideoId(raw: string): string | null {
   return VIDEO_PATHS.has(shape) && VIDEO_ID.test(id) ? id : null;
 }
 
+/**
+ * The canonical watch link for a stored video id.
+ *
+ * Here rather than in `WatchOnYouTube` because that component is no longer the
+ * only thing that builds one: the JSON-LD a song page server-renders names the
+ * same video, and the promise that component's own comment makes — that the
+ * canonical shape is written in one place per stack — is precisely what a second
+ * copy ends. The id is encoded for the reason stated there: on the eleven
+ * characters both write paths validate, encoding is the identity, so it changes
+ * nothing today and is what keeps the destination inside YouTube for every
+ * writer there will ever be.
+ */
+export function watchUrl(videoId: string): string {
+  return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+}
+
 /** `strings.Trim(path, "/")`, which is what the server splits its segments off. */
 function trimSlashes(path: string): string {
   return path.replace(/^\/+|\/+$/g, "");

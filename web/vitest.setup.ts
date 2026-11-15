@@ -8,8 +8,10 @@ import { server } from "./src/test/server";
 /**
  * Whether this file is running for a spec with a DOM under it.
  *
- * All but one are: `serverRender.test.tsx` asks for `@vitest-environment node`,
- * and is the whole reason this guard exists. A setup file still runs for it,
+ * All but two are: `serverRender.test.tsx` and `app/sitemap.test.ts` ask for
+ * `@vitest-environment node`, and the first is the whole reason this guard
+ * exists — the second is a spec that reaches the API through `api/client.ts`'s
+ * *server* branch and could only ever run here. A setup file still runs for them,
  * and `window.scrollTo` and `localStorage.clear()` throw there — taking the
  * spec down before it asserted anything, which is the opposite of what a spec
  * run without a browser is for. The rest of the block is merely pointless in

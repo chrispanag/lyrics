@@ -32,6 +32,12 @@ ENV NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID=$NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFI
 # `cache-to: mode=max` exports along with every other stage's layers. The
 # `COPY . .` above invalidates it on any source change anyway, so there is
 # nothing to keep it for.
+#
+# "Never reads it" is about the *build* cache and not the whole directory: the
+# `revalidate` a song page passes `apiFetch` writes Next's fetch data cache
+# under this same path at run time. That one is created by the running process
+# for itself, so dropping the build cache here does not switch it off — and
+# there is nothing to carry over, a build having no API to have fetched from.
 RUN npm run build && rm -rf .next/cache
 
 # --- runtime -----------------------------------------------------------------

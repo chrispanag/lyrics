@@ -59,6 +59,16 @@ services:
         NEXT_PUBLIC_PRELUDE_SDK_KEY: ${PRELUDE_SDK_KEY:-}
         NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN: ${PRELUDE_SESSION_DOMAIN:-}
         NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID: ${PRELUDE_OTP_LOGIN_CONFIG_ID:-}
+    # Where the Node process itself reaches the API, for the fetches a server
+    # render makes — a song's metadata and the sitemap. It belongs here and not
+    # in the build args above: it is read at run time, so dropped into that block
+    # it would silently do nothing, there being no matching ARG/ENV pair in
+    # web/Dockerfile and deliberately so. Nothing is inlined into the bundle from
+    # it, which is why it carries no NEXT_PUBLIC_ prefix. On the compose network
+    # the API is reachable by service name; a browser still talks to :5173 and
+    # :8080 through the published ports.
+    environment:
+      API_ORIGIN: http://api:8080
     # The container listens on 3000 now that `next start` serves the app rather
     # than nginx. The published port stays 5173, which is what the API's
     # CORS_ORIGINS default above names.
