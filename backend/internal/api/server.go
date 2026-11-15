@@ -74,6 +74,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/songs/{id}", httpx.Handler(s.handleGetSong))
 			r.Get("/people", httpx.Handler(s.handleListPeople))
 			r.Get("/people/{id}", httpx.Handler(s.handleGetPerson))
+			r.Get("/credited-people", httpx.Handler(s.handleCreditedPeople))
 			r.Get("/genres", httpx.Handler(s.handleListGenres))
 			r.Get("/lists/{id}", httpx.Handler(s.handleGetList))
 			r.Get("/public-lists", httpx.Handler(s.handlePublicLists))

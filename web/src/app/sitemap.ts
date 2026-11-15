@@ -1,9 +1,10 @@
 import type { MetadataRoute } from "next";
 
 import { apiFetch, toQuery } from "@/api/client";
-import { listHref, songHref } from "@/lib/listContext";
+import { genrePageHref, personPageHref } from "@/lib/browse";
+import { isUuid, listHref, songHref } from "@/lib/listContext";
 import { SITE_ORIGIN } from "@/lib/site";
-import type { ListResponse, PublicList, Song } from "@/lib/types";
+import type { CreditedPerson, Genre, ListResponse, PublicList, Song } from "@/lib/types";
 
 // Absolute URLs throughout: `metadataBase` is not read here.
 
@@ -17,21 +18,23 @@ const PAGE = 100;
 type Entry = MetadataRoute.Sitemap[number];
 
 /**
- * The catalog's address, every song's and every public list's, or the static
- * routes alone.
+ * The catalog's address, every genre's and every person's catalog page, every
+ * song's and every public list's, or the static routes alone.
  *
- * All or nothing, across both walks: a sitemap missing half the songs, or
+ * All or nothing, across every read: a sitemap missing half the songs, or
  * every list, looks exactly like a smaller catalog. The cause is logged, since
  * nothing else reports it.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const home = { url: `${SITE_ORIGIN}/` };
   try {
-    const [songs, lists] = await Promise.all([
+    const [genres, people, songs, lists] = await Promise.all([
+      genreEntries(),
+      walk<CreditedPerson>("/api/v1/credited-people", {}, personEntry),
       walk<Song>("/api/v1/songs", { sort: "oldest" }, songEntry),
       walk<PublicList>("/api/v1/public-lists", {}, listEntry),
     ]);
-    return [home, ...songs, ...lists];
+    return [home, ...genres, ...people, ...songs, ...lists];
   } catch (caught) {
     console.error("sitemap: could not enumerate the catalog", caught);
     return [home];
@@ -39,10 +42,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 }
 
 /**
- * Every row of a paginated collection, as sitemap entries. Both collections
- * walk a total order in which new rows append (`sort=oldest` for songs, the
- * only order `/public-lists` has), so pages cannot shift and the first
- * answer's `meta.total` fixes every offset up front.
+ * Every row of a paginated collection, as sitemap entries. Each collection
+ * walks a total order in which new rows append (`sort=oldest` for songs, the
+ * only order `/credited-people` and `/public-lists` have), so pages cannot
+ * shift and the first answer's `meta.total` fixes every offset up front.
  */
 async function walk<T>(
   path: string,
@@ -64,6 +67,30 @@ function offsetsAfterFirst(total: number): number[] {
   const offsets: number[] = [];
   for (let offset = PAGE; offset < total; offset += PAGE) offsets.push(offset);
   return offsets;
+}
+
+/**
+ * Every genre on a song, from the unpaginated `/genres` in one read. Neither
+ * this nor a person carries a `lastModified`: a song deleted, or a credit or
+ * genre removed from one, changes the page and leaves no date behind, so any
+ * date derived from the songs would claim the page older than it is.
+ */
+async function genreEntries(): Promise<Entry[]> {
+  const { data } = await apiFetch<ListResponse<Genre>>("/api/v1/genres", { anonymous: true });
+  return data.flatMap((genre) => {
+    // Thrown, not dropped, as a song with no slug is.
+    if (!genre.slug) throw new Error(`genre ${genre.id} has no slug`);
+    // The API omits a count of zero.
+    return (genre.song_count ?? 0) > 0
+      ? [{ url: `${SITE_ORIGIN}${genrePageHref(genre.slug)}` }]
+      : [];
+  });
+}
+
+/** A person's page, under the address their catalog page names as canonical. */
+function personEntry(person: CreditedPerson): Entry {
+  if (!isUuid(person.id)) throw new Error(`credited person has no usable id: ${person.id}`);
+  return { url: `${SITE_ORIGIN}${personPageHref(person.id)}` };
 }
 
 /**

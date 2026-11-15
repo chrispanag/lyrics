@@ -193,3 +193,10 @@ type PublicList struct {
 	ID        uuid.UUID `json:"id"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+// CreditedPerson is what anyone may enumerate about a person on at least one
+// song: the id their catalog page is addressed by, and nothing else (no date:
+// web/src/app/sitemap.ts says why).
+type CreditedPerson struct {
+	ID uuid.UUID `json:"id"`
+}

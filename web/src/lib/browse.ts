@@ -21,6 +21,20 @@ export function browseHref(filters: Pick<SongFilters, "q" | "person" | "genre_sl
   return query ? `/?${query}` : "/";
 }
 
+/**
+ * The address a person's catalog page is canonical under. The route's
+ * canonical and the sitemap both build it here, so the two cannot name one
+ * page in two spellings.
+ */
+export function personPageHref(personId: string): string {
+  return browseHref({ person: personId });
+}
+
+/** The address a genre's catalog page is canonical under; see `personPageHref`. */
+export function genrePageHref(slug: string): string {
+  return browseHref({ genre_slug: slug });
+}
+
 export const PAGE_SIZE = 20;
 
 const SORTS = ["relevance", "title", "newest", "oldest"] as const;

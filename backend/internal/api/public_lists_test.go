@@ -5,7 +5,6 @@ import (
 	"maps"
 	"net/http"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -99,7 +98,7 @@ func TestPublicListsWalkInAStableOrder(t *testing.T) {
 		})
 	}
 	slices.SortFunc(seeded, func(a, b store.List) int {
-		return cmp.Or(a.CreatedAt.Compare(b.CreatedAt), strings.Compare(a.ID.String(), b.ID.String()))
+		return cmp.Or(a.CreatedAt.Compare(b.CreatedAt), compareUUID(a.ID, b.ID))
 	})
 	want := make([]uuid.UUID, len(seeded), len(seeded)+1)
 	for i, l := range seeded {

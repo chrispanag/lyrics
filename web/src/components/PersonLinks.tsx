@@ -1,4 +1,4 @@
-import { browseHref } from "@/lib/browse";
+import { personPageHref } from "@/lib/browse";
 import { Link } from "@/lib/navigation";
 
 /**
@@ -22,7 +22,7 @@ export function PersonLinks({
         <span key={person.person_id}>
           {index > 0 && ", "}
           <Link
-            href={browseHref({ person: person.person_id })}
+            href={personPageHref(person.person_id)}
             // Lets a modal close itself, since the navigation happens beneath it.
             onClick={onNavigate}
             className="hover:text-fg-accent hover:underline"

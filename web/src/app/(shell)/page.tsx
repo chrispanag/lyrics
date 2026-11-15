@@ -4,7 +4,14 @@ import { cache } from "react";
 
 import { guestRead, isNotFound } from "@/api/client";
 import { queries } from "@/api/hooks";
-import { type CatalogView, browseHref, catalogName, catalogView, viewGenre } from "@/lib/browse";
+import {
+  type CatalogView,
+  catalogName,
+  catalogView,
+  genrePageHref,
+  personPageHref,
+  viewGenre,
+} from "@/lib/browse";
 import { songCount } from "@/lib/format";
 import { websiteJsonLd } from "@/lib/jsonLd";
 import { type NextSearchParams, isUuid, searchFrom } from "@/lib/listContext";
@@ -112,9 +119,9 @@ function canonicalOf(view: CatalogView, named: Named): string | undefined {
       // Unread for an outage, the address's own spelling is normalized instead.
       return named.personUnknown
         ? undefined
-        : browseHref({ person: named.person?.id ?? canonicalUuid(view.personId) });
+        : personPageHref(named.person?.id ?? canonicalUuid(view.personId));
     case "genre":
-      return named.genreUnknown ? undefined : browseHref({ genre_slug: view.genreSlug });
+      return named.genreUnknown ? undefined : genrePageHref(view.genreSlug);
     default:
       return undefined;
   }
@@ -132,9 +139,9 @@ function canonicalUuid(id: string): string {
   ].join("-");
 }
 
-/** "12 songs", or "songs" when the API did not count them. */
+/** "12 songs". The API omits a count of zero rather than leaving one uncounted. */
 function songsOf(count: number | undefined): string {
-  return count === undefined ? "songs" : songCount(count);
+  return songCount(count ?? 0);
 }
 
 /** What a result or a link preview says about the view, beyond the site's own words. */

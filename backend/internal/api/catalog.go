@@ -83,6 +83,21 @@ func (s *Server) handleListPeople(w http.ResponseWriter, r *http.Request) error 
 	return nil
 }
 
+// handleCreditedPeople enumerates the id of every person on at least one song,
+// for the sitemap's catalog pages. Guest-readable, paginated, oldest first.
+// Its own route rather than a mode of /people because the walk wants ids
+// alone, without the per-row song count every /people row computes.
+func (s *Server) handleCreditedPeople(w http.ResponseWriter, r *http.Request) error {
+	limit, offset := httpx.Pagination(r.URL.Query())
+
+	people, total, err := s.store.CreditedPeople(r.Context(), limit, offset)
+	if err != nil {
+		return storeError(err, "People")
+	}
+	httpx.JSON(w, http.StatusOK, httpx.NewListResponse(people, total, limit, offset))
+	return nil
+}
+
 func (s *Server) handleGetPerson(w http.ResponseWriter, r *http.Request) error {
 	id, err := urlUUID(r)
 	if err != nil {
