@@ -1,4 +1,4 @@
-import { useRef, useState, type SubmitEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Pencil, Plus, Tags, Trash } from "lucide-react";
 
@@ -221,7 +221,6 @@ export function AdminGenresPage() {
   const [sheet, setSheet] = useState<GenreSheet | null>(null);
   const [name, setName] = useState("");
   const [failure, setFailure] = useState<Failure | null>(null);
-  const nameField = useRef<HTMLInputElement>(null);
 
   // Clears the last attempt's failure, or a rename opens under a create's error.
   const openSheet = (next: GenreSheet) => {
@@ -323,14 +322,14 @@ export function AdminGenresPage() {
       </ul>
 
       {nameForm && (
-        <Sheet open onClose={closeSheet} title={nameForm.title} initialFocus={nameField}>
+        <Sheet open onClose={closeSheet} title={nameForm.title}>
           <form onSubmit={onSubmitName} className="space-y-4">
             {failure && <ErrorMessage>{failure.message}</ErrorMessage>}
             <Field label="Name" htmlFor="genre-name" error={failure?.field} hint={nameForm.hint}>
               <Input
-                ref={nameField}
                 id="genre-name"
                 required
+                autoFocus
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder={nameForm.placeholder}

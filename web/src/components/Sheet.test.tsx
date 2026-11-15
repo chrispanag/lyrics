@@ -1,9 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { StrictMode, useRef, useState } from "react";
+import { StrictMode, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { Sheet } from "./ui";
+import { Input, Sheet } from "./ui";
 import { modalIsOpen } from "@/lib/modal";
 
 /*
@@ -13,7 +13,6 @@ import { modalIsOpen } from "@/lib/modal";
 
 function Harness({ onClose, mounted = true }: { onClose?: () => void; mounted?: boolean }) {
   const [open, setOpen] = useState(false);
-  const field = useRef<HTMLInputElement>(null);
   const close = () => {
     onClose?.();
     setOpen(false);
@@ -25,8 +24,8 @@ function Harness({ onClose, mounted = true }: { onClose?: () => void; mounted?: 
       </button>
       {/* `mounted={false}` is the `{cond && <Sheet open />}` shape two pages use. */}
       {(mounted || open) && (
-        <Sheet open={open} onClose={close} title="Example" initialFocus={field}>
-          <input ref={field} aria-label="Name" />
+        <Sheet open={open} onClose={close} title="Example">
+          <Input autoFocus aria-label="Name" />
         </Sheet>
       )}
     </>
@@ -48,7 +47,9 @@ describe("Sheet", () => {
     expect(document.body.style.overflow).toBe("hidden");
   });
 
-  it("starts on `initialFocus` and hands focus back to the opener", async () => {
+  // `autoFocus` runs during the commit; mounted with `showModal()` rather than
+  // after it, the field is recorded as the opener and focus never comes home.
+  it("starts on an `autoFocus` field and hands focus back to the opener", async () => {
     const user = userEvent.setup();
     render(<Harness />);
     const opener = screen.getByRole("button", { name: "Open" });

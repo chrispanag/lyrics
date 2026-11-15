@@ -1,4 +1,4 @@
-import { type ComponentProps, type ReactNode, type RefObject, useId } from "react";
+import { type ComponentProps, type ReactNode, useId } from "react";
 import { LoaderCircle, X } from "lucide-react";
 
 import { buttonClasses, type ButtonSize, type ButtonVariant } from "./buttonStyles";
@@ -260,23 +260,22 @@ export function ErrorMessage({ children }: { children: ReactNode }) {
  * opener. It stays mounted while closed, because `close()` is what does that
  * last part; the content does not, so a sheet still opens fresh.
  *
- * For a field to start focused pass `initialFocus`, never `autoFocus`; see
- * `useDialog` in lib/modal.ts.
+ * The header is always there, so `showModal()` starts focus on Close; the
+ * content mounts once the dialog is open, so an `autoFocus` field in it then
+ * takes focus without being mistaken for the opener (`useDialog`).
  */
 export function Sheet({
   open,
   onClose,
   title,
-  initialFocus,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
-  initialFocus?: RefObject<HTMLElement | null>;
   children: ReactNode;
 }) {
-  const dialog = useDialog({ open, onClose, initialFocus });
+  const [dialog, shown] = useDialog({ open, onClose });
   const titleId = useId();
 
   return (
@@ -295,26 +294,22 @@ export function Sheet({
         "backdrop:bg-black/40 backdrop:backdrop-blur-sm",
       )}
     >
-      {open && (
-        <>
-          <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4 dark:border-stone-800">
-            <h2 id={titleId} className="text-base font-semibold">
-              {title}
-            </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="rounded-full p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"
-            >
-              <X aria-hidden className="size-5" />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-safe">
-            {children}
-          </div>
-        </>
-      )}
+      <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4 dark:border-stone-800">
+        <h2 id={titleId} className="text-base font-semibold">
+          {title}
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="rounded-full p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"
+        >
+          <X aria-hidden className="size-5" />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-safe">
+        {shown && children}
+      </div>
     </dialog>
   );
 }

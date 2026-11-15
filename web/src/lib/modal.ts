@@ -5,6 +5,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
 } from "react";
 
 /*
@@ -66,7 +67,7 @@ export function useModal({
   open: boolean;
   onClose: () => void;
   /** Given focus while the modal is up. */
-  focus?: RefObject<HTMLElement | null>;
+  focus: RefObject<HTMLElement | null>;
 }): ModalMarking {
   useScrollLock(open);
 
@@ -84,7 +85,7 @@ export function useModal({
     if (!open) return;
 
     const opener = document.activeElement;
-    focus?.current?.focus();
+    focus.current?.focus();
 
     return () => {
       if (opener instanceof HTMLElement) opener.focus();
@@ -95,7 +96,7 @@ export function useModal({
 }
 
 /** Props for the `<dialog>` that `useDialog` drives. */
-export interface DialogProps {
+interface DialogProps {
   ref: RefObject<HTMLDialogElement | null>;
   closedby: "any";
   onClose: (event: SyntheticEvent<HTMLDialogElement>) => void;
@@ -126,21 +127,20 @@ function outside(event: PointerEvent<HTMLDialogElement>): boolean {
  * instead drops focus on `<body>`, which is why the layout cleanup closes it
  * first — it runs before React removes the element.
  *
- * `initialFocus` stands in for `autofocus`, which React never writes as an
- * attribute: it focuses from script during the commit, before the dialog is
- * open, so `showModal()` would record the field as the opener and then move
- * focus off it. Do not put `autoFocus` inside a dialog.
+ * Returns the props and whether the content may mount, which is only once the
+ * dialog is open. React's `autoFocus` focuses from script during the commit, so
+ * a field mounted alongside `showModal()` would be focused first and recorded
+ * as the opener; mounted a render later, it lands in an open dialog.
  */
 export function useDialog({
   open,
   onClose,
-  initialFocus,
 }: {
   open: boolean;
   onClose: () => void;
-  initialFocus?: RefObject<HTMLElement | null> | undefined;
-}): DialogProps {
+}): [DialogProps, boolean] {
   const ref = useRef<HTMLDialogElement>(null);
+  const [shown, setShown] = useState(false);
   // Whether the prop still wants the dialog open: a `close` event after the
   // prop has already said so is the echo of our own `close()`, not news.
   const wanted = useRef(false);
@@ -154,15 +154,16 @@ export function useDialog({
 
     wanted.current = true;
     dialog.showModal();
-    initialFocus?.current?.focus();
+    setShown(true);
 
     return () => {
       wanted.current = false;
+      setShown(false);
       if (dialog.open) dialog.close();
     };
-  }, [open, initialFocus]);
+  }, [open]);
 
-  return {
+  const props: DialogProps = {
     ref,
     // Light dismiss where supported; Safari gets the pointer fallback below.
     closedby: "any",
@@ -182,4 +183,5 @@ export function useDialog({
       pressedOutside.current = false;
     },
   };
+  return [props, open && shown];
 }

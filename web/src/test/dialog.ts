@@ -25,10 +25,10 @@ function onKeyDown(event: KeyboardEvent) {
 export function installDialogStub() {
   const proto = HTMLDialogElement.prototype;
   const matches = Element.prototype.matches;
+  document.addEventListener("keydown", onKeyDown);
 
   proto.showModal = function showModal(this: HTMLDialogElement) {
     if (this.open) return;
-    if (openers.size === 0) document.addEventListener("keydown", onKeyDown);
     openers.set(this, document.activeElement);
     this.setAttribute("open", "");
     this.querySelector<HTMLElement>(FOCUSABLE)?.focus();
@@ -38,7 +38,6 @@ export function installDialogStub() {
     if (!this.open) return;
     const opener = openers.get(this);
     openers.delete(this);
-    if (openers.size === 0) document.removeEventListener("keydown", onKeyDown);
     this.removeAttribute("open");
     if (opener instanceof HTMLElement) opener.focus();
     // A queued task, as in a browser: it arrives after the commit that closed it.

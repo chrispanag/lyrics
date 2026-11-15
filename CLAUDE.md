@@ -1254,10 +1254,11 @@ each of them is written down.
   does not), because `close()` is what returns focus; an open dialog removed
   from the DOM drops focus on `<body>`. Two pages mount a sheet only while open,
   which is why the hook closes it in a *layout* cleanup — that runs before React
-  removes the element. Second, **`autoFocus` must not be used inside one**:
-  React focuses from script during the commit, before `showModal()` runs, so the
-  dialog records the field as its opener and focus never comes home. Pass
-  `initialFocus` instead. Third, **the native `close` event is reported through
+  removes the element. Second, **the content mounts a render after
+  `showModal()`**, which is the `shown` state the hook returns. React's
+  `autoFocus` focuses from script during the commit, so a field mounted in the
+  same commit is focused before the dialog opens, gets recorded as the opener,
+  and focus never comes home. Third, **the native `close` event is reported through
   `onClose` only while the prop still wants the dialog open and the dialog is
   actually closed** — the event is a queued task, so without the first check
   every close the prop asked for echoes back as a second request, and without

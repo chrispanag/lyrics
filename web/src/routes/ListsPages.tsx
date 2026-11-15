@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState, useSyncExternalStore, type SubmitEvent } from "react";
+import { lazy, Suspense, useState, useSyncExternalStore, type SubmitEvent } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash } from "lucide-react";
 
@@ -78,7 +78,6 @@ export function ListsPage() {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
-  const nameField = useRef<HTMLInputElement>(null);
 
   const onCreate = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -142,19 +141,14 @@ export function ListsPage() {
         ))}
       </ul>
 
-      <Sheet
-        open={creating}
-        onClose={() => setCreating(false)}
-        title="New list"
-        initialFocus={nameField}
-      >
+      <Sheet open={creating} onClose={() => setCreating(false)} title="New list">
         <form onSubmit={onCreate} className="space-y-4">
           {error && <ErrorMessage>{error}</ErrorMessage>}
           <Field label="Name" htmlFor="list-name">
             <Input
-              ref={nameField}
               id="list-name"
               required
+              autoFocus
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Rebetika favourites"
@@ -194,7 +188,6 @@ export function ListDetailPage() {
   const [naming, setNaming] = useState(false);
   const [copyName, setCopyName] = useState("");
   const [copyError, setCopyError] = useState("");
-  const copyNameField = useRef<HTMLInputElement>(null);
   // A server render has no `window`: its snapshot is "" and the browser's
   // answer follows on hydration. The origin never changes, so there is
   // nothing to subscribe to.
@@ -447,7 +440,6 @@ export function ListDetailPage() {
           setCopyError("");
         }}
         title="Name your copy"
-        initialFocus={copyNameField}
       >
         <form
           className="space-y-4"
@@ -459,9 +451,9 @@ export function ListDetailPage() {
           {copyError && <ErrorMessage>{copyError}</ErrorMessage>}
           <Field label="Name" htmlFor="copy-name">
             <Input
-              ref={copyNameField}
               id="copy-name"
               required
+              autoFocus
               value={copyName}
               onChange={(event) => setCopyName(event.target.value)}
             />
