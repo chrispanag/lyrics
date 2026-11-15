@@ -2,7 +2,7 @@ import { act, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Link, pathMatches, useNavigationKey, useRouter } from "./navigation";
+import { Link, pathMatches, useNavigationKey, useRouter, useSetSearchParams } from "./navigation";
 import { renderWithProviders } from "@/test/render";
 import { CurrentAddress } from "@/test/routes";
 
@@ -130,6 +130,63 @@ describe("canGoBack", () => {
   it("ignores the browser's own history from before the page loaded", () => {
     vi.stubGlobal("navigation", { canGoBack: true });
     renderWithProviders(<Probe />, { route: "/songs/a" });
+
+    expect(canGoBack()).toBe("false");
+  });
+});
+
+/** Two search-string writes in one event, before anything re-renders. */
+function SearchWriter() {
+  const setParams = useSetSearchParams();
+  const router = useRouter();
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setParams((next) => next.set("q", "agapi"), { replace: true });
+          setParams((next) => next.set("genre", "laiko"));
+        }}
+      >
+        Both
+      </button>
+      <button type="button" onClick={() => router.back()}>
+        Back
+      </button>
+      <p data-testid="back">{String(router.canGoBack())}</p>
+      <CurrentAddress />
+    </>
+  );
+}
+
+describe("useSetSearchParams", () => {
+  // The catalog's debounced query and a filter can land in one render window:
+  // each write has to start from the address the one before it left, or the
+  // second puts back what the first took out.
+  it("keeps both of two writes made before a re-render", async () => {
+    renderWithProviders(<SearchWriter />, { route: "/?page=2" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Both" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/?page=2&q=agapi&genre=laiko");
+  });
+
+  // Each write keeps its own history: the replace took the entry it was on,
+  // so Back from the push lands on it and not on the address before both.
+  it("keeps each write's own history", async () => {
+    renderWithProviders(<SearchWriter />, { route: ["/songs/a", "/?page=2"] });
+
+    await userEvent.click(screen.getByRole("button", { name: "Both" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/?page=2&q=agapi");
+  });
+
+  // Not a navigation, so it leaves `canGoBack` where it was.
+  it("is not counted as a navigation", async () => {
+    renderWithProviders(<SearchWriter />, { route: "/" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Both" }));
 
     expect(canGoBack()).toBe("false");
   });

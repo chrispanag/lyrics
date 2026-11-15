@@ -1317,12 +1317,13 @@ screen changed for it.
 
 - **The router is a backend handed in through context.** `NavigationProvider`
   takes a `NavigationBackend` — the address, the params, `push`, `replace`,
-  `back`, and the `Link` component that renders an anchor — and every hook and
+  `back`, `currentHref`, `writeSearch`, `prefetch`, and the `Link` component that renders an anchor — and every hook and
   link in the seam reads it. Production mounts `NextNavigation`
   (`lib/nextNavigation.tsx`, from `app/Providers.tsx`), which fills it from
   `next/navigation` and renders `next/link`; specs and stories mount
   `TestRouter`, an in-memory history in the seam itself whose links are plain
-  anchors. So no spec mocks Next's router and none of the ~550 specs or the
+  anchors. So no spec mocks Next's router — save `nextNavigation.test.tsx`,
+  which tests the backend itself — and none of the ~550 specs or the
   stories changed to move routers, and the Next backend is its own module so
   that nothing a spec or a story loads imports `next/navigation` at all — the
   browser build of Storybook would otherwise pull Next's internals into Vite.
@@ -1355,7 +1356,8 @@ screen changed for it.
   about to go: today a list's neighbors. `Link` and `NavLink` take an `href`
   string and `replace`;
   `usePathname`, `useSearchParams` (read-only) and `useParams` read the address;
-  `useSetSearchParams` writes the search string from what it holds now, and is
+  `useSetSearchParams` writes the search string from what it holds now (at the
+  moment of writing; see below), and is
   not counted as a navigation — through the backend's `writeSearch`, which on
   Next is the History API rather than the router: Next keeps `useSearchParams`
   in step with `pushState`/`replaceState` and asks the server for nothing, where
@@ -1406,6 +1408,26 @@ screen changed for it.
 - **`useSetSearchParams` is not referentially stable**, so `BrowsePage`'s
   debounced-search guard is still what keeps pagination advancing. Making it
   stable would be a promise every backend then has to keep.
+- **A search-string write starts from the address as it is at the moment of
+  writing, never from the last render.** The backend's `pathname` and
+  `searchParams` are a render's snapshot, and two writes can land before the
+  next render — the catalog's debounced query and a filter pressed in the same
+  moment, or any handler that writes twice. Seeded from the snapshot, each
+  started from the same address and the second put back what the first had
+  changed: a filter that silently dropped the query just typed, or the reverse,
+  with nothing on screen saying so. react-router's setter had the same shape,
+  so it predates the move to Next. Hence `currentHref()` on the backend, read
+  at write time: `window.location` on Next, which `writeSearch`'s
+  `pushState`/`replaceState` move at once while `useSearchParams` catches up a
+  render later, and in `TestRouter` a ref each move updates ahead of the render
+  it schedules. `edit` keeps its shape — it already was an updater, handed a
+  copy to change — so no caller changed; only what it is handed did. History is
+  untouched: `replace` still decides each write's entry, and a write is still
+  not a navigation. Pinned from both backends with two writes in one click:
+  `navigation.test.tsx` against `TestRouter`, and `nextNavigation.test.tsx`,
+  the one spec that mounts the production backend, against a stand-in for
+  `next/navigation` whose `useSearchParams` is the render's snapshot, exactly
+  as Next's is. Each fails with the snapshot seeding back.
 - **The seam is one `.tsx` file exporting components beside hooks**, which
   `useComponentExportOnlyModules` forbids everywhere else. It is turned off for
   that file alone in `biome.jsonc`: being one module is the point, and the cost
