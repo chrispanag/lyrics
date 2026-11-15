@@ -86,6 +86,7 @@ beforeEach(() => {
   session.otpConfigId = "otp-config";
   challengeIds = ["challenge-1", "challenge-2", "challenge-3"];
   answerStepUp("review");
+  document.documentElement.removeAttribute(SESSION_ATTRIBUTE);
 });
 
 /**
@@ -151,6 +152,19 @@ describe("AuthProvider", () => {
     // The confirmed profile (no seeded name) replaces the guess.
     expect(await screen.findByText("singer@example.com")).toBeInTheDocument();
     expect(screen.getByText("settled")).toBeInTheDocument();
+  });
+
+  // The boot script keys on presence alone, so a snapshot `storedUser` refuses
+  // still set the hint. Left in place, it would hide Sign in from a guest.
+  it("drops the boot script's hint when the snapshot is refused", () => {
+    localStorage.setItem("lyrics:last-user", "not json at all");
+    document.documentElement.setAttribute(SESSION_ATTRIBUTE, "");
+    session.getAccessToken.mockImplementation(() => new Promise<string | null>(() => {}));
+
+    renderProvider();
+
+    expect(screen.getByText("guest")).toBeInTheDocument();
+    expect(document.documentElement.hasAttribute(SESSION_ATTRIBUTE)).toBe(false);
   });
 
   // A session found dead mid-restore must not stay remembered: the write keys

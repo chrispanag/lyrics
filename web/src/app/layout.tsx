@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 
-import { OG_BASE, SITE_NAME, SITE_ORIGIN, SITE_SUMMARY } from "@/lib/site";
 import { SESSION_BOOT_SCRIPT } from "@/auth/storedUser";
 import { FONT_SIZE_BOOT_SCRIPT } from "@/lib/fontSize";
+import { OG_BASE, SITE_NAME, SITE_ORIGIN, SITE_SUMMARY } from "@/lib/site";
 import { THEME_BOOT_SCRIPT, THEME_COLORS } from "@/lib/theme";
 import "@/styles/index.css";
 

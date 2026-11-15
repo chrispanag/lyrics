@@ -16,9 +16,9 @@ export const SESSION_ATTRIBUTE = "data-session";
 /**
  * Source for the inline <script> app/layout.tsx renders. The server draws every
  * visitor as a guest, so without it a returning reader sees Sign in until the
- * bundle hydrates. Presence only, not `asUser`: a snapshot `storedUser` refuses
- * hides the guest chrome only until `AuthProvider`'s layout effect drops the
- * attribute.
+ * bundle hydrates. Presence only, not `asUser`: a value `storedUser` would
+ * refuse still hides the guest chrome, but only until `AuthProvider`'s layout
+ * effect drops the attribute.
  */
 export const SESSION_BOOT_SCRIPT =
   `try{` +
