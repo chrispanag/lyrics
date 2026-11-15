@@ -53,7 +53,8 @@ export function ProfilePage() {
 
   // Applying the theme is the button's side effect, not a consequence of state
   // changing. As an effect it also re-ran on mount, redoing the matchMedia query
-  // and localStorage write that main.tsx already performed before first paint.
+  // the inline script in app/layout.tsx already ran before first paint, and
+  // writing back to storage the value just read from it.
   const selectTheme = (next: Theme) => {
     setTheme(next);
     applyTheme(next);

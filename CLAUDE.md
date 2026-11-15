@@ -29,7 +29,9 @@ make check       # lint + test, both stacks
 when no database is reachable, so without it a broken schema reports green.
 
 Keep `make check` clean. Backend must be `gofmt`-clean with zero `golangci-lint`
-findings; frontend must have zero `tsc` errors and zero eslint findings
+findings — and `make check` does not run gofmt while CI does, so also run
+`gofmt -l backend`: it exits 0 either way, and CI fails on any file it lists. The
+frontend must have zero `tsc` errors and zero eslint findings
 (warnings included — the fast-refresh warnings are why styles live in their own
 modules, see Conventions).
 
@@ -497,7 +499,7 @@ lean on.
   in ten minutes, a visitor who wandered off comes back to a page still naming
   it, and `retryOTP` on a dead challenge fails for good — so every later attempt
   fails identically and the screen has no way out of a state it cannot describe.
-  `resendPasswordChangeCode` drops the ref and opens a new one when the retry
+  `resendPasswordWriteCode` drops the ref and opens a new one when the retry
   fails, which also covers a first attempt that never opened one at all. The
   swallowed cause goes to the console, because a Prelude outage looks identical
   from here.
@@ -528,8 +530,7 @@ written password needs a mailbox someone can read.
 Prelude has no picture field — a user's `profile` there is an open map of string
 values, and nothing in the product hosts an image — so the picture is ours, like
 `users.role` and `users.email_verified_at`. The parts below hold it up, and none
-of them announces itself. (Deliberately not counted: the count was seven, the
-list was ten before this sentence was written, and a number in prose is the
+of them announces itself. (Deliberately not counted: a number in prose is the
 inventory this file records going stale under Head assets.)
 
 - **`GET /users/{id}/avatar` is public, and has to be.** An `<img>` is not
@@ -1043,15 +1044,16 @@ each of them is written down.
   then `GET /me`, and starting from `null` meant every refresh of a signed-in
   page painted the *guest* answer first: a navigation offering Sign in with no
   Lists in it, a catalog with no Add song, all replaced a few hundred
-  milliseconds later. It is the same trade `applyTheme(storedTheme())` makes in
-  `main.tsx` — paint the last known answer rather than a wrong one — and it is
-  safe for the same reason `hasRole` is: the server is the authority, so a stale
-  role costs one paint of chrome whose every action is refused. No token is ever
-  kept there; the SDK owns those, and `auth/session` says so. What the snapshot
-  must not do is move anybody, which is why **`loading` keeps its exact meaning
-  and every redirect reads it first**: `VerificationGate`, the sign-in and
-  sign-up screens' "already signed in" redirects, and `VerifyEmailPage`'s
-  challenge-opening effect all wait for the restore, and each of them is pinned.
+  milliseconds later. It is the same trade the inline theme script in
+  `app/layout.tsx` makes — paint the last known answer rather than a wrong one —
+  and it is safe for the same reason `hasRole` is: the server is the authority,
+  so a stale role costs one paint of chrome whose every action is refused. No
+  token is ever kept there; the SDK owns those, and `auth/session` says so.
+  What the snapshot must not do is move anybody, which is why **`loading` keeps
+  its exact meaning and every redirect reads it first**: `VerificationGate`, the
+  sign-in and sign-up screens' "already signed in" redirects, and
+  `VerifyEmailPage`'s challenge-opening effect all wait for the restore, and
+  each of them is pinned.
   Left unguarded, a snapshot taken before an address was verified on another
   device bounces a verified visitor to a code form and then to the catalog rather
   than the page they opened; a snapshot outliving its session sends someone who
