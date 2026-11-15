@@ -29,8 +29,8 @@ describe("Reaching the navigation from every screen", () => {
     { route: "/profile" },
     { route: "/admin", user: admin },
     { route: "/admin/genres", user: admin },
-    // The root not-found sits outside the route groups and composes the shell
-    // itself, so it needs the same way off it.
+    // The root not-found sits outside the route groups and mounts their
+    // layouts itself, so it needs the same way off it.
     { route: "/nowhere-at-all" },
   ];
 

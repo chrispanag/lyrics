@@ -732,8 +732,8 @@ The parts below hold that up.
   spec rather than a phone.
 - **Each `page.tsx` is thin, and the screens stay client components.** A page
   renders one component from `src/routes` (inside a guard if it needs one);
-  that module carries `"use client"`, as do `Layout`, `SearchHeader` and
-  `ui.tsx`, which layouts and the root not-found import. `next build` is what
+  that module carries `"use client"`, as do `Layout` and `SearchHeader`, which
+  layouts import, and `ui.tsx`, which the root not-found imports. `next build` is what
   catches a server file reaching a hook through a module without it; the specs
   run no RSC boundary and cannot. The App Router splits per route already, so the
   `React.lazy` that kept the editor and the admin console out of every visitor's
@@ -1117,8 +1117,8 @@ screen changed for it.
 - **Nothing scrolls but `Layout`.** Next scrolls a new page into view by a rule
   of its own, on every `Link` and `push`; the backend passes `scroll: false`
   everywhere, so `Layout`'s pathname-keyed scroll to the top stays the one rule —
-  and a filter written into the catalog's query string, a `replace` to the same
-  path, does not scroll at all. The backend's `push`/`replace`/`back` are built
+  and a filter written into the catalog's query string, which `writeSearch`
+  hands to the History API rather than the router, does not scroll at all. The backend's `push`/`replace`/`back` are built
   once from Next's stable router object, so `useRouter()` is stable for good.
 - **The vocabulary is Next's.** `useRouter()` returns `push`, `replace`, `back`
   and `canGoBack`; `Link` and `NavLink` take an `href` string and `replace`;
