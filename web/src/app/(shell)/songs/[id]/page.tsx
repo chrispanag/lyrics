@@ -107,10 +107,7 @@ export async function generateMetadata({
     description,
     alternates: {
       canonical: path,
-      // The same song as data, for an agent that would rather not parse HTML.
-      // The Go API answers /api on this origin in production, so the path is
-      // right as it stands; `metadataBase` makes it absolute, as it does the
-      // canonical. Only a guest-readable read: llms.txt describes the rest.
+      // The same song as JSON, for agents; /api is same-origin in production.
       types: { "application/json": songApiPath(song.slug) },
     },
     openGraph: {

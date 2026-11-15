@@ -31,6 +31,7 @@ const stepChrome =
  */
 export function ListSongNavBar({ position }: { position: ListPosition }) {
   useArrowKeyPaging(position);
+  usePrefetchedSteps(position);
 
   return (
     <nav
@@ -75,13 +76,27 @@ function StepArrow({ href, back }: { href?: string | undefined; back?: boolean |
     <Link
       href={href}
       replace
-      prefetch
       aria-label={back ? "Previous song" : "Next song"}
       className={stepChrome}
     >
       <Icon aria-hidden className="size-5" />
     </Link>
   );
+}
+
+/**
+ * Loads both neighbors once the position is known, so whichever way the reader
+ * steps (an arrow, a key, a swipe) the page paints at once rather than after a
+ * server round trip. An effect rather than the arrows' own prefetch: a link's
+ * waits for it to scroll into view, and the keys and the swipe must not depend
+ * on where the bar is.
+ */
+function usePrefetchedSteps({ previousHref, nextHref }: ListPosition) {
+  const { prefetch } = useRouter();
+  useEffect(() => {
+    if (previousHref) prefetch(previousHref);
+    if (nextHref) prefetch(nextHref);
+  }, [prefetch, previousHref, nextHref]);
 }
 
 /** How long the mark stays before fading, and where having shown it is recorded. */

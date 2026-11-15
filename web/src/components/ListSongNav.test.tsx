@@ -1,37 +1,29 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { ListSongNavBar } from "./ListSongNav";
 import type { ListPosition } from "@/lib/listContext";
-import {
-  type BackendLinkProps,
-  type NavigationBackend,
-  NavigationProvider,
-} from "@/lib/navigation";
+import { type NavigationBackend, NavigationProvider } from "@/lib/navigation";
 
 /*
- * Which of the bar's links ask to be loaded ahead of a press. The test router
- * ignores the hint, so a backend that writes it onto the anchor is what can
- * see it. The steps are the ones that must paint at once; the history they
- * keep is pinned in SongDetailPage.test.tsx.
+ * What a list position loads ahead of a step. The test router's `prefetch`
+ * does nothing, so a backend that records it is what can see it. The history
+ * the steps keep is pinned in SongDetailPage.test.tsx.
  */
 
-function RecordingLink({ href, replace, prefetch, ...rest }: BackendLinkProps) {
-  return (
-    <a href={href} data-replace={replace} data-prefetch={String(Boolean(prefetch))} {...rest} />
-  );
+function recordingBackend() {
+  return {
+    pathname: "/songs/b",
+    searchParams: new URLSearchParams("list=l"),
+    params: {},
+    push: () => {},
+    replace: () => {},
+    back: () => {},
+    writeSearch: () => {},
+    prefetch: vi.fn<(href: string) => void>(),
+    Link: ({ href, replace: _replace, ...rest }) => <a href={href} {...rest} />,
+  } satisfies NavigationBackend;
 }
-
-const backend: NavigationBackend = {
-  pathname: "/songs/b",
-  searchParams: new URLSearchParams("list=l"),
-  params: {},
-  push: () => {},
-  replace: () => {},
-  back: () => {},
-  writeSearch: () => {},
-  Link: RecordingLink,
-};
 
 const position: ListPosition = {
   listName: "Summer",
@@ -42,17 +34,31 @@ const position: ListPosition = {
   nextHref: "/songs/c?list=l",
 };
 
-describe("ListSongNavBar", () => {
-  it("loads both neighbors ahead of a step, and not the list it leads back to", () => {
-    render(
-      <NavigationProvider backend={backend}>
-        <ListSongNavBar position={position} />
-      </NavigationProvider>,
-    );
+function renderBar(backend: NavigationBackend, at: ListPosition) {
+  return render(
+    <NavigationProvider backend={backend}>
+      <ListSongNavBar position={at} />
+    </NavigationProvider>,
+  );
+}
 
-    for (const name of ["Previous song", "Next song"]) {
-      expect(screen.getByRole("link", { name })).toHaveAttribute("data-prefetch", "true");
-    }
-    expect(screen.getByRole("link", { name: "Summer" })).toHaveAttribute("data-prefetch", "false");
+describe("ListSongNavBar", () => {
+  it("loads both neighbors, and nothing else, as soon as it knows where it is", () => {
+    const backend = recordingBackend();
+    renderBar(backend, position);
+
+    // `?list=` included: a step is answered only from an entry for its own href.
+    expect(backend.prefetch.mock.calls.map(([href]) => href).sort()).toEqual([
+      "/songs/a?list=l",
+      "/songs/c?list=l",
+    ]);
+  });
+
+  it("loads only the neighbor there is at the end of a list", () => {
+    const backend = recordingBackend();
+    renderBar(backend, { ...position, index: 2, nextHref: undefined });
+
+    expect(backend.prefetch).toHaveBeenCalledTimes(1);
+    expect(backend.prefetch).toHaveBeenCalledWith("/songs/a?list=l");
   });
 });

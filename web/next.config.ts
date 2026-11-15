@@ -28,8 +28,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },
-      // public/ is served `max-age=0`; these change only via `make icons`, or
-      // rarely and harmlessly late (llms.txt describes routes that outlive it).
+      // public/ is served `max-age=0`; these rarely change and can be a day stale.
       {
         source:
           "/:file(favicon.ico|favicon.svg|apple-touch-icon.png|og-card.png|manifest.json|llms.txt)",
@@ -38,11 +37,9 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // `/admin` has no screen of its own. Its page's `redirect()` never reaches a
-  // document load: `RequireAdmin` sits above it and withholds the page while
-  // the session restores, which on a server is always, so the HTML was a 200
-  // and the browser redirected. Here it is a real 307, decided before any route
-  // renders. Not permanent: the tab order may change.
+  // A real 307 for /admin on a document load. The page's own `redirect()` sits
+  // under `RequireAdmin`, which a server never opens, so it answered 200.
+  // Not permanent: the tab order may change.
   async redirects() {
     return [{ source: "/admin", destination: ADMIN_TABS[0].to, permanent: false }];
   },

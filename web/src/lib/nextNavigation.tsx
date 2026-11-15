@@ -2,6 +2,7 @@
 
 import NextLink from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { PrefetchOptions } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { type ReactNode, useMemo } from "react";
 
 import { type BackendLinkProps, type NavigationBackend, NavigationProvider } from "./navigation";
@@ -13,26 +14,19 @@ import { type BackendLinkProps, type NavigationBackend, NavigationProvider } fro
  * CLAUDE.md, "The routing seam".
  */
 
+/** Next's `PrefetchKind.FULL`: an enum no public entry point exports. */
+const FULL_PREFETCH = "full" as PrefetchOptions["kind"];
+
 /**
  * `scroll={false}`: Next scrolls a new page into view on its own, by a rule of
  * its own, and `Layout`'s pathname-keyed scroll to the top is the app's. Two
  * rules would disagree about a filter written into the catalog's query string,
  * which must not scroll at all.
  */
-function NextBackendLink({ href, replace, prefetch, ...rest }: BackendLinkProps) {
-  // `prefetch` true is Next's full prefetch, which a dynamic route needs: its
-  // default stops at the nearest `loading.tsx`, and these routes have none.
+function NextBackendLink({ href, replace, ...rest }: BackendLinkProps) {
   // Cast: Next's props type its handlers as never-undefined, which
   // `exactOptionalPropertyTypes` will not take from an anchor's props.
-  return (
-    <NextLink
-      href={href}
-      replace={replace}
-      scroll={false}
-      prefetch={prefetch ? true : null}
-      {...(rest as object)}
-    />
-  );
+  return <NextLink href={href} replace={replace} scroll={false} {...(rest as object)} />;
 }
 
 /** Mounts the seam on Next's router. Once, in the root layout's providers. */
@@ -57,6 +51,11 @@ export function NextNavigation({ children }: { children: ReactNode }) {
         if (replace) window.history.replaceState(null, "", href);
         else window.history.pushState(null, "", href);
       },
+      // The full kind: the default stops at the nearest `loading.tsx`, and
+      // these routes have none, so it would load nothing worth having. The
+      // payload is held for `staleTimes.static` (five minutes), and a
+      // navigation to the same href, by link or by `replace`, is answered from it.
+      prefetch: (href: string) => router.prefetch(href, { kind: FULL_PREFETCH }),
     }),
     [router],
   );
