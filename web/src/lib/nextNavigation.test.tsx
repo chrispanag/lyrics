@@ -11,7 +11,14 @@ import { NextNavigation } from "./nextNavigation";
  * mounts `TestRouter`; this one holds the production backend to the same contract.
  */
 
-const router = { push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() };
+// Hoisted with the mock below, which would otherwise close over a binding
+// that does not exist yet when it runs.
+const router = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  back: vi.fn(),
+  prefetch: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
@@ -39,6 +46,8 @@ describe("NextNavigation's search-string writes", () => {
   const start = window.location.href;
 
   beforeEach(() => {
+    // `restoreMocks` puts spies back and leaves a `vi.fn`'s calls alone.
+    for (const move of Object.values(router)) move.mockClear();
     window.history.replaceState(null, "", "/?page=2");
   });
 

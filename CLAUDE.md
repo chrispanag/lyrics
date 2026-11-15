@@ -1318,15 +1318,16 @@ screen changed for it.
 - **The router is a backend handed in through context.** `NavigationProvider`
   takes a `NavigationBackend` — the address, the params, `push`, `replace`,
   `back`, `liveHref`, `writeSearch`, `prefetch`, and the `Link` component that
-  renders an anchor — and every hook and link in the seam reads it. Production mounts `NextNavigation`
-  (`lib/nextNavigation.tsx`, from `app/Providers.tsx`), which fills it from
-  `next/navigation` and renders `next/link`; specs and stories mount
-  `TestRouter`, an in-memory history in the seam itself whose links are plain
-  anchors. So no spec mocks Next's router — save `nextNavigation.test.tsx`,
-  which tests the backend itself — and none of the ~550 specs or the
-  stories changed to move routers, and the Next backend is its own module so
-  that nothing a spec or a story loads imports `next/navigation` at all — the
-  browser build of Storybook would otherwise pull Next's internals into Vite.
+  renders an anchor — and every hook and link in the seam reads it. Production
+  mounts `NextNavigation` (`lib/nextNavigation.tsx`, from `app/Providers.tsx`),
+  which fills it from `next/navigation` and renders `next/link`; specs and
+  stories mount `TestRouter`, an in-memory history in the seam itself whose
+  links are plain anchors. So no spec mocks Next's router — save
+  `nextNavigation.test.tsx`, which tests the backend itself — and none of the
+  ~550 specs or the stories changed to move routers, and the Next backend is its
+  own module so that nothing a story or any other spec loads imports
+  `next/navigation` at all — the browser build of Storybook would otherwise pull
+  Next's internals into Vite.
   `RouteParams` hands a matched route's params down, for the harness, which
   matches patterns itself (`test/routes.tsx` for a spec's own routes,
   `test/app.tsx` for the real tree); Next's `useParams` already has them.

@@ -49,6 +49,11 @@ export interface NavigationBackend {
    * The address as it is now, path plus search string: read when asked, unlike
    * `pathname` and `searchParams`, which are the last render's. See
    * `useSetSearchParams`.
+   *
+   * Promised only to include every `writeSearch` already made. A `push`,
+   * `replace` or `back` may not show here until it lands: Next moves the
+   * address when the new route commits, and `back` waits for `popstate`, while
+   * `TestRouter` moves at once. Nothing may rely on either answer.
    */
   liveHref(): string;
   /**
