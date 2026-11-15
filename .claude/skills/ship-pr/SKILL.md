@@ -21,9 +21,11 @@ Several steps below say **verify**. That means:
 1. Run the checks the change can affect. `make check` covers everything. If
    the diff touches only one stack, that stack's targets are enough:
    `make lint-backend test-backend` or `make lint-web test-web`. A diff that
-   touches no code needs none.
+   touches no code needs none. When Go changed, also run `gofmt -l backend`:
+   CI fails on any file it lists, and no `make` target checks formatting.
 2. Fix anything they report.
-3. Commit, with a message in the style of `git log`.
+3. Commit whatever changed, with a message in the style of `git log`. If
+   nothing changed, there is nothing to commit.
 
 Pushing is done separately, so that several commits can go up in one push and
 start one CI run, not several.
@@ -34,8 +36,11 @@ start one CI run, not several.
    `main`, create a branch with a short descriptive name first.
 2. If the work is uncommitted, **verify** it.
 3. `git push -u origin HEAD`
-4. Run `gh pr view` to see whether this branch already has a PR. If it does,
-   reuse it. Mark it draft with `gh pr ready --undo` if it is open.
+4. Run `gh pr view --json number,state,isDraft` to see whether this branch
+   already has a PR. Reuse it only if its state is `OPEN`, and mark it draft
+   with `gh pr ready --undo` unless it already is. A `MERGED` or `CLOSED` PR
+   for the same branch name does not count: `gh pr view` falls back to one
+   when no PR is open, and it cannot be pushed to or merged again.
 5. Otherwise run `gh pr create --draft --base main`, passing the body with
    `--body-file`:
    - **Title:** a plain-language sentence stating what changed and why, in the
@@ -56,7 +61,8 @@ Record the PR number as `<n>`.
    problem. Fix each one that holds up. Dismiss each one that does not, with a
    one-line reason that goes in the final summary. Do not drop findings
    silently.
-3. If either skill changed files, **verify**, then push once.
+3. If the working tree changed, whether by either skill or by your own fixes
+   for its findings, **verify**, then push once.
 4. If the changes altered what the PR does, or made a claim in the body untrue,
    update the body with `gh pr edit <n> --body-file`.
 5. `gh pr ready <n>`
@@ -70,17 +76,20 @@ this with `run_in_background: true`, since you are notified when it exits:
 ```bash
 head=$(git rev-parse HEAD)
 for i in $(seq 30); do
-  [ "$(gh pr view <n> --json headRefOid -q .headRefOid)" = "$head" ] &&
-    { gh pr checks <n> >/dev/null 2>&1; [ $? -ne 1 ]; } && break
+  if [ "$(gh pr view <n> --json headRefOid -q .headRefOid)" = "$head" ]; then
+    count=$(gh pr checks <n> --json name -q length 2>/dev/null)
+    [ "${count:-0}" -gt 0 ] && break
+  fi
   sleep 10
 done
 gh pr checks <n> --watch --interval 30
 ```
 
-`gh pr checks` exits 1 when no checks exist yet and 8 when they are pending. If
-the loop runs out (five minutes) and the watch reports no checks, stop and
-report: CI is not running for this PR. Do not poll while the job runs. Wait for
-the notification.
+The loop counts the checks rather than reading the exit code, because
+`gh pr checks` exits 1 both when no checks exist yet and when one has already
+failed. If the loop runs out (five minutes) and the watch reports no checks,
+stop and report: CI is not running for this PR. Do not poll while the job runs.
+Wait for the notification.
 
 ## 4. If CI fails, fix it and go back to 3
 
@@ -95,8 +104,9 @@ the notification.
 4. **Verify**, push, and go back to step 3.
 
 If the failure is outside this PR's control (flaky infrastructure, an outage, a
-missing secret), rerun it once with `gh run rerun <run-id> --failed`. If it
-fails the same way again, stop and report.
+missing secret), rerun it once with `gh run rerun <run-id> --failed`, then
+wait for it with `gh run watch <run-id> --exit-status`, run in the background
+like step 3. If it fails the same way again, stop and report.
 
 **Stop after three fix rounds** that do not turn CI green. Report what is still
 failing and what you tried. Leave the PR open. Do not merge.
@@ -105,11 +115,16 @@ failing and what you tried. Leave the PR open. Do not merge.
 
 When every check passes:
 
-1. Run `gh pr view <n> --json mergeable,mergeStateStatus,reviewDecision`. If the
-   PR is not mergeable, stop and report why. For example, a required review may
-   be missing. The exception is a conflict with `main`: rebase onto
-   `origin/main`, **verify**, push with `--force-with-lease`, and go back to
-   step 3.
+1. Run `gh pr view <n> --json mergeable,mergeStateStatus,reviewDecision`. If
+   `mergeable` is `UNKNOWN`, GitHub has not computed it yet: wait ten seconds
+   and ask again, up to five times, before deciding. If the PR is not
+   mergeable, stop and report why. For example, a required review may be
+   missing. The exception is a conflict with `main` (`CONFLICTING`): run
+   `git fetch origin`, rebase onto `origin/main`, resolve the conflicts,
+   **verify**, push with `--force-with-lease`, and go back to step 3. Without
+   the fetch, `origin/main` is the stale copy the branch already sits on, the
+   rebase does nothing, and the conflict comes straight back. Rebase once; if
+   the PR still conflicts afterwards, stop and report.
 2. Run `gh pr merge <n> --squash`. Never pass `--admin`.
 3. Delete the remote branch with `git push origin --delete <branch>`. Do not
    use `gh pr merge --delete-branch` for this. It also switches the local
