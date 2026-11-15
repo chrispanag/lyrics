@@ -17,7 +17,7 @@ export function BackButton({ className }: { className?: string }) {
       type="button"
       onClick={() => navigate(-1)}
       className={cn(
-        "-ml-2 flex items-center gap-1 rounded-lg p-2 text-sm text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800",
+        "-ml-2 flex items-center gap-1 rounded-lg p-2 text-sm text-fg-tertiary hover:bg-subtle",
         className,
       )}
     >

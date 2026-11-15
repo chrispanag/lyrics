@@ -125,21 +125,19 @@ export function ListsPage() {
               className={cn(
                 cardChrome,
                 cardHover,
-                "flex items-center justify-between gap-3 bg-white p-4 dark:bg-stone-900",
+                "flex items-center justify-between gap-3 bg-surface p-4",
               )}
             >
               <div className="min-w-0">
                 <h2 className="flex items-center gap-2 truncate font-semibold">
                   {list.name}
                   {list.is_public ? (
-                    <Globe aria-label="Public" className="size-3.5 shrink-0 text-stone-400" />
+                    <Globe aria-label="Public" className="size-3.5 shrink-0 text-fg-subtle" />
                   ) : (
-                    <Lock aria-label="Private" className="size-3.5 shrink-0 text-stone-400" />
+                    <Lock aria-label="Private" className="size-3.5 shrink-0 text-fg-subtle" />
                   )}
                 </h2>
-                <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
-                  {songCount(list.item_count)}
-                </p>
+                <p className="mt-0.5 text-sm text-fg-muted">{songCount(list.item_count)}</p>
               </div>
             </Link>
           </li>
@@ -220,7 +218,7 @@ export function ListDetailPage() {
       <div className="mx-auto max-w-2xl px-4 py-6">
         <PageTitle name="List not available" />
         <ErrorMessage>This list is not available.</ErrorMessage>
-        <Link to="/lists" className="mt-4 inline-block text-sm text-brand-600 hover:underline">
+        <Link to="/lists" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
           Back to lists
         </Link>
       </div>
@@ -278,12 +276,8 @@ export function ListDetailPage() {
 
       <header className="mb-5">
         <h1 className="text-2xl font-bold tracking-tight">{list.name}</h1>
-        {list.description && (
-          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{list.description}</p>
-        )}
-        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-          {songCount(list.item_count)}
-        </p>
+        {list.description && <p className="mt-1 text-sm text-fg-muted">{list.description}</p>}
+        <p className="mt-1 text-sm text-fg-muted">{songCount(list.item_count)}</p>
 
         {/* A non-owner only reaches a public list; guests are sent to sign in. */}
         {!isOwner && (
@@ -336,7 +330,7 @@ export function ListDetailPage() {
             {/* The default list cannot be deleted (the server 403s). */}
             {!list.is_default && (
               <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
-                <Trash aria-hidden className="size-4 text-red-600" />
+                <Trash aria-hidden className="size-4 text-fg-danger" />
                 Delete list
               </Button>
             )}
@@ -399,7 +393,7 @@ export function ListDetailPage() {
       <Sheet open={sharing} onClose={() => setSharing(false)} title="Share this list">
         {list.is_public ? (
           <div className="space-y-4">
-            <p className="text-sm text-stone-600 dark:text-stone-400">
+            <p className="text-sm text-fg-tertiary">
               Anyone with this link can read “{list.name}” and save their own copy of it. It is not
               listed anywhere in the catalog.
             </p>
@@ -420,7 +414,7 @@ export function ListDetailPage() {
         ) : (
           /* Publishing is asked for, never done quietly behind Share. */
           <div className="space-y-4">
-            <p className="text-sm text-stone-600 dark:text-stone-400">
+            <p className="text-sm text-fg-tertiary">
               “{list.name}” is private. Publishing it lets anyone holding the link read it and save
               their own copy — the songs stay yours to change, and their copy is separate from this
               list.

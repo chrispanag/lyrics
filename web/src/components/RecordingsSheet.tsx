@@ -20,7 +20,7 @@ export function RecordingsSheet({
 }) {
   return (
     <Sheet open={open} onClose={onClose} title="Recordings">
-      <ul className="divide-y divide-stone-200 dark:divide-stone-800">
+      <ul className="divide-y divide-line">
         {recordings.map((recording) => {
           const hasPerformers = recording.performers.length > 0;
           // False when the year stands in as the primary line, so the right
@@ -44,10 +44,10 @@ export function RecordingsSheet({
                     </p>
                   )}
                   {recording.label && hasPerformers && (
-                    <p className="text-sm text-stone-500 dark:text-stone-400">{recording.label}</p>
+                    <p className="text-sm text-fg-muted">{recording.label}</p>
                   )}
                   {recording.notes && (
-                    <p className="mt-1 whitespace-pre-line text-sm text-stone-500 dark:text-stone-400">
+                    <p className="mt-1 whitespace-pre-line text-sm text-fg-muted">
                       {recording.notes}
                     </p>
                   )}
@@ -57,14 +57,12 @@ export function RecordingsSheet({
                   {/* Keyed on the flag, never on index 0. The brand ramp stops
                       at 900, so no `brand-950` here. */}
                   {recording.is_first && (
-                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-200">
+                    <span className="rounded-full bg-accent-subtle px-2 py-0.5 text-xs font-medium text-fg-accent-subtle">
                       First recording
                     </span>
                   )}
                   {recording.release_year !== null && hasOwnText && (
-                    <p className="mt-1 text-stone-500 dark:text-stone-400">
-                      {recording.release_year}
-                    </p>
+                    <p className="mt-1 text-fg-muted">{recording.release_year}</p>
                   )}
                 </div>
               </div>

@@ -25,9 +25,7 @@ const meta = {
               <MenuHeader />
               <div className="mx-auto max-w-2xl px-4 py-6">
                 <h1 className="text-2xl font-semibold">A page</h1>
-                <p className="mt-2 text-stone-600 dark:text-stone-400">
-                  The screen a route renders goes here.
-                </p>
+                <p className="mt-2 text-fg-tertiary">The screen a route renders goes here.</p>
               </div>
             </>
           }

@@ -13,12 +13,10 @@ export type ButtonSize = (typeof BUTTON_SIZES)[number];
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
-    "bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 disabled:bg-brand-600/50",
-  secondary:
-    "bg-stone-200 text-stone-900 hover:bg-stone-300 active:bg-stone-400 dark:bg-stone-800 dark:text-stone-100 dark:hover:bg-stone-700",
-  ghost:
-    "bg-transparent text-stone-700 hover:bg-stone-200 active:bg-stone-300 dark:text-stone-300 dark:hover:bg-stone-800",
-  danger: "bg-red-600 text-white hover:bg-red-700 active:bg-red-800",
+    "bg-accent text-white hover:bg-accent-hover active:bg-accent-active disabled:bg-accent/50",
+  secondary: "bg-muted text-fg hover:bg-muted-hover active:bg-muted-active",
+  ghost: "bg-transparent text-fg-secondary hover:bg-muted active:bg-muted-hover",
+  danger: "bg-danger text-white hover:bg-danger-hover active:bg-danger-active",
 };
 
 // Every size but `sm` is at least 44px tall; below that, taps land on
@@ -53,4 +51,4 @@ export function buttonClasses(
  * accent, cursor and disabled treatment.
  */
 export const rowControlChrome =
-  "shrink-0 rounded-lg p-2 text-stone-400 transition-colors focus-visible:ring-2 focus-visible:outline-hidden";
+  "shrink-0 rounded-lg p-2 text-fg-subtle transition-colors focus-visible:ring-2 focus-visible:outline-hidden";

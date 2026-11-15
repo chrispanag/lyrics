@@ -28,7 +28,7 @@ function AuthShell({
       <div className="mb-8 text-center">
         <Wordmark size="lg" />
         <h1 className="mt-4 text-2xl font-bold tracking-tight">{title}</h1>
-        <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{subtitle}</p>
+        <p className="mt-1 text-sm text-fg-muted">{subtitle}</p>
       </div>
       {children}
     </div>
@@ -103,19 +103,19 @@ export function LoginPage() {
       </form>
 
       <p className="mt-4 text-center text-sm">
-        <Link to="/forgot-password" className="text-stone-500 hover:underline dark:text-stone-400">
+        <Link to="/forgot-password" className="text-fg-muted hover:underline">
           Forgot your password?
         </Link>
       </p>
 
-      <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
+      <p className="mt-6 text-center text-sm text-fg-muted">
         No account?{" "}
-        <Link to="/register" className="font-medium text-brand-600 hover:underline">
+        <Link to="/register" className="font-medium text-fg-accent hover:underline">
           Create one
         </Link>
       </p>
       <p className="mt-2 text-center text-sm">
-        <Link to="/" className="text-stone-500 hover:underline dark:text-stone-400">
+        <Link to="/" className="text-fg-muted hover:underline">
           Continue as guest
         </Link>
       </p>
@@ -161,7 +161,7 @@ function PasswordHints({ hints }: { hints: string[] }) {
   if (hints.length === 0) return null;
 
   return (
-    <ul className="space-y-1 text-xs text-stone-500 dark:text-stone-400">
+    <ul className="space-y-1 text-xs text-fg-muted">
       {hints.map((hint) => (
         <li key={hint}>• {hint}</li>
       ))}
@@ -214,7 +214,7 @@ function ResendCodeLink({
         type="button"
         onClick={onResend}
         disabled={resending || cooldown > 0}
-        className="font-medium text-brand-600 hover:underline disabled:cursor-not-allowed disabled:text-stone-400 disabled:no-underline"
+        className="font-medium text-fg-accent hover:underline disabled:cursor-not-allowed disabled:text-fg-subtle disabled:no-underline"
       >
         {cooldown > 0 ? `Send another in ${cooldown}s` : "Send another"}
       </button>
@@ -301,9 +301,9 @@ export function RegisterPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
+      <p className="mt-6 text-center text-sm text-fg-muted">
         Already have an account?{" "}
-        <Link to="/login" className="font-medium text-brand-600 hover:underline">
+        <Link to="/login" className="font-medium text-fg-accent hover:underline">
           Sign in
         </Link>
       </p>
@@ -473,7 +473,7 @@ function SignOutOthersPanel() {
   return (
     <>
       {error && <ErrorMessage>{error}</ErrorMessage>}
-      <p className="text-sm text-stone-500 dark:text-stone-400">
+      <p className="text-sm text-fg-muted">
         If you are signed in somewhere else, you can end those sessions now.
       </p>
       <Button
@@ -688,7 +688,7 @@ export function ForgotPasswordPage() {
         </form>
 
         <p className="mt-6 text-center text-sm">
-          <Link to="/login" className="text-stone-500 hover:underline dark:text-stone-400">
+          <Link to="/login" className="text-fg-muted hover:underline">
             Back to sign in
           </Link>
         </p>
@@ -719,14 +719,14 @@ export function ForgotPasswordPage() {
           </Button>
         </form>
 
-        <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
+        <div className="mt-6 space-y-2 text-center text-sm text-fg-muted">
           <ResendCodeLink resending={resending} cooldown={cooldown} onResend={onResend} />
           <p>
             Wrong address?{" "}
             <button
               type="button"
               onClick={startOver}
-              className="font-medium text-stone-500 hover:underline dark:text-stone-400"
+              className="font-medium text-fg-muted hover:underline"
             >
               Start over
             </button>
@@ -744,7 +744,7 @@ export function ForgotPasswordPage() {
           {notice && <Notice>{notice}</Notice>}
 
           {/* Explains the second code, which otherwise reads as the first failing. */}
-          <p className="text-sm text-stone-500 dark:text-stone-400">
+          <p className="text-sm text-fg-muted">
             Setting a new password needs one more check of your email. This is the last step before
             you choose it.
           </p>
@@ -762,7 +762,7 @@ export function ForgotPasswordPage() {
           </Button>
         </form>
 
-        <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
+        <div className="mt-6 space-y-2 text-center text-sm text-fg-muted">
           <ResendCodeLink
             resending={resending}
             cooldown={cooldown}
@@ -772,7 +772,7 @@ export function ForgotPasswordPage() {
             <button
               type="button"
               onClick={startOver}
-              className="font-medium text-stone-500 hover:underline dark:text-stone-400"
+              className="font-medium text-fg-muted hover:underline"
             >
               Start over
             </button>
@@ -800,11 +800,11 @@ export function ForgotPasswordPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
+        <p className="mt-6 text-center text-sm text-fg-muted">
           <button
             type="button"
             onClick={startOver}
-            className="font-medium text-stone-500 hover:underline dark:text-stone-400"
+            className="font-medium text-fg-muted hover:underline"
           >
             Start again with a new code
           </button>
@@ -944,7 +944,7 @@ export function VerifyEmailPage() {
         </Button>
       </form>
 
-      <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
+      <div className="mt-6 space-y-2 text-center text-sm text-fg-muted">
         {/* Held while the opening code is in flight, or a second step-up retires it. */}
         <ResendCodeLink resending={resending || sending} cooldown={cooldown} onResend={onResend} />
         <p>
@@ -952,7 +952,7 @@ export function VerifyEmailPage() {
           <button
             type="button"
             onClick={() => logout()}
-            className="font-medium text-stone-500 hover:underline dark:text-stone-400"
+            className="font-medium text-fg-muted hover:underline"
           >
             Sign out
           </button>
@@ -1109,7 +1109,7 @@ export function ChangePasswordPage() {
             This deployment is not set up to confirm a password change by email.
           </ErrorMessage>
           {/* The reset proves the same mailbox by the same kind of code. */}
-          <p className="text-sm text-stone-500 dark:text-stone-400">
+          <p className="text-sm text-fg-muted">
             You can still set a new password by resetting it, which emails you a code to confirm it
             is you.
           </p>
@@ -1144,7 +1144,7 @@ export function ChangePasswordPage() {
           </Button>
         </form>
 
-        <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
+        <div className="mt-6 space-y-2 text-center text-sm text-fg-muted">
           {/* Held while the first code is in flight, as on the verification screen. */}
           <ResendCodeLink
             resending={resending || sending}
@@ -1152,10 +1152,7 @@ export function ChangePasswordPage() {
             onResend={onResend}
           />
           <p>
-            <Link
-              to="/profile"
-              className="font-medium text-stone-500 hover:underline dark:text-stone-400"
-            >
+            <Link to="/profile" className="font-medium text-fg-muted hover:underline">
               Back to profile
             </Link>
           </p>
@@ -1182,13 +1179,13 @@ export function ChangePasswordPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
+        <p className="mt-6 text-center text-sm text-fg-muted">
           {/* Disabled while working: no cooldown has started to stop a second code. */}
           <button
             type="button"
             onClick={startAgain}
             disabled={resending}
-            className="font-medium text-stone-500 hover:underline disabled:cursor-not-allowed disabled:text-stone-400 disabled:no-underline dark:text-stone-400"
+            className="font-medium text-fg-muted hover:underline disabled:cursor-not-allowed disabled:text-fg-subtle disabled:no-underline"
           >
             Start again with a new code
           </button>

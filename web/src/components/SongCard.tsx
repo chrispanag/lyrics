@@ -10,8 +10,7 @@ import { songHref } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
 
 /** One genre as the card shows it, and the box that holds its row open without one. */
-const genreChip =
-  "rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600 dark:bg-stone-800 dark:text-stone-400";
+const genreChip = "rounded-full bg-subtle px-2 py-0.5 text-xs text-fg-tertiary";
 
 /**
  * Memoized: browse re-renders on every keystroke, and song objects from the
@@ -28,29 +27,21 @@ export const SongCard = memo(function SongCard({ song, listId }: { song: Song; l
   return (
     <Link
       to={songHref(song, listId)}
-      className={cn(
-        cardChrome,
-        cardHover,
-        "block bg-white p-4 active:bg-brand-50 dark:bg-stone-900",
-      )}
+      className={cn(cardChrome, cardHover, "block bg-surface p-4 active:bg-accent-subtle")}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           {/* h2: both pages that list cards (the catalog and a list) put them
               directly under the page's h1, and an h3 there skips a level. */}
-          <h2 className="truncate font-semibold text-stone-900 dark:text-stone-100">
-            {song.title}
-          </h2>
+          <h2 className="truncate font-semibold text-fg">{song.title}</h2>
           {/* Always rendered; `min-h-lh` gives an empty <p> its line box. */}
-          <p className="mt-0.5 min-h-lh truncate text-sm text-stone-500 dark:text-stone-400">
-            {credits}
-          </p>
+          <p className="mt-0.5 min-h-lh truncate text-sm text-fg-muted">{credits}</p>
         </div>
         {song.youtube_video_id && (
           <SquarePlay
             role="img"
             aria-label="Has a video"
-            className="size-5 shrink-0 text-stone-400"
+            className="size-5 shrink-0 text-fg-subtle"
           />
         )}
       </div>
@@ -58,7 +49,7 @@ export const SongCard = memo(function SongCard({ song, listId }: { song: Song; l
       {song.snippet && (
         <Snippet
           text={song.snippet}
-          className="mt-2 line-clamp-2 text-sm leading-relaxed whitespace-pre-line text-stone-600 dark:text-stone-400"
+          className="mt-2 line-clamp-2 text-sm leading-relaxed whitespace-pre-line text-fg-tertiary"
         />
       )}
 

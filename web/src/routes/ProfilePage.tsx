@@ -71,9 +71,7 @@ export function ProfilePage() {
       <div className="mx-auto max-w-md px-4 py-10 text-center">
         <PageTitle name="Profile" />
         <h1 className="text-2xl font-bold tracking-tight">You are browsing as a guest</h1>
-        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
-          Sign in to build lists of songs.
-        </p>
+        <p className="mt-2 text-sm text-fg-muted">Sign in to build lists of songs.</p>
         <div className="mt-6 flex flex-col gap-2">
           <Link to="/login" className={buttonClasses("primary", "lg")}>
             Sign in
@@ -166,13 +164,13 @@ export function ProfilePage() {
         </div>
       )}
 
-      <dl className="mb-6 space-y-2 rounded-2xl bg-stone-100 p-4 text-sm dark:bg-stone-900">
+      <dl className="mb-6 space-y-2 rounded-2xl bg-panel p-4 text-sm">
         <div className="flex justify-between gap-3">
-          <dt className="text-stone-500 dark:text-stone-400">Email</dt>
+          <dt className="text-fg-tertiary">Email</dt>
           <dd className="truncate font-medium">{user.email}</dd>
         </div>
         <div className="flex justify-between gap-3">
-          <dt className="text-stone-500 dark:text-stone-400">Role</dt>
+          <dt className="text-fg-tertiary">Role</dt>
           <dd className="font-medium capitalize">{user.role}</dd>
         </div>
       </dl>
@@ -247,8 +245,8 @@ function PictureButton({
           // Straddles the perimeter: inside it covers the face.
           "absolute -right-0.5 -bottom-0.5 flex size-8 items-center justify-center rounded-full",
           // The ring is the body's ground color, so it reads as a bite out of the circle.
-          "bg-brand-600 text-white ring-2 ring-stone-50 transition-colors dark:ring-stone-950",
-          !busy && "group-hover:bg-brand-700 group-active:bg-brand-800",
+          "bg-accent text-white ring-2 ring-canvas transition-colors",
+          !busy && "group-hover:bg-accent-hover group-active:bg-accent-active",
         )}
       >
         {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Pencil className="size-3.5" />}
@@ -317,9 +315,7 @@ function PictureMenu({
  * apart — `cn()` is a plain join, so chrome is shared rather than overridden.
  */
 function SectionHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="mb-2 text-sm font-medium text-stone-700 dark:text-stone-300">{children}</h2>
-  );
+  return <h2 className="mb-2 text-sm font-medium text-fg-secondary">{children}</h2>;
 }
 
 /** What the live region says while a picture is saving or being removed. */
@@ -357,11 +353,7 @@ function ThemeToggle({
   return (
     <div className={className}>
       <SectionHeading>Appearance</SectionHeading>
-      <div
-        role="radiogroup"
-        aria-label="Appearance"
-        className="flex gap-1 rounded-xl bg-stone-200 p-1 dark:bg-stone-800"
-      >
+      <div role="radiogroup" aria-label="Appearance" className="flex gap-1 rounded-xl bg-muted p-1">
         {THEME_OPTIONS.map((option) => (
           // biome-ignore lint/a11y/useSemanticElements: a segmented control, styled as one row of buttons.
           <button
@@ -372,9 +364,7 @@ function ThemeToggle({
             onClick={() => onChange(option.value)}
             className={cn(
               "flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors",
-              theme === option.value
-                ? "bg-white text-stone-900 shadow-sm dark:bg-stone-950 dark:text-stone-100"
-                : "text-stone-600 dark:text-stone-400",
+              theme === option.value ? "bg-canvas text-fg shadow-sm" : "text-fg-tertiary",
             )}
           >
             {option.icon && <option.icon aria-hidden className="size-4" />}

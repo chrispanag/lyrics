@@ -19,7 +19,9 @@ export function Wordmark({ size = "md" }: { size?: keyof typeof markSizes }) {
   // inline-flex so a `text-center` parent (the auth screens) centers it.
   return (
     <span className="inline-flex items-center gap-2">
-      <Disc3 aria-hidden className={cn(markSizes[size], "text-brand-600")} />
+      {/* The fill token, not `fg-accent`: the mark is the brand's own color
+          in both themes, like the icons drawn from it. */}
+      <Disc3 aria-hidden className={cn(markSizes[size], "text-accent")} />
       <span className="text-xl font-semibold tracking-tight">{SITE_NAME}</span>
     </span>
   );

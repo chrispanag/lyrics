@@ -98,7 +98,7 @@ function SongArticle() {
       <div className="mx-auto max-w-3xl px-4 py-6">
         <PageTitle name="Song not available" />
         <ErrorMessage>{errorMessage(error, "This song could not be loaded.")}</ErrorMessage>
-        <Link to="/" className="mt-4 inline-block text-sm text-brand-600 hover:underline">
+        <Link to="/" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
           Back to browse
         </Link>
       </div>
@@ -148,7 +148,7 @@ function SongArticle() {
               disabled={!song}
               onClick={() => setConfirmDelete(true)}
             >
-              <Trash aria-hidden className="size-4 text-red-600" />
+              <Trash aria-hidden className="size-4 text-fg-danger" />
             </Button>
           )}
         </div>
@@ -185,18 +185,16 @@ function SongArticle() {
 
       <section aria-label="Lyrics">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
-            Lyrics
-          </h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-fg-muted">Lyrics</h2>
           {/* biome-ignore lint/a11y/useSemanticElements: a toolbar, not a form; a fieldset brings form styling. */}
           <div className="flex items-center gap-1" role="group" aria-label="Text size">
-            <Type aria-hidden className="mr-1 size-4 text-stone-400" />
+            <Type aria-hidden className="mr-1 size-4 text-fg-subtle" />
             <button
               type="button"
               onClick={() => setFontSize(fontSizeIndex - 1)}
               disabled={fontSizeIndex === 0}
               aria-label="Decrease text size"
-              className="rounded-lg p-2 text-stone-600 hover:bg-stone-200 disabled:opacity-40 dark:text-stone-400 dark:hover:bg-stone-800"
+              className="rounded-lg p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
             >
               <Minus aria-hidden className="size-4" />
             </button>
@@ -205,7 +203,7 @@ function SongArticle() {
               onClick={() => setFontSize(fontSizeIndex + 1)}
               disabled={fontSizeIndex === FONT_SIZES.length - 1}
               aria-label="Increase text size"
-              className="rounded-lg p-2 text-stone-600 hover:bg-stone-200 disabled:opacity-40 dark:text-stone-400 dark:hover:bg-stone-800"
+              className="rounded-lg p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
             >
               <Plus aria-hidden className="size-4" />
             </button>
@@ -219,16 +217,13 @@ function SongArticle() {
           // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
           <p
             lang={song.language}
-            className={cn(
-              "whitespace-pre-line leading-loose text-stone-800 dark:text-stone-200",
-              FONT_SIZES[fontSizeIndex],
-            )}
+            className={cn("whitespace-pre-line leading-loose text-fg", FONT_SIZES[fontSizeIndex])}
             style={{ fontFamily: "var(--font-lyrics)" }}
           >
             {song.lyrics}
           </p>
         ) : (
-          <p className="text-sm italic text-stone-500">No lyrics have been added yet.</p>
+          <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>
         )}
       </section>
 
@@ -238,11 +233,9 @@ function SongArticle() {
       )}
 
       {song?.notes && (
-        <section className="mt-8 rounded-2xl bg-stone-100 p-4 dark:bg-stone-900">
-          <h2 className="mb-1 text-sm font-semibold text-stone-700 dark:text-stone-300">Notes</h2>
-          <p className="whitespace-pre-line text-sm text-stone-600 dark:text-stone-400">
-            {song.notes}
-          </p>
+        <section className="mt-8 rounded-2xl bg-panel p-4">
+          <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
+          <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
         </section>
       )}
 
@@ -303,16 +296,14 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
     /* The song's own language: the title is content too. */
     <header className="mb-5" lang={song.language}>
       <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">{song.title}</h1>
-      {song.alt_title && (
-        <p className="mt-1 text-lg text-stone-500 dark:text-stone-400">{song.alt_title}</p>
-      )}
+      {song.alt_title && <p className="mt-1 text-lg text-fg-muted">{song.alt_title}</p>}
 
       <dl className="mt-3 space-y-1 text-sm">
         {/* Performers lead; the row is conditional, since most recordings
             name nobody. */}
         {performers.length > 0 && (
           <div className="flex gap-2">
-            <dt className="shrink-0 text-stone-500 dark:text-stone-400">Performed by</dt>
+            <dt className="shrink-0 text-fg-muted">Performed by</dt>
             <dd className="font-medium">
               <PersonLinks people={performers} />
             </dd>
@@ -320,9 +311,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
         )}
         {creditsByRole.map(([role, names]) => (
           <div key={role} className="flex gap-2">
-            <dt className="shrink-0 text-stone-500 dark:text-stone-400">
-              {CREDIT_DISPLAY_LABELS[role]}
-            </dt>
+            <dt className="shrink-0 text-fg-muted">{CREDIT_DISPLAY_LABELS[role]}</dt>
             <dd className="font-medium">
               <PersonLinks people={names} />
             </dd>
@@ -330,7 +319,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
         ))}
         {year && (
           <div className="flex gap-2">
-            <dt className="text-stone-500 dark:text-stone-400">Year</dt>
+            <dt className="text-fg-muted">Year</dt>
             <dd className="font-medium">{year}</dd>
           </div>
         )}
@@ -341,7 +330,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
         <button
           type="button"
           onClick={onShowRecordings}
-          className="mt-2 text-sm font-medium text-brand-600 hover:underline"
+          className="mt-2 text-sm font-medium text-fg-accent hover:underline"
         >
           Show all {recordingCount(song.recordings.length)}
         </button>
@@ -353,7 +342,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
             <Link
               key={genre.id}
               to={browseHref({ genre_slug: genre.slug })}
-              className="rounded-full bg-stone-200 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-300 dark:bg-stone-800 dark:text-stone-300"
+              className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-fg-secondary hover:bg-muted-hover"
             >
               {genre.name}
             </Link>
@@ -406,20 +395,18 @@ function AddToListSheet({
                   // press cannot act on the stale `present` and re-add.
                   disabled={toggle.isPending}
                   aria-pressed={present}
-                  className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-stone-100 dark:hover:bg-stone-800"
+                  className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-subtle"
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{list.name}</span>
-                    <span className="block text-xs text-stone-500">
+                    <span className="block text-xs text-fg-muted">
                       {songCount(list.item_count)}
                     </span>
                   </span>
                   <span
                     className={cn(
                       "flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                      present
-                        ? "border-brand-600 bg-brand-600 text-white"
-                        : "border-stone-300 dark:border-stone-600",
+                      present ? "border-accent bg-accent text-white" : "border-line-strong",
                     )}
                   >
                     {present && <Check aria-hidden className="size-4" />}
@@ -433,7 +420,7 @@ function AddToListSheet({
       <Link
         to="/lists"
         onClick={onClose}
-        className="mt-3 block rounded-xl border border-dashed border-stone-300 px-3 py-3 text-center text-sm text-stone-600 hover:border-brand-400 hover:text-brand-600 dark:border-stone-700 dark:text-stone-400"
+        className="mt-3 block rounded-xl border border-dashed border-line-strong px-3 py-3 text-center text-sm text-fg-tertiary hover:border-line-accent hover:text-fg-accent"
       >
         Manage lists
       </Link>

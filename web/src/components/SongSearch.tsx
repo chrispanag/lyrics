@@ -206,7 +206,7 @@ export function SongSearch() {
           {total > results.length && (
             <Link
               to={browseHref({ q: query })}
-              className="block border-t border-stone-200 px-4 py-3 text-sm font-medium text-brand-600 hover:bg-stone-50 dark:border-stone-700 dark:text-brand-400 dark:hover:bg-stone-800"
+              className="block border-t border-line px-4 py-3 text-sm font-medium text-fg-accent hover:bg-subtle"
             >
               See all {songCount(total)}
             </Link>
@@ -216,15 +216,11 @@ export function SongSearch() {
     }
 
     if (isError) {
-      return (
-        <p className={cn(noteChrome, "text-red-700 dark:text-red-300")}>
-          Search is unavailable right now.
-        </p>
-      );
+      return <p className={cn(noteChrome, "text-fg-danger")}>Search is unavailable right now.</p>;
     }
 
     return (
-      <p role="status" className={cn(noteChrome, "text-stone-500 dark:text-stone-400")}>
+      <p role="status" className={cn(noteChrome, "text-fg-muted")}>
         {searching ? "Searching…" : `No songs matched “${query}”.`}
       </p>
     );
@@ -274,7 +270,7 @@ export function SongSearch() {
           <div
             className={cn(
               "absolute inset-x-0 top-full z-10 mt-2 overflow-hidden rounded-2xl border shadow-xl",
-              "border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-900",
+              "border-line-strong bg-surface",
             )}
           >
             {panelBody()}
@@ -316,23 +312,15 @@ const SongOption = memo(function SongOption({
       tabIndex={-1}
       to={href}
       replace={replace}
-      className={cn(
-        "block px-4 py-2.5 transition-colors hover:bg-stone-100 dark:hover:bg-stone-800",
-        active && "bg-stone-100 dark:bg-stone-800",
-      )}
+      className={cn("block px-4 py-2.5 transition-colors hover:bg-subtle", active && "bg-subtle")}
     >
       <span className="block truncate font-medium">{song.title}</span>
-      {/* stone-600 rather than 500 for the secondary lines: on the highlighted
-          row's stone-100, 500 is under 4.5:1. */}
-      {credits && (
-        <span className="block truncate text-xs text-stone-600 dark:text-stone-400">{credits}</span>
-      )}
+      {/* fg-tertiary rather than fg-muted for the secondary lines: on the
+          highlighted row's fill, fg-muted is under 4.5:1. */}
+      {credits && <span className="block truncate text-xs text-fg-tertiary">{credits}</span>}
       {/* One line, without `whitespace-pre-line`, so a verse break stays a row. */}
       {song.snippet && (
-        <Snippet
-          text={song.snippet}
-          className="mt-0.5 line-clamp-1 text-xs text-stone-600 dark:text-stone-400"
-        />
+        <Snippet text={song.snippet} className="mt-0.5 line-clamp-1 text-xs text-fg-tertiary" />
       )}
     </Link>
   );

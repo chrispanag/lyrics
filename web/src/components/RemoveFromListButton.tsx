@@ -26,7 +26,7 @@ export function RemoveFromListButton({
       aria-label={`Remove ${title} from this list`}
       className={cn(
         rowControlChrome,
-        "hover:bg-red-50 hover:text-red-600 focus-visible:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-red-950/50 dark:hover:text-red-400",
+        "hover:bg-danger-subtle hover:text-fg-danger focus-visible:ring-danger disabled:cursor-not-allowed disabled:opacity-50",
       )}
     >
       {pending ? (
