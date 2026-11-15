@@ -1,0 +1,30 @@
+# Songfolio
+
+> Songfolio (https://songfolio.live) is a catalog of song lyrics, mostly Greek with some English. Every song has its lyrics, its credits (composer, lyricist), its recordings (who performed it, the year, a YouTube video when there is one) and its genres. Anyone can read and search it without an account; accounts only add personal lists and contributing songs.
+
+Everything below is readable by a guest, with no key and no sign-in. Please fetch politely: one request at a time is plenty, and the JSON API is cheaper for both of us than the HTML pages.
+
+## Addresses on the site
+
+- [A song](https://songfolio.live/songs/to-tragoydi-tis-agapis): `/songs/<slug>`. The slug is the title transliterated to Latin letters and never changes, even if the title is corrected. An older `/songs/<uuid>` address answers a permanent redirect (308) to the slug. An unknown song is a real 404. Each song page links its JSON with `<link rel="alternate" type="application/json">` and carries schema.org `MusicComposition` JSON-LD.
+- [Search the catalog](https://songfolio.live/?q=θάλασσα): `/?q=<text>`. Matches titles, lyrics and people's names; accents and letter case do not matter, and close misspellings of names still match. Greek is searched in Greek script.
+- Songs by one person: `/?person=<person uuid>`, every song they wrote or performed. Credits on a song page link here.
+- Other catalog filters: `/?genre_slug=<slug>`, `/?language=el` (a two-letter code), `/?sort=title|newest|oldest`.
+- A shared list: `/lists/<uuid>`. Only lists their owner made public can be read; any other answers as not found.
+- [Sitemap](https://songfolio.live/sitemap.xml): every song's address.
+
+## JSON API
+
+The API is on the same origin under `/api/v1`. Collections answer `{"data": [...], "meta": {"total", "limit", "offset"}}`, errors answer `{"error": {"code", "message"}}`, and a missing record has the code `not_found` with status 404.
+
+- `GET /api/v1/songs`: search and browse. Parameters: `q` (text, as on the site), `person`, `performer`, `composer`, `lyricist` (person uuids), `genre_slug`, `language` (a two-letter code such as `el` or `en`), `year_from`, `year_to`, `sort` (`relevance`, `title`, `newest`, `oldest`), `limit` (default 20, at most 100), `offset`. Results leave out the lyrics; a search result carries a `snippet` of the matching lines instead, with each match wrapped in `⟦` and `⟧`.
+- `GET /api/v1/songs/<slug or uuid>`: one song with everything, lyrics included. `recordings` arrive already ordered, the first recording first; the song's own `release_year` and `youtube_video_id` are copied from that first recording. A video's address is `https://www.youtube.com/watch?v=<youtube_video_id>`.
+- `GET /api/v1/people?q=<name>&role=composer|lyricist|performer`: people, with how many songs each is on. `GET /api/v1/people/<uuid>`: one person.
+- `GET /api/v1/genres`: every genre, with its `slug` for the `genre_slug` filter.
+- `GET /api/v1/lists/<uuid>`: a public list and its songs, in order.
+
+Example: `https://songfolio.live/api/v1/songs?q=θεοδωρακης&limit=5`
+
+## Optional
+
+- Lyrics are contributed by people, and the rights in them belong to their writers. Quote briefly and link to the song page rather than reproducing whole lyrics.

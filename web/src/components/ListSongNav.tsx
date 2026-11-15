@@ -75,6 +75,7 @@ function StepArrow({ href, back }: { href?: string | undefined; back?: boolean |
     <Link
       href={href}
       replace
+      prefetch
       aria-label={back ? "Previous song" : "Next song"}
       className={stepChrome}
     >

@@ -766,14 +766,18 @@ The parts below hold that up.
   `Waiting` from `routes/guards.tsx`, so the next screen that waits finds the
   title already in the shape it copies; a bare `<Spinner/>` there is a page
   with no `<title>` in its server HTML.
-- **`/admin` redirects on the server, and on a document load the redirect is
-  still the browser's.** Its `page.tsx` calls `redirect()` to the first tab, but
-  `RequireAdmin` sits above it and withholds the page while the session
-  restores — on the server, always — so the throw never reaches the HTML render
-  and the response is a 200 whose payload carries the redirect, which the
-  router follows once the gate opens. An in-app navigation gets it straight
-  from the payload. A `next.config` redirect would be a real 307 at the cost of
-  naming the first tab in a second place; nothing is indexed under `/admin`.
+- **`/admin` is redirected by `next.config.ts`, because its own page cannot
+  do it on a document load.** The page's `redirect()` sits under `RequireAdmin`,
+  which withholds the page while the session restores — on a server, always —
+  so the throw never reached the HTML render: the response was a 200 whose
+  payload carried the redirect, followed in the browser once the gate opened.
+  A `redirects()` entry is decided before any route renders, so a document load
+  and an in-app navigation's RSC request both get a real 307. It reads
+  `ADMIN_TABS[0]` from `routes/adminTabs.ts`, which the config can import because
+  that module imports nothing — keep it that way, or the config starts pulling
+  client code into the build's config step. The page stays as the backstop and
+  as what `test/app.tsx` follows; `src/nextConfig.test.ts` pins the entry, and
+  `next start` is what showed the 307.
 - **A value only the browser has may not be read while rendering, and a
   try/catch is not the fix.** Wrapping stops the throw and leaves the worse
   half: the server renders one answer and the client's first render another,
@@ -933,14 +937,29 @@ scraper rather than by anyone inside the app, which is why each is written down.
   in-app navigation the boundary only fills what the client cache lacks, so a
   song already cached is not replaced by an older server read. `page.test.tsx`
   pins the key, the stamp and the HTML (rendered to a string under Node).
-- **A step to another song waits for the server.** An in-app navigation fetches
-  the next route's payload, which reads the song first, so the list's arrows,
-  swipe and keys no longer paint the page shell instantly with the song behind
-  a skeleton: the new page arrives whole, a server round trip later. The read
-  is cached for `CACHE_SECONDS`, and the client refetches the stale entry once
-  it lands. A `loading.tsx` for the segment would bring the instant shell back,
-  at the cost of a streamed boundary — which is exactly what would turn the
-  404 and the 308 below into 200s (see "The Next.js app").
+- **A step through a list is loaded before it is taken.** An in-app navigation
+  fetches the next route's payload, which reads the song first, so a step that
+  has to ask for it waits a whole server round trip with nothing changing on
+  screen. The bar's two arrows are therefore `prefetch` links, which on Next is
+  a *full* prefetch (`prefetch={true}`): the neighbor's whole payload, song
+  included, held in the router's cache for five minutes (`staleTimes.static`).
+  Next's default would not do it — on a dynamic route with no `loading.tsx` it
+  prefetches nothing worth having. The swipe and the arrow keys need nothing of
+  their own: they `replace` to the same addresses, and the router answers them
+  from the same cache entry. Measured against `next start` with 400 ms added to
+  every RSC and API request: a step took 415–430 ms before, every one of them
+  waiting on its RSC fetch, and 9–16 ms after, for the arrows and the keys
+  alike, with no request for the destination at all — only the prefetch of the
+  *next* neighbor and the refetch of the song's stale cache entry. **Not a
+  `loading.tsx`**, which is the other way to paint at once: it streams a
+  boundary before the page decides, which turns the 404 and the 308 below into
+  200s (see "The Next.js app"). What prefetching costs is a server render per
+  neighbor per page view, mostly answered from the data cache's copy of the
+  song; it is on the bar's arrows alone for that reason, and the seam's
+  `prefetch` says so (see "The routing seam"). The bar has to be on screen for
+  it, since Next schedules a link's prefetch as it enters the viewport — which
+  it is, at the top of every song in a list. The history the steps keep is
+  untouched: `prefetch` loads, and `replace` still decides the entry.
 - **A song the API says does not exist is a real 404**, thrown by `loadSong`
   itself, so `generateMetadata` and the page share it through `cache`, and
   rendered by `songs/[id]/not-found.tsx` — the page's own "not available" under
@@ -1080,6 +1099,23 @@ scraper rather than by anyone inside the app, which is why each is written down.
   `app/robots.ts` claim the same path, and there is nothing in it worth
   generating. Its `Sitemap:` line therefore names a path with no file behind it,
   which is fine and is worth knowing before someone goes looking for one.
+- **`public/llms.txt` is the site described for agents, and it describes only
+  what a guest can read.** The addresses (`/songs/<slug>`, `/?q=`, `/?person=`,
+  `/lists/<uuid>`) and the read API under `/api/v1` — the routes in the Go
+  router's optional-auth group, never one behind a session, since an agent
+  following it has none and a documented route answering 401 is a dead end. It
+  is hand-written prose, so nothing checks it against `server.go` or against
+  `BrowsePage`'s parameters: **a renamed query parameter or a moved route has to
+  be changed there too.** It gets the day-long `Cache-Control` of the other
+  `public/` files, which `src/nextConfig.test.ts` pins; robots.txt points at it
+  in a comment, there being no directive for it.
+- **A song page names its JSON with `<link rel="alternate"
+  type="application/json">`**, through `generateMetadata`'s `alternates.types`
+  — the slug's `/api/v1/songs/<slug>`, whichever address was asked, like the
+  canonical. Written as a path; `metadataBase` makes it absolute on
+  `SITE_ORIGIN`, which is right because the ingress serves `/api` from the Go
+  service on that same origin. A local build therefore names production, as the
+  canonical already does.
 
 ### The routing seam
 
@@ -1121,7 +1157,11 @@ screen changed for it.
   hands to the History API rather than the router, does not scroll at all. The backend's `push`/`replace`/`back` are built
   once from Next's stable router object, so `useRouter()` is stable for good.
 - **The vocabulary is Next's.** `useRouter()` returns `push`, `replace`, `back`
-  and `canGoBack`; `Link` and `NavLink` take an `href` string and `replace`;
+  and `canGoBack`; `Link` and `NavLink` take an `href` string, `replace` and
+  `prefetch` — a hint a backend may ignore, which on Next is a full prefetch
+  (a server render of a page nobody may open, so it belongs on the few links a
+  reader is about to take: today the list bar's arrows) and in `TestRouter`
+  nothing, the anchor never carrying it;
   `usePathname`, `useSearchParams` (read-only) and `useParams` read the address;
   `useSetSearchParams` writes the search string from what it holds now, and is
   not counted as a navigation — through the backend's `writeSearch`, which on

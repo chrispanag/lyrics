@@ -19,10 +19,20 @@ import { type BackendLinkProps, type NavigationBackend, NavigationProvider } fro
  * rules would disagree about a filter written into the catalog's query string,
  * which must not scroll at all.
  */
-function NextBackendLink({ href, replace, ...rest }: BackendLinkProps) {
+function NextBackendLink({ href, replace, prefetch, ...rest }: BackendLinkProps) {
+  // `prefetch` true is Next's full prefetch, which a dynamic route needs: its
+  // default stops at the nearest `loading.tsx`, and these routes have none.
   // Cast: Next's props type its handlers as never-undefined, which
   // `exactOptionalPropertyTypes` will not take from an anchor's props.
-  return <NextLink href={href} replace={replace} scroll={false} {...(rest as object)} />;
+  return (
+    <NextLink
+      href={href}
+      replace={replace}
+      scroll={false}
+      prefetch={prefetch ? true : null}
+      {...(rest as object)}
+    />
+  );
 }
 
 /** Mounts the seam on Next's router. Once, in the root layout's providers. */

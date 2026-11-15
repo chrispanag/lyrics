@@ -92,6 +92,15 @@ describe("a song's server-rendered document", () => {
     expect(metadata.openGraph?.images).toBeDefined();
   });
 
+  it("points an agent at the song's JSON under its slug, whichever address was asked", async () => {
+    // Asked by id: the alternate still names the slug, like the canonical.
+    const metadata = await generateMetadata(props(UUID));
+
+    expect(metadata.alternates?.types).toEqual({
+      "application/json": `/api/v1/songs/${SLUG}`,
+    });
+  });
+
   it("carries the structured description of the song it is serving", async () => {
     const body = structuredData(await SongPage(props(SLUG)));
 

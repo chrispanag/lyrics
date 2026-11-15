@@ -18,6 +18,10 @@
 # contentless pages that then become indexable. /lists is deliberately absent:
 # the index needs a session, but a list itself is meant to be shared, and no
 # standard directive excludes the one without the other.
+#
+# Agents: https://songfolio.live/llms.txt describes the site's addresses and its
+# public JSON API under /api/v1, which `Allow: /` covers and which is cheaper to
+# read than the pages. No standard directive names that file, hence a comment.
 
 User-agent: *
 Allow: /

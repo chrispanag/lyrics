@@ -30,6 +30,8 @@ export type ReadonlySearchParams = Omit<URLSearchParams, "append" | "delete" | "
 export type BackendLinkProps = Omit<ComponentPropsWithoutRef<"a">, "href"> & {
   href: string;
   replace: boolean;
+  /** Load the whole destination ahead of a press. A hint: a backend may ignore it. */
+  prefetch?: boolean | undefined;
 };
 
 /**
@@ -158,6 +160,12 @@ type LinkProps = Omit<ComponentPropsWithoutRef<"a">, "href"> & {
   href: string;
   /** Replace this history entry rather than push one. */
   replace?: boolean | undefined;
+  /**
+   * Load the whole destination before it is pressed, so the step paints at
+   * once. For the few links a reader is about to take: on Next each is a
+   * server render of a page nobody may open. See "The routing seam".
+   */
+  prefetch?: boolean | undefined;
 };
 
 /** A link inside the app. `href` is a path, with a search string if it needs one. */
@@ -397,7 +405,7 @@ export function TestRouter({ entries, children }: { entries: string[]; children:
 }
 
 /** A plain anchor whose plain clicks move the memory history instead. */
-function MemoryLink({ href, replace, onClick, ...rest }: BackendLinkProps) {
+function MemoryLink({ href, replace, prefetch: _prefetch, onClick, ...rest }: BackendLinkProps) {
   const backend = useBackend();
   return (
     <a
