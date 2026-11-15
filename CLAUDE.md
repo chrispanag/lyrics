@@ -28,9 +28,10 @@ make check       # lint + test, both stacks
 `make test-backend` depends on `up` deliberately: the integration tests **skip**
 when no database is reachable, so without it a broken schema reports green.
 
-Keep `make check` clean. Backend must be `gofmt`-clean — `make check` does not
-run gofmt, CI does, so also run `gofmt -l backend` — with zero `golangci-lint`
-findings; frontend must have zero `tsc` errors and zero eslint findings
+Keep `make check` clean. Backend must be `gofmt`-clean with zero `golangci-lint`
+findings — and `make check` does not run gofmt while CI does, so also run
+`gofmt -l backend`: it exits 0 either way, and CI fails on any file it lists. The
+frontend must have zero `tsc` errors and zero eslint findings
 (warnings included — the fast-refresh warnings are why styles live in their own
 modules, see Conventions).
 
@@ -1045,14 +1046,14 @@ each of them is written down.
   Lists in it, a catalog with no Add song, all replaced a few hundred
   milliseconds later. It is the same trade the inline theme script in
   `app/layout.tsx` makes — paint the last known answer rather than a wrong one —
-  and it is
-  safe for the same reason `hasRole` is: the server is the authority, so a stale
-  role costs one paint of chrome whose every action is refused. No token is ever
-  kept there; the SDK owns those, and `auth/session` says so. What the snapshot
-  must not do is move anybody, which is why **`loading` keeps its exact meaning
-  and every redirect reads it first**: `VerificationGate`, the sign-in and
-  sign-up screens' "already signed in" redirects, and `VerifyEmailPage`'s
-  challenge-opening effect all wait for the restore, and each of them is pinned.
+  and it is safe for the same reason `hasRole` is: the server is the authority,
+  so a stale role costs one paint of chrome whose every action is refused. No
+  token is ever kept there; the SDK owns those, and `auth/session` says so.
+  What the snapshot must not do is move anybody, which is why **`loading` keeps
+  its exact meaning and every redirect reads it first**: `VerificationGate`, the
+  sign-in and sign-up screens' "already signed in" redirects, and
+  `VerifyEmailPage`'s challenge-opening effect all wait for the restore, and
+  each of them is pinned.
   Left unguarded, a snapshot taken before an address was verified on another
   device bounces a verified visitor to a code form and then to the catalog rather
   than the page they opened; a snapshot outliving its session sends someone who

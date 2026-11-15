@@ -105,7 +105,8 @@ is still true, check; if you cannot tell, leave it and list it in the report.
    line is a comment line or a now-blank line left by a deleted comment (collapse
    duplicated blank lines).
 4. Run `make lint` (golangci-lint, go vet, tsc, eslint) and `gofmt -l backend`,
-   which no `make` target runs. Fix anything the edit caused, such as an unused
+   which no `make` target runs. `gofmt -l` exits 0 either way; CI fails on any
+   file it lists. Fix anything the edit caused, such as an unused
    `eslint-disable` or a missing directive.
 5. Report:
    - Per file: comments deleted / shortened.

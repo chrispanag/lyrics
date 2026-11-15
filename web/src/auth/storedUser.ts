@@ -8,9 +8,9 @@ import { ROLES, type User } from "@/lib/types";
  * Rendering that as "nobody" is what made every refresh of a signed-in page
  * paint the *guest* answer first: a navigation offering a sign-in button and
  * no Lists in it, a catalog with no Add song, all of it replaced a few
- * hundred milliseconds later. This is the same trade `applyTheme(storedTheme())`
- * makes in `main.tsx`: paint the last known answer rather than a wrong one while
- * waiting for the right one.
+ * hundred milliseconds later. This is the same trade the inline theme script in
+ * `app/layout.tsx` makes: paint the last known answer rather than a wrong one
+ * while waiting for the right one.
  *
  * It is a hint about what to *draw* and nothing more. No token is kept here —
  * the SDK owns those, as `auth/session` says — so the snapshot is no way into an
