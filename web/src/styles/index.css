@@ -46,6 +46,15 @@
        pages is already identical. Invisible on a Mac, where scrollbars overlay
        the content and reserve nothing. */
     scrollbar-gutter: stable;
+    /* What the browser draws for itself — that scrollbar, the canvas behind
+       the page, native controls, autofill — reads this, not the `.dark` class.
+       Keyed on the class rather than the media query because the in-app
+       toggle can override the system. With no script there is no class and
+       the page is light, so light is the right answer there too. */
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
   }
 
   @media (prefers-reduced-motion: reduce) {

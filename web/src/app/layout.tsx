@@ -38,6 +38,9 @@ export const viewport: Viewport = {
   // Lets the layout extend under the notch and home indicator; the safe-area
   // insets in styles/index.css keep content clear of them.
   viewportFit: "cover",
+  // Read before any CSS arrives, so the first canvas can already be dark. Both,
+  // because the theme is the reader's; html's color-scheme decides from there.
+  colorScheme: "light dark",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#0c0a09" },
     { media: "(prefers-color-scheme: light)", color: "#fafaf9" },
