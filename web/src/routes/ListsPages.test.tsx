@@ -5,6 +5,7 @@ import { Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { ListDetailPage, ListsPage } from "./ListsPages";
+import { keys } from "@/api/hooks";
 import { API, apiError, list, listById, makeList, makeSong, makeUser } from "@/test/handlers";
 import { stubRowRects } from "@/test/rects";
 import { renderWithProviders } from "@/test/render";
@@ -69,6 +70,29 @@ describe("ListsPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong.");
     expect(screen.queryByText("No lists yet")).not.toBeInTheDocument();
+  });
+
+  // As on the song page: a refetch runs on every return to the tab, and one
+  // that fails must not report a request the reader never made.
+  it("keeps the lists a reader already has when a refetch fails", async () => {
+    server.use(
+      http.get(`${API}/api/v1/lists`, () =>
+        HttpResponse.json(list([makeList({ id: "list-1", name: "Ρεμπέτικα" })])),
+      ),
+    );
+    const { queryClient } = renderWithProviders(<ListsPage />, { user: makeUser() });
+    await screen.findByRole("link", { name: /Ρεμπέτικα/ });
+
+    server.use(
+      http.get(`${API}/api/v1/lists`, () => apiError(500, "internal", "Something went wrong.")),
+    );
+    await act(() => queryClient.refetchQueries({ queryKey: keys.lists() }));
+    // The refetch resolves before react-query tells the page; pressing a
+    // control renders it first, or the assertion below cannot fail.
+    await userEvent.click(screen.getByRole("button", { name: "New list" }));
+
+    expect(screen.getByRole("link", { name: /Ρεμπέτικα/ })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("creates a list under the trimmed name and shows it once created", async () => {

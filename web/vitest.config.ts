@@ -14,8 +14,10 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     css: false,
-    // Spies are put back after every test, so a spec need not restore its own
-    // and a failing assertion cannot leak one into the next test.
+    // Every `vi.spyOn` is put back before each test, so a spec need not restore
+    // its own and a failing assertion cannot leak one into the next test. A spy
+    // made in `beforeAll` or at describe scope is therefore gone by the first
+    // test: make it in `beforeEach`.
     restoreMocks: true,
     exclude: ["node_modules/**", ".next/**", "e2e/**"],
     coverage: {
@@ -30,7 +32,9 @@ export default defineConfig({
         "src/AppRoot.tsx",
         "src/app/layout.tsx",
         "src/app/client.tsx",
-        "src/app/[[]...slug]]/page.tsx",
+        // Brackets escaped: unescaped, `[[]` is a character class matching one
+        // `[`, and the pattern silently misses the folder.
+        "src/app/\\[\\[...slug\\]\\]/page.tsx",
         "src/app/songs/new/page.tsx",
       ],
       reporter: ["text-summary"],

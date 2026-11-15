@@ -104,7 +104,8 @@ export function ListsPage() {
 
       {isLoading && <Skeletons count={3} className="h-20 w-full" />}
 
-      {isError && (
+      {/* A failed refetch keeps the lists in hand and says nothing. */}
+      {isError && !data && (
         <ErrorMessage>{errorMessage(loadError, "Your lists could not be loaded.")}</ErrorMessage>
       )}
 

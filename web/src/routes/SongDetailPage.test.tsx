@@ -1049,7 +1049,6 @@ describe("SongDetailPage inside a list", () => {
   });
 });
 
-// Exercises the shared `ConfirmSheet`, as does ListsPages' delete spec.
 describe("SongDetailPage save to list", () => {
   function serveSheet(membership: () => Response | Promise<Response>) {
     server.use(
@@ -1109,6 +1108,29 @@ describe("SongDetailPage save to list", () => {
     );
   });
 
+  // Pending lasts until membership is refetched: a second press on the stale
+  // state would re-add the song just taken off. A refusal must be said, too.
+  it("holds the rows while a change is in flight, and says when it is refused", async () => {
+    const [held, release] = deferred();
+    serveSheet(() => HttpResponse.json({ list_ids: ["list-1"] }));
+    server.use(
+      http.all(`${API}/api/v1/lists/:listId/songs/:songId`, async () => {
+        await held;
+        return apiError(500, "internal", "Something went wrong.");
+      }),
+    );
+    renderDetail({ user: makeUser() });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Save to a list" }));
+    const on = await screen.findByRole("button", { name: /Ρεμπέτικα/ });
+    await userEvent.click(on);
+
+    await waitFor(() => expect(on).toBeDisabled());
+    release();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong.");
+    expect(on).toBeEnabled();
+  });
+
   it("says the lists could not be loaded rather than showing every one unchecked", async () => {
     serveSheet(() => apiError(500, "internal", "Something went wrong."));
     renderDetail({ user: makeUser() });
@@ -1120,6 +1142,7 @@ describe("SongDetailPage save to list", () => {
   });
 });
 
+// Exercises the shared `ConfirmSheet`, as does ListsPages' delete spec.
 describe("SongDetailPage deletion", () => {
   it("asks before deleting a song, and deletes the one it named", async () => {
     let deleted = "";

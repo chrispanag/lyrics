@@ -7,11 +7,7 @@ describe("the shared MSW server", () => {
   it("refuses a request no handler answers", async () => {
     const report = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    try {
-      await expect(fetch("http://localhost:8080/api/v1/nothing-answers-this")).rejects.toThrow();
-      expect(report).toHaveBeenCalled();
-    } finally {
-      report.mockRestore();
-    }
+    await expect(fetch("http://localhost:8080/api/v1/nothing-answers-this")).rejects.toThrow();
+    expect(report).toHaveBeenCalled();
   });
 });

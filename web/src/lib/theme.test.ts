@@ -156,15 +156,13 @@ describe("THEME_BOOT_SCRIPT", () => {
 
   it("survives a storage that throws", () => {
     prefersDark(true);
-    const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("storage is blocked");
     });
 
     expect(() => runBootScript()).not.toThrow();
     expect(document.documentElement.classList.contains("dark")).toBe(false);
     expect(themeColorOverride()).toBeNull();
-
-    getItem.mockRestore();
   });
 
   // A `var` in an inline script lands on `window`.

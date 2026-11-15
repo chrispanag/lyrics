@@ -208,7 +208,9 @@ describe("BrowsePage artist filter", () => {
 
     renderWithProviders(<BrowsePage />, { route: "/?person=person-1" });
 
-    await userEvent.click(await screen.findByRole("button", { name: /remove filter/i }));
+    // Named first, so the absence below is the chip going rather than never arriving.
+    expect(await screen.findByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /remove filter/i }));
 
     await waitFor(() => expect(requests.at(-1)?.get("person")).toBeNull());
     expect(screen.queryByText("Μίκης Θεοδωράκης")).not.toBeInTheDocument();

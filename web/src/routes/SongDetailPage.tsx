@@ -379,13 +379,18 @@ function AddToListSheet({
 
   // Rows wait for both answers: drawn from the lists alone, every row reads as
   // unchecked, and pressing one sends an add for a song already on that list.
-  const failure = lists.error ?? membership.error;
+  // A failed refetch keeps the answer in hand and says nothing, as the song
+  // page does; only a failure that leaves nothing to show is reported.
+  const failure = (lists.data ? null : lists.error) ?? (membership.data ? null : membership.error);
   const memberOf = new Set(membership.data?.list_ids ?? []);
 
   return (
     <Sheet open={open} onClose={onClose} title="Save to list">
       {failure && (
         <ErrorMessage>{errorMessage(failure, "Your lists could not be loaded.")}</ErrorMessage>
+      )}
+      {toggle.error && (
+        <ErrorMessage>{errorMessage(toggle.error, "That list could not be changed.")}</ErrorMessage>
       )}
       {!failure && (!lists.data || !membership.data) && <Spinner />}
       <ul className="space-y-1">
@@ -397,6 +402,9 @@ function AddToListSheet({
                 <button
                   type="button"
                   onClick={() => toggle.mutate({ listId: list.id, present })}
+                  // Pending lasts until membership is refetched, so a second
+                  // press cannot act on the stale `present` and re-add.
+                  disabled={toggle.isPending}
                   aria-pressed={present}
                   className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-stone-100 dark:hover:bg-stone-800"
                 >
