@@ -100,13 +100,13 @@ is still true, check; if you cannot tell, leave it and list it in the report.
 1. Resolve the file list from the scope above.
 2. For each file: read it whole, classify each comment, verify outdated claims
    with `grep`, then apply edits. **Change comments only** — never code,
-   strings, or formatting of code lines.
+   strings, or formatting of code lines, except the whitespace `gofmt`
+   realigns once a trailing comment is gone.
 3. Confirm only comments changed: review `git diff` and make sure every changed
-   line is a comment line or a now-blank line left by a deleted comment (collapse
-   duplicated blank lines).
+   line is a comment line, a now-blank line left by a deleted comment (collapse
+   duplicated blank lines), or a gofmt realignment.
 4. Run `make lint` (gofmt, golangci-lint, go vet, tsc, eslint). Fix anything
-   the edit caused, such as an unused
-   `eslint-disable` or a missing directive.
+   the edit caused, such as an unused `eslint-disable` or a missing directive.
 5. Report:
    - Per file: comments deleted / shortened.
    - Comments left alone because truth could not be verified, with
