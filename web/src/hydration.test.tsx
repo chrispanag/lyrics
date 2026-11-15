@@ -37,9 +37,7 @@ import { TestApp } from "@/test/app";
 vi.mock("@/auth/session", () => ({
   OTP_LOGIN_CONFIG_ID: "",
   getAccessToken: () => new Promise<string | null>(() => {}),
-  sessionClient: () => {
-    throw new Error("the SDK is not for specs");
-  },
+  sessionClient: () => Promise.reject(new Error("the SDK is not for specs")),
 }));
 
 /**
