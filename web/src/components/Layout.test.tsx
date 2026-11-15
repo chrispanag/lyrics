@@ -1,7 +1,7 @@
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Layout, StickyHeader } from "./Layout";
 import { MenuHeader } from "./SearchHeader";
@@ -208,5 +208,44 @@ describe("StickyHeader", () => {
     scrollDown();
 
     expect(header()).not.toHaveClass("max-md:-translate-y-full");
+  });
+
+  /*
+   * The suite-wide ResizeObserver never calls back, so this one answers on
+   * `observe`, the way a browser's first notification does, and jsdom's
+   * `offsetHeight` (always 0) is given a height to report.
+   */
+  it("publishes its height for the root's scroll padding, and withdraws it", () => {
+    class AnsweringResizeObserver {
+      private readonly callback: ResizeObserverCallback;
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+      }
+      observe() {
+        this.callback([], this as unknown as ResizeObserver);
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    const suiteObserver = globalThis.ResizeObserver;
+    vi.stubGlobal("ResizeObserver", AnsweringResizeObserver);
+    const height = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(57);
+    const published = () =>
+      document.documentElement.style.getPropertyValue("--sticky-header-height");
+
+    try {
+      const { unmount } = render(<StickyHeader>Search</StickyHeader>);
+
+      expect(published()).toBe("57px");
+      // What index.css keys the in-header focus rule on.
+      expect(header()).toHaveAttribute("data-sticky-header");
+
+      unmount();
+
+      expect(published()).toBe("");
+    } finally {
+      height.mockRestore();
+      vi.stubGlobal("ResizeObserver", suiteObserver);
+    }
   });
 });

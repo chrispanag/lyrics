@@ -332,6 +332,8 @@ export function StickyHeader({
   return (
     <header
       ref={ref}
+      // Read by index.css, which keeps focus inside the header from scrolling.
+      data-sticky-header
       className={cn(
         "sticky top-0 z-30 border-b border-stone-200 bg-stone-50/90 backdrop-blur transition-transform duration-200 pt-safe dark:border-stone-800 dark:bg-stone-950/90",
         hidden && !pinned && "max-md:-translate-y-full",
