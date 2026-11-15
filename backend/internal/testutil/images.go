@@ -74,16 +74,17 @@ func SolidJPEG(tb testing.TB, width, height int) []byte {
 // PNGHeader builds a PNG that declares the given dimensions and carries no
 // pixel data: a decompression bomb, since the size is read from IHDR first.
 func PNGHeader(width, height uint32) []byte {
-	ihdr := []byte("IHDR")
-	ihdr = binary.BigEndian.AppendUint32(ihdr, width)
-	ihdr = binary.BigEndian.AppendUint32(ihdr, height)
+	var data [13]byte
+	binary.BigEndian.PutUint32(data[0:], width)
+	binary.BigEndian.PutUint32(data[4:], height)
 	// 8 bits per channel, truecolor with alpha, and the only compression,
 	// filter and interlace methods PNG defines.
-	ihdr = append(ihdr, 8, 6, 0, 0, 0)
+	copy(data[8:], []byte{8, 6, 0, 0, 0})
+	ihdr := append([]byte("IHDR"), data[:]...)
 
 	out := []byte("\x89PNG\r\n\x1a\n")
 	// A chunk's length counts its data; its checksum covers the type as well.
-	out = binary.BigEndian.AppendUint32(out, uint32(len(ihdr)-len("IHDR"))) //nolint:gosec // G115: IHDR data is always 13 bytes.
+	out = binary.BigEndian.AppendUint32(out, uint32(len(data)))
 	out = append(out, ihdr...)
 	return binary.BigEndian.AppendUint32(out, crc32.ChecksumIEEE(ihdr))
 }

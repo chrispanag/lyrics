@@ -112,12 +112,12 @@ func (s *Server) compensateFailedRegistration(reqCtx context.Context, preludeUse
 	defer cancel()
 
 	if err := s.prelude.DeleteUser(ctx, preludeUserID); err != nil {
-		slog.Error("failed to roll back partially created prelude user; "+
+		slog.ErrorContext(ctx, "failed to roll back partially created prelude user; "+
 			"this email cannot be registered again until the account is deleted manually",
 			"prelude_user_id", preludeUserID, "email", email, "error", err)
 		return
 	}
-	slog.Info("rolled back partially created prelude user", "prelude_user_id", preludeUserID)
+	slog.InfoContext(ctx, "rolled back partially created prelude user", "prelude_user_id", preludeUserID)
 }
 
 // EmailVerifyScope is the step-up scope that proves an address. Must match the

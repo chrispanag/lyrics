@@ -72,7 +72,9 @@ func testDatabaseName() string {
 
 // ensureDatabase creates this binary's database if it does not exist yet.
 func ensureDatabase() error {
-	ctx := context.Background()
+	// Bounded, since a wedged server would otherwise hang every test binary.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	admin, err := sql.Open("pgx", baseDatabaseURL())
 	if err != nil {
