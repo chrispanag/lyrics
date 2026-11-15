@@ -4,17 +4,18 @@ import { useEffect, useState } from "react";
 import { Plus, SixteenthNotes, SlidersHorizontal } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
-import { useGenres, usePerson, useSongs } from "@/api/hooks";
+import { useGenres, usePerson, useSongPages } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { buttonClasses } from "@/components/buttonStyles";
+import { InfiniteScrollTrigger } from "@/components/InfiniteScrollTrigger";
 import { PageTitle } from "@/components/PageTitle";
 import { SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
 import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Skeletons } from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
-import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
-import { PAGE_SIZE, catalogName, catalogView, viewGenre } from "@/lib/browse";
+import { LANGUAGE_LABELS, type Song, hasRole } from "@/lib/types";
+import { catalogName, catalogView, viewGenre } from "@/lib/browse";
 import { songCount } from "@/lib/format";
 import { Link, useSearchParams, useSetSearchParams } from "@/lib/navigation";
 
@@ -29,7 +30,7 @@ export function BrowsePage() {
   // query it read ahead is the query asked for here. Not memoized:
   // react-query hashes query keys structurally.
   const view = catalogView(params);
-  const { query, page, genreSlug, language, personId, activeSort, filters } = view;
+  const { query, genreSlug, language, personId, activeSort, filters } = view;
   const [draft, setDraft] = useState(query);
 
   // Re-synced to the URL during render, not in an effect: an effect leaves the
@@ -45,7 +46,7 @@ export function BrowsePage() {
 
   // Pushes the debounced input into the URL, replacing history per keystroke.
   // Both guards are load-bearing: the first skips a debounce still catching up;
-  // the second stops this clearing `page` after every param write, since
+  // the second stops this rewriting the address after every param write, since
   // `setParams` is not referentially stable.
   useEffect(() => {
     if (debounced !== draft) return;
@@ -56,41 +57,28 @@ export function BrowsePage() {
       (next) => {
         if (debounced) next.set("q", debounced);
         else next.delete("q");
-        next.delete("page");
       },
       { replace: true },
     );
   }, [debounced, draft, query, setParams]);
 
-  const { data, isLoading, isError, error } = useSongs(filters);
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = useSongPages(filters);
   const { data: genres } = useGenres();
 
-  /** Edits the query string. Any filter change resets the page unless `keepPage`. */
-  const updateParams = (
-    mutate: (next: URLSearchParams) => void,
-    options: { keepPage?: boolean } = {},
-  ) => {
-    setParams((next) => {
-      mutate(next);
-      if (!options.keepPage) next.delete("page");
-    });
-  };
-
   const setParam = (key: string, value: string | null) => {
-    updateParams((next) => {
+    setParams((next) => {
       if (value) next.set(key, value);
       else next.delete(key);
     });
-  };
-
-  const goToPage = (page: number) => {
-    updateParams(
-      (next) => {
-        if (page <= 0) next.delete("page");
-        else next.set("page", String(page));
-      },
-      { keepPage: true },
-    );
   };
 
   const activeGenre = viewGenre(view, genres?.data);
@@ -99,8 +87,11 @@ export function BrowsePage() {
   // The one list of what counts as a filter; the button and badge both read it.
   const filterCount = [personId, genreSlug, language].filter(Boolean).length;
   const hasFilters = filterCount > 0;
-  const total = data?.meta.total ?? 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  // The latest page's count, which sees songs added or removed since the first.
+  const total = data?.pages.at(-1)?.meta.total ?? 0;
+  // Offsets shift when a song is added mid-scroll, which repeats one across
+  // two pages; a key seen twice is a React error, so each song shows once.
+  const songs = uniqueById(data?.pages.flatMap((page) => page.data) ?? []);
 
   // Named by the query or the landing filter, since each is a history entry
   // and a bookmark; `generateMetadata`'s `og:title` is the same name.
@@ -177,14 +168,15 @@ export function BrowsePage() {
           )}
         </div>
 
-        {isError && (
+        {/* A later page's failure is said where it happened, below the list. */}
+        {isError && !isFetchNextPageError && (
           <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
         )}
 
         {/* `h-28` restates a song card's height; update it if cards change. */}
         {isLoading && <Skeletons count={5} className="h-28 w-full" />}
 
-        {!isLoading && data?.data.length === 0 && (
+        {!isLoading && data && songs.length === 0 && (
           <EmptyState
             icon={<SixteenthNotes className="size-12" />}
             title={query ? "No songs matched" : "No songs yet"}
@@ -197,33 +189,26 @@ export function BrowsePage() {
         )}
 
         <div className="space-y-3">
-          {data?.data.map((song) => (
+          {songs.map((song) => (
             <SongCard key={song.id} song={song} />
           ))}
         </div>
 
-        {totalPages > 1 && (
-          <nav aria-label="Pagination" className="mt-6 flex items-center justify-between gap-3">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={page === 0}
-              onClick={() => goToPage(page - 1)}
-            >
-              Previous
+        {isFetchingNextPage && (
+          <Skeletons count={2} className="h-28 w-full" stackClassName="mt-3 space-y-3" />
+        )}
+
+        {isFetchNextPageError ? (
+          // Not retried by scrolling: a failing API would be asked on every pixel.
+          <div className="mt-4 space-y-3">
+            <ErrorMessage>{errorMessage(error, "More songs could not be loaded.")}</ErrorMessage>
+            <Button variant="secondary" size="sm" onClick={() => fetchNextPage()}>
+              Try again
             </Button>
-            <span className="text-sm text-fg-muted">
-              Page {page + 1} of {totalPages}
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={page >= totalPages - 1}
-              onClick={() => goToPage(page + 1)}
-            >
-              Next
-            </Button>
-          </nav>
+          </div>
+        ) : (
+          hasNextPage &&
+          !isFetchingNextPage && <InfiniteScrollTrigger onLoadMore={() => fetchNextPage()} />
         )}
       </div>
 
@@ -298,7 +283,7 @@ export function BrowsePage() {
                 variant="secondary"
                 className="flex-1"
                 onClick={() =>
-                  updateParams((next) => {
+                  setParams((next) => {
                     // Every key `filterCount` counts must be cleared here.
                     next.delete("person");
                     next.delete("genre_slug");
@@ -318,4 +303,10 @@ export function BrowsePage() {
       )}
     </>
   );
+}
+
+/** The songs in their order, each kept at its first appearance. */
+function uniqueById(songs: Song[]): Song[] {
+  const seen = new Set<string>();
+  return songs.filter((song) => !seen.has(song.id) && Boolean(seen.add(song.id)));
 }

@@ -1,5 +1,8 @@
 import {
+  infiniteQueryOptions,
+  keepPreviousData,
   queryOptions,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -22,6 +25,8 @@ import type {
 /** Query key factory, so invalidations cannot drift from the keys they target. */
 export const keys = {
   songs: (filters: SongFilters) => ["songs", filters] as const,
+  // Under `songs`, so every invalidation of the catalog reaches it too.
+  songPages: (filters: SongFilters) => ["songs", "pages", filters] as const,
   song: (id: string) => ["song", id] as const,
   people: (query: string) => ["people", query] as const,
   person: (id: string) => ["person", id] as const,
@@ -45,6 +50,26 @@ export const queries = {
       queryKey: keys.songs(filters),
       queryFn: () =>
         apiFetch<ListResponse<Song>>(`/api/v1/songs${toQuery({ ...filters })}`, request),
+    }),
+  /**
+   * The catalog, a page at a time from `offset` 0, for infinite scrolling.
+   * `filters` carries the page size; the offset is each page's own.
+   */
+  songPages: (filters: SongFilters, request?: RequestOptions) =>
+    infiniteQueryOptions({
+      queryKey: keys.songPages(filters),
+      queryFn: ({ pageParam }) =>
+        apiFetch<ListResponse<Song>>(
+          `/api/v1/songs${toQuery({ ...filters, offset: pageParam })}`,
+          request,
+        ),
+      initialPageParam: 0,
+      // An empty page ends the list even short of `total`, so a catalog that
+      // shrank under the reader cannot ask for the same offset forever.
+      getNextPageParam: (last) => {
+        const next = last.meta.offset + last.data.length;
+        return last.data.length > 0 && next < last.meta.total ? next : undefined;
+      },
     }),
   person: (id: string, request?: RequestOptions) =>
     queryOptions({
@@ -72,6 +97,15 @@ export function useSongs(filters: SongFilters, enabled = true) {
     // Keeps the previous page on screen while the next query loads.
     placeholderData: (previous) => previous,
     enabled,
+  });
+}
+
+/** The catalog as an infinite list; see `queries.songPages`. */
+export function useSongPages(filters: SongFilters) {
+  return useInfiniteQuery({
+    ...queries.songPages(filters),
+    // Keeps the previous results on screen while a new filter's first page loads.
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -62,7 +62,7 @@ describe("the catalog's server render", () => {
   it("hands the page its reads, keyed as its hooks key them", async () => {
     const before = Date.now();
     const tree = await CatalogPage(
-      props({ person: PERSON.id, page: "1", sort: "title", genre_slug: "rempetiko" }),
+      props({ person: PERSON.id, sort: "title", genre_slug: "rempetiko" }),
     );
 
     expect(handover(tree)?.props.children.type).toBe(BrowsePage);
@@ -70,12 +70,11 @@ describe("the catalog's server render", () => {
     // the route derived.
     expect(entries(tree).map((entry) => entry.queryKey)).toEqual(
       expect.arrayContaining([
-        keys.songs({
+        keys.songPages({
           person: PERSON.id,
           genre_slug: "rempetiko",
           sort: "title",
           limit: 20,
-          offset: 20,
         }),
         keys.genres(),
         keys.person(PERSON.id),
@@ -90,7 +89,7 @@ describe("the catalog's server render", () => {
     const tree = await CatalogPage(props({ q: "θάλασσα" }));
 
     expect(entries(tree).map((entry) => entry.queryKey)).toEqual([
-      keys.songs({ q: "θάλασσα", sort: "relevance", limit: 20, offset: 0 }),
+      keys.songPages({ q: "θάλασσα", sort: "relevance", limit: 20 }),
       keys.genres(),
     ]);
   });
@@ -188,6 +187,14 @@ describe("what the catalog tells a crawler", () => {
     expect(metadata.openGraph?.description).toMatch(/song lyrics catalog/);
   });
 
+  // The catalog no longer pages, so an old `?page=` link is the page itself.
+  it("folds an old page link into the page it now shows", async () => {
+    const metadata = await generateMetadata(props({ page: "2" }));
+
+    expect(metadata).not.toHaveProperty("robots");
+    expect(metadata.alternates?.canonical).toBe("/");
+  });
+
   it("makes a person's songs a page of their own, whatever the order", async () => {
     const metadata = await generateMetadata(props({ person: PERSON.id, sort: "title" }));
 
@@ -213,8 +220,6 @@ describe("what the catalog tells a crawler", () => {
 
   it.each([
     ["a search", { q: "θάλασσα" }],
-    ["a later page", { page: "2" }],
-    ["a later page of a person's songs", { person: PERSON.id, page: "1" }],
     ["a language", { language: "el" }],
     ["a combination of filters", { person: PERSON.id, genre_slug: "laiko" }],
     ["a person the API does not know", { person: "3f2504e0-4f89-11d3-9a0c-0305e82c3301" }],

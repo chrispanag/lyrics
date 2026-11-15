@@ -35,6 +35,7 @@ export function genrePageHref(slug: string): string {
   return browseHref({ genre_slug: slug });
 }
 
+/** How many songs each step of the infinite list fetches. */
 export const PAGE_SIZE = 20;
 
 const SORTS = ["relevance", "title", "newest", "oldest"] as const;
@@ -55,30 +56,18 @@ export type CatalogSubject = "search" | "person" | "genre" | "mixed" | "catalog"
 export interface CatalogView {
   subject: CatalogSubject;
   query: string;
-  /** Zero-based. */
-  page: number;
   genreSlug: string;
   language: string;
   personId: string;
   /** The ordering in effect, which the sort picker shows: never absent. */
   activeSort: NonNullable<SongFilters["sort"]>;
-  /** What `useSongs` is asked for, and so what its key is built from. */
+  /** What `useSongPages` is asked for, and so what its key is built from. */
   filters: SongFilters;
-}
-
-/**
- * Reads the page number, treating anything unusable as page one. NaN would
- * pass every comparison as false and break pagination.
- */
-function pageNumber(raw: string | null): number {
-  const parsed = Number(raw ?? "0");
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
 /** The catalog view an address asks for. */
 export function catalogView(params: SearchReader): CatalogView {
   const query = params.get("q") ?? "";
-  const page = pageNumber(params.get("page"));
   const genreSlug = params.get("genre_slug") ?? "";
   const language = params.get("language") ?? "";
   // Song pages link every credit to `/?person=<id>`; unread, an artist link
@@ -106,7 +95,6 @@ export function catalogView(params: SearchReader): CatalogView {
             ? "genre"
             : "catalog",
     query,
-    page,
     genreSlug,
     language,
     personId,
@@ -118,7 +106,6 @@ export function catalogView(params: SearchReader): CatalogView {
       language: language || undefined,
       sort: activeSort,
       limit: PAGE_SIZE,
-      offset: page * PAGE_SIZE,
     },
   };
 }

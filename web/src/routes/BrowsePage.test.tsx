@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { BrowsePage } from "./BrowsePage";
 import type { Genre, ListResponse, Song } from "@/lib/types";
 import { API, apiError, list, makeGenre, makeSong, makeUser } from "@/test/handlers";
+import { intersectAll } from "@/test/intersection";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
@@ -100,30 +101,6 @@ describe("BrowsePage", () => {
     renderWithProviders(<BrowsePage />, { user: makeUser({ role: "contributor" }) });
 
     expect(await screen.findByRole("link", { name: /add song/i })).toBeInTheDocument();
-  });
-});
-
-/*
- * The debounced-search effect re-runs on every param write; without its guard
- * it clears `page` and the list silently snaps back to the first page.
- */
-describe("BrowsePage pagination", () => {
-  it("advances to the next page and stays there", async () => {
-    const user = userEvent.setup();
-    // Three pages' worth of results behind a single page of rows.
-    const requests = recordRequests({ songs: list([makeSong()], { total: 45 }) });
-
-    renderWithProviders(<BrowsePage />);
-
-    await user.click(await screen.findByRole("button", { name: /next/i }));
-
-    expect(await screen.findByText("Page 2 of 3")).toBeInTheDocument();
-    await waitFor(() => expect(requests.at(-1)?.get("offset")).toBe("20"));
-
-    // The offset has to survive past the debounce, not just the first render.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 500)));
-    expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
-    expect(requests.at(-1)?.get("offset")).toBe("20");
   });
 });
 
@@ -289,27 +266,94 @@ describe("BrowsePage clearing a search", () => {
   });
 });
 
-describe("BrowsePage pagination backwards", () => {
-  // Page one is the absent parameter, so its address is the bare catalog's.
-  it("steps back to the first page", async () => {
+/** The `n`th song of a catalog, distinct in id, slug and title. */
+const nthSong = (n: number) => makeSong({ id: `song-${n}`, slug: `song-${n}`, title: `Song ${n}` });
+
+/**
+ * A catalog of `total` songs served a page at a time by offset, recording each
+ * request's offset. `failAt` answers that offset with an error once.
+ */
+function serveCatalogOf(total: number, { failAt }: { failAt?: number } = {}) {
+  const offsets: string[] = [];
+  let failed = false;
+  server.use(
+    http.get(`${API}/api/v1/songs`, ({ request }) => {
+      const params = new URL(request.url).searchParams;
+      const offset = Number(params.get("offset") ?? "0");
+      const limit = Number(params.get("limit") ?? "20");
+      offsets.push(String(offset));
+      if (offset === failAt && !failed) {
+        failed = true;
+        return apiError(500, "internal_error", "Something went wrong.");
+      }
+      const songs = Array.from({ length: Math.max(0, Math.min(limit, total - offset)) }, (_, i) =>
+        nthSong(offset + i + 1),
+      );
+      return HttpResponse.json(list(songs, { total, limit, offset }));
+    }),
+  );
+  return offsets;
+}
+
+describe("BrowsePage infinite scrolling", () => {
+  it("loads the next songs as the end of the list comes into view, until there are none", async () => {
+    const offsets = serveCatalogOf(25);
+
+    renderWithProviders(<BrowsePage />);
+
+    expect(await screen.findByText("Song 20")).toBeInTheDocument();
+    expect(screen.queryByText("Song 21")).not.toBeInTheDocument();
+    expect(screen.getByText("25 songs")).toBeInTheDocument();
+
+    act(() => intersectAll());
+
+    expect(await screen.findByText("Song 25")).toBeInTheDocument();
+    // Page one stays: the list grows rather than turning over.
+    expect(screen.getByText("Song 1")).toBeInTheDocument();
+    expect(offsets).toEqual(["0", "20"]);
+
+    // Nothing left, so nothing is watching for the end.
+    act(() => intersectAll());
+    expect(offsets).toEqual(["0", "20"]);
+  });
+
+  // Never by scrolling alone: a failing API would be asked on every pixel.
+  it("says when more songs could not load, and tries again when asked", async () => {
     const user = userEvent.setup();
-    const requests = recordRequests({ songs: list([makeSong()], { total: 45 }) });
+    const offsets = serveCatalogOf(25, { failAt: 20 });
 
-    renderWithProviders(<BrowsePage />, { route: "/?page=1" });
+    renderWithProviders(<BrowsePage />);
+    await screen.findByText("Song 20");
+    act(() => intersectAll());
 
-    expect(await screen.findByText("Page 2 of 3")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /previous/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong.");
+    // The songs already shown stay.
+    expect(screen.getByText("Song 1")).toBeInTheDocument();
+    act(() => intersectAll());
+    expect(offsets).toEqual(["0", "20"]);
 
-    expect(await screen.findByText("Page 1 of 3")).toBeInTheDocument();
-    await waitFor(() => expect(requests.at(-1)?.get("offset")).toBe("0"));
-    expect(screen.getByRole("button", { name: /previous/i })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Song 25")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("starts a new search from its first songs", async () => {
+    const user = userEvent.setup();
+    const offsets = serveCatalogOf(45);
+
+    renderWithProviders(<BrowsePage />);
+    await screen.findByText("Song 20");
+    act(() => intersectAll());
+    await screen.findByText("Song 40");
+
+    await user.type(screen.getByRole("searchbox", { name: /search songs/i }), "αγάπη");
+
+    await waitFor(() => expect(offsets).toEqual(["0", "20", "0"]), { timeout: 3000 });
   });
 });
 
-/*
- * The sheet writes every choice to the URL, and each one resets the page: a
- * narrower filter left on page three is very often past its last page.
- */
+/* The sheet writes every choice to the URL, so a filtered view can be shared. */
 describe("BrowsePage filter sheet", () => {
   /** A catalog past one page, with two genres for the sheet to offer. */
   const recordSheetRequests = () =>
@@ -330,7 +374,7 @@ describe("BrowsePage filter sheet", () => {
     const user = userEvent.setup();
     const requests = recordSheetRequests();
 
-    renderWithProviders(<BrowsePage />, { route: "/?page=2" });
+    renderWithProviders(<BrowsePage />);
     const sheet = await openFilters(user);
 
     const genre = await within(sheet).findByRole("button", { name: /Ρεμπέτικο/ });
@@ -338,7 +382,6 @@ describe("BrowsePage filter sheet", () => {
     await user.click(genre);
 
     await waitFor(() => expect(requests.at(-1)?.get("genre_slug")).toBe("rempetiko"));
-    expect(requests.at(-1)?.get("offset")).toBe("0");
     expect(screen.getByRole("button", { name: "Filters, 1 active" })).toBeInTheDocument();
     expect(genre).toHaveAttribute("aria-pressed", "true");
 
@@ -382,7 +425,7 @@ describe("BrowsePage filter sheet", () => {
     const requests = recordSheetRequests();
 
     renderWithProviders(<BrowsePage />, {
-      route: "/?q=αγάπη&person=person-1&genre_slug=rempetiko&language=el&sort=title&page=1",
+      route: "/?q=αγάπη&person=person-1&genre_slug=rempetiko&language=el&sort=title",
     });
     const sheet = await openFilters(user);
 
@@ -396,7 +439,6 @@ describe("BrowsePage filter sheet", () => {
       expect(last?.has("language")).toBe(false);
       // The default with a query, now the chosen ordering is gone.
       expect(last?.get("sort")).toBe("relevance");
-      expect(last?.get("offset")).toBe("0");
     });
     expect(screen.getByRole("button", { name: "Filters" })).toBeInTheDocument();
   });

@@ -103,13 +103,11 @@ type Named = Awaited<ReturnType<typeof namedOf>>;
  * under its own filter alone, so a sort is folded into it. Everything else is
  * `noindex, follow` — still crawled through for the songs it links to, never
  * listed itself: a search (an address space anyone can mint, of thin and
- * overlapping results), a later page (a different slice, so a canonical to
- * page one would be a false claim, and the sitemap already lists every song),
- * a language or a combination of filters, and a filter the API says names
+ * overlapping results), a language or a combination of filters, and a filter the API says names
  * nothing. A filter that could not be resolved for an outage stays indexable.
  */
 function canonicalOf(view: CatalogView, named: Named): string | undefined {
-  if (view.page > 0 || view.language) return undefined;
+  if (view.language) return undefined;
   switch (view.subject) {
     case "catalog":
       return "/";
@@ -192,7 +190,7 @@ export default async function CatalogPage({ searchParams }: Props) {
   const view = await viewOf(searchParams);
   const client = requestClient();
   await Promise.all([
-    client.prefetchQuery(queries.songs(view.filters, guestRead())),
+    client.prefetchInfiniteQuery(queries.songPages(view.filters, guestRead())),
     readNamed(client, view.personId),
   ]);
 
