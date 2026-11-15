@@ -93,15 +93,25 @@ const isBlankRecording = (recording: RecordingDraft): boolean =>
 const isSentRecording = (recording: RecordingDraft): boolean => !isBlankRecording(recording);
 
 /**
- * Where a form row lands in the payload: its index among the rows that are
- * sent, which is what the server keys a row's error on. Blank rows are dropped
- * at save, so that differs from the form index, and a blank row owns no error.
+ * The row keys a save sent, in payload order, which is what the server keys a
+ * row's error on. Blank rows are dropped at save, so a payload index differs
+ * from the form index. Taken at submit rather than derived from the form as it
+ * stands: a row typed into, cleared or removed after the error would otherwise
+ * shift every error below it onto a row the server never named.
  */
-function sentIndex<T>(rows: T[], index: number, sent: (row: T) => boolean): number | undefined {
-  const row = rows[index];
-  if (row === undefined || !sent(row)) return undefined;
-  return rows.slice(0, index).filter(sent).length;
+interface SentRows {
+  credits: string[];
+  recordings: string[];
+  performers: Record<string, string[]>;
 }
+
+const NO_ROWS_SENT: SentRows = { credits: [], recordings: [], performers: {} };
+
+/** A row's payload index in the save that failed, or undefined if it was not sent. */
+const sentAt = (keys: string[] | undefined, key: string): number | undefined => {
+  const index = keys?.indexOf(key) ?? -1;
+  return index === -1 ? undefined : index;
+};
 
 export function SongEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -126,6 +136,7 @@ export function SongEditorPage() {
 
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [sentRows, setSentRows] = useState<SentRows>(NO_ROWS_SENT);
   const [dirty, setDirty] = useState(false);
 
   // Populate once per song, not per refetch: react-query returns a fresh object
@@ -238,15 +249,17 @@ export function SongEditorPage() {
       recordings.map((recording, i) => ({ ...recording, isFirst: i === index })),
     );
 
-  /** Row errors, looked up by where each row lands in the payload; see sentIndex. */
-  const recordingError = (index: number, field: string): string | undefined => {
-    const sent = sentIndex(recordings, index, isSentRecording);
+  /** Row errors, looked up by where each row landed in the failed save; see SentRows. */
+  const recordingError = (recording: RecordingDraft, field: string): string | undefined => {
+    const sent = sentAt(sentRows.recordings, recording.key);
     return sent === undefined ? undefined : fieldErrors[`recordings[${sent}].${field}`];
   };
 
   /** A credit's error, split by the control it concerns. */
-  const creditError = (index: number): { name?: string | undefined; role?: string | undefined } => {
-    const sent = sentIndex(credits, index, named);
+  const creditError = (
+    credit: CreditDraft,
+  ): { name?: string | undefined; role?: string | undefined } => {
+    const sent = sentAt(sentRows.credits, credit.key);
     if (sent === undefined) return {};
     const at = `credits[${sent}]`;
     return {
@@ -255,12 +268,13 @@ export function SongEditorPage() {
     };
   };
 
-  const performerError = (index: number, performerIndex: number): string | undefined => {
-    const recording = recordings[index];
-    const sent = sentIndex(recordings, index, isSentRecording);
-    if (!recording || sent === undefined) return undefined;
-    const sentPerformer = sentIndex(recording.performers, performerIndex, named);
-    if (sentPerformer === undefined) return undefined;
+  const performerError = (
+    recording: RecordingDraft,
+    performer: PersonDraft,
+  ): string | undefined => {
+    const sent = sentAt(sentRows.recordings, recording.key);
+    const sentPerformer = sentAt(sentRows.performers[recording.key], performer.key);
+    if (sent === undefined || sentPerformer === undefined) return undefined;
     const at = `recordings[${sent}].performers[${sentPerformer}]`;
     return fieldErrors[at] ?? fieldErrors[`${at}.name`];
   };
@@ -270,6 +284,19 @@ export function SongEditorPage() {
     setError("");
     setFieldErrors({});
 
+    const sentCredits = credits.filter(named);
+    const sentRecordings = recordings.filter(isSentRecording);
+    const rows: SentRows = {
+      credits: sentCredits.map((credit) => credit.key),
+      recordings: sentRecordings.map((recording) => recording.key),
+      performers: Object.fromEntries(
+        sentRecordings.map((recording) => [
+          recording.key,
+          recording.performers.filter(named).map((performer) => performer.key),
+        ]),
+      ),
+    };
+
     const payload: SongInput = {
       title: title.trim(),
       alt_title: altTitle.trim() || null,
@@ -277,14 +304,14 @@ export function SongEditorPage() {
       language,
       notes: notes.trim() || null,
       // Blank rows are abandoned edits, dropped rather than rejected.
-      credits: credits.filter(named).map((credit, index) => ({
+      credits: sentCredits.map((credit, index) => ({
         ...(credit.personId ? { person_id: credit.personId } : { name: credit.name.trim() }),
         role: credit.role,
         position: index,
       })),
       genre_ids: genreIds,
       // Blank recordings are dropped too; see `isBlankRecording`.
-      recordings: recordings.filter(isSentRecording).map((recording, index) => ({
+      recordings: sentRecordings.map((recording, index) => ({
         label: recording.label.trim() || null,
         youtube_url: recording.youtubeUrl.trim() || null,
         release_year: recording.releaseYear ? Number(recording.releaseYear) : null,
@@ -310,6 +337,7 @@ export function SongEditorPage() {
       else navigate(songHref(saved), { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, "The song could not be saved."));
+      setSentRows(rows);
       setFieldErrors(errorDetails(caught));
     }
   };
@@ -368,7 +396,7 @@ export function SongEditorPage() {
           </legend>
 
           {credits.map((credit, index) => {
-            const error = creditError(index);
+            const error = creditError(credit);
             const message = error.role ?? error.name;
             const errorId = `credit-${index}-error`;
             return (
@@ -497,7 +525,7 @@ export function SongEditorPage() {
                 <Field
                   label="Label"
                   htmlFor={`recording-${index}-label`}
-                  error={recordingError(index, "label")}
+                  error={recordingError(recording, "label")}
                   hint="Optional — the release or version this recording appeared on"
                 >
                   <Input
@@ -510,7 +538,7 @@ export function SongEditorPage() {
                 <Field
                   label="Year"
                   htmlFor={`recording-${index}-year`}
-                  error={recordingError(index, "release_year")}
+                  error={recordingError(recording, "release_year")}
                 >
                   <Input
                     id={`recording-${index}-year`}
@@ -526,7 +554,7 @@ export function SongEditorPage() {
                 <Field
                   label="YouTube link"
                   htmlFor={`recording-${index}-youtube`}
-                  error={recordingError(index, "youtube_url")}
+                  error={recordingError(recording, "youtube_url")}
                   hint="A watch, youtu.be, or embed link"
                 >
                   <Input
@@ -547,7 +575,7 @@ export function SongEditorPage() {
                     Performers
                   </span>
                   {recording.performers.map((performer, performerIndex) => {
-                    const error = performerError(index, performerIndex);
+                    const error = performerError(recording, performer);
                     const errorId = `recording-${index}-performer-${performerIndex}-error`;
                     return (
                       <div key={performer.key} className="space-y-1.5">
@@ -607,7 +635,7 @@ export function SongEditorPage() {
                 <Field
                   label="Notes"
                   htmlFor={`recording-${index}-notes`}
-                  error={recordingError(index, "notes")}
+                  error={recordingError(recording, "notes")}
                   hint="Optional — anything worth saying about this performance"
                 >
                   <Textarea

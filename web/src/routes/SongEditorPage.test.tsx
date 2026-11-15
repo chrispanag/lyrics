@@ -621,6 +621,11 @@ describe("SongEditorPage", () => {
     expect(byId("credit-name-0")).not.toHaveAttribute("aria-describedby");
     expect(byId("recording-1-performer-1")).toHaveAccessibleDescription("Name is too long.");
     expect(byId("recording-1-performer-0")).not.toHaveAttribute("aria-describedby");
+    // Refilling a dropped row must not move the error: the server named the
+    // rows of the save that failed, not of the form as it now stands.
+    await userEvent.type(byId("credit-name-0"), "Μάνος Χατζιδάκις");
+    expect(byId("credit-name-1")).toHaveAccessibleDescription("Name is too long.");
+    expect(byId("credit-name-0")).not.toHaveAttribute("aria-describedby");
   });
 
   it("puts a credit's role error on the role, not the name", async () => {
