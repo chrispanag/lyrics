@@ -135,8 +135,14 @@ install: ## Install frontend dependencies
 
 .PHONY: test-web
 # With coverage, as CI runs it, so a floor in vitest.config.ts fails here too.
-test-web: ## Run frontend unit tests with coverage
-	cd web && pnpm run test:coverage
+# The stories run in a headless Chromium: `pnpm exec playwright install chromium`
+# once, if `make e2e` has never been run on this machine.
+test-web: ## Run frontend unit tests with coverage, then every story as a test
+	cd web && pnpm run test:coverage && pnpm run test:stories
+
+.PHONY: storybook
+storybook: ## Run Storybook on :6006
+	cd web && pnpm run storybook
 
 .PHONY: lint-web
 lint-web: ## Typecheck, lint and check formatting of the frontend

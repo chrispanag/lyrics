@@ -51,6 +51,7 @@
     "vitest.setup.ts",
     "vitest.config.ts",
     "next.config.ts",
+    ".storybook",
     "e2e",
     "next-env.d.ts",
     ".next/types/**/*.ts",
