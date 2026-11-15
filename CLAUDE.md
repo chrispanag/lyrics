@@ -781,7 +781,7 @@ no application code — but while it stands, these are the parts holding it up.
   a divergence here shows only as one white frame and only to a visitor whose
   theme is dark. `suppressHydrationWarning` on `<html>` is part of it — the
   script legitimately makes the client's markup differ from the server's. And
-  the script declares its two temporaries with `let`: an inline `<script>` runs
+  the script declares its temporaries with `let`: an inline `<script>` runs
   in global scope, where `var` inside a block is still function-scoped, so `var`
   put `window.t` and `window.d` on every page in the app. That is the other
   thing the spec pins, by asking for the globals rather than the class.

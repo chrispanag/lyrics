@@ -50,10 +50,11 @@ export const THEME_BOOT_SCRIPT =
   `let t=localStorage.getItem(${JSON.stringify(THEME_KEY)})??"system";` +
   `let d=t==="dark"||(t==="system"&&window.matchMedia(${JSON.stringify(DARK_QUERY)}).matches);` +
   `document.documentElement.classList.toggle("dark",d);` +
-  `let m=document.getElementById(${JSON.stringify(THEME_COLOR_ID)});` +
-  `if(t==="system"){m?.remove()}else{` +
-  `if(!m){m=document.createElement("meta");m.id=${JSON.stringify(THEME_COLOR_ID)};m.name="theme-color";document.head.prepend(m)}` +
-  `m.content=d?${JSON.stringify(THEME_COLORS.dark)}:${JSON.stringify(THEME_COLORS.light)}` +
+  // Nothing renders the override, so at boot there is none to find or remove.
+  `if(t!=="system"){` +
+  `let m=document.createElement("meta");m.id=${JSON.stringify(THEME_COLOR_ID)};m.name="theme-color";` +
+  `m.content=d?${JSON.stringify(THEME_COLORS.dark)}:${JSON.stringify(THEME_COLORS.light)};` +
+  `document.head.prepend(m)` +
   `}` +
   `}catch(e){}`;
 

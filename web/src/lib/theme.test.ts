@@ -31,10 +31,15 @@ const themeColorOverride = () =>
   document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]:not([media])')?.content ??
   null;
 
-afterEach(() => {
-  localStorage.clear();
+/** Undoes what either path writes, leaving storage alone. */
+const resetDom = () => {
   document.documentElement.classList.remove("dark");
   for (const meta of document.head.querySelectorAll('meta[name="theme-color"]')) meta.remove();
+};
+
+afterEach(() => {
+  localStorage.clear();
+  resetDom();
   vi.unstubAllGlobals();
 });
 
@@ -56,8 +61,7 @@ describe("THEME_BOOT_SCRIPT", () => {
       const fromScript = document.documentElement.classList.contains("dark");
       const colorFromScript = themeColorOverride();
 
-      document.documentElement.classList.remove("dark");
-      for (const meta of document.head.querySelectorAll('meta[name="theme-color"]')) meta.remove();
+      resetDom();
       applyTheme(storedTheme());
       const fromFunction = document.documentElement.classList.contains("dark");
 
