@@ -316,7 +316,9 @@ export function Sheet({
           <X aria-hidden className="size-5" />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-safe">
+      {/* Not `py-4 pb-safe`: as utilities, the later `pb-safe` wins and is 0
+          wherever there is no inset, leaving the body no bottom padding. */}
+      <div className="flex-1 overflow-y-auto overscroll-contain px-5 pt-4 pb-[max(--spacing(4),env(safe-area-inset-bottom))]">
         {shown && children}
       </div>
     </dialog>
