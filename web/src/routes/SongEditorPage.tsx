@@ -13,6 +13,7 @@ import {
   Chip,
   ErrorMessage,
   Field,
+  FieldError,
   Input,
   Select,
   Spinner,
@@ -87,6 +88,19 @@ const isBlankRecording = (recording: RecordingDraft): boolean =>
   !recording.releaseYear &&
   !recording.notes.trim() &&
   !recording.performers.some(named);
+
+const isSentRecording = (recording: RecordingDraft): boolean => !isBlankRecording(recording);
+
+/**
+ * Where a form row lands in the payload: its index among the rows that are
+ * sent, which is what the server keys a row's error on. Blank rows are dropped
+ * at save, so that differs from the form index, and a blank row owns no error.
+ */
+function sentIndex<T>(rows: T[], index: number, sent: (row: T) => boolean): number | undefined {
+  const row = rows[index];
+  if (row === undefined || !sent(row)) return undefined;
+  return rows.slice(0, index).filter(sent).length;
+}
 
 export function SongEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -223,16 +237,32 @@ export function SongEditorPage() {
       recordings.map((recording, i) => ({ ...recording, isFirst: i === index })),
     );
 
-  /**
-   * A recording's field error, by the payload index the server keyed it on.
-   * Blank rows are not sent, so that differs from the form index, and a blank
-   * row owns no error.
-   */
+  // Row errors, looked up by where each row lands in the payload; see sentIndex.
+
   const recordingError = (index: number, field: string): string | undefined => {
+    const sent = sentIndex(recordings, index, isSentRecording);
+    return sent === undefined ? undefined : fieldErrors[`recordings[${sent}].${field}`];
+  };
+
+  /** A credit's error, split by the control it concerns. */
+  const creditError = (index: number): { name?: string | undefined; role?: string | undefined } => {
+    const sent = sentIndex(credits, index, named);
+    if (sent === undefined) return {};
+    const at = `credits[${sent}]`;
+    return {
+      name: fieldErrors[at] ?? fieldErrors[`${at}.name`],
+      role: fieldErrors[`${at}.role`],
+    };
+  };
+
+  const performerError = (index: number, performerIndex: number): string | undefined => {
     const recording = recordings[index];
-    if (!recording || isBlankRecording(recording)) return undefined;
-    const sent = recordings.slice(0, index).filter((r) => !isBlankRecording(r)).length;
-    return fieldErrors[`recordings[${sent}].${field}`];
+    const sent = sentIndex(recordings, index, isSentRecording);
+    if (!recording || sent === undefined) return undefined;
+    const sentPerformer = sentIndex(recording.performers, performerIndex, named);
+    if (sentPerformer === undefined) return undefined;
+    const at = `recordings[${sent}].performers[${sentPerformer}]`;
+    return fieldErrors[at] ?? fieldErrors[`${at}.name`];
   };
 
   const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
@@ -254,22 +284,20 @@ export function SongEditorPage() {
       })),
       genre_ids: genreIds,
       // Blank recordings are dropped too; see `isBlankRecording`.
-      recordings: recordings
-        .filter((recording) => !isBlankRecording(recording))
-        .map((recording, index) => ({
-          label: recording.label.trim() || null,
-          youtube_url: recording.youtubeUrl.trim() || null,
-          release_year: recording.releaseYear ? Number(recording.releaseYear) : null,
-          notes: recording.notes.trim() || null,
-          is_first: recording.isFirst,
-          position: index,
-          performers: recording.performers.filter(named).map((performer, performerIndex) => ({
-            ...(performer.personId
-              ? { person_id: performer.personId }
-              : { name: performer.name.trim() }),
-            position: performerIndex,
-          })),
+      recordings: recordings.filter(isSentRecording).map((recording, index) => ({
+        label: recording.label.trim() || null,
+        youtube_url: recording.youtubeUrl.trim() || null,
+        release_year: recording.releaseYear ? Number(recording.releaseYear) : null,
+        notes: recording.notes.trim() || null,
+        is_first: recording.isFirst,
+        position: index,
+        performers: recording.performers.filter(named).map((performer, performerIndex) => ({
+          ...(performer.personId
+            ? { person_id: performer.personId }
+            : { name: performer.name.trim() }),
+          position: performerIndex,
         })),
+      })),
     };
 
     try {
@@ -339,55 +367,66 @@ export function SongEditorPage() {
             Credits
           </legend>
 
-          {credits.map((credit, index) => (
-            <div key={credit.key} className="flex gap-2">
-              <div className="flex-1">
-                <PersonAutocomplete
-                  id={`credit-name-${index}`}
-                  value={credit}
-                  placeholder="Name"
-                  onChange={(selection) =>
-                    track(setCredits)(
-                      // The selection replaces the person whole: spread over
-                      // `item`, a retyped name keeps the picked id, which wins.
-                      credits.map((item, i) =>
-                        i === index ? { key: item.key, role: item.role, ...selection } : item,
-                      ),
-                    )
-                  }
-                />
+          {credits.map((credit, index) => {
+            const error = creditError(index);
+            const errorId = `credit-${index}-error`;
+            return (
+              <div key={credit.key} className="space-y-1.5">
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <PersonAutocomplete
+                      id={`credit-name-${index}`}
+                      describedBy={error.name ? errorId : undefined}
+                      value={credit}
+                      placeholder="Name"
+                      onChange={(selection) =>
+                        track(setCredits)(
+                          // The selection replaces the person whole: spread over
+                          // `item`, a retyped name keeps the picked id, which wins.
+                          credits.map((item, i) =>
+                            i === index ? { key: item.key, role: item.role, ...selection } : item,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                  <Select
+                    aria-label={`Role for credit ${index + 1}`}
+                    aria-describedby={error.role ? errorId : undefined}
+                    value={credit.role}
+                    onChange={(event) =>
+                      track(setCredits)(
+                        credits.map((item, i) =>
+                          i === index ? { ...item, role: event.target.value as CreditRole } : item,
+                        ),
+                      )
+                    }
+                    className="w-36 shrink-0"
+                  >
+                    {CREDIT_ROLES.map((role) => (
+                      <option key={role} value={role}>
+                        {CREDIT_PICKER_LABELS[role]}
+                      </option>
+                    ))}
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    // `size="icon"`, not a padding override: `cn` is a plain join.
+                    size="icon"
+                    aria-label={`Remove credit ${index + 1}`}
+                    onClick={() => track(setCredits)(credits.filter((_, i) => i !== index))}
+                    className="shrink-0"
+                  >
+                    <Trash aria-hidden className="size-4 text-red-600" />
+                  </Button>
+                </div>
+                {(error.role ?? error.name) && (
+                  <FieldError id={errorId}>{error.role ?? error.name}</FieldError>
+                )}
               </div>
-              <Select
-                aria-label={`Role for credit ${index + 1}`}
-                value={credit.role}
-                onChange={(event) =>
-                  track(setCredits)(
-                    credits.map((item, i) =>
-                      i === index ? { ...item, role: event.target.value as CreditRole } : item,
-                    ),
-                  )
-                }
-                className="w-36 shrink-0"
-              >
-                {CREDIT_ROLES.map((role) => (
-                  <option key={role} value={role}>
-                    {CREDIT_PICKER_LABELS[role]}
-                  </option>
-                ))}
-              </Select>
-              <Button
-                type="button"
-                variant="ghost"
-                // `size="icon"`, not a padding override: `cn` is a plain join.
-                size="icon"
-                aria-label={`Remove credit ${index + 1}`}
-                onClick={() => track(setCredits)(credits.filter((_, i) => i !== index))}
-                className="shrink-0"
-              >
-                <Trash aria-hidden className="size-4 text-red-600" />
-              </Button>
-            </div>
-          ))}
+            );
+          })}
 
           {fieldErrors.credits && <ErrorMessage>{fieldErrors.credits}</ErrorMessage>}
 
@@ -506,39 +545,47 @@ export function SongEditorPage() {
                   <span className="block text-sm font-medium text-stone-700 dark:text-stone-300">
                     Performers
                   </span>
-                  {recording.performers.map((performer, performerIndex) => (
-                    <div key={performer.key} className="flex gap-2">
-                      <div className="flex-1">
-                        <PersonAutocomplete
-                          id={`recording-${index}-performer-${performerIndex}`}
-                          value={performer}
-                          placeholder="Name"
-                          onChange={(selection) =>
-                            editPerformers(index, (performers) =>
-                              performers.map((item, i) =>
-                                i === performerIndex ? { key: item.key, ...selection } : item,
-                              ),
-                            )
-                          }
-                        />
+                  {recording.performers.map((performer, performerIndex) => {
+                    const error = performerError(index, performerIndex);
+                    const errorId = `recording-${index}-performer-${performerIndex}-error`;
+                    return (
+                      <div key={performer.key} className="space-y-1.5">
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <PersonAutocomplete
+                              id={`recording-${index}-performer-${performerIndex}`}
+                              describedBy={error ? errorId : undefined}
+                              value={performer}
+                              placeholder="Name"
+                              onChange={(selection) =>
+                                editPerformers(index, (performers) =>
+                                  performers.map((item, i) =>
+                                    i === performerIndex ? { key: item.key, ...selection } : item,
+                                  ),
+                                )
+                              }
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            // `size="icon"`, not a padding override: `cn` is a plain join.
+                            size="icon"
+                            aria-label={`Remove performer ${performerIndex + 1} from recording ${index + 1}`}
+                            onClick={() =>
+                              editPerformers(index, (performers) =>
+                                performers.filter((_, i) => i !== performerIndex),
+                              )
+                            }
+                            className="shrink-0"
+                          >
+                            <Trash aria-hidden className="size-4 text-red-600" />
+                          </Button>
+                        </div>
+                        {error && <FieldError id={errorId}>{error}</FieldError>}
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        // `size="icon"`, not a padding override: `cn` is a plain join.
-                        size="icon"
-                        aria-label={`Remove performer ${performerIndex + 1} from recording ${index + 1}`}
-                        onClick={() =>
-                          editPerformers(index, (performers) =>
-                            performers.filter((_, i) => i !== performerIndex),
-                          )
-                        }
-                        className="shrink-0"
-                      >
-                        <Trash aria-hidden className="size-4 text-red-600" />
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <Button
                     type="button"
                     variant="secondary"

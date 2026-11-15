@@ -23,11 +23,14 @@ export function PersonAutocomplete({
   onChange,
   placeholder,
   id,
+  describedBy,
 }: {
   value: PersonSelection;
   onChange: (selection: PersonSelection) => void;
   placeholder?: string;
   id?: string;
+  /** The id of an error under the row, for a field with no Field around it. */
+  describedBy?: string | undefined;
 }) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
@@ -62,6 +65,7 @@ export function PersonAutocomplete({
         aria-expanded={open && suggestions.length > 0}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-describedby={describedBy}
         autoComplete="off"
         placeholder={placeholder}
         value={value.name}

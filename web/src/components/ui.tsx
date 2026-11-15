@@ -132,16 +132,20 @@ export function Field({
           {hint}
         </p>
       )}
-      {error && (
-        <p
-          id={`${htmlFor}-error`}
-          role="alert"
-          className="text-xs font-medium text-red-600 dark:text-red-400"
-        >
-          {error}
-        </p>
-      )}
+      {error && <FieldError id={`${htmlFor}-error`}>{error}</FieldError>}
     </div>
+  );
+}
+
+/**
+ * A server error under the control it names. Field renders its own; a row of
+ * controls with no Field around it renders this and points the control at `id`.
+ */
+export function FieldError({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <p id={id} role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">
+      {children}
+    </p>
   );
 }
 
