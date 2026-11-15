@@ -6,9 +6,14 @@ import { API } from "@/test/handlers";
 import { server } from "@/test/server";
 
 // The real client contacts a live session domain. The stub answers `refresh()`
-// like a restored session.
+// like a restored session, and counts how many were built.
+const sdk = vi.hoisted(() => ({ built: 0 }));
+
 vi.mock("@prelude.so/js-sdk/session", () => ({
   PrldSessionClient: class {
+    constructor() {
+      sdk.built += 1;
+    }
     invalidated = 0;
     async invalidateCache() {
       this.invalidated += 1;
@@ -40,9 +45,19 @@ describe("auth/session", () => {
     expect(seen).toEqual([null]);
 
     await import("./session");
+    // Registered, but nothing built yet: a server imports this too.
+    expect(sdk.built).toBe(0);
 
     await apiFetch("/api/v1/me");
     expect(seen).toEqual([null, "Bearer token-0"]);
+  });
+
+  // Two clients would disagree about the session.
+  it("builds one SDK client however often it is asked for", async () => {
+    const { sessionClient } = await import("./session");
+
+    expect(sessionClient()).toBe(sessionClient());
+    expect(sdk.built).toBe(1);
   });
 
   // A 401 retry's forceRefresh must reach the SDK, or it resends the dead token.
@@ -55,7 +70,7 @@ describe("auth/session", () => {
 
   it("reports no token rather than throwing when there is no session", async () => {
     const { getAccessToken, sessionClient } = await import("./session");
-    vi.spyOn(sessionClient, "refresh").mockRejectedValueOnce(new Error("no session"));
+    vi.spyOn(sessionClient(), "refresh").mockRejectedValueOnce(new Error("no session"));
 
     expect(await getAccessToken()).toBeNull();
   });

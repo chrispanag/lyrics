@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch, setUnauthorizedHandler } from "@/api/client";
@@ -55,10 +63,16 @@ function describeCompliancy(result: { criteria: string; expected: number }): str
  * lives in `./session`, outside React, so a token exists before the first effect.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Seeded from the last session's snapshot (./storedUser) to avoid a guest
-  // flash. `loading` still means nothing is known; every redirect reads it.
-  const [user, setUser] = useState<User | null>(storedUser);
+  // Starts as the guest a server renders, then takes the last session's
+  // snapshot (./storedUser) before the first paint, so a refresh flashes no
+  // guest chrome and hydration has nothing to disagree about. `loading` still
+  // means nothing is known; every redirect reads it.
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  useLayoutEffect(() => {
+    // biome-ignore lint/nursery/useReactCompiler: read once before paint, for the reason above.
+    setUser(storedUser());
+  }, []);
   const queryClient = useQueryClient();
 
   // The open challenge per scope. Keyed by scope so no flow can reuse another's
@@ -131,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // (password reset's code included); skipping a step leaves it half signed in.
   const completeSignIn = useCallback(async () => {
     // The cache still holds the signed-out state until it is dropped.
-    await sessionClient.invalidateCache();
+    await sessionClient().invalidateCache();
 
     const profile = await loadProfile();
     setUser(profile);
@@ -141,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      await sessionClient.loginWithPassword({ identifier: email, password });
+      await sessionClient().loginWithPassword({ identifier: email, password });
       await completeSignIn();
     },
     [completeSignIn],
@@ -193,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // assigned only in a callback as `never`.
     const opened: { id: string | null } = { id: null };
 
-    const { status } = await sessionClient.requestStepUp({
+    const { status } = await sessionClient().requestStepUp({
       scope,
       onChallenge: (info) => {
         opened.id = info.challengeId;
@@ -213,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     challenges.current[scope] = opened.id;
-    await sessionClient.startOTP({ challengeId: opened.id });
+    await sessionClient().startOTP({ challengeId: opened.id });
     return status;
   }, []);
 
@@ -234,7 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resendCode = useCallback(async (scope: string, open: () => Promise<void>) => {
     if (challenges.current[scope]) {
       try {
-        await sessionClient.retryOTP();
+        await sessionClient().retryOTP();
         return;
       } catch (caught) {
         // Logged: a Prelude outage looks identical from here.
@@ -257,7 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("No verification is in progress.");
       }
       // A wrong code throws here. On success the SDK refreshes the session.
-      await sessionClient.checkOTP({ code, challengeId });
+      await sessionClient().checkOTP({ code, challengeId });
       challenges.current[EMAIL_VERIFY_SCOPE] = null;
       await recordVerification();
     },
@@ -267,7 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Declared before confirmPasswordResetCode, whose dependency array reads it.
   const logout = useCallback(async () => {
     try {
-      await sessionClient.logout();
+      await sessionClient().logout();
     } finally {
       // Clear local state even if the revocation call failed.
       setUser(null);
@@ -293,20 +307,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Drop any challenge a previous attempt ("Start over") left open.
     challenges.current[PASSWORD_WRITE_SCOPE] = null;
 
-    await sessionClient.startOTP({
+    await sessionClient().startOTP({
       identifier: { type: "email_address", value: email },
       loginConfigId: OTP_LOGIN_CONFIG_ID,
     });
   }, []);
 
   const resendPasswordResetCode = useCallback(async () => {
-    await sessionClient.retryOTP();
+    await sessionClient().retryOTP();
   }, []);
 
   const confirmPasswordResetCode = useCallback(
     async (code: string) => {
       // A wrong code throws here as a typed SDK error.
-      await sessionClient.checkOTP({ code });
+      await sessionClient().checkOTP({ code });
 
       // From here the visitor is signed in and the code is spent, so any
       // failure below ends the session; the recovery is "Start over".
@@ -321,7 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Granted outright refreshes nothing; canChangePassword forces the
         // refresh, or the write 403s with nothing wrong with the password.
-        if (!(await sessionClient.canChangePassword())) {
+        if (!(await sessionClient().canChangePassword())) {
           throw new Error("The session did not receive permission to change the password.");
         }
         return { secondCodeSent: false };
@@ -359,12 +373,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Cleared after the check: a wrong code leaves the challenge open to retry.
-    await sessionClient.checkOTP({ code, challengeId });
+    await sessionClient().checkOTP({ code, challengeId });
     challenges.current[PASSWORD_WRITE_SCOPE] = null;
 
     // Checked on a fresh token so a missing grant fails here, nameably, rather
     // than as a rejected password a step later.
-    if (!(await sessionClient.canChangePassword())) {
+    if (!(await sessionClient().canChangePassword())) {
       throw new Error("The session did not receive permission to change the password.");
     }
   }, []);
@@ -375,17 +389,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const changePassword = useCallback(async (password: string) => {
-    await sessionClient.changePassword(password);
+    await sessionClient().changePassword(password);
     // Nothing local to reload: the password lives in Prelude.
   }, []);
 
   const signOutOtherDevices = useCallback(async () => {
-    await sessionClient.revokeSessions("others");
+    await sessionClient().revokeSessions("others");
   }, []);
 
   const validatePassword = useCallback(async (password: string) => {
     try {
-      const result = await sessionClient.validatePassword(password);
+      const result = await sessionClient().validatePassword(password);
       const messages = (result?.results ?? []).filter((r) => !r.valid).map(describeCompliancy);
       return { valid: result?.valid ?? true, messages };
     } catch {

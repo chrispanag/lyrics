@@ -1,0 +1,194 @@
+import { act, render, waitFor } from "@testing-library/react";
+import { type DehydratedState, QueryClient, dehydrate, hydrate } from "@tanstack/react-query";
+import type { ReactElement } from "react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { App } from "./App";
+import { AuthProvider } from "@/auth/AuthProvider";
+import { storeUser } from "@/auth/storedUser";
+import { storeFontSize } from "@/lib/fontSize";
+import type { User } from "@/lib/types";
+import { storeTheme } from "@/lib/theme";
+import { catalogList, catalogSongs } from "@/test/catalog";
+import { listById, makeUser } from "@/test/handlers";
+import { server } from "@/test/server";
+import { TestProviders } from "@/test/TestProviders";
+
+/*
+ * The hydration check CLAUDE.md asks for under "The Next.js shell": each screen
+ * is rendered to a string as a server would (no storage, no session), then the
+ * browser's storage is seeded and the same tree hydrated over that HTML. React
+ * recovering from a mismatch, or warning about one, fails the case.
+ *
+ * jsdom renders the server half, so a read of `window` would not throw here;
+ * `serverRender.test.tsx` renders under Node for that. What this file adds is
+ * the comparison: a stored value read while rendering is invisible to a spec
+ * that renders once.
+ */
+
+// Never resolves: the restore stays in flight, which is the window the
+// snapshot exists to paint, and nothing here may reach the real SDK.
+vi.mock("@/auth/session", () => ({
+  OTP_LOGIN_CONFIG_ID: "",
+  getAccessToken: () => new Promise<string | null>(() => {}),
+  sessionClient: () => {
+    throw new Error("the SDK is not for specs");
+  },
+}));
+
+/** A client with the screen's data already in it, as a server page would hand over. */
+function clientWith(state: DehydratedState): QueryClient {
+  const client = new QueryClient({
+    // Fresh forever: a refetch during hydration is noise, not a mismatch.
+    defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
+  });
+  hydrate(client, state);
+  return client;
+}
+
+/**
+ * What the screen at `route` fetches, read by mounting it once against the
+ * stubbed API. The server half has nothing to fetch with, so it renders from
+ * this, exactly as `dehydratedState` reaches `AppRoot` from a server page.
+ */
+async function dataFor(route: string, user: User | null): Promise<DehydratedState> {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const { unmount } = render(
+    <TestProviders queryClient={client} route={route} user={user}>
+      <App />
+    </TestProviders>,
+  );
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  // Twice: a query enabled by another's answer starts a beat later.
+  await act(async () => {});
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  unmount();
+  return dehydrate(client);
+}
+
+/**
+ * Renders `build()` as a server would, seeds storage, hydrates the same tree,
+ * and returns everything React said about the two disagreeing.
+ */
+async function hydrationProblems(
+  build: (client: QueryClient) => ReactElement,
+  { state, seed }: { state: DehydratedState; seed: () => void },
+): Promise<{ problems: string[]; container: HTMLElement }> {
+  // A server has no storage: every read refuses, which each wrapped read
+  // answers with its default. The spy also clears whatever priming wrote.
+  localStorage.clear();
+  const refuse = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    throw new Error("A server has no storage.");
+  });
+  const html = renderToString(build(clientWith(state)));
+  refuse.mockRestore();
+
+  seed();
+
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  document.body.append(container);
+
+  const problems: string[] = [];
+  // Attribute mismatches are only a development warning in React 19, never a
+  // recoverable error, so the console is half of what is listened to.
+  vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+    problems.push(args.map(String).join(" "));
+  });
+
+  const root = await act(async () =>
+    hydrateRoot(container, build(clientWith(state)), {
+      onRecoverableError: (error) => problems.push(String(error)),
+    }),
+  );
+  cleanups.push(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  return { problems, container };
+}
+
+const cleanups: (() => void)[] = [];
+afterEach(() => {
+  for (const cleanup of cleanups.splice(0)) cleanup();
+});
+
+/** The route table under the test providers, auth stubbed as `user`. */
+function stubbed(route: string, user: User | null) {
+  return (client: QueryClient) => (
+    <TestProviders queryClient={client} route={route} user={user}>
+      <App />
+    </TestProviders>
+  );
+}
+
+describe("hydrating over a server render", () => {
+  const reader = makeUser({ display_name: "Νίκος" });
+
+  // The shell around the catalog: the sidebar, the drawer and the search header.
+  it("agrees about the catalog and its shell", async () => {
+    const state = await dataFor("/", reader);
+
+    const { problems, container } = await hydrationProblems(stubbed("/", reader), {
+      state,
+      seed: () => {},
+    });
+
+    expect(problems).toEqual([]);
+    // The premise: the catalog rendered rows, not its loading state.
+    expect(container).toHaveTextContent(catalogSongs[0]?.title ?? "");
+  });
+
+  // The font size and the swipe mark are both stored per device and both
+  // decide markup; a list context is what puts the mark on the page.
+  it("agrees about a song page reached from a list", async () => {
+    server.use(listById(catalogList(3)));
+    const route = `/songs/${catalogSongs[0]?.slug}?list=list-1`;
+    const state = await dataFor(route, null);
+
+    const { problems, container } = await hydrationProblems(stubbed(route, null), {
+      state,
+      // The swipe hint is left unspent: no key is what makes it showable.
+      seed: () => storeFontSize(3),
+    });
+
+    expect(problems).toEqual([]);
+    expect(container).toHaveTextContent(catalogSongs[0]?.title ?? "");
+  });
+
+  it("agrees about the profile's theme switch", async () => {
+    const state = await dataFor("/profile", reader);
+
+    const { problems, container } = await hydrationProblems(stubbed("/profile", reader), {
+      state,
+      seed: () => storeTheme("dark"),
+    });
+
+    expect(problems).toEqual([]);
+    // Then takes the stored theme before paint.
+    expect(container.querySelector('[aria-checked="true"]')).toHaveTextContent("Dark");
+  });
+
+  // The real provider: a server renders a guest, the browser remembers a user.
+  it("agrees about who is signed in, then paints the remembered user", async () => {
+    const state = await dataFor("/", null);
+
+    const { problems, container } = await hydrationProblems(
+      (client) => (
+        <TestProviders queryClient={client} route="/">
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </TestProviders>
+      ),
+      { state, seed: () => storeUser(reader) },
+    );
+
+    expect(problems).toEqual([]);
+    // Before any restore has answered: the snapshot, not a guest flash.
+    expect(container).toHaveTextContent("Νίκος");
+  });
+});

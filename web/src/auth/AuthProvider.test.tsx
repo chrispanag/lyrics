@@ -56,7 +56,7 @@ vi.mock("./session", () => ({
     return session.otpConfigId;
   },
   getAccessToken: session.getAccessToken,
-  sessionClient: {
+  sessionClient: () => ({
     logout: session.logout,
     invalidateCache: session.invalidateCache,
     loginWithPassword: session.loginWithPassword,
@@ -68,7 +68,7 @@ vi.mock("./session", () => ({
     changePassword: session.changePassword,
     revokeSessions: session.revokeSessions,
     validatePassword: session.validatePassword,
-  },
+  }),
 }));
 
 /** The ids Prelude hands out, one per opened challenge, in order. */

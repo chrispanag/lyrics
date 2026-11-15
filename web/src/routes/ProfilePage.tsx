@@ -1,4 +1,4 @@
-import { useId, useState, type ChangeEvent, type SubmitEvent } from "react";
+import { useId, useLayoutEffect, useState, type ChangeEvent, type SubmitEvent } from "react";
 import { KeyRound, LoaderCircle, LogOut, Moon, Pencil, Sun, Trash, Upload } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
@@ -39,7 +39,13 @@ export function ProfilePage() {
   const [pictureError, setPictureError] = useState("");
   const [preparing, setPreparing] = useState(false);
   const [pictureMenu, setPictureMenu] = useState(false);
-  const [theme, setTheme] = useState<Theme>(storedTheme);
+  // Starts as a server would answer and reads storage before paint: read while
+  // rendering, the switch would hydrate against a server's "system".
+  const [theme, setTheme] = useState<Theme>("system");
+  useLayoutEffect(() => {
+    // biome-ignore lint/nursery/useReactCompiler: read once before paint, for the reason above.
+    setTheme(storedTheme());
+  }, []);
 
   // Keyed on the stored name, not the user object: every auth-context write
   // (e.g. a new picture) replaces the object and would discard a typed name.
