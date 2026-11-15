@@ -71,7 +71,9 @@ function offsetsAfterFirst(total: number): number[] {
 
 /**
  * Every genre on a song, from the unpaginated `/genres` in one read. Neither
- * this nor a person carries a `lastModified` (CLAUDE.md says why).
+ * this nor a person carries a `lastModified`: a song deleted, or a credit or
+ * genre removed from one, changes the page and leaves no date behind, so any
+ * date derived from the songs would claim the page older than it is.
  */
 async function genreEntries(): Promise<Entry[]> {
   const { data } = await apiFetch<ListResponse<Genre>>("/api/v1/genres", { anonymous: true });

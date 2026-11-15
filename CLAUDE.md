@@ -66,6 +66,13 @@ make icons         # regenerate icons from web/icons/*.svg
   are written only by triggers. Don't write them from Go.
 - Every API route naming a song must accept both slug and UUID. In the frontend,
   build and parse song addresses only through `lib/listContext.ts`.
+- A person's or genre's catalog page is addressed only through `personPageHref`
+  and `genrePageHref` (`lib/browse.ts`): the route's canonical and the sitemap
+  both use them, and `sitemap.test.ts` checks that they agree.
+- The API omits `song_count` when it is zero. Read an absent count as 0, not as
+  "not counted" or malformed.
+- The sitemap is all or nothing: any failed read or malformed row yields `/`
+  alone, because a partial sitemap looks like a smaller catalog.
 - Never read `localStorage` or `window` during render. Use
   `lib/useStoredState.ts`.
 - No `metadata.title` or `generateMetadata` title; titles come from `PageTitle`.
