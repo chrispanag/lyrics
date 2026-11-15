@@ -30,7 +30,6 @@
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "types": ["node", "vitest/globals", "@testing-library/jest-dom"],
-    "baseUrl": ".",
     // Next resolves these itself, which is what replaced the alias
     // vite.config.ts used to declare beside them.
     "paths": {

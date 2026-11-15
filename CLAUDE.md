@@ -825,6 +825,14 @@ no application code — but while it stands, these are the parts holding it up.
   is read by neither. `next build` rewrites `jsx`, `allowJs` and
   `esModuleInterop` if they disagree with it, so they are not choices to make
   there.
+- **TypeScript 7 has no compiler API, so `next build` checks types through the
+  CLI.** Next 16.4 runs `tsc` in a child process when
+  `experimental.useTypeScriptCli` is on. That is its default, but an
+  experimental one, so `next.config.ts` sets it explicitly; turning it off
+  makes the build demand TypeScript 6. The `next` entry under `plugins` is
+  inert — TS 7's language server loads no plugins — but stays, since
+  `next build` writes it back. `baseUrl` is gone: TS 7 refuses it, and `paths` resolve from the
+  tsconfig's own directory.
 
 ### What the server says while the app is still client-only
 

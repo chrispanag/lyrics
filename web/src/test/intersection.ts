@@ -11,6 +11,7 @@ class StubIntersectionObserver implements IntersectionObserver {
   // Required by the interface; nothing reads them.
   readonly root = null;
   readonly rootMargin = "0px";
+  readonly scrollMargin = "0px";
   readonly thresholds: readonly number[] = [0];
 
   private readonly targets = new Set<Element>();
