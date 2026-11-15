@@ -38,8 +38,7 @@ export function Button({
 }
 
 // The shape the field primitives share. Size, padding and width are stated per
-// primitive, since `cn` cannot override a shared class. <Select> sets no width:
-// its caller does.
+// primitive, since `cn` cannot override a shared class.
 const fieldLayout = "rounded-xl";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
@@ -61,11 +60,17 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
 // and is drawn at each engine's own size, so it is switched off and replaced.
 // An icon rather than a background image, so its color follows the theme.
 // `className` sizes the wrapper, which is what a caller's width has to reach.
+// The select inherits `text-transform` from it explicitly: the UA stylesheet
+// resets it on form controls, so a caller's `capitalize` would stop there.
 export function Select({ className, ...props }: ComponentProps<"select">) {
   return (
     <div className={cn("relative", className)}>
       <select
-        className={cn(fieldChrome, fieldLayout, "peer h-11 w-full appearance-none pl-3 pr-9")}
+        className={cn(
+          fieldChrome,
+          fieldLayout,
+          "peer h-11 w-full appearance-none pl-3 pr-9 [text-transform:inherit]",
+        )}
         {...props}
       />
       <ChevronDown

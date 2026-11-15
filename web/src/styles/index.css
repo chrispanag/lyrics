@@ -111,9 +111,6 @@
   }
 }
 
-/* Utilities rather than component classes, so they take variants and are only
-   emitted when used. */
-
 /* For a search field that draws its own clear button — see `SearchField`.
    WebKit and Chromium put a cancel button inside `type="search"` themselves,
    landing right where the component renders its own: two crosses side by side,
