@@ -84,15 +84,13 @@ async function genreEntries(): Promise<Entry[]> {
 }
 
 /**
- * Whether a genre is worth listing. A row the filter cannot judge throws
- * rather than being dropped, so a payload missing the field fails the whole
- * sitemap instead of quietly listing no genres.
+ * Whether a genre is worth listing. The API omits a count of zero, so an
+ * absent one is zero. A genre with no slug throws rather than being dropped,
+ * as a song with none does.
  */
 function hasSongs(genre: Genre): boolean {
-  if (!genre.slug || typeof genre.song_count !== "number") {
-    throw new Error(`genre ${genre.id} has no slug or song count`);
-  }
-  return genre.song_count > 0;
+  if (!genre.slug) throw new Error(`genre ${genre.id} has no slug`);
+  return (genre.song_count ?? 0) > 0;
 }
 
 /** A person's page, under the address their catalog page names as canonical. */

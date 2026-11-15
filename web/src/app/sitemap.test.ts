@@ -80,7 +80,8 @@ function genresOf(genres: Genre[]) {
 
 const rempetiko = makeGenre({ song_count: 4 });
 const laiko = makeGenre({ id: "genre-2", name: "Λαϊκό", slug: "laiko", song_count: 1 });
-const unsung = makeGenre({ id: "genre-3", name: "Κενό", slug: "keno", song_count: 0 });
+// The API's own shape for a genre on no song: the count is omitted, not zero.
+const { song_count: _, ...unsung } = makeGenre({ id: "genre-3", name: "Κενό", slug: "keno" });
 
 // No people, genres or public lists unless a case says otherwise.
 beforeEach(() => server.use(publicListsOf(0), creditedPeopleOf(0), genresOf([])));
@@ -190,11 +191,9 @@ describe("sitemap", () => {
     await expectStaticRoutesOnly();
   });
 
-  // Filtered rather than refused, a genre with no count would read as one on
-  // no song, and a payload without the field would quietly list no genres.
-  it("refuses a genre it cannot tell is on a song", async () => {
-    const { song_count: _, ...uncounted } = rempetiko;
-    server.use(catalogOf(1), genresOf([uncounted]));
+  // `genrePageHref("")` is the catalog's own `/`, listed a second time.
+  it("refuses a genre with no slug", async () => {
+    server.use(catalogOf(1), genresOf([{ ...rempetiko, slug: "" }]));
 
     await expectStaticRoutesOnly();
   });
