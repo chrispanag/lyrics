@@ -197,29 +197,12 @@ jobs:
         working-directory: web
         run: pnpm run test:stories
 
-      # Turbopack's build cache, on by default since Next 16.3, is only read
-      # if `.next/cache` survives between runs. Keyed on the commit, so every
-      # build saves its own; the prefix restores the latest build on the same
-      # lockfile. A key built from a list of source files instead skips the
-      # save on an exact hit, so a change to a file the list missed leaves the
-      # cache a build behind.
-      - uses: actions/cache@v6
-        with:
-          path: web/.next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: |
-            nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-
-
-      # A base URL is set only because this is a smoke test of the build; the
-      # real production build leaves it unset so the bundle calls its own origin.
-      - name: Build
-        working-directory: web
-        env:
-          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
-        run: pnpm exec next build
+      # No `next build` here: the Web image job runs the same build inside the
+      # Dockerfile, which is the one that ships.
 
   # Each image is built but not pushed: this proves the Dockerfiles still work,
-  # which a `go build` or `next build` alone does not. One job per image, so
+  # which a `go build` alone does not, and the web image's build is the only
+  # `next build` CI runs. One job per image, so
   # each is gated once and a green check names the image it actually built.
   docker-api:
     name: API image
@@ -258,6 +241,8 @@ jobs:
         with:
           context: ./web
           push: false
+          # Set only because this is a smoke test of the build; the real
+          # production build leaves it unset so the bundle calls its own origin.
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
           cache-from: type=gha,scope=web
