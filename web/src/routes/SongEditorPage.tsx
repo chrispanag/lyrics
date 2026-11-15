@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useState, type SubmitEvent } from "react";
 import { Plus, Trash } from "lucide-react";
 
@@ -6,6 +8,7 @@ import { useCreateSong, useGenres, useSong, useUpdateSong } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { cardChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
+import { Waiting } from "@/routes/guards";
 import { PersonAutocomplete, type PersonSelection } from "@/components/PersonAutocomplete";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import {
@@ -17,7 +20,6 @@ import {
   FieldError,
   Input,
   Select,
-  Spinner,
   Textarea,
 } from "@/components/ui";
 import { songHref, songRefHref } from "@/lib/listContext";
@@ -189,9 +191,12 @@ export function SongEditorPage() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
 
-  if (authLoading) return <Spinner />;
+  // Named after the form, so its history entry differs from the song page.
+  const heading = isEdit ? "Edit song" : "Add a song";
+
+  if (authLoading) return <Waiting title={heading} />;
   if (!hasRole(user?.role, "contributor")) return <Redirect href="/" />;
-  if (isEdit && loadingSong) return <Spinner />;
+  if (isEdit && loadingSong) return <Waiting title={heading} />;
 
   // A failed load must not fall through to the form: every save sends the whole
   // song, so saving an empty form would blank it.
@@ -343,11 +348,9 @@ export function SongEditorPage() {
   };
 
   const saving = createSong.isPending || updateSong.isPending;
-  const heading = isEdit ? "Edit song" : "Add a song";
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
-      {/* Named after the form, so its history entry differs from the song page. */}
       <PageTitle name={heading} />
       <h1 className="mb-6 text-2xl font-bold tracking-tight">{heading}</h1>
 

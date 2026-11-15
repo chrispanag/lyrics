@@ -1,7 +1,7 @@
 // Storybook builds with Vite, like the specs, rather than with Next: no
-// component under src/components imports from `next/*`, and the app itself is
-// client-only behind `ssr: false`. `@storybook/nextjs-vite` is the switch to
-// make if a story ever needs Next's modules mocked.
+// component imports from `next/*`: routing goes through the seam, which stories
+// mount on its in-memory `TestRouter`. `@storybook/nextjs-vite` is the switch
+// to make if a story ever needs Next's modules mocked.
 import type { StorybookConfig } from "@storybook/react-vite";
 import { readFileSync } from "node:fs";
 import path from "node:path";

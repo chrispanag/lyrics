@@ -64,15 +64,12 @@ export default defineConfig({
         "src/**/*.stories.{ts,tsx}",
         "src/test/**",
         "src/**/*.d.ts",
-        // The Next shell: wrappers that do anything only inside a Next build,
-        // where a spec under jsdom would test its own mocks.
-        "src/AppRoot.tsx",
+        // What runs only inside a Next build, where a spec under jsdom would
+        // test its own mocks: the document, its providers, and the seam's Next
+        // backend. Specs mount the seam on `TestRouter` instead.
         "src/app/layout.tsx",
-        "src/app/client.tsx",
-        // Brackets escaped: unescaped, `[[]` is a character class matching one
-        // `[`, and the pattern silently misses the folder.
-        "src/app/\\[\\[...slug\\]\\]/page.tsx",
-        "src/app/songs/new/page.tsx",
+        "src/app/Providers.tsx",
+        "src/lib/nextNavigation.tsx",
       ],
       reporter: ["text-summary"],
       // A floor just under what the suite measures, so coverage cannot erode

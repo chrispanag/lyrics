@@ -1,3 +1,5 @@
+"use client";
+
 import { useId, useState, type ChangeEvent, type SubmitEvent } from "react";
 import { KeyRound, LoaderCircle, LogOut, Moon, Pencil, Sun, Trash, Upload } from "lucide-react";
 
@@ -5,10 +7,11 @@ import { errorDetails, errorMessage } from "@/api/client";
 import { useRemoveAvatar, useUpdateProfile, useUploadAvatar } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
-import { Button, ErrorMessage, Field, Input, Sheet, Spinner } from "@/components/ui";
+import { Button, ErrorMessage, Field, Input, Sheet } from "@/components/ui";
 import { buttonClasses } from "@/components/buttonStyles";
 import { panelChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
+import { Waiting } from "@/routes/guards";
 import type { Identity } from "@/lib/avatar";
 import { cn } from "@/lib/cn";
 import {
@@ -60,13 +63,7 @@ export function ProfilePage() {
 
   // Every branch needs its own PageTitle: the hoisted title unmounts with the
   // branch, and a branch without one leaves the tab showing the URL.
-  if (loading)
-    return (
-      <>
-        <PageTitle name="Profile" />
-        <Spinner />
-      </>
-    );
+  if (loading) return <Waiting title="Profile" />;
 
   if (!user) {
     return (

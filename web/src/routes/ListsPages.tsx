@@ -1,3 +1,5 @@
+"use client";
+
 import { lazy, Suspense, useState, useSyncExternalStore, type SubmitEvent } from "react";
 import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash } from "lucide-react";
 

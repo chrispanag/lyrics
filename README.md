@@ -678,8 +678,8 @@ seven groups of genuinely different songs that share one.
 
 Everything is one origin. `/api` routes to the Go service with the path prefix
 preserved (the router mounts at `/api/v1`), and every other path falls through
-to the frontend, whose optional catch-all route answers the addresses the
-client-side router owns. A production build of the frontend has no API base URL
+to the frontend, where each screen is an App Router route rendered on the
+server. A production build of the frontend has no API base URL
 compiled into it and calls its own origin, so moving the app to another domain
 never means rebuilding it.
 
@@ -775,9 +775,8 @@ web/
   next.config.ts     security headers; the dev-only /api rewrite
   src/
     app/             the Next App Router tree: root layout (head, metadata,
-                     the no-flash theme script) and one optional catch-all
-                     page, which hands every address to the router below
-    AppRoot.tsx      providers and the router, mounted client-only
+                     the no-flash theme script, providers), and one thin
+                     page per screen, grouped by the chrome around it
     api/             typed fetch client, TanStack Query hooks
     auth/            Prelude session provider
     components/      layout, primitives, song card, autocomplete

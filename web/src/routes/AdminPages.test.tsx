@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { AdminGenresPage, AdminUsersPage } from "./AdminPages";
-import { App } from "@/App";
+import { TestApp } from "@/test/app";
 import { API, apiError, list, makeGenre, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
@@ -18,13 +18,13 @@ function serveGenres(...genres: Genre[]) {
 }
 
 describe("admin console routing", () => {
-  // The guard is in App.tsx, so every console route is walked: one left
+  // The guard is the /admin layout, so every console route is walked: one left
   // unwrapped renders for everybody, silently.
   it.each([
     ["/admin/genres", "Genres"],
     ["/admin/users", "Users"],
   ])("sends a contributor away from %s", async (route, heading) => {
-    renderWithProviders(<App />, { user: makeUser({ role: "contributor" }), route });
+    renderWithProviders(<TestApp />, { user: makeUser({ role: "contributor" }), route });
 
     // Landed on the catalog.
     expect(await screen.findByRole("searchbox")).toBeInTheDocument();
@@ -36,7 +36,7 @@ describe("admin console routing", () => {
     // No default handler covers the admin routes.
     server.use(http.get(`${API}/api/v1/admin/users`, () => HttpResponse.json(list([]))));
 
-    renderWithProviders(<App />, { user: admin, route: "/admin" });
+    renderWithProviders(<TestApp />, { user: admin, route: "/admin" });
 
     expect(await screen.findByRole("heading", { level: 1, name: "Users" })).toBeInTheDocument();
   });
@@ -44,7 +44,11 @@ describe("admin console routing", () => {
   // Until the session restores, `user` is a snapshot or null; deciding then
   // bounces an admin on reload or trusts a remembered role.
   it("waits for the session before deciding", async () => {
-    renderWithProviders(<App />, { user: null, auth: { loading: true }, route: "/admin/genres" });
+    renderWithProviders(<TestApp />, {
+      user: null,
+      auth: { loading: true },
+      route: "/admin/genres",
+    });
 
     expect(await screen.findByRole("status")).toBeInTheDocument();
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
@@ -52,7 +56,7 @@ describe("admin console routing", () => {
 
   // The nav entry points at `/admin`; pointed at a screen it goes dark on the other.
   it("keeps the console lit on a screen the entry does not name", async () => {
-    renderWithProviders(<App />, { user: admin, route: "/admin/genres" });
+    renderWithProviders(<TestApp />, { user: admin, route: "/admin/genres" });
 
     // Rendered twice: the sidebar and the phone's navigation drawer.
     const entries = await screen.findAllByRole("link", { name: "Admin" });

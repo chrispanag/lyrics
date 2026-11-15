@@ -1,3 +1,5 @@
+"use client";
+
 import { useCallback, useEffect, useRef, useState, type SubmitEvent } from "react";
 
 import { errorDetails, errorMessage } from "@/api/client";
@@ -6,7 +8,8 @@ import { returnDestination } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { buttonClasses } from "@/components/buttonStyles";
 import { PageTitle } from "@/components/PageTitle";
-import { Button, ErrorMessage, Field, Input, Notice, Spinner } from "@/components/ui";
+import { Waiting } from "@/routes/guards";
+import { Button, ErrorMessage, Field, Input, Notice } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
 import { Link, Redirect, useRouter, useSearchParams } from "@/lib/navigation";
 
@@ -870,7 +873,7 @@ export function VerifyEmailPage() {
 
   // Reached by redirect, so a reload lands here mid-restore; wait, or it bounces
   // to sign-in.
-  if (loading) return <Spinner />;
+  if (loading) return <Waiting title="Check your email" />;
   if (!user) return <Redirect href="/login" />;
   if (user.email_verified_at) return <Redirect href="/" />;
 

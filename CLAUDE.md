@@ -695,82 +695,129 @@ inventory this file records going stale under Head assets.)
   sees it gone at once and nobody else is promised that for another five
   minutes.
 
-### The Next.js shell
+### The Next.js app
 
-The app is a Next application whose every route is still a react-router route:
-`src/app` holds a root layout and one optional catch-all page, and everything
-under `src/AppRoot.tsx` is the app that used to be mounted by `main.tsx`. That
-arrangement is deliberate and temporary — it is what let the move off Vite change
-no application code — but while it stands, these are the parts holding it up.
+Every screen is an App Router route rendered on the server. `src/app` holds the
+root layout, one thin `page.tsx` per address that renders the screen component
+from `src/routes`, and the layouts that put chrome around them by position:
 
-- **`AppRoot` is imported through `dynamic(..., { ssr: false })`, and that is
-  what makes every rule below the shell keep applying unchanged.** The providers,
-  `BrowserRouter`, the module-scope `QueryClient` and every route run in the
-  browser and only there, exactly as they did under Vite. What is left between
-  the app and taking that flag off is no longer in the render bodies or the
-  import graph — every stored value is read after a server-shaped first render,
-  `auth/session` imports on a server, and `src/hydration.test.tsx` holds a
-  server render against the browser's — but in the shell itself: `AppRoot`'s
-  module-scope `QueryClient`, which on a server would be one cache shared by
-  every request, and `BrowserRouter`, which reads `window` to build its
-  history. Both belong to the switch-over, not to a screen. `ssr: false` is legal only inside a client component,
-  which is why `app/client.tsx` exists between a page and `AppRoot` rather than
-  the page importing it directly. It sits beside the route folders rather than
-  inside one because three pages render it now: the catch-all, `/songs/[id]` and
-  `/songs/new`.
+```
+app/layout.tsx                 document, metadata, theme script, <Providers>
+app/not-found.tsx              any unmatched address: 404, inside the shell
+app/(auth)/…                   login, register, verify-email, forgot-password,
+                               change-password (RequireAuth) — no shell
+app/(shell)/layout.tsx         Layout: sidebar, drawer, scroll-to-top
+app/(shell)/page.tsx           the catalog          ┐ SearchHeader carries
+app/(shell)/songs/[id]/…       the song page        ┘ the hamburger
+app/(shell)/(menu)/layout.tsx  MenuHeader: the app bar for everything else
+app/(shell)/(menu)/…           songs/new, songs/[id]/edit, lists, lists/[id],
+                               profile, admin (layout: RequireAdmin + console)
+```
+
+The parts below hold that up.
+
+- **The structure is the route tree, and position is the rule.** Each piece of
+  chrome is a layout a screen sits under rather than a wrapper it is given —
+  the shell, the `(menu)` app bar, the admin guard and console — so a new screen
+  gets the right chrome by where its folder goes, and the failure a forgotten
+  wrapper causes (a phone with no way to the navigation, a console screen
+  rendered for everybody) is not something a page can be written into. The
+  route groups exist for exactly that: `(auth)` is outside the shell because
+  the credential screens have no navigation, and `/change-password` is there
+  behind `RequireAuth` because its steps are state and navigation beside them
+  loses the flow. The verification gate is in the root's `Providers`, around
+  every route. **`src/appRoutes.test.tsx` is what checks it**, through
+  `test/app.tsx`, which composes the real `page.tsx` and `layout.tsx` files by
+  their folders the way Next does — so a page moved to the wrong group fails the
+  spec rather than a phone.
+- **Each `page.tsx` is thin, and the screens stay client components.** A page
+  renders one component from `src/routes` (inside a guard if it needs one);
+  that module carries `"use client"`, as do `Layout` and `SearchHeader`, which
+  layouts import, and `ui.tsx`, which the root not-found imports. `next build` is what
+  catches a server file reaching a hook through a module without it; the specs
+  run no RSC boundary and cannot. The App Router splits per route already, so the
+  `React.lazy` that kept the editor and the admin console out of every visitor's
+  bundle is gone with the route table: a route's code reaches only those who open
+  it. **`Layout` has no Suspense boundary around its children any more**, and
+  must not get one back: a server streams the shell the moment one sits above a
+  page, and a `notFound()` or `permanentRedirect()` thrown after that arrives as
+  a 200 with a meta tag instead of a 404 or a 308 — measured, both.
+- **`Providers` makes its `QueryClient` in `useState`, never at module scope.**
+  On a server a module-scope client is one cache shared by every request, so one
+  visitor's data could render into another's page; in the browser the root
+  layout mounts once, so this is still one client per session. It also mounts
+  the seam's Next backend and `AuthProvider`, in the order `AppRoot` did: the
+  query client outside the auth provider, which invalidates caches on sign-in
+  and sign-out. Next turns Strict Mode on for the App Router by default, so it is
+  no longer written out.
+- **Every route renders per request: `export const dynamic = "force-dynamic"` on
+  the root layout.** The shell reads the search string through
+  `useSearchParams`, and on a route Next prerenders that hands the whole tree up
+  to the nearest Suspense boundary to the browser — the server HTML would be an
+  empty shell again, and `next build` refuses it outright. Per request it renders
+  with the real search params. The catalog and shared lists are the routes that
+  would profit from a static shell plus streamed data; that is the later step.
+- **Guards render a `<title>` while they wait, because that is what a server
+  renders.** On a server the session is always still being restored, so
+  `RequireAuth`, `RequireAdmin`, the editor and the verification screen show
+  their waiting state there and never the screen that would name the tab.
+  `RequireAuth` takes the `title` (the one the screen behind it uses);
+  `RequireAdmin` says "Admin". All of them, and the profile, render the one
+  `Waiting` from `routes/guards.tsx`, so the next screen that waits finds the
+  title already in the shape it copies; a bare `<Spinner/>` there is a page
+  with no `<title>` in its server HTML.
+- **`/admin` redirects on the server, and on a document load the redirect is
+  still the browser's.** Its `page.tsx` calls `redirect()` to the first tab, but
+  `RequireAdmin` sits above it and withholds the page while the session
+  restores — on the server, always — so the throw never reaches the HTML render
+  and the response is a 200 whose payload carries the redirect, which the
+  router follows once the gate opens. An in-app navigation gets it straight
+  from the payload. A `next.config` redirect would be a real 307 at the cost of
+  naming the first tab in a second place; nothing is indexed under `/admin`.
 - **A value only the browser has may not be read while rendering, and a
   try/catch is not the fix.** Wrapping stops the throw and leaves the worse
   half: the server renders one answer and the client's first render another,
   which React 19 answers by discarding the server's HTML and re-rendering the
   whole root. So each of these starts from the default that a server would
-  produce and takes the stored answer in a `useLayoutEffect` — before the
-  browser paints, so on the client-only routes these are today nothing changes
-  visually at all. The reader's font size (`lib/fontSize.ts`, extracted from
+  produce and takes the stored answer in a `useLayoutEffect`, before the browser
+  paints. The reader's font size (`lib/fontSize.ts`, extracted from
   `SongDetailPage` so a spec can call it without the page's import graph),
   `useSwipeHint`'s `unspent`, the profile's theme switch and `AuthProvider`'s
   remembered user are the four, and the hint is the one that decides markup
-  most abruptly: `ListSongSwipe` returns null outright while the hook
-  answers null, so the observed box either exists or does not, and starting
-  spent is what makes both sides agree. Nothing is lost by that — the mark waits
-  for an IntersectionObserver before it shows anything, and `md:hidden` still
-  denies the box any geometry at a desk, so the single showing cannot be spent
-  there. The shape is `lib/useStoredState.ts`, so its compiler suppression and
-  its reason are written once; `AuthProvider` alone writes it out inline,
-  because the compiler lint cannot see a custom hook's setter as stable and
-  every one of the provider's callbacks calls it. These are the only storage
-  reads that should take it: the shape suits a value the reader also writes, or
-  one read exactly once. (The rule reaches further than
-  this shape, so a grep also finds `BrowsePage`'s URL sync and `AuthProvider`'s
-  `logout`, each with its own reason.) `storedTheme`/`storeTheme` and
-  `ListsPages`'s share URL are the other two. The first needed only the wrap,
-  since only the theme switch draws it and that reads it in a layout effect; the
-  second is a `useSyncExternalStore` read whose server snapshot is `""`, the
-  form for a browser value with no writer at all. The catch-all has no per-route
-  opt-out, so "that screen is client-only" lasts exactly as long as
-  `ssr: false` does. `src/serverRender.test.tsx` is what
-  says so, and it has to be `// @vitest-environment node` — the first spec here
-  to want its own environment, borrowing `auth/session.test.ts`'s reasoning and
-  not its mechanism, that one running under jsdom like everything else — because
-  jsdom hands a `localStorage` to anything that asks, so a render-phase read
-  passes the whole suite and fails only when the `ssr: false` comes off. Which
-  is also why `vitest.setup.ts` guards its stubs on `typeof window`: the setup
-  file runs for that spec too. **It names its sites rather than catching them**,
-  and its storage cases are not equally strong: every one of these reads is
-  wrapped now, so none of them can throw there, and asserting `storedTheme` and
-  `storedFontSize` answer their defaults pins that the modules are safe to
-  *call* on a server rather than that nothing calls them mid-render. The one
-  case that does constrain a render needs a **spy** to do it, and that is the
-  part worth carrying to the next such spec: with a wrap in place, "there is no
-  storage" and "nothing asked for any" render the same empty string, so the
-  call is the only thing left that a `catch` cannot hide. Both directions are
-  pinned — the mark's box appears if the read moves back into the render body,
-  and the spy fires even when it does not, which is the case with the hint
-  already spent. The same spec renders the catalog, a song page, the profile and
-  the real `AuthProvider` through the route table, which is what pins that
-  importing `auth/session` builds no SDK client: its stub of the SDK throws
-  without a `window`, stricter than the real one, which constructs under Node
-  and fails only on first use — so the strict stub stands for whichever build
-  trips it earlier.
+  most abruptly: `ListSongSwipe` returns null outright while the hook answers
+  null, so the observed box either exists or does not, and starting spent is
+  what makes both sides agree. Nothing is lost by that — the mark waits for an
+  IntersectionObserver before it shows anything, and `md:hidden` still denies
+  the box any geometry at a desk, so the single showing cannot be spent there.
+  The shape is `lib/useStoredState.ts`, so its compiler suppression and its
+  reason are written once; `AuthProvider` alone writes it out inline, because
+  the compiler lint cannot see a custom hook's setter as stable and every one of
+  the provider's callbacks calls it. These are the only storage reads that
+  should take it: the shape suits a value the reader also writes, or one read
+  exactly once. (The rule reaches further than this shape, so a grep also finds
+  `BrowsePage`'s URL sync and `AuthProvider`'s `logout`, each with its own
+  reason.) `storedTheme`/`storeTheme` and `ListsPages`'s share URL are the other
+  two. The first needed only the wrap, since only the theme switch draws it and
+  that reads it in a layout effect; the second is a `useSyncExternalStore` read
+  whose server snapshot is `""`, the form for a browser value with no writer at
+  all. `src/serverRender.test.tsx` is what says so, and it has to be
+  `// @vitest-environment node` — because jsdom hands a `localStorage` to
+  anything that asks, so a render-phase read passes the whole suite and fails
+  only on a real server. Which is also why `vitest.setup.ts` guards its stubs on
+  `typeof window`: the setup file runs for that spec too. **It names its sites
+  rather than catching them**, and its storage cases are not equally strong:
+  every one of these reads is wrapped now, so none of them can throw there, and
+  asserting `storedTheme` and `storedFontSize` answer their defaults pins that
+  the modules are safe to *call* on a server rather than that nothing calls them
+  mid-render. The one case that does constrain a render needs a **spy** to do
+  it, and that is the part worth carrying to the next such spec: with a wrap in
+  place, "there is no storage" and "nothing asked for any" render the same empty
+  string, so the call is the only thing left that a `catch` cannot hide. The
+  same spec renders the catalog, a song page, the profile and the real
+  `AuthProvider` through the route tree, which is what pins that importing
+  `auth/session` builds no SDK client: its stub of the SDK throws without a
+  `window`, stricter than the real one, which constructs under Node and fails
+  only on first use.
 - **`src/hydration.test.tsx` is the check for the sites nobody named.** It
   renders a screen to a string the way a server would — under jsdom, but with
   every `localStorage.getItem` refusing, which each wrapped read answers with its
@@ -780,38 +827,36 @@ no application code — but while it stands, these are the parts holding it up.
   which React 19 only warns about in development and never patches — the theme
   switch's `aria-checked` was that kind, and listening for recoverable errors
   alone passes it. The data comes from mounting the screen once against MSW and
-  dehydrating the cache, the shape `dehydratedState` already reaches `AppRoot`
-  in, so the comparison is of content rather than of two loading skeletons. The
+  dehydrating the cache, the shape a server page hands to `HydrationBoundary`,
+  so the comparison is of content rather than of two loading skeletons. The
   font size, the swipe hint, the theme and the remembered user each fail it when
-  read back into a render body; the stubbed catalog case has no fix behind it
-  and is there for the next one. jsdom is what lets one spec do both halves, and
+  read back into a render body. jsdom is what lets one spec do both halves, and
   is also why it cannot see a read of `window` throwing — `serverRender.test.tsx`
   is the other half.
 - **The theme is applied by an inline script in `app/layout.tsx`, which is a
   hand-written copy of `applyTheme(storedTheme())` and of the `lyrics:theme`
   key.** Nothing bundled runs early enough: the script has to execute while the
-  parser is still ahead of anything with a background color, and the app's own
-  JavaScript now arrives later than it did under Vite. So the rule lives in two
-  places, the same trade `extractVideoId` makes against Go's `parseYouTubeURL`,
-  and `lib/theme.ts` says so at the definition. Change one and change the other;
-  miss the script and every dark-theme load flashes light first, on every page.
-  `theme.test.ts` is what makes that instruction more than an instruction — it
-  runs the exported string case by case against `applyTheme(storedTheme())`, the
-  way `youtube.test.ts` holds `extractVideoId` to the Go parser it mirrors, since
-  a divergence here shows only as one white frame and only to a visitor whose
-  theme is dark. `suppressHydrationWarning` on `<html>` is part of it — the
-  script legitimately makes the client's markup differ from the server's. And
-  the script declares its temporaries with `let`: an inline `<script>` runs
-  in global scope, where `var` inside a block is still function-scoped, so `var`
-  put `window.t` and `window.d` on every page in the app. That is the other
-  thing the spec pins, by asking for the globals rather than the class. An
-  explicit theme also prepends its own unscoped `theme-color` meta ahead of the
-  `viewport` export's media-scoped pair, and **its colors are upper case on
-  purpose**: React hydrates a `<meta>` by adopting the first in the document
-  with the same `name` and `content` string, never checking `media` or `id`, so
-  an override spelled like the pair is taken over as one of them — and React's
-  later removal of it throws once "system" has already removed it. The spec
-  hydrates the pair over the boot script's output to hold that.
+  parser is still ahead of anything with a background color. So the rule lives
+  in two places, the same trade `extractVideoId` makes against Go's
+  `parseYouTubeURL`, and `lib/theme.ts` says so at the definition. Change one and
+  change the other; miss the script and every dark-theme load flashes light
+  first, on every page. `theme.test.ts` is what makes that instruction more than
+  an instruction — it runs the exported string case by case against
+  `applyTheme(storedTheme())`, the way `youtube.test.ts` holds `extractVideoId`
+  to the Go parser it mirrors, since a divergence here shows only as one white
+  frame and only to a visitor whose theme is dark. `suppressHydrationWarning` on
+  `<html>` is part of it — the script legitimately makes the client's markup
+  differ from the server's. And the script declares its temporaries with `let`:
+  an inline `<script>` runs in global scope, where `var` inside a block is still
+  function-scoped, so `var` put `window.t` and `window.d` on every page in the
+  app. That is the other thing the spec pins, by asking for the globals rather
+  than the class. An explicit theme also prepends its own unscoped `theme-color`
+  meta ahead of the `viewport` export's media-scoped pair, and **its colors are
+  upper case on purpose**: React hydrates a `<meta>` by adopting the first in the
+  document with the same `name` and `content` string, never checking `media` or
+  `id`, so an override spelled like the pair is taken over as one of them — and
+  React's later removal of it throws once "system" has already removed it. The
+  spec hydrates the pair over the boot script's output to hold that.
 - **The `/api` proxy is a `rewrites()` entry in `next.config.ts` and is
   development-only.** It replaces the Vite dev-server proxy, and `make mobile`
   is what depends on it: emptied `NEXT_PUBLIC_API_BASE_URL` sends every call
@@ -819,7 +864,9 @@ no application code — but while it stands, these are the parts holding it up.
   `NODE_ENV` because in production the App Platform ingress routes `/api` to the
   Go service before Next sees it — left ungated it would be dead config that
   looks live, and would quietly become the thing serving `/api` if that ingress
-  rule were ever dropped.
+  rule were ever dropped. It is an after-files rewrite, which is also why there
+  is no catch-all page for unknown addresses: one would answer `/api/*` before
+  the rewrite got the chance.
 - **`allowedDevOrigins` is the other half of `make mobile`, and without it that
   workflow does not merely degrade — the app never boots.** Next blocks
   cross-origin requests to `/_next/*` in development, and `next dev -H 0.0.0.0`
@@ -827,13 +874,12 @@ no application code — but while it stands, these are the parts holding it up.
   `0.0.0.0` and never this machine's LAN address. Some of the app's own script
   tags carry `crossorigin`, so their fetches send an `Origin` header and are
   answered 403: `http://<lan-ip>:5173` on a phone serves the document, fails
-  three chunks including `AppRoot`, and leaves a blank page with an untitled
-  tab. Nothing about it is visible from the machine being developed on, whose
-  origin is `localhost`. The entries are hostnames matched segment by segment —
-  no scheme, no port — so they are the private ranges rather than one address,
-  and `172.*.*.*` is wider than RFC 1918's `172.16–31` because the matcher has
-  no numeric ranges; the list is read by `next dev` alone, where it decides
-  which other private host may read dev assets and nothing else.
+  the chunks that hydrate it, and leaves a page that cannot be used. Nothing about
+  it is visible from the machine being developed on, whose origin is
+  `localhost`. The entries are hostnames matched segment by segment — no scheme,
+  no port — so they are the private ranges rather than one address, and
+  `172.*.*.*` is wider than RFC 1918's `172.16–31` because the matcher has no
+  numeric ranges; the list is read by `next dev` alone.
 - **The security headers are a `headers()` entry in the same file**, ported from
   the deleted `web/nginx.conf`: `X-Content-Type-Options`, `Referrer-Policy` and
   `X-Frame-Options: DENY`. They were repeated per-location there because nginx's
@@ -853,73 +899,70 @@ no application code — but while it stands, these are the parts holding it up.
   that package is still a devDependency and why `tsconfig.json`'s `jsx` setting
   is read by neither. `next build` rewrites `jsx`, `allowJs` and
   `esModuleInterop` if they disagree with it, so they are not choices to make
-  there.
+  there. Coverage leaves out the three files that do anything only inside a
+  Next build — the root layout, `Providers` and the seam's Next backend.
 - **TypeScript 7 has no compiler API, so `next build` checks types through the
   CLI.** Next 16.4 runs `tsc` in a child process when
   `experimental.useTypeScriptCli` is on. That is its default, but an
   experimental one, so `next.config.ts` sets it explicitly; turning it off
   makes the build demand TypeScript 6. The `next` entry under `plugins` is
   inert — TS 7's language server loads no plugins — but stays, since
-  `next build` writes it back. `baseUrl` is gone: TS 7 refuses it, and `paths` resolve from the
-  tsconfig's own directory.
+  `next build` writes it back. `baseUrl` is gone: TS 7 refuses it, and `paths`
+  resolve from the tsconfig's own directory.
 
-### What the server says while the app is still client-only
+### What the server renders
 
-`generateMetadata`, a `<script type="application/ld+json">` and `sitemap.xml` are
-rendered by the Node process whatever the body does, so all three ship with
-`ssr: false` still standing — and so does a song page's own content, rendered
-beside the app rather than by it. Nearly nothing below is visible from inside the
-app — these are read by a crawler, an agent or a scraper — which is why each of
-them is written down.
+Every route's HTML is the screen itself, rendered by the Node process — the
+shell, the app bar, a guard's waiting state, the song with its lyrics. What only
+a server can add is below, and most of it is read by a crawler, an agent or a
+scraper rather than by anyone inside the app, which is why each is written down.
 
-- **A song page's HTML carries the song, and the app removes it on mounting.**
-  `SongPreview` renders the title, credits and lyrics (and a `<title>`, which
-  React hoists into the server's `<head>`) inside `UntilAppMounts`, which drops
-  them when `AppRoot` calls `markAppMounted` from a layout effect — after the
-  whole app has committed and before the browser paints, so the two are never on
-  screen together. **Unmounted, never hidden**: the `<title>` must go with it, or
-  it stays first in the head and pins the tab exactly as a metadata title would
-  (see Head assets). It is a static copy, not the app's components: those need
-  the router, and anything pressable here does nothing until the app arrives —
-  so plain links and no buttons. **Its geometry mirrors the app's** — the
-  sidebar's `w-60`, the search header's height, the back-button row, the
-  recordings line, the lyrics heading's `h-8` — so the text does not jump at the
-  swap; measured to within a pixel at a desk and on a phone. Change `SongHeader`
-  and `SongPreview` together, and measure again. Two jumps are left, knowingly:
-  a reader who chose a non-default lyrics size sees the lyrics reflow (the
-  server cannot read the stored size, and an inline boot script like the
-  theme's is a decision of its own), and an address carrying `?list=` sees the
-  list bar push the song down when it arrives (the bar needs the list, which
-  the server does not fetch).
-- **The app starts from the server's copy of the song, stamped stale.** The page
-  builds it as a React Query cache entry and hands `ClientOnly` the dehydrated
-  state, which `AppRoot` hydrates through `HydrationBoundary` during its first
-  render, so the page draws the song with no second round trip. `AppRoot` knows
-  nothing about songs: the next
-  page to render on the server hands over its own entries the same way. The key
-  is the *address* the page was asked under, as `useSong` keys it — the id form
-  never gets this far, being redirected first. The entry carries
-  `updatedAt: 0` so it is refetched at once: the server read may be up to
-  `CACHE_SECONDS` old from Next's data cache, and fresh it would show a reader
-  who reloads after an edit the version before it. `page.test.tsx` pins the key
-  and the stamp; `AppRoot.test.tsx` holds the API's answer back forever to prove
-  the first paint came from the handed-over entry.
+- **A song page's HTML carries the song, because the page is handed the read the
+  server made.** `app/(shell)/songs/[id]/page.tsx` reads the song, builds it as a
+  React Query cache entry and renders `SongDetailPage` inside a
+  `HydrationBoundary` holding it — so the server render, and the browser's first
+  render after it, draw the title, credits and lyrics (with the song's own
+  `lang`) and a `<title>` naming it, with no second round trip and no stand-in.
+  The `SongPreview` copy the client-only app needed is gone, and with it
+  `UntilAppMounts` and `lib/appMounted`: there is one song page now, so there is
+  no geometry to keep two of in step. The key is the *address* the page was asked
+  under, as `useSong` keys it — the id form never gets this far, being redirected
+  first. The entry carries `updatedAt: 0` so it is refetched at once: the server
+  read may be up to `CACHE_SECONDS` old from Next's data cache, and fresh it
+  would show a reader who reloads after an edit the version before it. On an
+  in-app navigation the boundary only fills what the client cache lacks, so a
+  song already cached is not replaced by an older server read. `page.test.tsx`
+  pins the key, the stamp and the HTML (rendered to a string under Node).
+- **A step to another song waits for the server.** An in-app navigation fetches
+  the next route's payload, which reads the song first, so the list's arrows,
+  swipe and keys no longer paint the page shell instantly with the song behind
+  a skeleton: the new page arrives whole, a server round trip later. The read
+  is cached for `CACHE_SECONDS`, and the client refetches the stale entry once
+  it lands. A `loading.tsx` for the segment would bring the instant shell back,
+  at the cost of a streamed boundary — which is exactly what would turn the
+  404 and the 308 below into 200s (see "The Next.js app").
 - **A song the API says does not exist is a real 404**, thrown by `loadSong`
-  itself, so `generateMetadata` and the page share it through `cache` — and
-  rendered by `app/not-found.tsx`, which still serves the app so it shows its
-  own "not available". Next adds `noindex`. Only the API's *own* `not_found`
-  code counts: a bare 404 from whatever sits in front of it (a misrouted
-  ingress, a wrong `API_ORIGIN`) is an outage, and answering every song 404 for
-  one would deindex the catalog. **Which is why the Go router's fallback answers
-  `no_route`, not `not_found`**: an ingress that loses `preserve_path_prefix`
-  (see Deployment) sends `/v1/songs/<slug>` to a router mounted at `/api/v1`,
-  and with one shared code every song page would 404. `not_found` means a route
-  matched and its record is missing, and nothing else may answer it —
-  `TestUnmatchedPathIsNotAMissingRecord` pins both sides. The throw is in the `catch` block, where nothing
-  catches it again; moved into the `try`, it would be swallowed with the
-  failures it sits beside. Unknown paths outside `/songs/` still answer 200;
-  nothing on the server knows react-router's table.
-
+  itself, so `generateMetadata` and the page share it through `cache`, and
+  rendered by `songs/[id]/not-found.tsx` — the page's own "not available" under
+  the same search header, so a phone still has the hamburger. **The 404's body is
+  rendered in the browser, not by the server**: a `notFound()` thrown by the page
+  reaches the top of the HTML render, where Next answers with its error shell
+  and the router draws the not-found from the payload. Measured, and the same as
+  the client-only app's 404 was; the status and `noindex` are what a crawler
+  reads. Only the API's *own* `not_found` code counts: a bare 404 from whatever
+  sits in front of it (a misrouted ingress, a wrong `API_ORIGIN`) is an outage,
+  and answering every song 404 for one would deindex the catalog. **Which is why
+  the Go router's fallback answers `no_route`, not `not_found`**: an ingress that
+  loses `preserve_path_prefix` (see Deployment) sends `/v1/songs/<slug>` to a
+  router mounted at `/api/v1`, and with one shared code every song page would
+  404. `not_found` means a route matched and its record is missing, and nothing
+  else may answer it — `TestUnmatchedPathIsNotAMissingRecord` pins both sides.
+  The throw is in the `catch` block, where nothing catches it again; moved into
+  the `try`, it would be swallowed with the failures it sits beside. An outage
+  renders the page with nothing handed over, and the browser asks again and
+  says so in its own words. Any other unmatched address renders
+  `app/not-found.tsx` — server-rendered, 404, inside the group layouts it mounts
+  itself, since the root's not-found sits outside the route groups.
 - **A server render needs an origin, and `""` is not one.** `API_BASE` in
   `api/client.ts` is two branches now: the browser's, unchanged, and the Node
   process's, which resolves `API_ORIGIN` and falls back to `:8080`. It is one
@@ -934,36 +977,24 @@ them is written down.
   value is `${APP_URL}`, so a server fetch goes out through the public ingress
   and back: there is no private service-to-service address configured, and that
   is a known cost. Every server fetch passes `{ anonymous: true }` — a server
-  render is a guest by construction. **Whether `${APP_URL}` resolves to the
-  primary custom domain or to the default `*.ondigitalocean.app` host was never
-  confirmed against a live deploy** — recorded the way `DO-Connecting-IP` and
-  Prelude's `iss` host are, and with the same shape of consequence: App Platform
-  redirects its default domain to the primary one and `fetch` follows a redirect
-  silently, so the default host costs an extra hop per server fetch that nothing
-  in logs or metrics tells apart from a healthy call. It can cost latency, never
-  correctness.
-- **Everything the server says is about the *entry* document only, and nothing
-  updates it afterwards.** Next renders this route once; from then on
-  react-router does every navigation and Next's router never runs — so a reader
-  who swipes from song A to song B is looking at B under A's description,
-  canonical, `og:*` and JSON-LD. Crawlers execute no JavaScript and so only ever
-  see the document they asked for, which is what makes this acceptable rather
-  than a bug; what sees the stale copy is anything reading the live DOM, a
-  share-sheet scraper or an extension. `PageTitle` is the one thing that does
-  track, because a `<title>` React hoists also unwinds on unmount — there is no
-  equivalent for a `<meta>` this route renders, and adding one would mean the app
-  maintaining the server's metadata from the client, which is a second authority
-  over it. Do not read the presence of correct metadata on one song page as a
-  promise it follows the reader.
-- **`generateMetadata` must never return a `title`.** It is the same rule
-  `app/layout.tsx` keeps and for the same mechanism, one level down: React
-  renders a metadata title from a segment above every route, so it sorts ahead of
-  the one `PageTitle` hoists, wins `document.title` — and then never changes
-  again, because react-router does every in-app navigation and Next's router
-  never runs. Paging through a list would leave the tab naming the first song
-  forever. `og:title` is a different property and is what the card reads. The
-  one `<title>` in a song page's server HTML is `SongPreview`'s `PageTitle`,
-  which goes when the app mounts (see the first bullet of this section).
+  render is a guest by construction, and so is everything a client component
+  renders there, the session being restored only in the browser. **Whether
+  `${APP_URL}` resolves to the primary custom domain or to the default
+  `*.ondigitalocean.app` host was never confirmed against a live deploy** —
+  recorded the way `DO-Connecting-IP` and Prelude's `iss` host are, and with the
+  same shape of consequence: App Platform redirects its default domain to the
+  primary one and `fetch` follows a redirect silently, so the default host costs
+  an extra hop per server fetch that nothing in logs or metrics tells apart from
+  a healthy call. It can cost latency, never correctness.
+- **Metadata now follows the reader.** Next's router does every navigation, so
+  `generateMetadata`'s description, canonical, `og:*` and the JSON-LD are those
+  of the page on screen after a step through a list, not of the document the
+  tab first loaded — the gap the client-only app documented is closed. The
+  catalog, lists and the rest still carry only the layout's site-wide metadata.
+- **`generateMetadata` must never return a `title`.** Titles have one
+  mechanism, `PageTitle`, and a metadata title is a second `<title>` racing it
+  for `document.title` — see Head assets. `og:title` is a different property and
+  is what the card reads.
 - **A route's `openGraph` *replaces* the layout's rather than merging into it.**
   Next merges metadata shallowly, so a block naming only `og:type` and `og:title`
   silently drops the card image and the site name with it. `lib/site.ts` holds
@@ -971,16 +1002,15 @@ them is written down.
   spreads one thing and cannot forget half of it, which is the shared-constant
   shape Next's own docs recommend. `SITE_NAME` is beside it because the product
   name was in five places and a rename that misses one is silent; `PageTitle` and
-  `Wordmark` read it too, both having argued for exactly that in their own
-  comments. And `SITE_ORIGIN`, because a sitemap entry and the JSON-LD both need
-  an absolute URL and **neither reads `metadataBase`**, which resolves the
-  relative URLs inside metadata and nothing else.
+  `Wordmark` read it too. And `SITE_ORIGIN`, because a sitemap entry and the
+  JSON-LD both need an absolute URL and **neither reads `metadataBase`**, which
+  resolves the relative URLs inside metadata and nothing else.
 - **The JSON-LD is escaped, and `songJsonLd` returns text rather than an object
   so that it cannot be forgotten.** Lyrics are contributor-typed text going into
   a raw `<script>` body, where the HTML parser is still looking for `</script`: a
   lyric containing one closes the tag and the rest is parsed as markup a
   contributor wrote. Same stored-XSS shape as the `⟦…⟧` snippet sentinels,
-  arriving from the server. Every `<` becomes `\u003c`, which is total rather than
+  arriving from the server. Every `<` becomes `<`, which is total rather than
   a filter — every sequence the parser reacts to in there starts with that one
   character. Pinned in `lib/jsonLd.test.ts` by asserting the body contains no `<`
   whatsoever, and verified in the served document.
@@ -992,22 +1022,22 @@ them is written down.
   000010 reserves both out of slug space. And `permanentRedirect` **works by
   throwing**, so it sits outside the `try` that swallows a failed fetch —
   inside, the redirect is swallowed along with it and the old address quietly
-  serves the app exactly as before.
-- **`/songs/new` needs a segment of its own beside `/songs/[id]`.** Without it the
-  editor's address is a song's: `generateMetadata` goes looking for a song called
-  "new" and the redirect branch reasons about the form as though it were one. A
-  static segment outranks a dynamic one, which is the same precedence the
-  react-router table already relies on for this pair. `/songs/[id]/edit` is two
-  segments and still reaches the catch-all.
+  serves the page exactly as before.
+- **`/songs/new` is a static segment beside `/songs/[id]`, in another group.**
+  It outranks the dynamic one by being static, the same precedence the
+  react-router table relied on; without it `generateMetadata` would go looking
+  for a song called "new". `songs/[id]` appears in both `(shell)` and
+  `(shell)/(menu)` — the page in the first, `edit` in the second — which Next
+  allows because the two resolve to different paths and name the segment alike.
 - **`revalidate` as a segment export does nothing here; the caching is on the
-  request.** A dynamic segment with no `generateStaticParams` is rendered per
-  request whatever that export says. Measured against `next start`: three page
-  requests made three API calls with `export const revalidate = 300` in place and
-  one with `apiFetch`'s `revalidate` option instead, which is Next's own `fetch`
-  extension. The option is per call site on purpose — a stale answer is right for
-  a crawler and wrong for the app, where a reader who just saved an edit would be
-  shown the version before it. There is no `generateStaticParams` either way:
-  `next build` runs with no API on :8080.
+  request.** A dynamic route is rendered per request whatever that export says.
+  Measured against `next start`: three page requests made three API calls with
+  `export const revalidate = 300` in place and one with `apiFetch`'s
+  `revalidate` option instead, which is Next's own `fetch` extension. The option
+  is per call site on purpose — a stale answer is right for a crawler and wrong
+  for the app, where a reader who just saved an edit would be shown the version
+  before it; the refetch of the stale entry is what covers the app. There is no
+  `generateStaticParams`: `next build` runs with no API on :8080.
 - **The sitemap must not be evaluated at build time, and must survive a dead API
   anyway.** Metadata routes are cached by default, and a build has nothing on
   :8080 — so a sitemap evaluated then ships empty and stays empty until the next
@@ -1017,15 +1047,14 @@ them is written down.
   which is `created_at ASC, id ASC` — a total order in which a song added
   mid-walk appends rather than shifting a row across a page boundary and handing
   a crawler one song twice while dropping another — and `meta.total` is the
-  authority for how far to go — and it is also what lets every page after the
+  authority for how far to go, which is also what lets every page after the
   first go out at once, the offsets all being fixed by the first answer. A
   failure yields the static routes **alone rather than what had been collected**:
   a truncated sitemap is indistinguishable from a small catalog, so half the songs
   going unindexed would look exactly like success. `Promise.all` keeps that,
   one rejection being the whole walk's. `app/sitemap.test.ts` runs under
-  `@vitest-environment node`, one of the two specs that exercise the server
-  branch of `API_BASE` above, and its fourth case is what pins the all-or-nothing
-  half by failing every page but the first.
+  `@vitest-environment node`, and its fourth case is what pins the
+  all-or-nothing half by failing every page but the first.
 - **A payload with no `slug` is a failure, and both server readers treat it as
   one.** It is not corruption and not something `Song` can express: an API
   predating migration 000010 answers with the field simply *not there*, on every
@@ -1042,11 +1071,11 @@ them is written down.
   needs one.** `listContext.test.ts` pins the two address helpers and
   `jsonLd.test.ts` the payload; the `/songs/undefined` redirect above passed all
   of them and the whole suite besides, because what was wrong was the wiring. So
-  `app/songs/[id]/page.test.tsx` *calls* the async component and reads the tree
-  it returns rather than rendering it — `<ClientOnly/>` has nothing to render
-  outside a Next build — and it mocks `permanentRedirect` to throw, which is what
-  the real one does and what stops the render continuing. Each of its cases was
-  checked against the regression it names.
+  `app/(shell)/songs/[id]/page.test.tsx` *calls* the async component and reads
+  the tree it returns, then renders that tree to a string, and it mocks
+  `permanentRedirect` to throw, which is what the real one does and what stops
+  the render continuing. Each of its cases was checked against the regression it
+  names.
 - **`robots.txt` stays a static file.** A file under `public/` and an
   `app/robots.ts` claim the same path, and there is nothing in it worth
   generating. Its `Sitemap:` line therefore names a path with no file behind it,
@@ -1054,86 +1083,110 @@ them is written down.
 
 ### The routing seam
 
-Every screen is still a react-router route, and the plan is to move them onto
-App Router pages backed by `next/navigation`. `lib/navigation.tsx` is what makes
-that switch one module: it is the only file that may import react-router outside
-the route table (`App.tsx`) and the harness's `test/routes.tsx`, and Biome's
-`noRestrictedImports` refuses it anywhere else. It mounts the router too —
-`AppRouter` for `AppRoot`, `TestRouter` for `TestProviders` — so neither names
-a router. What it offers is shaped by what Next can also
-implement, which is why the parts below look the way they do.
+`lib/navigation.tsx` is the only way a screen reaches the router, and Biome's
+`noRestrictedImports` refuses `next/navigation` and `next/link` anywhere else —
+except `lib/nextNavigation.tsx`, the seam's Next backend, and route files, which
+may take `notFound`, `redirect` and `permanentRedirect` and nothing more. It kept
+its API through the switch from react-router, which is what it was built for: no
+screen changed for it.
 
-- **The vocabulary is Next's.** `useRouter()` returns `push`, `replace` and
-  `back`; `Link` and `NavLink` take an `href` string and `replace`; `usePathname`,
-  `useSearchParams` (read-only) and `useParams` read the address;
-  `useSetSearchParams` writes the search string from what it holds now; and
-  `<Redirect>` always replaces, since every guard did. A `push` to the address
-  already showing is a replace, as react-router's `Link` already made one: two
-  identical entries in a row are a Back press that appears to do nothing. An
-  address is a string — never react-router's object `To`, which Next's `href` object is not the same
-  shape as — and there is no hash in `useCurrentHref`, because no Next hook
-  exposes one. `NavLink` is written here over `usePathname` rather than wrapped,
-  and its `pathMatches` is also what `AdminConsole` names its heading by, so the
-  tab that is lit and the heading cannot disagree. It mirrors react-router's
-  rule, including the one that surprises: a link to `/` is lit on `/` alone —
-  which is why there is no `end` prop to say it a second time.
-  `Layout` and `AdminConsole` take `children`; the `<Outlet/>` stays in the
-  route table, which is the part a layout file replaces.
-- **Sign-in's destination travels as `?next=`, not router state.** Router state
-  is react-router's alone, and the address also survives a reload of the
-  sign-in screen. `auth/returnTo.ts` writes it (`signInHref`) and reads it
-  (`returnDestination`), and the reader is where the cost lands: anyone can
-  write the parameter, so only a path on this site is accepted. Writers call
-  `useSignInHref()`, which reads the current address *with* its search string;
-  one built by hand from `usePathname` drops a filter on the way back. The check is a
-  `URL` resolved against a stand-in origin, not a prefix test, because the
-  parser is what turns `/\host` and a tab inside `//host` into another host —
-  exactly as a browser would, and exactly what a `startsWith("//")` misses.
-  `returnTo.test.ts` walks those spellings.
-- **"Is anything of ours behind this entry" is `router.canGoBack()`, and it
-  replaced `location.key === "default"`**, which Next has no equivalent of. It
-  is whether this document has pushed an entry or moved through history since
-  it loaded: the in-app trail and nothing else, kept in memory. Two browser
-  answers were rejected for counting more than that trail.
-  `window.history.length` counts other sites' entries, so a link opened from
-  search results reads as having something behind it. The Navigation API's
-  `navigation.canGoBack` counts earlier *page loads* of this site, so an editor
-  address pasted into a tab already on a song pops to that other song after
-  saving — it was the first version here, and review caught it. What memory
-  costs is the reload: a reloaded editor reads as a fresh tab and replaces
-  itself with its own song instead of popping, which leaves one duplicate
-  entry behind. That is the safe way to be wrong, since the other way lands
-  somewhere unrelated; it is also the one case `location.key` got right, because
-  react-router keeps the key in `history.state`. Persisting a mark of our own
-  there would recover it, at the price of depending on what each router does to
-  `history.state`. The flag lives in a provider that `AppRouter` and
-  `TestRouter` mount and nothing else can, so no tree has a router without it;
+- **The router is a backend handed in through context.** `NavigationProvider`
+  takes a `NavigationBackend` — the address, the params, `push`, `replace`,
+  `back`, and the `Link` component that renders an anchor — and every hook and
+  link in the seam reads it. Production mounts `NextNavigation`
+  (`lib/nextNavigation.tsx`, from `app/Providers.tsx`), which fills it from
+  `next/navigation` and renders `next/link`; specs and stories mount
+  `TestRouter`, an in-memory history in the seam itself whose links are plain
+  anchors. So no spec mocks Next's router and none of the ~550 specs or the
+  stories changed to move routers, and the Next backend is its own module so
+  that nothing a spec or a story loads imports `next/navigation` at all — the
+  browser build of Storybook would otherwise pull Next's internals into Vite.
+  `RouteParams` hands a matched route's params down, for the harness, which
+  matches patterns itself (`test/routes.tsx` for a spec's own routes,
+  `test/app.tsx` for the real tree); Next's `useParams` already has them.
+- **What the app promises about history is written once, above whichever
+  router answers.** A push to the address already showing is a replace, and so
+  is a link to it — decided by the seam at render (`Link` passes `replace` when
+  the destination is the address showing) rather than left to the router, since
+  Next and react-router never agreed on it: two identical entries in a row are a
+  Back press that appears to do nothing. `canGoBack()` and `useNavigationKey`
+  live in `NavigationProvider`, the only way to mount a backend, so no tree has
+  a router without them. `TestRouter`'s `back()` moves no browser history and
+  fires no `popstate`, exactly as react-router's memory router did, so the specs
+  that pin `canGoBack` read the same.
+- **Nothing scrolls but `Layout`.** Next scrolls a new page into view by a rule
+  of its own, on every `Link` and `push`; the backend passes `scroll: false`
+  everywhere, so `Layout`'s pathname-keyed scroll to the top stays the one rule —
+  and a filter written into the catalog's query string, which `writeSearch`
+  hands to the History API rather than the router, does not scroll at all. The backend's `push`/`replace`/`back` are built
+  once from Next's stable router object, so `useRouter()` is stable for good.
+- **The vocabulary is Next's.** `useRouter()` returns `push`, `replace`, `back`
+  and `canGoBack`; `Link` and `NavLink` take an `href` string and `replace`;
+  `usePathname`, `useSearchParams` (read-only) and `useParams` read the address;
+  `useSetSearchParams` writes the search string from what it holds now, and is
+  not counted as a navigation — through the backend's `writeSearch`, which on
+  Next is the History API rather than the router: Next keeps `useSearchParams`
+  in step with `pushState`/`replaceState` and asks the server for nothing, where
+  `router.replace` re-rendered the catalog on the server for every keystroke
+  typed into its search box (verified: one API request per query, no RSC
+  request); and `<Redirect>` replaces from an effect — every
+  guard's redirect is decided in the browser, since on a server every guard is
+  still waiting for the session. An address is a string, and there is no hash in
+  `useCurrentHref`, because no Next hook exposes one. `NavLink` is written here
+  over `usePathname`, and its `pathMatches` is also what `AdminConsole` names its
+  heading by, so the tab that is lit and the heading cannot disagree. A link to
+  `/` is lit on `/` alone — which is why there is no `end` prop.
+- **Sign-in's destination travels as `?next=`, not router state.** Next's router
+  has none, and the address also survives a reload of the sign-in screen.
+  `auth/returnTo.ts` writes it (`signInHref`) and reads it (`returnDestination`),
+  and the reader is where the cost lands: anyone can write the parameter, so
+  only a path on this site is accepted. Writers call `useSignInHref()`, which
+  reads the current address *with* its search string; one built by hand from
+  `usePathname` drops a filter on the way back. The check is a `URL` resolved
+  against a stand-in origin, not a prefix test, because the parser is what turns
+  `/\host` and a tab inside `//host` into another host — exactly as a browser
+  would, and exactly what a `startsWith("//")` misses. `returnTo.test.ts` walks
+  those spellings.
+- **"Is anything of ours behind this entry" is `router.canGoBack()`.** It is
+  whether this document has pushed an entry or moved through history since it
+  loaded: the in-app trail and nothing else, kept in memory. Two browser answers
+  were rejected for counting more than that trail. `window.history.length`
+  counts other sites' entries, so a link opened from search results reads as
+  having something behind it. The Navigation API's `navigation.canGoBack` counts
+  earlier *page loads* of this site, so an editor address pasted into a tab
+  already on a song pops to that other song after saving. What memory costs is
+  the reload: a reloaded editor reads as a fresh tab and replaces itself with its
+  own song instead of popping, which leaves one duplicate entry behind. That is
+  the safe way to be wrong, since the other way lands somewhere unrelated.
   `TestRouter` reads the history behind the first screen (`route: [...]`) off
   its entries, which is how the editor's specs keep both sides pinned.
-- **`useNavigationKey` replaced `location.key` as "a navigation happened".** The
-  drawer closes on it and the song page's search box empties on it, and both
-  need a link to the address already showing to count — which changes neither
-  the pathname nor the search string, under either router. The key is the
-  address plus a count of navigations whose destination *was* the address
-  showing, which the seam can see because every `Link` press and every
-  `push`/`replace` goes through it. Counting only those is deliberate: a
-  navigation that moves the address changes the key by moving the address, on
+- **`useNavigationKey` is "a navigation happened".** The drawer closes on it and
+  the song page's search box empties on it, and both need a link to the address
+  already showing to count — which changes neither the pathname nor the search
+  string. The key is the address plus a count of navigations whose destination
+  *was* the address showing, which the seam can see because every `Link` press
+  and every `push`/`replace` goes through it. Counting only those is deliberate:
+  a navigation that moves the address changes the key by moving the address, on
   the same render that draws the new screen, where a counter bumped at the click
   would reset the old screen a render early. A modified click opens another tab
   and counts for nothing. What it misses is Back between two entries with the
   same address, which nothing in the app creates.
-- **`useSetSearchParams` is not referentially stable**, exactly as react-router's
-  setter is not, so `BrowsePage`'s debounced-search guard is still what keeps
-  pagination advancing. Making it stable here would be a promise the Next
-  implementation then has to keep too.
+- **`useSetSearchParams` is not referentially stable**, so `BrowsePage`'s
+  debounced-search guard is still what keeps pagination advancing. Making it
+  stable would be a promise every backend then has to keep.
 - **The seam is one `.tsx` file exporting components beside hooks**, which
   `useComponentExportOnlyModules` forbids everywhere else. It is turned off for
   that file alone in `biome.jsonc`: being one module is the point, and the cost
   is a full reload instead of a fast refresh when it is edited.
 - **Specs say which screen answers which address through `test/routes.tsx`**
-  (`TestRoutes`, and `CurrentAddress` for asserting a destination), never by
-  naming `<Routes>`. That file is the whole of the harness a router change has
-  to touch.
+  (`TestRoutes`, and `CurrentAddress` for asserting a destination), and render
+  the real tree through `test/app.tsx`'s `TestApp`, never by naming a router.
+  `TestApp` composes `src/app`'s pages and layouts from an `import.meta.glob` by
+  folder, leaves out the root layout (the document; its providers are what
+  `TestProviders` supplies, the `VerificationGate` added), stands each *async*
+  page in with the screen it renders (`SERVER_PAGES`, since a browser renderer
+  cannot await one and its own spec calls it), and follows a page's `redirect()`
+  with a client `Redirect`.
 
 ### Frontend
 
@@ -1495,18 +1548,20 @@ implement, which is why the parts below look the way they do.
   further left than the next one's, and that box moves under the finger that
   just tapped through it. Every other screen gets `MenuHeader`, the same
   `StickyHeader` and the same column with nothing but the button in it — and
-  gets it from `MenuBarLayout`, **a layout route around the section rather than
-  a wrapper written per screen**, which is `RequireAdmin`'s shape below for
-  `RequireAdmin`'s reason. Per route, the wrapper invites the failure it exists
-  to prevent: a route copied from one of the two exceptions above it ships a
-  screen with no navigation at all on a phone. Per page is worse, a page having
-  to carry it in every state it can be in — `ListDetailPage` has three returns
-  to `ProfilePage`'s two. What is left for a spec is the part position cannot
-  rule out, and `App.test.tsx` is it: it walks every address inside the shell
-  asking each for the one hamburger, and it **has to render the real route
-  table**, since the two mechanisms cannot see each other and nothing else looks
-  at both — the drawer's own specs mount a stand-in route tree and every page's
-  specs render the page with no shell at all. The column the two bars share is
+  gets it from the `(menu)` route group's layout, **a layout around the section
+  rather than a wrapper written per screen**, which is `RequireAdmin`'s shape
+  below for `RequireAdmin`'s reason. Per page, the wrapper invites the failure it
+  exists to prevent: a page copied from one of the two exceptions ships a screen
+  with no navigation at all on a phone, and a page would have to carry it in
+  every state it can be in — `ListDetailPage` has three returns to
+  `ProfilePage`'s two. The root `app/not-found.tsx` is the one screen outside the
+  groups, so it mounts the two group layouts itself. What is left for a spec is
+  the part position cannot rule out, and `src/appRoutes.test.tsx` is it: it walks
+  every address inside the shell asking each for the one hamburger, and it **has
+  to render the real route tree** (`test/app.tsx`, composed from the app
+  directory's files), since the two mechanisms cannot see each other and nothing
+  else looks at both — the drawer's own specs mount a stand-in route tree and
+  every page's specs render the page with no shell at all. The column the two bars share is
   one string in `SearchHeader.tsx`, and the spec compares them rather than
   naming the classes: written out, it pins a copy staying in sync, which is the
   weaker guarantee that component exists not to rely on. `MenuHeader` is
@@ -1522,21 +1577,21 @@ implement, which is why the parts below look the way they do.
   be opened — every page's own specs render that page with no shell above it,
   and throwing there would make `Layout` something each of them has to mount.
 - **The admin console is a guarded section, not a pair of guarded screens.**
-  `RequireAdmin` wraps the `/admin` layout route, whose element is the console's
-  own chrome around the route table's `<Outlet/>` (the console takes it as
-  `children`, like `Layout`), so a screen added below it is admin-only by
-  position — the wrapper is not something the next screen can be written
-  without. Written per route instead, as it first was, a forgotten wrapper
-  renders that screen for everybody and the server refusing its writes is all
-  that says so. Being outside the pages also keeps the console's chunk off the
-  machine of anyone who cannot open it, and the heading comes from the tab that
+  `RequireAdmin` and the console's own chrome are `app/(shell)/(menu)/admin/
+  layout.tsx`, so a screen added below it is admin-only by position — the
+  wrapper is not something the next screen can be written without. Written per
+  route instead, as it first was, a forgotten wrapper renders that screen for
+  everybody and the server refusing its writes is all that says so. Being its
+  own route also keeps the console's code off the machine of anyone who never
+  opens it, and the heading comes from the tab that
   matches the address so a screen's name is written once rather than in the
   route, the tab, and a title prop. Two smaller traps in the same place. The
   navigation carries one entry and it names the *section*: a `NavLink` matches
   on prefix, so an entry naming a screen — as it did, `/admin/users` — goes dark
   the moment an admin opens the other one, and the console then still works
-  while no longer saying where the reader is. `/admin` therefore needs the index
-  redirect, being a section with no screen of its own. And the gate *blocks* on
+  while no longer saying where the reader is. `/admin` therefore needs its
+  redirecting page, being a section with no screen of its own (see "The Next.js
+  app" for why that redirect is the browser's on a document load). And the gate *blocks* on
   `loading` where the verification gate only reads it — that one renders what was
   asked for while the restore is in flight, and this one cannot: until the
   restore settles `user` is the snapshot of the last session this browser had, so
@@ -1544,9 +1599,9 @@ implement, which is why the parts below look the way they do.
   the console on the role that snapshot merely remembers. A spinner in front of
   one section is nothing like one in front of every visitor's first paint. The
   section's screens live in `routes/adminTabs.ts` rather than in the console
-  itself, because `App.tsx` opens `/admin` on the first of them and importing
-  that list from the console's own module would pull its chunk into the bundle
-  every visitor downloads.
+  itself, because `/admin`'s page — a server file — opens the first of them, and
+  importing the list from the console's client module would put that module in
+  a server file's import graph for one constant.
 - **A screen that reads `isLoading` and a length must read `isError` too.** Both
   admin screens shipped without it and both said the same wrong thing: a failed
   request has no rows, so "No users matched." and "No genres yet" stood in for a
@@ -1794,38 +1849,37 @@ implement, which is why the parts below look the way they do.
 
 ### Head assets
 
-- **A missing file under `public/` does not 404 — it serves the app.** Every
-  unmatched path is a React Router route, and the thing that makes it one has
-  changed identity twice without the hazard changing at all: it was
-  `catchall_document` on App Platform and `try_files` under nginx, and it is now
-  the optional catch-all page under `src/app`, which matches any path Next did
-  not already answer from `public/`. So `/favicon.ico` answered `200 text/html`
-  with the app in it, and **still does** for a path with no file behind it —
-  verified against `next start`, not assumed from the routing. That is worse
-  than a 404 in the one way that matters: the client succeeded, so it has
-  nothing to fall back to, and anything that does not read SVG favicons
-  (crawlers, feed readers, link-preview bots) showed no icon at all while
-  `/favicon.svg` sat there working. The same swallows `/apple-touch-icon.png`,
-  `/manifest.json` and `/robots.txt`. **Deleting one of the four icon entries in
-  `app/layout.tsx` therefore breaks nothing visibly** — check the content type,
-  not the status.
-- **`app/layout.tsx` exports no `metadata.title`, and adding one pins every tab
-  in the app to "Songfolio".** `PageTitle` works by rendering a `<title>` that
-  React 19 hoists into the head, and `document.title` is the *first* title
-  element there. React puts a hoisted title ahead of one it does not manage,
-  which is why index.html's static title was a fallback and this worked under
-  Vite. A `metadata` title is not such a node: React renders it too, from the
-  layout, which is above every route — so it sorts first, wins the read, and is
-  written again when the streamed metadata boundary resolves after hydration.
-  The specs cannot catch it, because jsdom has no competing title to lose to.
-  What is given up is a title in the server HTML for a reader running no
-  JavaScript on every route but a song page; `og:title` still carries the name
-  to link previews. Both directions verified in a real browser, including
-  against the deployed Vite build. **The rule reaches the routes that
-  server-render, not just this layout**: `/songs/[id]`'s `generateMetadata`
-  returns no `title` for exactly the same mechanism one level down. A song
-  page's server `<title>` comes from `SongPreview`'s `PageTitle` instead, which
-  unmounts with the preview when the app arrives.
+- **A missing file under `public/` is a 404 now — but still an HTML one.**
+  Every unmatched path used to be the client-side router's, and the thing that
+  made it one changed identity three times without the hazard changing at all:
+  `catchall_document` on App Platform, `try_files` under nginx, then an optional
+  catch-all page under `src/app`. Each answered `/favicon.ico` with `200
+  text/html` and the app in it, which is worse than a 404 in the one way that
+  matters: the client succeeded, so it has nothing to fall back to, and anything
+  that does not read SVG favicons (crawlers, feed readers, link-preview bots)
+  showed no icon at all while `/favicon.svg` sat there working. With one route
+  per screen an unmatched path renders `app/not-found.tsx` with a real 404 —
+  verified against `next start` — but the body is still `text/html`, so
+  **deleting one of the four icon entries in `app/layout.tsx` still breaks
+  nothing a status code alone would show**: check the content type.
+- **Titles have one mechanism, `PageTitle`, and no route or layout exports a
+  `metadata.title`.** `PageTitle` renders a `<title>` that React 19 hoists into
+  the head, during the server render as in the browser, and `document.title` is
+  the *first* title element there. A metadata title is a second element from a
+  second authority — rendered from the layout above every route, it sorts first
+  and wins the read — so the two would race. With Next's router doing every
+  navigation a metadata title would at least *change* now, which was the
+  react-router-era objection; it was kept out anyway, because the titles that
+  matter are decided by state no `generateMetadata` can see: the steps of a
+  reset, a song's "not available", a list a guest cannot read, the editor's
+  form. Moving them to metadata would mean one rule per kind of screen instead
+  of one component. **Every route's server HTML carries a `<title>`** — the
+  screens name themselves, and the guards and waiting states that stand in for
+  a screen on a server (see "The Next.js app") name it too; a page fetching its
+  record says the bare product name until it has one. Verified with `curl`
+  against `next start` for every route, and in a real browser that the tab
+  follows each in-app navigation with exactly one `<title>` in the head. jsdom
+  cannot catch a second title, because it has no competing one to lose to.
 - **The rasters come from `icons/icon-square.svg`, not from
   `public/favicon.svg`.** The favicon has `rx="7"` and is transparent outside
   that radius; iOS composites its own mask over an opaque square, so
@@ -1887,10 +1941,9 @@ implement, which is why the parts below look the way they do.
   Flip one without the other and the bug moves rather than closes: the chrome
   gets its right voice and the lyrics, which are the reason the site exists,
   get the wrong one.
-- **Titles come from `PageTitle`, which works because React 19 hoists a
-  `<title>` out of the tree** — and, just as load-bearing, because
-  `app/layout.tsx` declares no title for it to sort behind; see the bullet on
-  that above. No effect, no library, and it unwinds on unmount
+- **`PageTitle` works because React 19 hoists a `<title>` out of the tree** —
+  and, just as load-bearing, because no metadata title sits ahead of it; see the
+  bullet on that above. No effect, no library, and it unwinds on unmount
   — which is what stops the editor's name sticking to the song page it pops
   back to. Two shells cover most of the app in one line each: `AuthShell` names
   every auth screen from the `title` it already takes, so the steps of a reset
@@ -1947,11 +2000,11 @@ implement, which is why the parts below look the way they do.
   one: it takes away the browser's Back button and, on iOS, the OS edge-swipe.
   What makes it safe is already in place and should stay — every screen carries
   the hamburger that opens the navigation, and `BackButton` covers both pages a
-  reader navigates *into*. That is what `MenuBarLayout` is holding up in an
+  reader navigates *into*. That is what the `(menu)` layout is holding up in an
   installed window, where there is no browser chrome to fall back on: a screen
   that slipped through without a bar is merely awkward in Safari and is a dead
   end here. It replaced a bottom tab bar, which gave the same guarantee by
-  position — which is why the bar is a layout route around a section and not a
+  position — which is why the bar is a layout around a route group and not a
   wrapper each screen has to be given. Note this does **not** make `lib/swipe.ts`'s edge guard
   redundant: it is moot only inside an installed window, and most readers arrive
   in a browser, where the guard is the whole reason a page swipe does not also
@@ -2184,8 +2237,8 @@ these four are the parts that break quietly.
   unknown weight, so the full axis ships.
 - **The `web` component is a service, not a static site, and `/api` can never
   reach it.** Next serves every document from a running process, so there is no
-  `output_dir` and no `catchall_document`; the optional catch-all route under
-  `src/app` is what answers the addresses the client-side router owns. The
+  `output_dir` and no `catchall_document`: every screen is its own App Router
+  route, and `app/not-found.tsx` answers the rest with a 404. The
   ingress gives `/api` to the Go service for the whole app, so a Next route
   handler under `app/api/` is unreachable in production while working perfectly
   in `next dev` — anything server-side the frontend needs must be mounted

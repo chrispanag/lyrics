@@ -1,3 +1,5 @@
+"use client";
+
 import { type ComponentProps, createContext, type ReactNode, useContext, useId } from "react";
 import { ChevronDown, LoaderCircle, X } from "lucide-react";
 

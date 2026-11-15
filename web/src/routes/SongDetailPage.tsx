@@ -1,4 +1,6 @@
-import { useRef, useState } from "react";
+"use client";
+
+import { type ReactNode, useRef, useState } from "react";
 import { Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
@@ -17,9 +19,7 @@ import { PageTitle } from "@/components/PageTitle";
 import { PersonLinks } from "@/components/PersonLinks";
 import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
-import { CreditRow } from "@/components/CreditRow";
 import { buttonClasses } from "@/components/buttonStyles";
-import { genreLinkChrome } from "@/components/songStyles";
 import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton, Spinner } from "@/components/ui";
 import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
@@ -45,6 +45,32 @@ export function SongDetailPage() {
       <SongSearch />
       <SongArticle />
     </>
+  );
+}
+
+/**
+ * What the song route's `not-found.tsx` renders when the API says no song has
+ * the address: the page's own "not available", under the same search header,
+ * which is also this screen's only way to the navigation on a phone.
+ */
+export function SongNotFound() {
+  return (
+    <>
+      <SongSearch />
+      <SongUnavailable message="No song has this address." />
+    </>
+  );
+}
+
+function SongUnavailable({ message }: { message: string }) {
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-6">
+      <PageTitle name="Song not available" />
+      <ErrorMessage>{message}</ErrorMessage>
+      <Link href="/" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
+        Back to browse
+      </Link>
+    </div>
   );
 }
 
@@ -91,15 +117,7 @@ function SongArticle() {
   // hand that only means a failed refetch, which must not take the lyrics away.
   // See CLAUDE.md, "Frontend".
   if (!isLoading && !song) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-6">
-        <PageTitle name="Song not available" />
-        <ErrorMessage>{errorMessage(error, "This song could not be loaded.")}</ErrorMessage>
-        <Link href="/" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
-          Back to browse
-        </Link>
-      </div>
-    );
+    return <SongUnavailable message={errorMessage(error, "This song could not be loaded.")} />;
   }
 
   // Located by the address, so the bar stays up while the next song loads.
@@ -328,7 +346,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
             <Link
               key={genre.id}
               href={browseHref({ genre_slug: genre.slug })}
-              className={cn(genreLinkChrome, "hover:bg-muted-hover")}
+              className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-fg-secondary hover:bg-muted-hover"
             >
               {genre.name}
             </Link>
@@ -411,5 +429,15 @@ function AddToListSheet({
         Manage lists
       </Link>
     </Sheet>
+  );
+}
+
+/** One labeled row of the header's credits; the value is names or a year. */
+function CreditRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="shrink-0 text-fg-muted">{label}</dt>
+      <dd className="font-medium">{children}</dd>
+    </div>
   );
 }

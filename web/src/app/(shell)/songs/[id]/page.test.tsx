@@ -1,18 +1,21 @@
 // @vitest-environment node
-import type { DehydratedState } from "@tanstack/react-query";
+import { type DehydratedState, HydrationBoundary } from "@tanstack/react-query";
 import { HttpResponse, http } from "msw";
 import type { ReactElement } from "react";
+import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { keys } from "@/api/hooks";
-
+import { RouteParams } from "@/lib/navigation";
+import { TestProviders } from "@/test/TestProviders";
 import { API, apiError, makeSong, makeUnaddressedSong, songByRef } from "@/test/handlers";
 import { server } from "@/test/server";
 
 /*
- * Pins the route's wiring (the 308, the absent title, the JSON-LD); the helpers
- * have their own specs. The async component is called and its tree inspected:
- * `<ClientOnly/>` renders nothing outside a Next build.
+ * Pins the route's wiring (the 308, the absent title, the JSON-LD, the song
+ * handed to the page); the helpers have their own specs. The async component
+ * is called and its tree inspected, then rendered to a string the way the
+ * server sends it. Under Node: this module is server code.
  */
 
 const UUID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
@@ -42,9 +45,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { default: SongPage, generateMetadata } = await import("./page");
-const { ClientOnly } = await import("@/app/client");
-const { UntilAppMounts } = await import("@/app/UntilAppMounts");
-const { SongPreview } = await import("./SongPreview");
+const { SongDetailPage } = await import("@/routes/SongDetailPage");
+const { default: SongNotFound } = await import("./not-found");
 
 /** Answers the song at both of its addresses, and 404s anything else. */
 function servingSong(song = makeSong({ id: UUID, slug: SLUG })) {
@@ -105,30 +107,40 @@ describe("a song's server-rendered document", () => {
     );
   });
 
-  it("renders the song for readers without JavaScript, until the app takes over", async () => {
+  it("renders the song page, handed the song it read", async () => {
     const tree = await SongPage(props(SLUG));
 
-    // Inside the boundary that unmounts it, or its <title> outlives the app's.
-    const standIn = child<{ children: ReactElement<{ song: { slug: string } }> }>(
+    const boundary = child<{ children: ReactElement; state?: DehydratedState }>(
       tree,
-      UntilAppMounts,
+      HydrationBoundary,
     );
-    expect(standIn?.props.children.type).toBe(SongPreview);
-    expect(standIn?.props.children.props.song.slug).toBe(SLUG);
-  });
-
-  it("hands the app the song it read, under its address and stamped stale", async () => {
-    const tree = await SongPage(props(SLUG));
-
-    const app = child<{ dehydratedState?: DehydratedState }>(tree, ClientOnly);
-    const entries = app?.props.dehydratedState?.queries ?? [];
+    expect(boundary?.props.children.type).toBe(SongDetailPage);
+    const entries = boundary?.props.state?.queries ?? [];
     expect(entries).toHaveLength(1);
     const [{ queryKey, state }] = entries as [DehydratedState["queries"][number]];
     // Keyed as `useSong` keys it: the address, not the id.
     expect(queryKey).toEqual(keys.song(SLUG));
     expect((state.data as { id: string }).id).toBe(UUID);
-    // The read may be minutes old, so the app must refetch it at once.
+    // The read may be minutes old, so the page must refetch it at once.
     expect(state.dataUpdatedAt).toBe(0);
+  });
+
+  // What a crawler, an agent or a screen reader gets before any JavaScript:
+  // the song itself, in its own language, and a title naming it.
+  it("sends the song's title, credits and lyrics in the HTML", async () => {
+    const tree = await SongPage(props(SLUG));
+
+    const html = renderToString(
+      <TestProviders route={`/songs/${SLUG}`}>
+        <RouteParams params={{ id: SLUG }}>{tree}</RouteParams>
+      </TestProviders>,
+    );
+
+    expect(html).toContain("<title>Θάλασσα Πλατιά — Songfolio</title>");
+    expect(html).toMatch(/<h1[^>]*>Θάλασσα Πλατιά<\/h1>/);
+    expect(html).toMatch(/<header[^>]*lang="el"/);
+    expect(html).toContain("Μίκης Θεοδωράκης");
+    expect(html).toMatch(/<p[^>]*lang="el"[^>]*>Στης θάλασσας τα βάθη/);
   });
 
   it("answers 404 when the API says no such song exists", async () => {
@@ -149,20 +161,17 @@ describe("a song's server-rendered document", () => {
 
     const tree = await SongPage(props(SLUG));
 
-    expect(child(tree, ClientOnly)).toBeDefined();
+    expect(child(tree, HydrationBoundary)).toBeDefined();
   });
 
-  it("serves the app rather than redirecting when the song cannot be read", async () => {
+  it("renders the page to ask again, rather than redirecting, when the song cannot be read", async () => {
     server.use(http.get(`${API}/api/v1/songs/:ref`, () => HttpResponse.error()));
 
     // No redirect (the slug is unknown) and no 404: the client renders its own state.
     const tree = await SongPage(props(UUID, { list: "list-1" }));
 
     expect(structuredData(tree)).toBeNull();
-    expect(child(tree, UntilAppMounts)).toBeUndefined();
-    expect(
-      child<{ dehydratedState?: unknown }>(tree, ClientOnly)?.props.dehydratedState,
-    ).toBeUndefined();
+    expect(child<{ state?: unknown }>(tree, HydrationBoundary)?.props.state).toBeUndefined();
     expect(await generateMetadata(props(UUID))).toEqual({});
   });
 
@@ -175,5 +184,21 @@ describe("a song's server-rendered document", () => {
 
     expect(structuredData(tree)).toBeNull();
     expect(await generateMetadata(props(UUID))).toEqual({});
+  });
+});
+
+describe("a song the API says does not exist", () => {
+  // The page's own words, under the search header that carries the hamburger:
+  // a dead song link is no reason to strand a phone without its navigation.
+  it("is named as not available, with the way to the navigation", () => {
+    const html = renderToString(
+      <TestProviders route="/songs/no-such-song">
+        <SongNotFound />
+      </TestProviders>,
+    );
+
+    expect(html).toContain("<title>Song not available — Songfolio</title>");
+    expect(html).toContain("No song has this address.");
+    expect(html).toContain("Open menu");
   });
 });

@@ -2,7 +2,6 @@
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { App } from "./App";
 import { keys } from "@/api/hooks";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { getAccessToken } from "@/auth/session";
@@ -13,11 +12,12 @@ import { storeTheme, storedTheme } from "@/lib/theme";
 import { makeSong, makeUser } from "@/test/handlers";
 import { testQueryClient } from "@/test/providers";
 import { TestProviders } from "@/test/TestProviders";
+import { TestApp } from "@/test/app";
 
 /*
  * Browser-only reads, run without a browser: jsdom hands `localStorage` to
- * anything, so a render-phase read passes there and breaks once `ssr: false`
- * comes off. See CLAUDE.md, The Next.js shell.
+ * anything, so a render-phase read passes there and breaks on the server that
+ * now renders every route. See CLAUDE.md, The Next.js app.
  *
  * The theme and font-size cases only pin that those modules are safe to call on
  * a server; the swipe case, with its spy, is the one that constrains a render.
@@ -107,7 +107,7 @@ describe("rendering without a browser", () => {
 
     const html = renderToString(
       <TestProviders queryClient={client} route={route} user={makeUser()}>
-        <App />
+        <TestApp />
       </TestProviders>,
     );
 
@@ -119,7 +119,7 @@ describe("rendering without a browser", () => {
     const html = renderToString(
       <TestProviders route="/">
         <AuthProvider>
-          <App />
+          <TestApp />
         </AuthProvider>
       </TestProviders>,
     );

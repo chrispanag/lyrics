@@ -104,9 +104,8 @@ services:
         scope: RUN_TIME
         value: SET_BY_DEPLOY_SCRIPT
 
-  # A service, not a static site: Next serves every document from a Node
-  # process, and the optional catch-all route in src/app answers the router's
-  # paths.
+  # A service, not a static site: Next renders every document in a Node
+  # process, one App Router route per screen.
   - name: web
     github:
       repo: chrispanag/lyrics
