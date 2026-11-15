@@ -20,5 +20,13 @@ export default defineConfig({
     css: false,
     // Playwright specs live in e2e/ and are driven by their own runner.
     exclude: ["node_modules/**", ".next/**", "e2e/**"],
+    // Node 25+ defines its own `localStorage` global — undefined without
+    // --localstorage-file — and jsdom's environment does not replace a global
+    // that already exists, so every spec saw no storage at all. Off, jsdom's
+    // is the one specs get, and a node-environment spec has none, as in a
+    // real server.
+    poolOptions: {
+      forks: { execArgv: ["--no-experimental-webstorage"] },
+    },
   },
 });

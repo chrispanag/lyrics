@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # --- build -------------------------------------------------------------------
-FROM golang:1.25-alpine AS build
+FROM golang:1.27-alpine AS build
 
 WORKDIR /src
 
@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
         -o /out/ ./cmd/api ./cmd/migrate
 
 # --- runtime -----------------------------------------------------------------
-FROM alpine:3.21
+FROM alpine:3.24
 
 # ca-certificates is required: the API calls the Prelude Management API and
 # fetches the JWKS over TLS, both of which fail without a trust store.

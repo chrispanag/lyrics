@@ -59,12 +59,12 @@ jobs:
 
       # Keep this action on v8 or later: earlier majors install the last
       # golangci-lint v1 release, which is built with Go 1.24 and refuses a
-      # module targeting 1.25 outright — it fails before linting anything.
-      # The version is pinned so CI and `make check` run the same binary.
+      # module targeting anything newer — it fails before linting anything.
+      # `make lint-backend` reads this pin and refuses any other local version.
       - uses: golangci/golangci-lint-action@v9
         with:
           working-directory: backend
-          version: v2.9.0
+          version: v2.15.0
 
       - name: Test
         working-directory: backend
@@ -86,9 +86,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # engines.node is also what App Platform's Node buildpack builds
+      # production with, so reading it here keeps CI on the same major.
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: web/package.json
           cache: npm
           cache-dependency-path: web/package-lock.json
 

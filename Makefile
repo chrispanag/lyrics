@@ -98,9 +98,18 @@ test-backend: up ## Run backend tests with the race detector
 	cd backend && go test ./... -count=1 -race
 
 .PHONY: lint-backend
+# CI's golangci-lint pin is the one version; a different local binary is
+# refused rather than trusted, since rules change between releases and an older
+# build refuses a module targeting a newer Go outright.
 lint-backend: ## Check formatting and lint the backend
 	@cd backend && unformatted=$$(gofmt -l .) && if [ -n "$$unformatted" ]; then \
 		echo "These files need gofmt (run: gofmt -w backend):"; echo "$$unformatted"; exit 1; fi
+	@want=$$(sed -n '/golangci-lint-action@/,/version:/s/^ *version: v\(.*\)$$/\1/p' .github/workflows/ci.yml); \
+	have=$$(golangci-lint version --short 2>/dev/null); \
+	if [ "$$have" != "$$want" ]; then \
+		echo "golangci-lint $${have:-is missing}; CI runs v$$want (.github/workflows/ci.yml)." >&2; \
+		echo "Install it: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$$want" >&2; exit 1; \
+	fi
 	cd backend && golangci-lint run ./... && go vet ./...
 
 # --- frontend ----------------------------------------------------------------
