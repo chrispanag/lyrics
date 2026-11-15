@@ -23,7 +23,7 @@ import { useNavigate } from "@/lib/navigation";
 
 // Not `rowControlChrome`: its resting color differs, and `cn` cannot override.
 const stepChrome =
-  "shrink-0 rounded-lg p-2 text-fg-muted transition-colors hover:bg-subtle hover:text-fg";
+  "shrink-0 rounded-compact p-2 text-fg-muted transition-colors hover:bg-subtle hover:text-fg";
 
 /**
  * The list a song is being read from, where it sits in it, and the way on.
@@ -123,13 +123,13 @@ export function ListSongSwipe({
       // Fixed, so it is on screen without scrolling; bottom-12 matches the
       // shell's `pb-12`. `md:hidden` must stay on this observed box: a hidden
       // box never intersects, so the one showing is not spent at a desk.
-      className="pointer-events-none fixed inset-x-0 bottom-12 z-30 flex justify-center md:hidden"
+      className="pointer-events-none fixed inset-x-0 bottom-12 z-floating flex justify-center md:hidden"
     >
       {/* Opaque and inverted so it reads over the lyrics; only available
           directions get an arrow. */}
       <span
         className={cn(
-          "flex items-center gap-1.5 rounded-full bg-inverse/95 px-3 py-1.5 text-xs font-medium text-fg-inverse shadow-lg transition-opacity duration-700",
+          "flex items-center gap-1.5 rounded-full bg-inverse/95 px-3 py-1.5 text-xs font-medium text-fg-inverse shadow-popover transition-opacity duration-700",
           hinting ? "opacity-100" : "opacity-0",
         )}
       >

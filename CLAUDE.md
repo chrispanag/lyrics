@@ -1885,7 +1885,11 @@ them is written down.
   `fg-secondary`, and the one to use for muted text on a fill, where `fg-muted`
   measures 3.8–4.4:1 and fails AA; and `fg-accent` is
   brand-400 in the dark theme while `accent` stays brand-600 for fills and the
-  wordmark, which the icon sources mirror.
+  wordmark, which the icon sources mirror. Radius, shadow and stacking are named
+  by role the same way (`rounded-control`, `rounded-card`, `shadow-popover`,
+  `z-dropdown`, `z-sticky`, …), because the two dropdowns had already disagreed
+  on both; the guard refuses Tailwind's sized scales and bare `z-` numbers.
+  White and black are refused too: `fg-on-fill` and `scrim` are their roles.
 - **`cn()` is a plain join, not tailwind-merge.** Later classes do not override
   earlier ones; share the chrome rather than passing overrides through.
 - **Filter state lives in the URL**, so a filtered search is shareable and the

@@ -140,7 +140,7 @@ export function PersonAutocomplete({
           id={listId}
           // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: the ARIA combobox pattern's listbox.
           role="listbox"
-          className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-line-strong bg-surface py-1 shadow-lg"
+          className="absolute z-dropdown mt-1 max-h-56 w-full overflow-y-auto rounded-control border border-line-strong bg-surface py-1 shadow-popover"
         >
           {suggestions.map((person, index) => (
             // `presentation`, or the listbox owns list items rather than options.

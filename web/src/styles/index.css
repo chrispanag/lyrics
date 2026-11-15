@@ -76,6 +76,8 @@
     --fg-muted: var(--color-stone-500);
     --fg-subtle: var(--color-stone-400);
     --fg-inverse: var(--color-stone-100);
+    /* Text and icons on a saturated fill, `accent` or `danger`. */
+    --fg-on-fill: var(--color-white);
 
     --line: var(--color-stone-200);
     --line-strong: var(--color-stone-300);
@@ -115,6 +117,7 @@
     --fg-muted: var(--color-stone-400);
     --fg-subtle: var(--color-stone-500);
     --fg-inverse: var(--color-stone-800);
+    --fg-on-fill: var(--color-white);
 
     --line: var(--color-stone-800);
     --line-strong: var(--color-stone-600);
@@ -157,9 +160,16 @@
   --color-fg-muted: var(--fg-muted);
   --color-fg-subtle: var(--fg-subtle);
   --color-fg-inverse: var(--fg-inverse);
+  --color-fg-on-fill: var(--fg-on-fill);
 
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  /* The dimming behind a modal: sheets and the drawer. A literal, not a
+     `var()` of a token on :root, because it is painted on `::backdrop`, which
+     inherits nothing before Safari 17.4 — a variable there resolves to
+     nothing and the sheet loses its dim. `inline` writes the value itself
+     into `backdrop:bg-scrim`. It is the same in both themes. */
+  --color-scrim: rgb(0 0 0 / 0.4);
 
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
@@ -178,6 +188,35 @@
   --color-fg-danger: var(--fg-danger);
   --color-fg-danger-subtle: var(--fg-danger-subtle);
   --color-line-danger: var(--line-danger);
+}
+
+/* Shape, depth and stacking, named by role like the colors and for the same
+   reason: the two dropdowns had already disagreed, one `shadow-lg` at `z-20`
+   and the other `shadow-xl` at `z-10`. These do not change with the theme, so
+   they are plain theme values. `rounded-full` stays as it is — fully round is
+   the role — and the guard in tokens.test.ts refuses the sized scales. */
+@theme {
+  /* A highlight inside running text: a search match. */
+  --radius-inline: 0.25rem;
+  /* Icon buttons, and pieces nested inside a control (a segmented thumb). */
+  --radius-compact: 0.5rem;
+  /* Buttons, fields, rows in a menu or sheet, popovers, and the inline
+     messages that sit among fields. */
+  --radius-control: 0.75rem;
+  /* Cards, panels, and the large search field with the panel it opens. */
+  --radius-card: 1rem;
+  --radius-sheet: 1.5rem;
+
+  /* Tailwind's sm, xl and 2xl, by what they lift. */
+  --shadow-raised: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-popover: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-sheet: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+
+  /* Lowest first. A dialog needs none of these: it is in the top layer. */
+  --z-index-raised: 10; /* above its siblings, such as a row being dragged */
+  --z-index-dropdown: 20;
+  --z-index-sticky: 30;
+  --z-index-floating: 40; /* over everything on the page, such as the swipe hint */
 }
 
 @layer base {
@@ -384,11 +423,11 @@
     /* biome-ignore lint/correctness/noUnknownProperty: newer than Biome's property list. */
     scroll-initial-target: nearest;
   }
-  /* The 40% black and the blur the drawer always had, faded by how far the
+  /* The scrim and the blur the drawer always had, faded by how far the
      sheet is on screen rather than by a timer, so the dim follows the finger.
      ::backdrop inherits the progress from the dialog. */
   .nav-drawer::backdrop {
-    background: rgb(0 0 0 / 0.4);
+    background: --theme(--color-scrim inline);
     backdrop-filter: blur(8px);
     opacity: var(--drawer-backdrop, 0);
   }

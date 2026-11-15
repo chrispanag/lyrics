@@ -1,8 +1,10 @@
+import { panelChrome } from "@/components/cardStyles";
 import { CreditRow } from "@/components/CreditRow";
 import { PageTitle } from "@/components/PageTitle";
 import { genreLinkChrome } from "@/components/songStyles";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { browseHref } from "@/lib/browse";
+import { cn } from "@/lib/cn";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
 import { DEFAULT_FONT_SIZE, FONT_SIZES } from "@/lib/fontSize";
 import { recordingCount } from "@/lib/format";
@@ -100,7 +102,7 @@ export function SongPreview({ song }: { song: Song }) {
           )}
 
           {song.notes && (
-            <section className="mt-8 rounded-2xl bg-panel p-4">
+            <section className={cn(panelChrome, "mt-8")}>
               <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
               <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
             </section>
