@@ -103,7 +103,7 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 		jwt.WithAcceptableSkew(15*time.Second),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidToken, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidToken, err)
 	}
 
 	issuer, ok := token.Issuer()

@@ -15,24 +15,24 @@ import (
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
+	_ "github.com/golang-migrate/migrate/v4/source/file" // registers the file:// migration source
+	_ "github.com/jackc/pgx/v5/stdlib"                   // registers the "pgx" database/sql driver
 
 	"github.com/christos/lyrics/backend/internal/store"
 )
 
 // defaultTestDatabaseURL points at the Compose database on its published port.
-const defaultTestDatabaseURL = "postgres://lyrics:lyrics@localhost:5433/lyrics?sslmode=disable"
+const defaultTestDatabaseURL = "postgres://lyrics:lyrics@localhost:5433/lyrics?sslmode=disable" //nolint:gosec // G101: the local Compose database's throwaway credentials.
 
 var (
 	migrateOnce sync.Once
-	migrateErr  error
+	errMigrate  error
 )
 
 // baseDatabaseURL is the administrative connection string.
 func baseDatabaseURL() string {
-	if url := os.Getenv("TEST_DATABASE_URL"); url != "" {
-		return url
+	if raw := os.Getenv("TEST_DATABASE_URL"); raw != "" {
+		return raw
 	}
 	return defaultTestDatabaseURL
 }
@@ -69,6 +69,8 @@ func testDatabaseName() string {
 
 // ensureDatabase creates this binary's database if it does not exist yet.
 func ensureDatabase() error {
+	ctx := context.Background()
+
 	admin, err := sql.Open("pgx", baseDatabaseURL())
 	if err != nil {
 		return err
@@ -78,7 +80,7 @@ func ensureDatabase() error {
 	name := testDatabaseName()
 
 	var exists bool
-	err = admin.QueryRow(`SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)`, name).Scan(&exists)
+	err = admin.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)`, name).Scan(&exists)
 	if err != nil {
 		return err
 	}
@@ -88,7 +90,7 @@ func ensureDatabase() error {
 
 	// CREATE DATABASE cannot be parameterized; the name is sanitized to
 	// [a-z0-9_], so interpolating it is safe.
-	if _, err := admin.Exec(`CREATE DATABASE ` + name); err != nil {
+	if _, err := admin.ExecContext(ctx, `CREATE DATABASE `+name); err != nil {
 		// A parallel test binary may have won the race; that is fine.
 		if strings.Contains(err.Error(), "already exists") {
 			return nil
@@ -109,13 +111,13 @@ func NewStore(t *testing.T) *store.Store {
 	}
 
 	migrateOnce.Do(func() {
-		if migrateErr = ensureDatabase(); migrateErr != nil {
+		if errMigrate = ensureDatabase(); errMigrate != nil {
 			return
 		}
-		migrateErr = runMigrations(TestDatabaseURL())
+		errMigrate = runMigrations(TestDatabaseURL())
 	})
-	if migrateErr != nil {
-		t.Fatalf("prepare test database: %v", migrateErr)
+	if errMigrate != nil {
+		t.Fatalf("prepare test database: %v", errMigrate)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

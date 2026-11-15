@@ -118,7 +118,7 @@ func runHealthcheck() int {
 	}
 
 	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get("http://" + net.JoinHostPort("127.0.0.1", port) + "/api/v1/health")
+	resp, err := client.Get("http://" + net.JoinHostPort("127.0.0.1", port) + "/api/v1/health") //nolint:gosec,noctx // G704: the host is fixed to loopback; PORT is operator config.
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "healthcheck failed:", err)
 		return 1

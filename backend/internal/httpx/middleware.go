@@ -61,6 +61,7 @@ func RequestLogger(next http.Handler) http.Handler {
 // Recoverer converts a panic into a 500 so one bad request cannot take down the
 // process. The stack is logged; the client is told nothing beyond "internal error".
 func Recoverer(next http.Handler) http.Handler {
+	//nolint:contextcheck // the deferred closure uses the captured r.Context(), which contextcheck cannot follow.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			rec := recover()
@@ -69,11 +70,11 @@ func Recoverer(next http.Handler) http.Handler {
 			}
 			// A dropped client connection surfaces as a panic with this value and
 			// is not an application fault; there is also nobody left to respond to.
-			if rec == http.ErrAbortHandler {
+			if rec == http.ErrAbortHandler { //nolint:errorlint // net/http panics with this exact value; rec is not an error chain.
 				panic(rec)
 			}
 
-			slog.Error("panic recovered",
+			slog.ErrorContext(r.Context(), "panic recovered",
 				"panic", rec,
 				"method", r.Method,
 				"path", r.URL.Path,

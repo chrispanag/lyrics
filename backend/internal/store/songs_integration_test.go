@@ -170,7 +170,7 @@ func TestSearchHighlightsAccentedGreek(t *testing.T) {
 		}
 	}
 	if !found {
-		var got []string
+		got := make([]string, 0, len(songs))
 		for _, s := range songs {
 			got = append(got, *s.Snippet)
 		}
@@ -209,10 +209,11 @@ func TestFuzzyArtistMatchSurvivesManyCredits(t *testing.T) {
 		t.Fatalf("UpsertPerson: %v", err)
 	}
 
-	var performers []store.RecordingPerformer
-	for i, name := range []string{
+	names := []string{
 		"Γιώργος Νταλάρας", "Χάρις Αλεξίου", "Νίκος Γκάτσος", "Μάνος Χατζιδάκις",
-	} {
+	}
+	performers := make([]store.RecordingPerformer, 0, len(names))
+	for i, name := range names {
 		person, err := st.UpsertPerson(ctx, name)
 		if err != nil {
 			t.Fatalf("UpsertPerson(%q): %v", name, err)
@@ -540,7 +541,7 @@ func TestDeleteCreditedPersonReportsInUse(t *testing.T) {
 		t.Errorf("a still-credited person must not be reported as missing: %v", err)
 	}
 
-	// The neighbouring classifications must not have been disturbed.
+	// The neighboring classifications must not have been disturbed.
 	free, err := st.UpsertPerson(ctx, "Uncredited Person")
 	if err != nil {
 		t.Fatalf("UpsertPerson: %v", err)

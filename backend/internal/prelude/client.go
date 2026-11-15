@@ -148,7 +148,7 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, in, out any) e
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrUpstream, err)
+		return fmt.Errorf("%w: %w", ErrUpstream, err)
 	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBody))
@@ -162,7 +162,7 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, in, out any) e
 		return nil
 	}
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("%w: decode response: %v", ErrUpstream, err)
+		return fmt.Errorf("%w: decode response: %w", ErrUpstream, err)
 	}
 	return nil
 }

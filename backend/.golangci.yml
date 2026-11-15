@@ -1,0 +1,69 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - durationcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - fatcontext
+    - forcetypeassert
+    - gocritic
+    - gosec
+    - intrange
+    - misspell
+    - nilerr
+    - nilnil
+    - noctx
+    - nolintlint
+    - perfsprint
+    - prealloc
+    - predeclared
+    - revive
+    - thelper
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+    gocritic:
+      enabled-tags: [diagnostic, style, performance]
+      disabled-checks:
+        # Config, filter and input structs are passed by value on purpose:
+        # they are read-only, and a pointer would invite mutation.
+        - hugeParam
+        - rangeValCopy
+        # Unnamed multiple results are the house style.
+        - unnamedResult
+    misspell:
+      locale: US
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    rules:
+      # The API test harness closes every response body through t.Cleanup in
+      # `send`, which bodyclose cannot follow across the helper.
+      - path: _test\.go
+        linters: [bodyclose]
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/christos/lyrics/backend

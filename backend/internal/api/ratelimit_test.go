@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -61,7 +62,7 @@ func TestClientIP(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := httptest.NewRequest("POST", "/api/v1/auth/register", nil)
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/auth/register", nil)
 			r.RemoteAddr = "192.0.2.10:54321"
 			for k, v := range tc.set {
 				r.Header.Set(k, v)
@@ -79,7 +80,7 @@ func TestRateLimitSeparatesCallersBehindAProxy(t *testing.T) {
 	limiter := newRateLimiter(2, time.Minute)
 
 	attempt := func(callerIP string) bool {
-		r := httptest.NewRequest("POST", "/api/v1/auth/register", nil)
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/auth/register", nil)
 		// One proxy, one peer address.
 		r.RemoteAddr = "10.0.0.1:443"
 		r.Header.Set(clientIPHeader, callerIP)

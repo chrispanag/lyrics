@@ -84,7 +84,7 @@ func (s *Server) handleListPeople(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *Server) handleGetPerson(w http.ResponseWriter, r *http.Request) error {
-	id, err := urlUUID(r, "id")
+	id, err := urlUUID(r)
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func (s *Server) handleCreatePerson(w http.ResponseWriter, r *http.Request) erro
 }
 
 func (s *Server) handleUpdatePerson(w http.ResponseWriter, r *http.Request) error {
-	id, err := urlUUID(r, "id")
+	id, err := urlUUID(r)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func (s *Server) handleUpdatePerson(w http.ResponseWriter, r *http.Request) erro
 }
 
 func (s *Server) handleDeletePerson(w http.ResponseWriter, r *http.Request) error {
-	id, err := urlUUID(r, "id")
+	id, err := urlUUID(r)
 	if err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func (s *Server) handleCreateGenre(w http.ResponseWriter, r *http.Request) error
 }
 
 func (s *Server) handleUpdateGenre(w http.ResponseWriter, r *http.Request) error {
-	id, err := urlUUID(r, "id")
+	id, err := urlUUID(r)
 	if err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func (s *Server) handleUpdateGenre(w http.ResponseWriter, r *http.Request) error
 }
 
 func (s *Server) handleDeleteGenre(w http.ResponseWriter, r *http.Request) error {
-	id, err := urlUUID(r, "id")
+	id, err := urlUUID(r)
 	if err != nil {
 		return err
 	}

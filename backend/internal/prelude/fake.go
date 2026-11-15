@@ -51,6 +51,7 @@ func (f *Fake) CalledWith(name string) bool {
 	return slices.Contains(f.Calls, name)
 }
 
+// CreateUser implements Client.
 func (f *Fake) CreateUser(_ context.Context, email string, _ *Profile) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -71,6 +72,7 @@ func (f *Fake) CreateUser(_ context.Context, email string, _ *Profile) (string, 
 	return id, nil
 }
 
+// SetPassword implements Client.
 func (f *Fake) SetPassword(_ context.Context, userID, password string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -86,6 +88,7 @@ func (f *Fake) SetPassword(_ context.Context, userID, password string) error {
 	return nil
 }
 
+// DeleteUser implements Client.
 func (f *Fake) DeleteUser(_ context.Context, userID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

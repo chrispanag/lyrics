@@ -98,7 +98,7 @@ func run() error {
 func load(path string) ([]*song, *warnings, error) {
 	in := io.ReadCloser(os.Stdin)
 	if path != "-" {
-		f, err := os.Open(path)
+		f, err := os.Open(path) //nolint:gosec // G304: the path is the operator's own -file argument.
 		if err != nil {
 			return nil, nil, fmt.Errorf("open input: %w", err)
 		}
@@ -364,7 +364,7 @@ func loadFingerprints(ctx context.Context, tx pgx.Tx) (map[string]struct{}, erro
 func resolveActor(ctx context.Context, tx pgx.Tx, email string) (*uuid.UUID, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
-		return nil, nil
+		return nil, nil //nolint:nilnil // no actor given: the columns stay NULL.
 	}
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `SELECT id FROM users WHERE email = $1`, email).Scan(&id)
