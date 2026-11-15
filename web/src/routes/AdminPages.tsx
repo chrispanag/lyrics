@@ -41,7 +41,7 @@ const ROLE_DESCRIPTIONS: Record<Role, string> = {
 /** The row both console screens list records in, shared so they cannot drift. */
 const adminRowChrome = cn(
   cardChrome,
-  "flex flex-col gap-3 bg-white p-4 sm:flex-row sm:items-center sm:justify-between dark:bg-stone-900",
+  "flex flex-col gap-3 bg-surface p-4 sm:flex-row sm:items-center sm:justify-between",
 );
 
 /** The wait both screens show: rows the height of the cards they become. */
@@ -135,12 +135,8 @@ export function AdminUsersPage() {
               <Avatar user={row} size="md" />
               <div className="min-w-0">
                 <p className="truncate font-medium">{row.display_name ?? row.email}</p>
-                {row.display_name && (
-                  <p className="truncate text-sm text-stone-500 dark:text-stone-400">{row.email}</p>
-                )}
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                  {ROLE_DESCRIPTIONS[row.role]}
-                </p>
+                {row.display_name && <p className="truncate text-sm text-fg-muted">{row.email}</p>}
+                <p className="mt-0.5 text-xs text-fg-muted">{ROLE_DESCRIPTIONS[row.role]}</p>
               </div>
             </div>
 
@@ -171,7 +167,7 @@ export function AdminUsersPage() {
       </ul>
 
       {!isLoading && !isError && data?.data.length === 0 && (
-        <p className="py-10 text-center text-sm text-stone-500">No users matched.</p>
+        <p className="py-10 text-center text-sm text-fg-muted">No users matched.</p>
       )}
     </>
   );
@@ -292,7 +288,7 @@ export function AdminGenresPage() {
           <li key={genre.id} className={adminRowChrome}>
             <div className="min-w-0">
               <p className="truncate font-medium">{genre.name}</p>
-              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+              <p className="mt-0.5 text-xs text-fg-muted">
                 {songCount(genre.song_count ?? 0)} · {genre.slug}
               </p>
             </div>
@@ -313,7 +309,7 @@ export function AdminGenresPage() {
                 aria-label={`Delete ${genre.name}`}
                 onClick={() => openSheet({ kind: "delete", genre })}
               >
-                <Trash aria-hidden className="size-4 text-red-600" />
+                <Trash aria-hidden className="size-4 text-fg-danger" />
                 Delete
               </Button>
             </div>

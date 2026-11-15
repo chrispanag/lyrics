@@ -95,7 +95,7 @@ export function Select({ className, ...props }: ComponentProps<"select">) {
       />
       <ChevronDown
         aria-hidden
-        className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-stone-500 peer-disabled:opacity-50 dark:text-stone-400"
+        className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted peer-disabled:opacity-50"
       />
     </div>
   );
@@ -120,15 +120,12 @@ export function Field({
 
   return (
     <div className="space-y-1.5">
-      <label
-        htmlFor={htmlFor}
-        className="block text-sm font-medium text-stone-700 dark:text-stone-300"
-      >
+      <label htmlFor={htmlFor} className="block text-sm font-medium text-fg-secondary">
         {label}
       </label>
       <Described by={described}>{children}</Described>
       {hint && !error && (
-        <p id={`${htmlFor}-hint`} className="text-xs text-stone-500 dark:text-stone-400">
+        <p id={`${htmlFor}-hint`} className="text-xs text-fg-muted">
           {hint}
         </p>
       )}
@@ -153,7 +150,7 @@ export function Described({ by, children }: { by: string | undefined; children: 
  */
 export function FieldError({ id, children }: { id: string; children: ReactNode }) {
   return (
-    <p id={id} role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">
+    <p id={id} role="alert" className="text-xs font-medium text-fg-danger">
       {children}
     </p>
   );
@@ -173,9 +170,7 @@ export function Chip({
 }) {
   const classes = cn(
     "inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-sm transition-colors",
-    active
-      ? "bg-brand-600 text-white"
-      : "bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300",
+    active ? "bg-accent text-white" : "bg-muted text-fg-secondary",
     onClick && "cursor-pointer hover:opacity-80",
   );
 
@@ -212,19 +207,14 @@ export function Chip({
 export function Spinner({ className }: { className?: string }) {
   return (
     <div role="status" aria-live="polite" className={cn("flex justify-center py-8", className)}>
-      <LoaderCircle aria-hidden className="size-6 animate-spin text-stone-400" />
+      <LoaderCircle aria-hidden className="size-6 animate-spin text-fg-subtle" />
       <span className="sr-only">Loading</span>
     </div>
   );
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return (
-    <div
-      aria-hidden
-      className={cn("animate-pulse rounded-lg bg-stone-200 dark:bg-stone-800", className)}
-    />
-  );
+  return <div aria-hidden className={cn("animate-pulse rounded-lg bg-muted", className)} />;
 }
 
 /**
@@ -263,11 +253,9 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-      {icon && <div className="text-stone-300 dark:text-stone-700">{icon}</div>}
-      <h2 className="text-lg font-semibold text-stone-800 dark:text-stone-200">{title}</h2>
-      {description && (
-        <p className="max-w-sm text-sm text-stone-500 dark:text-stone-400">{description}</p>
-      )}
+      {icon && <div className="text-fg-subtle">{icon}</div>}
+      <h2 className="text-lg font-semibold text-fg">{title}</h2>
+      {description && <p className="max-w-sm text-sm text-fg-muted">{description}</p>}
       {action}
     </div>
   );
@@ -281,7 +269,7 @@ export function EmptyState({
  */
 export function Notice({ children }: { children: ReactNode }) {
   return (
-    <p role="status" className="text-sm text-stone-600 dark:text-stone-300">
+    <p role="status" className="text-sm text-fg-secondary">
       {children}
     </p>
   );
@@ -291,7 +279,7 @@ export function ErrorMessage({ children }: { children: ReactNode }) {
   return (
     <div
       role="alert"
-      className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200"
+      className="rounded-xl border border-line-danger bg-danger-subtle px-4 py-3 text-sm text-fg-danger-subtle"
     >
       {children}
     </div>
@@ -338,12 +326,11 @@ export function Sheet({
             // Pinned to the bottom, centered from `sm`. Sticky to the viewport's
             // edge, since the track is a pixel taller than it.
             "sticky bottom-0 mt-auto flex max-h-[85dvh] w-full flex-col",
-            "rounded-t-3xl bg-white shadow-2xl",
+            "rounded-t-3xl bg-surface shadow-2xl",
             "sm:mx-auto sm:my-auto sm:max-w-lg sm:rounded-3xl",
-            "dark:bg-stone-900",
           )}
         >
-          <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4 dark:border-stone-800">
+          <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h2 id={titleId} className="text-base font-semibold">
               {title}
             </h2>
@@ -351,7 +338,7 @@ export function Sheet({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="rounded-full p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"
+              className="rounded-full p-2 text-fg-muted hover:bg-subtle"
             >
               <X aria-hidden className="size-5" />
             </button>
@@ -393,7 +380,7 @@ export function ConfirmSheet({
 }) {
   return (
     <Sheet open={open} onClose={onClose} title={title}>
-      <div className="text-sm text-stone-600 dark:text-stone-400">{children}</div>
+      <div className="text-sm text-fg-tertiary">{children}</div>
       {error && (
         <div className="mt-4">
           <ErrorMessage>{error}</ErrorMessage>

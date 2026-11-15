@@ -49,7 +49,7 @@ export function Avatar({
       loading={size === "lg" ? "eager" : "lazy"}
       decoding="async"
       // The API stores squares; this covers any row that is not one.
-      className={cn(shared, "aspect-square bg-stone-200 object-cover dark:bg-stone-800")}
+      className={cn(shared, "aspect-square bg-muted object-cover")}
     />
   );
 }

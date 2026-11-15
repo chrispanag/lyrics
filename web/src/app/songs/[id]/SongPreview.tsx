@@ -36,9 +36,7 @@ export function SongPreview({ song }: { song: Song }) {
             <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">
               {song.title}
             </h1>
-            {song.alt_title && (
-              <p className="mt-1 text-lg text-stone-500 dark:text-stone-400">{song.alt_title}</p>
-            )}
+            {song.alt_title && <p className="mt-1 text-lg text-fg-muted">{song.alt_title}</p>}
 
             <dl className="mt-3 space-y-1 text-sm">
               {performers.length > 0 && <Credit label="Performed by" people={performers} />}
@@ -47,7 +45,7 @@ export function SongPreview({ song }: { song: Song }) {
               ))}
               {song.release_year && (
                 <div className="flex gap-2">
-                  <dt className="text-stone-500 dark:text-stone-400">Year</dt>
+                  <dt className="text-fg-muted">Year</dt>
                   <dd className="font-medium">{song.release_year}</dd>
                 </div>
               )}
@@ -55,7 +53,7 @@ export function SongPreview({ song }: { song: Song }) {
 
             {/* The app's "Show all …" button, as text: it is a fact before it is a control. */}
             {song.recordings.length > 0 && (
-              <p className="mt-2 text-sm font-medium text-stone-500 dark:text-stone-400">
+              <p className="mt-2 text-sm font-medium text-fg-muted">
                 {recordingCount(song.recordings.length)}
               </p>
             )}
@@ -66,7 +64,7 @@ export function SongPreview({ song }: { song: Song }) {
                   <li key={genre.id}>
                     <a
                       href={browseHref({ genre_slug: genre.slug })}
-                      className="rounded-full bg-stone-200 px-2.5 py-1 text-xs font-medium text-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                      className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-fg-secondary"
                     >
                       {genre.name}
                     </a>
@@ -80,20 +78,20 @@ export function SongPreview({ song }: { song: Song }) {
             {/* `h-8`: the row the app's text-size buttons make. */}
             <h2
               id="lyrics-heading"
-              className="mb-2 flex h-8 items-center text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400"
+              className="mb-2 flex h-8 items-center text-sm font-semibold uppercase tracking-wide text-fg-muted"
             >
               Lyrics
             </h2>
             {song.lyrics?.trim() ? (
               <p
                 lang={song.language}
-                className={`whitespace-pre-line leading-loose text-stone-800 dark:text-stone-200 ${FONT_SIZES[DEFAULT_FONT_SIZE]}`}
+                className={`whitespace-pre-line leading-loose text-fg ${FONT_SIZES[DEFAULT_FONT_SIZE]}`}
                 style={{ fontFamily: "var(--font-lyrics)" }}
               >
                 {song.lyrics}
               </p>
             ) : (
-              <p className="text-sm italic text-stone-500">No lyrics have been added yet.</p>
+              <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>
             )}
           </section>
 
@@ -102,13 +100,9 @@ export function SongPreview({ song }: { song: Song }) {
           )}
 
           {song.notes && (
-            <section className="mt-8 rounded-2xl bg-stone-100 p-4 dark:bg-stone-900">
-              <h2 className="mb-1 text-sm font-semibold text-stone-700 dark:text-stone-300">
-                Notes
-              </h2>
-              <p className="whitespace-pre-line text-sm text-stone-600 dark:text-stone-400">
-                {song.notes}
-              </p>
+            <section className="mt-8 rounded-2xl bg-panel p-4">
+              <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
+              <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
             </section>
           )}
         </article>
@@ -127,7 +121,7 @@ function Credit({
 }) {
   return (
     <div className="flex gap-2">
-      <dt className="shrink-0 text-stone-500 dark:text-stone-400">{label}</dt>
+      <dt className="shrink-0 text-fg-muted">{label}</dt>
       <dd className="font-medium">
         {people.map((person, index) => (
           <span key={person.person_id}>

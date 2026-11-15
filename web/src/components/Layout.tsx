@@ -38,8 +38,8 @@ interface NavItem {
  * The lit and pressable treatments shared by the nav links and the identity
  * card. Only the lit one carries a text color: at rest the card inherits.
  */
-const SIDEBAR_ACTIVE = "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200";
-const SIDEBAR_HOVER = "hover:bg-stone-100 dark:hover:bg-stone-800";
+const SIDEBAR_ACTIVE = "bg-accent-subtle text-fg-accent-subtle";
+const SIDEBAR_HOVER = "hover:bg-subtle";
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Browse", icon: Search },
@@ -145,7 +145,7 @@ function NavPanel() {
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive ? SIDEBAR_ACTIVE : cn(SIDEBAR_HOVER, "text-stone-600 dark:text-stone-400"),
+                isActive ? SIDEBAR_ACTIVE : cn(SIDEBAR_HOVER, "text-fg-tertiary"),
               )
             }
           >
@@ -170,7 +170,7 @@ function NavPanel() {
               <Avatar user={user} />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{user.display_name ?? user.email}</p>
-                <p className="text-xs capitalize text-stone-500 dark:text-stone-400">{user.role}</p>
+                <p className="text-xs capitalize text-fg-tertiary">{user.role}</p>
               </div>
             </NavLink>
           ) : (
@@ -186,7 +186,7 @@ function NavPanel() {
 
 function DesktopSidebar() {
   return (
-    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-stone-200 bg-white px-4 py-6 md:flex dark:border-stone-800 dark:bg-stone-900">
+    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface px-4 py-6 md:flex">
       <NavPanel />
     </aside>
   );
@@ -371,7 +371,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
     >
       <div
         ref={sheet}
-        className="nav-drawer-sheet flex flex-col border-r border-stone-200 bg-white shadow-2xl pt-safe pb-safe dark:border-stone-800 dark:bg-stone-900"
+        className="nav-drawer-sheet flex flex-col border-r border-line bg-surface shadow-2xl pt-safe pb-safe"
       >
         {/* Padding here, not on the sheet, so it cannot collide with the
             safe-area padding. `min-h-0` lets this scroll, and it always does,
@@ -487,7 +487,7 @@ export function StickyHeader({
       // Read by index.css, which keeps focus inside the header from scrolling.
       data-sticky-header
       className={cn(
-        "sticky top-0 z-30 border-b border-stone-200 bg-stone-50/90 backdrop-blur transition-transform duration-200 pt-safe dark:border-stone-800 dark:bg-stone-950/90",
+        "sticky top-0 z-30 border-b border-line bg-canvas/90 backdrop-blur transition-transform duration-200 pt-safe",
         hidden && !pinned && "max-md:-translate-y-full",
         mobileOnly && "md:hidden",
       )}

@@ -163,7 +163,7 @@ export function BrowsePage() {
             {hasFilters && (
               <span
                 aria-hidden
-                className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-brand-700 dark:bg-stone-900 dark:text-brand-200"
+                className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-surface text-[10px] font-semibold text-fg-accent-subtle"
               >
                 {filterCount}
               </span>
@@ -199,7 +199,7 @@ export function BrowsePage() {
 
       <div className="mx-auto max-w-3xl px-4 py-4">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-sm text-stone-500 dark:text-stone-400" aria-live="polite">
+          <p className="text-sm text-fg-muted" aria-live="polite">
             {isLoading ? "Searching…" : songCount(total)}
           </p>
           {hasRole(user?.role, "contributor") && (
@@ -246,7 +246,7 @@ export function BrowsePage() {
             >
               Previous
             </Button>
-            <span className="text-sm text-stone-500">
+            <span className="text-sm text-fg-muted">
               Page {page + 1} of {totalPages}
             </span>
             <Button
@@ -266,7 +266,7 @@ export function BrowsePage() {
         <Sheet open onClose={() => setFiltersOpen(false)} title="Filters">
           <div className="space-y-5">
             <div>
-              <h3 className="mb-2 text-sm font-medium text-stone-700 dark:text-stone-300">Genre</h3>
+              <h3 className="mb-2 text-sm font-medium text-fg-secondary">Genre</h3>
               <div className="flex flex-wrap gap-2">
                 {genres?.data.map((genre) => (
                   <Chip
@@ -283,7 +283,7 @@ export function BrowsePage() {
                   </Chip>
                 ))}
                 {genres?.data.length === 0 && (
-                  <p className="text-sm text-stone-500">No genres yet.</p>
+                  <p className="text-sm text-fg-muted">No genres yet.</p>
                 )}
               </div>
             </div>
@@ -291,7 +291,7 @@ export function BrowsePage() {
             <div>
               <label
                 htmlFor="filter-language"
-                className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300"
+                className="mb-2 block text-sm font-medium text-fg-secondary"
               >
                 Language
               </label>
@@ -310,7 +310,7 @@ export function BrowsePage() {
             <div>
               <label
                 htmlFor="filter-sort"
-                className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300"
+                className="mb-2 block text-sm font-medium text-fg-secondary"
               >
                 Sort by
               </label>

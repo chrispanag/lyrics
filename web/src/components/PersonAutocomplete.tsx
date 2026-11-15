@@ -108,7 +108,7 @@ export function PersonAutocomplete({
           id={listId}
           // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: the ARIA combobox pattern's listbox.
           role="listbox"
-          className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-900"
+          className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-line-strong bg-surface py-1 shadow-lg"
         >
           {suggestions.map((person, index) => (
             <li key={person.id}>
@@ -124,14 +124,12 @@ export function PersonAutocomplete({
                 }}
                 className={cn(
                   "flex w-full items-center justify-between px-3 py-2 text-left text-sm",
-                  index === highlighted
-                    ? "bg-brand-50 dark:bg-stone-800"
-                    : "hover:bg-stone-100 dark:hover:bg-stone-800",
+                  index === highlighted ? "bg-accent-subtle" : "hover:bg-subtle",
                 )}
               >
                 <span className="truncate">{person.name}</span>
                 {person.song_count !== undefined && person.song_count > 0 && (
-                  <span className="ml-2 shrink-0 text-xs text-stone-400">{person.song_count}</span>
+                  <span className="ml-2 shrink-0 text-xs text-fg-subtle">{person.song_count}</span>
                 )}
               </button>
             </li>

@@ -5,6 +5,7 @@ import { Plus, Trash } from "lucide-react";
 import { errorDetails, errorMessage } from "@/api/client";
 import { useCreateSong, useGenres, useSong, useUpdateSong } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
+import { cardChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
 import { PersonAutocomplete, type PersonSelection } from "@/components/PersonAutocomplete";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui";
 import { songHref, songRefHref } from "@/lib/listContext";
 import { extractVideoId } from "@/lib/youtube";
+import { cn } from "@/lib/cn";
 import { CREDIT_PICKER_LABELS } from "@/lib/credits";
 import { useNavigate } from "@/lib/navigation";
 import {
@@ -391,9 +393,7 @@ export function SongEditorPage() {
         </Field>
 
         <fieldset className="space-y-2">
-          <legend className="mb-1 text-sm font-medium text-stone-700 dark:text-stone-300">
-            Credits
-          </legend>
+          <legend className="mb-1 text-sm font-medium text-fg-secondary">Credits</legend>
 
           {credits.map((credit, index) => {
             const error = creditError(credit);
@@ -451,7 +451,7 @@ export function SongEditorPage() {
                     onClick={() => track(setCredits)(credits.filter((_, i) => i !== index))}
                     className="shrink-0"
                   >
-                    <Trash aria-hidden className="size-4 text-red-600" />
+                    <Trash aria-hidden className="size-4 text-fg-danger" />
                   </Button>
                 </div>
                 {message && <FieldError id={errorId}>{message}</FieldError>}
@@ -475,9 +475,7 @@ export function SongEditorPage() {
         </fieldset>
 
         <fieldset>
-          <legend className="mb-2 text-sm font-medium text-stone-700 dark:text-stone-300">
-            Genres
-          </legend>
+          <legend className="mb-2 text-sm font-medium text-fg-secondary">Genres</legend>
           <div className="flex flex-wrap gap-2">
             {genres?.data.map((genre) => (
               <Chip
@@ -495,17 +493,15 @@ export function SongEditorPage() {
               </Chip>
             ))}
             {genres?.data.length === 0 && (
-              <p className="text-sm text-stone-500">No genres exist yet.</p>
+              <p className="text-sm text-fg-muted">No genres exist yet.</p>
             )}
           </div>
           {fieldErrors.genre_ids && <ErrorMessage>{fieldErrors.genre_ids}</ErrorMessage>}
         </fieldset>
 
         <fieldset className="space-y-3">
-          <legend className="mb-1 text-sm font-medium text-stone-700 dark:text-stone-300">
-            Recordings
-          </legend>
-          <p className="text-sm text-stone-500 dark:text-stone-400">
+          <legend className="mb-1 text-sm font-medium text-fg-secondary">Recordings</legend>
+          <p className="text-sm text-fg-muted">
             Each recording has its own performers, link and year. A song can have none.
           </p>
 
@@ -514,11 +510,8 @@ export function SongEditorPage() {
             const videoId = extractVideoId(recording.youtubeUrl);
 
             return (
-              <fieldset
-                key={recording.key}
-                className="space-y-3 rounded-2xl border border-stone-200 p-4 dark:border-stone-800"
-              >
-                <legend className="px-1 text-sm font-medium text-stone-700 dark:text-stone-300">
+              <fieldset key={recording.key} className={cn(cardChrome, "space-y-3 p-4")}>
+                <legend className="px-1 text-sm font-medium text-fg-secondary">
                   Recording {index + 1}
                 </legend>
 
@@ -571,9 +564,7 @@ export function SongEditorPage() {
                 {videoId && <WatchOnYouTube videoId={videoId} />}
 
                 <div className="space-y-2">
-                  <span className="block text-sm font-medium text-stone-700 dark:text-stone-300">
-                    Performers
-                  </span>
+                  <span className="block text-sm font-medium text-fg-secondary">Performers</span>
                   {recording.performers.map((performer, performerIndex) => {
                     const error = performerError(recording, performer);
                     const errorId = `recording-${index}-performer-${performerIndex}-error`;
@@ -609,7 +600,7 @@ export function SongEditorPage() {
                             }
                             className="shrink-0"
                           >
-                            <Trash aria-hidden className="size-4 text-red-600" />
+                            <Trash aria-hidden className="size-4 text-fg-danger" />
                           </Button>
                         </div>
                         {error && <FieldError id={errorId}>{error}</FieldError>}
@@ -666,7 +657,7 @@ export function SongEditorPage() {
                     aria-label={`Remove recording ${index + 1}`}
                     onClick={() => track(setRecordings)(recordings.filter((_, i) => i !== index))}
                   >
-                    <Trash aria-hidden className="size-4 text-red-600" />
+                    <Trash aria-hidden className="size-4 text-fg-danger" />
                     Remove
                   </Button>
                 </div>
@@ -677,7 +668,7 @@ export function SongEditorPage() {
           {/* "None of them": a radio cannot be unpressed, and all-false is a
               real state, since first-ness is a claim nobody may be able to make. */}
           {recordings.length > 0 && (
-            <label className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
+            <label className="flex items-center gap-2 text-sm text-fg-muted">
               <input
                 type="radio"
                 name="first-recording"

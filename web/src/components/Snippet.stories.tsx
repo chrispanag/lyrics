@@ -8,7 +8,7 @@ const meta = {
   component: Snippet,
   args: {
     text: "Στης ⟦θάλασσας⟧ τα βάθη η ⟦αγάπη⟧ μου κοιμάται",
-    className: "text-sm text-stone-600 dark:text-stone-400",
+    className: "text-sm text-fg-tertiary",
   },
 } satisfies Meta<typeof Snippet>;
 

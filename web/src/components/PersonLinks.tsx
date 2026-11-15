@@ -26,7 +26,7 @@ export function PersonLinks({
             to={browseHref({ person: person.person_id })}
             // Lets a modal close itself, since the navigation happens beneath it.
             onClick={onNavigate}
-            className="hover:text-brand-600 hover:underline"
+            className="hover:text-fg-accent hover:underline"
           >
             {person.name}
           </Link>

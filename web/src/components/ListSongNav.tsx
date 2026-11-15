@@ -23,7 +23,7 @@ import { useNavigate } from "@/lib/navigation";
 
 // Not `rowControlChrome`: its resting color differs, and `cn` cannot override.
 const stepChrome =
-  "shrink-0 rounded-lg p-2 text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-200";
+  "shrink-0 rounded-lg p-2 text-fg-muted transition-colors hover:bg-subtle hover:text-fg";
 
 /**
  * The list a song is being read from, where it sits in it, and the way on.
@@ -35,20 +35,17 @@ export function ListSongNavBar({ position }: { position: ListPosition }) {
   return (
     <nav
       aria-label="Song navigation"
-      className={cn(
-        cardChrome,
-        "mb-5 flex items-center gap-2 bg-white px-3 py-1.5 dark:bg-stone-900",
-      )}
+      className={cn(cardChrome, "mb-5 flex items-center gap-2 bg-surface px-3 py-1.5")}
     >
       <Link
         to={position.listHref}
-        className="flex min-w-0 items-center gap-2 text-sm text-stone-600 transition-colors hover:text-brand-600 dark:text-stone-400 dark:hover:text-brand-400"
+        className="flex min-w-0 items-center gap-2 text-sm text-fg-tertiary transition-colors hover:text-fg-accent"
       >
         <ListMusic aria-hidden className="size-4 shrink-0" />
         <span className="truncate font-medium">{position.listName}</span>
       </Link>
 
-      <span className="ml-auto shrink-0 text-xs tabular-nums text-stone-500 dark:text-stone-400">
+      <span className="ml-auto shrink-0 text-xs tabular-nums text-fg-muted">
         {position.index + 1} of {position.total}
       </span>
 
@@ -132,8 +129,7 @@ export function ListSongSwipe({
           directions get an arrow. */}
       <span
         className={cn(
-          "flex items-center gap-1.5 rounded-full bg-stone-800/95 px-3 py-1.5 text-xs font-medium text-stone-100 shadow-lg transition-opacity duration-700",
-          "dark:bg-stone-100/95 dark:text-stone-800",
+          "flex items-center gap-1.5 rounded-full bg-inverse/95 px-3 py-1.5 text-xs font-medium text-fg-inverse shadow-lg transition-opacity duration-700",
           hinting ? "opacity-100" : "opacity-0",
         )}
       >

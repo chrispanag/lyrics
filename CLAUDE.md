@@ -1864,6 +1864,18 @@ them is written down.
   keeps growing, and each widening would otherwise stop the rule catching a hook
   exported beside a component in `src/components` — which is where the convention
   above actually lives.
+- **Colors are semantic tokens, not shades.** `bg-surface`, `text-fg-muted`,
+  `border-line`, `bg-accent` and the rest are defined once per theme in
+  `styles/index.css`, so a component writes one class where it used to write a
+  stone shade and its `dark:` twin — the pairs had drifted five ways for muted
+  text alone. `styles/tokens.test.ts` refuses a neutral shade or a `dark:` color
+  in a component, and a token defined for one theme only; the avatar palette is
+  the one exemption, being hues that tell people apart rather than roles. Two
+  tokens that look redundant are not: `fg-tertiary` is a step below
+  `fg-secondary`, and the one to use for muted text on a fill, where `fg-muted`
+  measures 3.8–4.4:1 and fails AA; and `fg-accent` is
+  brand-400 in the dark theme while `accent` stays brand-600 for fills and the
+  wordmark, which the icon sources mirror.
 - **`cn()` is a plain join, not tailwind-merge.** Later classes do not override
   earlier ones; share the chrome rather than passing overrides through.
 - **Filter state lives in the URL**, so a filtered search is shareable and the

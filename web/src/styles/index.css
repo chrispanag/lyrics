@@ -37,6 +37,149 @@
   --color-brand-900: oklch(0.33 0.08 34);
 }
 
+/* What each color is *for*. Components use these — `bg-surface`,
+   `text-fg-muted`, `border-line` — and never a stone shade with a `dark:` twin
+   beside it: the pair is written here once, rather than at every call site
+   where it can drift (it had, five ways, for muted text alone).
+   `src/styles/tokens.test.ts` holds both halves of that, refusing a token
+   defined for one theme only and a neutral shade written into a component.
+
+   The dark values are keyed on the `.dark` class, the same class the `dark`
+   variant reads, and not on `light-dark()`: that would be one line per token,
+   but a browser without it (Safari before 17.5) drops the whole declaration
+   and the page renders with no colors at all.
+
+   Naming: a bare name is a background, `fg-` is text and icons, `line-` is a
+   border. `fg-accent-subtle` is the text that sits on `accent-subtle`, and so
+   on. Hard-copied elsewhere, because nothing there can read a variable:
+   `canvas` as THEME_COLORS in lib/theme.ts, and `accent` as the icon sources'
+   brand-600 (see the note on it above). */
+@layer base {
+  :root {
+    --canvas: var(--color-stone-50);
+    --surface: var(--color-white);
+    --panel: var(--color-stone-100);
+    --subtle: var(--color-stone-100);
+    --muted: var(--color-stone-200);
+    --muted-hover: var(--color-stone-300);
+    --muted-active: var(--color-stone-400);
+    --inverse: var(--color-stone-800);
+
+    --fg: var(--color-stone-900);
+    --fg-secondary: var(--color-stone-700);
+    /* A step below `fg-secondary`: quiet text that is still read, such as nav
+       links, body copy in a dialog or a card, and labels on a chip or a panel.
+       That last group is why it is not `fg-muted`, which measures 3.8–4.4:1 on
+       a fill and so fails AA there; on plain surface the two are a matter of
+       weight. They are the same shade in the dark theme. */
+    --fg-tertiary: var(--color-stone-600);
+    --fg-muted: var(--color-stone-500);
+    --fg-subtle: var(--color-stone-400);
+    --fg-inverse: var(--color-stone-100);
+
+    --line: var(--color-stone-200);
+    --line-strong: var(--color-stone-300);
+
+    --accent: var(--color-brand-600);
+    --accent-hover: var(--color-brand-700);
+    --accent-active: var(--color-brand-800);
+    --accent-subtle: var(--color-brand-50);
+    --fg-accent: var(--color-brand-600);
+    --fg-accent-subtle: var(--color-brand-700);
+    --line-accent: var(--color-brand-300);
+    --focus: var(--color-brand-500);
+    --highlight: color-mix(in oklab, var(--color-brand-200) 70%, transparent);
+
+    --danger: var(--color-red-600);
+    --danger-hover: var(--color-red-700);
+    --danger-active: var(--color-red-800);
+    --danger-subtle: var(--color-red-50);
+    --fg-danger: var(--color-red-600);
+    --fg-danger-subtle: var(--color-red-800);
+    --line-danger: var(--color-red-300);
+  }
+
+  .dark {
+    --canvas: var(--color-stone-950);
+    --surface: var(--color-stone-900);
+    --panel: var(--color-stone-900);
+    --subtle: var(--color-stone-800);
+    --muted: var(--color-stone-800);
+    --muted-hover: var(--color-stone-700);
+    --muted-active: var(--color-stone-600);
+    --inverse: var(--color-stone-100);
+
+    --fg: var(--color-stone-100);
+    --fg-secondary: var(--color-stone-300);
+    --fg-tertiary: var(--color-stone-400);
+    --fg-muted: var(--color-stone-400);
+    --fg-subtle: var(--color-stone-500);
+    --fg-inverse: var(--color-stone-800);
+
+    --line: var(--color-stone-800);
+    --line-strong: var(--color-stone-600);
+
+    --accent: var(--color-brand-600);
+    --accent-hover: var(--color-brand-700);
+    --accent-active: var(--color-brand-800);
+    --accent-subtle: color-mix(in oklab, var(--color-brand-900) 40%, transparent);
+    --fg-accent: var(--color-brand-400);
+    --fg-accent-subtle: var(--color-brand-200);
+    --line-accent: var(--color-brand-800);
+    --focus: var(--color-brand-500);
+    --highlight: color-mix(in oklab, var(--color-brand-500) 40%, transparent);
+
+    --danger: var(--color-red-600);
+    --danger-hover: var(--color-red-700);
+    --danger-active: var(--color-red-800);
+    --danger-subtle: color-mix(in oklab, var(--color-red-950) 50%, transparent);
+    --fg-danger: var(--color-red-400);
+    --fg-danger-subtle: var(--color-red-200);
+    --line-danger: var(--color-red-900);
+  }
+}
+
+/* `inline`, so a utility reads the variable where it is used rather than once
+   on :root — which is what lets `.dark` on <html> change it. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-panel: var(--panel);
+  --color-subtle: var(--subtle);
+  --color-muted: var(--muted);
+  --color-muted-hover: var(--muted-hover);
+  --color-muted-active: var(--muted-active);
+  --color-inverse: var(--inverse);
+
+  --color-fg: var(--fg);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-tertiary: var(--fg-tertiary);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-fg-inverse: var(--fg-inverse);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-fg-accent: var(--fg-accent);
+  --color-fg-accent-subtle: var(--fg-accent-subtle);
+  --color-line-accent: var(--line-accent);
+  --color-focus: var(--focus);
+  --color-highlight: var(--highlight);
+
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-active: var(--danger-active);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-fg-danger: var(--fg-danger);
+  --color-fg-danger-subtle: var(--fg-danger-subtle);
+  --color-line-danger: var(--line-danger);
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
@@ -95,15 +238,14 @@
   }
 
   body {
-    @apply bg-stone-50 text-stone-900 antialiased;
-    @apply dark:bg-stone-950 dark:text-stone-100;
+    @apply bg-canvas text-fg antialiased;
     /* Prevents the whole page from bouncing on iOS while inner regions scroll. */
     overscroll-behavior-y: none;
   }
 
   /* A visible focus ring is the only affordance keyboard users have. */
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-brand-500;
+    @apply outline-2 outline-offset-2 outline-focus;
   }
 
   ::selection {

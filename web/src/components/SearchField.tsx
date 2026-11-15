@@ -37,7 +37,7 @@ export function SearchField({
     <div className={cn("relative", className)}>
       <Search
         aria-hidden
-        className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-stone-400"
+        className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-fg-subtle"
       />
       <input
         type="search"
@@ -53,7 +53,7 @@ export function SearchField({
           type="button"
           onClick={() => onChange("")}
           aria-label="Clear search"
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-2 text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-2 text-fg-subtle hover:bg-subtle"
         >
           <X aria-hidden className="size-4" />
         </button>

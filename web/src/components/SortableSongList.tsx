@@ -133,7 +133,7 @@ function SortableRow({
             aria-label={`Reorder ${song.title}`}
             className={cn(
               rowControlChrome,
-              "cursor-grab touch-none hover:bg-stone-100 hover:text-stone-600 focus-visible:ring-brand-500 active:cursor-grabbing dark:hover:bg-stone-800 dark:hover:text-stone-300",
+              "cursor-grab touch-none hover:bg-subtle hover:text-fg-secondary focus-visible:ring-focus active:cursor-grabbing",
             )}
             {...attributes}
             {...listeners}
