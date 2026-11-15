@@ -20,6 +20,9 @@
   },
   "linter": {
     "rules": {
+      // Every rule in the group, not only the recommended ones. CLAUDE.md says
+      // what a suppression has to state.
+      "a11y": "error",
       // Stated, not left to the React domain: without these lines neither fires
       // here (the suppressions they need go unused).
       "correctness": {

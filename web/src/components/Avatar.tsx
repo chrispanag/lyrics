@@ -29,7 +29,8 @@ export function Avatar({
   if (!source) {
     return (
       <span
-        // Decorative: the name is always rendered beside it.
+        // Decorative: the name is rendered beside it, or carried by the control
+        // that wraps the picture (the profile's "Edit picture" button).
         aria-hidden
         className={cn(
           shared,

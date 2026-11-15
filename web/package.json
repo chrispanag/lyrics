@@ -16,7 +16,7 @@
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "test:coverage": "vitest run --project unit --coverage",
-    "test:stories": "vitest run --project storybook",
+    "test:stories": "vitest run --project storybook-light --project storybook-dark",
     "storybook": "storybook dev -p 6006 --no-open",
     "build-storybook": "storybook build",
     "e2e": "playwright test",

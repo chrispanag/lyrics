@@ -86,7 +86,9 @@ const preview: Preview = {
       },
     },
   },
-  initialGlobals: { theme: "light" },
+  // Dark for the `storybook-dark` test project (vitest.config.ts), whose axe
+  // checks then judge contrast on the dark ground; light everywhere else.
+  initialGlobals: { theme: import.meta.env.STORY_THEME === "dark" ? "dark" : "light" },
   parameters: {
     // The app paints its own ground on <body>; Storybook's would sit on top.
     backgrounds: { disable: true },

@@ -186,8 +186,10 @@ function SongArticle() {
       <section aria-label="Lyrics">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-fg-muted">Lyrics</h2>
-          {/* biome-ignore lint/a11y/useSemanticElements: a toolbar, not a form; a fieldset brings form styling. */}
-          <div className="flex items-center gap-1" role="group" aria-label="Text size">
+          {/* A fieldset is the native group; preflight zeroes its border, margin
+              and padding. Named by `aria-label`, not a <legend>: the controls
+              are icons, and a visible "Text size" would crowd the heading row. */}
+          <fieldset className="flex items-center gap-1" aria-label="Text size">
             <Type aria-hidden className="mr-1 size-4 text-fg-subtle" />
             <button
               type="button"
@@ -207,7 +209,7 @@ function SongArticle() {
             >
               <Plus aria-hidden className="size-4" />
             </button>
-          </div>
+          </fieldset>
         </div>
 
         {!song ? (

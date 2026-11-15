@@ -63,6 +63,16 @@ async function typeAndOpen(field: HTMLElement, text = "Μ") {
   await screen.findByRole("listbox");
 }
 
+/**
+ * An option's text without its `aria-hidden` parts: the count is drawn as a
+ * bare number and spoken as "12 songs", and the spoken one is what to compare.
+ */
+function spoken(option: HTMLElement): string {
+  const copy = option.cloneNode(true) as HTMLElement;
+  for (const hidden of copy.querySelectorAll("[aria-hidden]")) hidden.remove();
+  return copy.textContent ?? "";
+}
+
 describe("PersonAutocomplete", () => {
   it("suggests matching people as the name is typed", async () => {
     const { field } = renderField();
@@ -70,8 +80,8 @@ describe("PersonAutocomplete", () => {
     await typeAndOpen(field);
 
     expect(field).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "Μίκης Θεοδωράκης12",
+    expect(screen.getAllByRole("option").map(spoken)).toEqual([
+      "Μίκης Θεοδωράκης12 songs",
       // No count for nobody's songs, nor for a count the server left out.
       "Μάνος Χατζιδάκις",
       "Μάρκος Βαμβακάρης",
@@ -108,15 +118,15 @@ describe("PersonAutocomplete", () => {
       screen
         .getAllByRole("option")
         .filter((option) => option.getAttribute("aria-selected") === "true")
-        .map((option) => option.textContent);
+        .map(spoken);
 
     expect(highlighted()).toEqual([]);
     await userEvent.keyboard("{ArrowDown}");
-    expect(highlighted()).toEqual(["Μίκης Θεοδωράκης12"]);
+    expect(highlighted()).toEqual(["Μίκης Θεοδωράκης12 songs"]);
     await userEvent.keyboard("{ArrowUp}");
     expect(highlighted()).toEqual(["Μάρκος Βαμβακάρης"]);
     await userEvent.keyboard("{ArrowDown}");
-    expect(highlighted()).toEqual(["Μίκης Θεοδωράκης12"]);
+    expect(highlighted()).toEqual(["Μίκης Θεοδωράκης12 songs"]);
   });
 
   // Focus stays on the field, so the highlight is announced only through the
@@ -194,5 +204,22 @@ describe("PersonAutocomplete", () => {
     await userEvent.click(screen.getByRole("button", { name: "Elsewhere" }));
 
     await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+  });
+
+  // Reopened by focus, a kept highlight would be announced and taken by Enter.
+  it("drops the highlight when the suggestions close", async () => {
+    const { field, changes } = renderField();
+    await typeAndOpen(field);
+    await userEvent.keyboard("{ArrowDown}");
+    await userEvent.click(screen.getByRole("button", { name: "Elsewhere" }));
+    await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+
+    await userEvent.click(field);
+    await screen.findByRole("listbox");
+
+    expect(field).not.toHaveAttribute("aria-activedescendant");
+    const before = changes.length;
+    await userEvent.keyboard("{Enter}");
+    expect(changes).toHaveLength(before);
   });
 });
