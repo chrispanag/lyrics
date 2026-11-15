@@ -12,6 +12,7 @@ import {
   Button,
   Chip,
   ErrorMessage,
+  Described,
   Field,
   FieldError,
   Input,
@@ -237,8 +238,7 @@ export function SongEditorPage() {
       recordings.map((recording, i) => ({ ...recording, isFirst: i === index })),
     );
 
-  // Row errors, looked up by where each row lands in the payload; see sentIndex.
-
+  /** Row errors, looked up by where each row lands in the payload; see sentIndex. */
   const recordingError = (index: number, field: string): string | undefined => {
     const sent = sentIndex(recordings, index, isSentRecording);
     return sent === undefined ? undefined : fieldErrors[`recordings[${sent}].${field}`];
@@ -369,46 +369,51 @@ export function SongEditorPage() {
 
           {credits.map((credit, index) => {
             const error = creditError(index);
+            const message = error.role ?? error.name;
             const errorId = `credit-${index}-error`;
             return (
               <div key={credit.key} className="space-y-1.5">
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <PersonAutocomplete
-                      id={`credit-name-${index}`}
-                      describedBy={error.name ? errorId : undefined}
-                      value={credit}
-                      placeholder="Name"
-                      onChange={(selection) =>
+                    <Described by={error.name ? errorId : undefined}>
+                      <PersonAutocomplete
+                        id={`credit-name-${index}`}
+                        value={credit}
+                        placeholder="Name"
+                        onChange={(selection) =>
+                          track(setCredits)(
+                            // The selection replaces the person whole: spread over
+                            // `item`, a retyped name keeps the picked id, which wins.
+                            credits.map((item, i) =>
+                              i === index ? { key: item.key, role: item.role, ...selection } : item,
+                            ),
+                          )
+                        }
+                      />
+                    </Described>
+                  </div>
+                  <Described by={error.role ? errorId : undefined}>
+                    <Select
+                      aria-label={`Role for credit ${index + 1}`}
+                      value={credit.role}
+                      onChange={(event) =>
                         track(setCredits)(
-                          // The selection replaces the person whole: spread over
-                          // `item`, a retyped name keeps the picked id, which wins.
                           credits.map((item, i) =>
-                            i === index ? { key: item.key, role: item.role, ...selection } : item,
+                            i === index
+                              ? { ...item, role: event.target.value as CreditRole }
+                              : item,
                           ),
                         )
                       }
-                    />
-                  </div>
-                  <Select
-                    aria-label={`Role for credit ${index + 1}`}
-                    aria-describedby={error.role ? errorId : undefined}
-                    value={credit.role}
-                    onChange={(event) =>
-                      track(setCredits)(
-                        credits.map((item, i) =>
-                          i === index ? { ...item, role: event.target.value as CreditRole } : item,
-                        ),
-                      )
-                    }
-                    className="w-36 shrink-0"
-                  >
-                    {CREDIT_ROLES.map((role) => (
-                      <option key={role} value={role}>
-                        {CREDIT_PICKER_LABELS[role]}
-                      </option>
-                    ))}
-                  </Select>
+                      className="w-36 shrink-0"
+                    >
+                      {CREDIT_ROLES.map((role) => (
+                        <option key={role} value={role}>
+                          {CREDIT_PICKER_LABELS[role]}
+                        </option>
+                      ))}
+                    </Select>
+                  </Described>
                   <Button
                     type="button"
                     variant="ghost"
@@ -421,9 +426,7 @@ export function SongEditorPage() {
                     <Trash aria-hidden className="size-4 text-red-600" />
                   </Button>
                 </div>
-                {(error.role ?? error.name) && (
-                  <FieldError id={errorId}>{error.role ?? error.name}</FieldError>
-                )}
+                {message && <FieldError id={errorId}>{message}</FieldError>}
               </div>
             );
           })}
@@ -500,7 +503,6 @@ export function SongEditorPage() {
                   <Input
                     id={`recording-${index}-label`}
                     value={recording.label}
-                    // `Field` leaves pointing at its hint or error to the caller.
                     onChange={(event) => editRecording(index, { label: event.target.value })}
                   />
                 </Field>
@@ -532,7 +534,6 @@ export function SongEditorPage() {
                     type="url"
                     inputMode="url"
                     value={recording.youtubeUrl}
-                    // The hint is the only statement of accepted link shapes.
                     onChange={(event) => editRecording(index, { youtubeUrl: event.target.value })}
                   />
                 </Field>
@@ -552,19 +553,20 @@ export function SongEditorPage() {
                       <div key={performer.key} className="space-y-1.5">
                         <div className="flex gap-2">
                           <div className="flex-1">
-                            <PersonAutocomplete
-                              id={`recording-${index}-performer-${performerIndex}`}
-                              describedBy={error ? errorId : undefined}
-                              value={performer}
-                              placeholder="Name"
-                              onChange={(selection) =>
-                                editPerformers(index, (performers) =>
-                                  performers.map((item, i) =>
-                                    i === performerIndex ? { key: item.key, ...selection } : item,
-                                  ),
-                                )
-                              }
-                            />
+                            <Described by={error ? errorId : undefined}>
+                              <PersonAutocomplete
+                                id={`recording-${index}-performer-${performerIndex}`}
+                                value={performer}
+                                placeholder="Name"
+                                onChange={(selection) =>
+                                  editPerformers(index, (performers) =>
+                                    performers.map((item, i) =>
+                                      i === performerIndex ? { key: item.key, ...selection } : item,
+                                    ),
+                                  )
+                                }
+                              />
+                            </Described>
                           </div>
                           <Button
                             type="button"

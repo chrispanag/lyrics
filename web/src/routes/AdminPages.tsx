@@ -333,7 +333,6 @@ export function AdminGenresPage() {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder={nameForm.placeholder}
-                // `Field` requires the control to point at its hint or error.
               />
             </Field>
             <Button

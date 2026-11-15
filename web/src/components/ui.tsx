@@ -126,7 +126,7 @@ export function Field({
       >
         {label}
       </label>
-      <FieldDescription value={described}>{children}</FieldDescription>
+      <Described by={described}>{children}</Described>
       {hint && !error && (
         <p id={`${htmlFor}-hint`} className="text-xs text-stone-500 dark:text-stone-400">
           {hint}
@@ -138,8 +138,18 @@ export function Field({
 }
 
 /**
+ * Points the primitives inside it at `by`, the way Field points its own control.
+ * For a control with no Field around it: wrap the one the text is about, not a
+ * whole row, or every control in the row is described by it.
+ */
+export function Described({ by, children }: { by: string | undefined; children: ReactNode }) {
+  return <FieldDescription value={by}>{children}</FieldDescription>;
+}
+
+/**
  * A server error under the control it names. Field renders its own; a row of
- * controls with no Field around it renders this and points the control at `id`.
+ * controls with no Field around it renders this, and wraps that control in
+ * `Described` with the same id.
  */
 export function FieldError({ id, children }: { id: string; children: ReactNode }) {
   return (

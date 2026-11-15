@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { Field, Input, Select, Textarea } from "./ui";
+import { Described, Field, FieldError, Input, Select, Textarea } from "./ui";
 
 /*
  * Field points its control at the text it shows, so no caller has to: wired by
@@ -72,18 +72,39 @@ describe("Field", () => {
     expect(input).toHaveAccessibleDescription("Too short. At least eight characters.");
   });
 
-  it("describes a control outside any field only as its caller says", () => {
+  it("describes nothing outside a field", () => {
     render(
       <>
-        <p id="help">Search by title or lyrics.</p>
-        <Input aria-label="Search" aria-describedby="help" />
+        <Field label="Notes" htmlFor="notes" hint="Optional">
+          <Input id="notes" />
+        </Field>
         <Input aria-label="Filter" />
       </>,
     );
 
-    expect(screen.getByLabelText("Search")).toHaveAccessibleDescription(
-      "Search by title or lyrics.",
-    );
     expect(screen.getByLabelText("Filter")).not.toHaveAttribute("aria-describedby");
+  });
+});
+
+// A row of controls with no Field around it: only the control the text is
+// about is wrapped, so its neighbors are not described by an error not theirs.
+describe("Described", () => {
+  it("describes the control it wraps and not its neighbors", () => {
+    render(
+      <>
+        <Described by="role-error">
+          <Select aria-label="Role">
+            <option>composer</option>
+          </Select>
+        </Described>
+        <Input aria-label="Name" />
+        <FieldError id="role-error">Role must be composer or lyricist.</FieldError>
+      </>,
+    );
+
+    expect(screen.getByLabelText("Role")).toHaveAccessibleDescription(
+      "Role must be composer or lyricist.",
+    );
+    expect(screen.getByLabelText("Name")).not.toHaveAttribute("aria-describedby");
   });
 });

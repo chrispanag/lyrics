@@ -566,10 +566,11 @@ describe("SongEditorPage", () => {
     ).toHaveAccessibleDescription("Notes are too long.");
   });
 
+  const byId = (id: string) => document.getElementById(id) as HTMLElement;
+
   // The server numbers rows as sent, and blank rows are not: a row's error
   // belongs to the row it names in the payload, not the form row at that index.
   it("puts a credit's or performer's error on the row the server meant, past blank ones", async () => {
-    const byId = (id: string) => document.getElementById(id) as HTMLElement;
     server.use(
       http.get(`${API}/api/v1/songs/song-1`, () =>
         HttpResponse.json(
@@ -638,7 +639,7 @@ describe("SongEditorPage", () => {
     expect(await screen.findByLabelText("Role for credit 1")).toHaveAccessibleDescription(
       "Role must be composer or lyricist.",
     );
-    expect(document.getElementById("credit-name-0")).not.toHaveAttribute("aria-describedby");
+    expect(byId("credit-name-0")).not.toHaveAttribute("aria-describedby");
   });
 
   // A failed load must not fall through to an empty form: saving it would blank
