@@ -608,9 +608,7 @@ inventory this file records going stale under Head assets.)
   defined it**, which is why `payloadOf` reads it out to an `ArrayBuffer`: an
   unrecognized Blob is *stringified*, so `"[object Blob]"` goes up as thirteen
   bytes of text with every byte of the image dropped, and the request looks
-  perfectly well formed doing it. jsdom's Blob implements `slice`, `size` and
-  `type` and nothing else, which is why `vitest.setup.ts` fills in
-  `arrayBuffer` beside the other gaps it covers.
+  perfectly well formed doing it.
 - **`Avatar` decides from `avatar_updated_at`, never from whether an image
   loaded** — the same idiom as `SongCard`'s badge reading `youtube_video_id`.
   Which is why both avatar mutations unsettle `["users"]`: the admin console
@@ -1220,8 +1218,9 @@ each of them is written down.
   That close is a reset made while rendering, keyed apart from the scroll-to-top
   effect beside it, whose `pathname` key is deliberate — a filter written into
   the catalog's query string must not scroll that page back to the top. **A
-  window that grows past `md` closes it too**, which is a `matchMedia` subscription in a codebase that
-  otherwise leaves every breakpoint to CSS, so it needs saying why.
+  window that grows past `md` closes it too**, which is a `matchMedia`
+  subscription in a codebase that otherwise leaves every breakpoint to CSS, so
+  it needs saying why.
   The panel and the hamburger are both `md:hidden`, so crossing the breakpoint
   takes the whole control off the screen while `navOpen` goes on saying it is
   open — and an open drawer nobody can see still costs everything an open modal
