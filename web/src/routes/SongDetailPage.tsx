@@ -6,7 +6,7 @@ import {
   Minus,
   Pencil,
   Plus,
-  Trash2,
+  Trash,
   Type,
 } from "lucide-react";
 
@@ -157,7 +157,7 @@ function SongArticle() {
               disabled={!song}
               onClick={() => setConfirmDelete(true)}
             >
-              <Trash2 aria-hidden className="size-4 text-red-600" />
+              <Trash aria-hidden className="size-4 text-red-600" />
             </Button>
           )}
         </div>

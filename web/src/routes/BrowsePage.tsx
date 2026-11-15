@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Music4, Plus, SlidersHorizontal } from "lucide-react";
+import { SixteenthNotes, Plus, SlidersHorizontal } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
 import { useGenres, usePerson, useSongs } from "@/api/hooks";
@@ -221,7 +221,7 @@ export function BrowsePage() {
 
         {!isLoading && data?.data.length === 0 && (
           <EmptyState
-            icon={<Music4 className="size-12" />}
+            icon={<SixteenthNotes className="size-12" />}
             title={query ? "No songs matched" : "No songs yet"}
             description={
               query

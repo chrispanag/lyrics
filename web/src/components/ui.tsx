@@ -6,7 +6,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
-import { Loader2, X } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 
 import { buttonClasses, type ButtonSize, type ButtonVariant } from "./buttonStyles";
 import { fieldChrome } from "@/components/fieldStyles";
@@ -34,7 +34,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       className={buttonClasses(variant, size, className)}
       {...props}
     >
-      {loading && <Loader2 aria-hidden className="size-4 animate-spin" />}
+      {loading && <LoaderCircle aria-hidden className="size-4 animate-spin" />}
       {children}
     </button>
   );
@@ -173,7 +173,7 @@ export function Chip({
 export function Spinner({ className }: { className?: string }) {
   return (
     <div role="status" aria-live="polite" className={cn("flex justify-center py-8", className)}>
-      <Loader2 aria-hidden className="size-6 animate-spin text-stone-400" />
+      <LoaderCircle aria-hidden className="size-6 animate-spin text-stone-400" />
       <span className="sr-only">Loading</span>
     </div>
   );

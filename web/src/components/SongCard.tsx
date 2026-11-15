@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Link } from "react-router-dom";
-import { Youtube } from "lucide-react";
+import { SquarePlay } from "lucide-react";
 
 import { Snippet } from "./Snippet";
 import { cardChrome, cardHover } from "./cardStyles";
@@ -51,7 +51,7 @@ export const SongCard = memo(function SongCard({
           </p>
         </div>
         {song.youtube_video_id && (
-          <Youtube aria-label="Has a video" className="size-5 shrink-0 text-stone-400" />
+          <SquarePlay aria-label="Has a video" className="size-5 shrink-0 text-stone-400" />
         )}
       </div>
 

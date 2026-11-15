@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import { useCreateSong, useGenres, useSong, useUpdateSong } from "@/api/hooks";
@@ -352,7 +352,7 @@ export function SongEditorPage() {
                 onClick={() => track(setCredits)(credits.filter((_, i) => i !== index))}
                 className="shrink-0"
               >
-                <Trash2 aria-hidden className="size-4 text-red-600" />
+                <Trash aria-hidden className="size-4 text-red-600" />
               </Button>
             </div>
           ))}
@@ -513,7 +513,7 @@ export function SongEditorPage() {
                         }
                         className="shrink-0"
                       >
-                        <Trash2 aria-hidden className="size-4 text-red-600" />
+                        <Trash aria-hidden className="size-4 text-red-600" />
                       </Button>
                     </div>
                   ))}
@@ -569,7 +569,7 @@ export function SongEditorPage() {
                       track(setRecordings)(recordings.filter((_, i) => i !== index))
                     }
                   >
-                    <Trash2 aria-hidden className="size-4 text-red-600" />
+                    <Trash aria-hidden className="size-4 text-red-600" />
                     Remove
                   </Button>
                 </div>

@@ -1,4 +1,4 @@
-import { Loader2, X } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 
 import { rowControlChrome } from "./buttonStyles";
 import { cn } from "@/lib/cn";
@@ -30,7 +30,7 @@ export function RemoveFromListButton({
       )}
     >
       {pending ? (
-        <Loader2 aria-hidden className="size-5 animate-spin" />
+        <LoaderCircle aria-hidden className="size-5 animate-spin" />
       ) : (
         <X aria-hidden className="size-5" />
       )}
