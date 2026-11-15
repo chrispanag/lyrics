@@ -25,6 +25,7 @@ import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton, Spinner } from "@/
 import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
 import { cn } from "@/lib/cn";
+import { panelChrome } from "@/components/cardStyles";
 import { DEFAULT_FONT_SIZE, FONT_SIZES, storeFontSize, storedFontSize } from "@/lib/fontSize";
 import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
@@ -198,7 +199,7 @@ function SongArticle() {
               onClick={() => setFontSize(fontSizeIndex - 1)}
               disabled={fontSizeIndex === 0}
               aria-label="Decrease text size"
-              className="rounded-lg p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
+              className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
             >
               <Minus aria-hidden className="size-4" />
             </button>
@@ -207,7 +208,7 @@ function SongArticle() {
               onClick={() => setFontSize(fontSizeIndex + 1)}
               disabled={fontSizeIndex === FONT_SIZES.length - 1}
               aria-label="Increase text size"
-              className="rounded-lg p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
+              className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
             >
               <Plus aria-hidden className="size-4" />
             </button>
@@ -237,7 +238,7 @@ function SongArticle() {
       )}
 
       {song?.notes && (
-        <section className="mt-8 rounded-2xl bg-panel p-4">
+        <section className={cn(panelChrome, "mt-8")}>
           <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
           <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
         </section>
@@ -388,7 +389,7 @@ function AddToListSheet({
                   // press cannot act on the stale `present` and re-add.
                   disabled={toggle.isPending}
                   aria-pressed={present}
-                  className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-subtle"
+                  className="flex w-full items-center justify-between gap-3 rounded-control px-3 py-3 text-left transition-colors hover:bg-subtle"
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{list.name}</span>
@@ -399,7 +400,7 @@ function AddToListSheet({
                   <span
                     className={cn(
                       "flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                      present ? "border-accent bg-accent text-white" : "border-line-strong",
+                      present ? "border-accent bg-accent text-fg-on-fill" : "border-line-strong",
                     )}
                   >
                     {present && <Check aria-hidden className="size-4" />}
@@ -413,7 +414,7 @@ function AddToListSheet({
       <Link
         to="/lists"
         onClick={onClose}
-        className="mt-3 block rounded-xl border border-dashed border-line-strong px-3 py-3 text-center text-sm text-fg-tertiary hover:border-line-accent hover:text-fg-accent"
+        className="mt-3 block rounded-control border border-dashed border-line-strong px-3 py-3 text-center text-sm text-fg-tertiary hover:border-line-accent hover:text-fg-accent"
       >
         Manage lists
       </Link>

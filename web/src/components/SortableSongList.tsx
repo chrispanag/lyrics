@@ -117,7 +117,7 @@ function SortableRow({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={isDragging ? "relative z-10 opacity-80" : undefined}
+      className={isDragging ? "relative z-raised opacity-80" : undefined}
     >
       <SongRow
         song={song}

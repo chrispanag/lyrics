@@ -269,7 +269,7 @@ export function SongSearch() {
         {open && (
           <div
             className={cn(
-              "absolute inset-x-0 top-full z-10 mt-2 overflow-hidden rounded-2xl border shadow-xl",
+              "absolute inset-x-0 top-full z-dropdown mt-2 overflow-hidden rounded-card border shadow-popover",
               "border-line-strong bg-surface",
             )}
           >

@@ -39,7 +39,7 @@ export function Button({
 
 // The shape the field primitives share. Size, padding and width are stated per
 // primitive, since `cn` cannot override a shared class.
-const fieldLayout = "rounded-xl";
+const fieldLayout = "rounded-control";
 
 /**
  * The id of the text a `Field` is showing under its control, error or hint.
@@ -170,7 +170,7 @@ export function Chip({
 }) {
   const classes = cn(
     "inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-sm transition-colors",
-    active ? "bg-accent text-white" : "bg-muted text-fg-secondary",
+    active ? "bg-accent text-fg-on-fill" : "bg-muted text-fg-secondary",
     onClick && "cursor-pointer hover:opacity-80",
   );
 
@@ -195,7 +195,7 @@ export function Chip({
             event.stopPropagation();
             onRemove();
           }}
-          className="-mr-1 rounded-full p-0.5 hover:bg-black/10"
+          className="-mr-1 rounded-full p-0.5 hover:bg-current/10"
         >
           <X aria-hidden className="size-3.5" />
         </button>
@@ -214,7 +214,7 @@ export function Spinner({ className }: { className?: string }) {
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden className={cn("animate-pulse rounded-lg bg-muted", className)} />;
+  return <div aria-hidden className={cn("animate-pulse rounded-compact bg-muted", className)} />;
 }
 
 /**
@@ -279,7 +279,7 @@ export function ErrorMessage({ children }: { children: ReactNode }) {
   return (
     <div
       role="alert"
-      className="rounded-xl border border-line-danger bg-danger-subtle px-4 py-3 text-sm text-fg-danger-subtle"
+      className="rounded-control border border-line-danger bg-danger-subtle px-4 py-3 text-sm text-fg-danger-subtle"
     >
       {children}
     </div>
@@ -317,7 +317,7 @@ export function Sheet({
       aria-labelledby={titleId}
       // A transparent `.dialog-viewport` over the whole screen, so the page
       // behind cannot scroll (see index.css); the dimming is still `::backdrop`.
-      className="dialog-viewport border-0 p-0 text-inherit backdrop:bg-black/40 backdrop:backdrop-blur-sm"
+      className="dialog-viewport border-0 p-0 text-inherit backdrop:bg-scrim backdrop:backdrop-blur-sm"
     >
       <div className="dialog-track">
         <div data-dialog-dismiss aria-hidden />
@@ -326,8 +326,8 @@ export function Sheet({
             // Pinned to the bottom, centered from `sm`. Sticky to the viewport's
             // edge, since the track is a pixel taller than it.
             "sticky bottom-0 mt-auto flex max-h-[85dvh] w-full flex-col",
-            "rounded-t-3xl bg-surface shadow-2xl",
-            "sm:mx-auto sm:my-auto sm:max-w-lg sm:rounded-3xl",
+            "rounded-t-sheet bg-surface shadow-sheet",
+            "sm:mx-auto sm:my-auto sm:max-w-lg sm:rounded-sheet",
           )}
         >
           <div className="flex items-center justify-between border-b border-line px-5 py-4">

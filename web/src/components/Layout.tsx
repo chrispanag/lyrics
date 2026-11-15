@@ -144,7 +144,7 @@ function NavPanel() {
             end={item.to === "/"}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-control px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive ? SIDEBAR_ACTIVE : cn(SIDEBAR_HOVER, "text-fg-tertiary"),
               )
             }
@@ -162,7 +162,7 @@ function NavPanel() {
               to="/profile"
               className={({ isActive }) =>
                 cn(
-                  "-mx-2 flex min-w-0 items-center gap-2.5 rounded-xl px-2 py-2 transition-colors",
+                  "-mx-2 flex min-w-0 items-center gap-2.5 rounded-control px-2 py-2 transition-colors",
                   isActive ? SIDEBAR_ACTIVE : SIDEBAR_HOVER,
                 )
               }
@@ -371,7 +371,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
     >
       <div
         ref={sheet}
-        className="nav-drawer-sheet flex flex-col border-r border-line bg-surface shadow-2xl pt-safe pb-safe"
+        className="nav-drawer-sheet flex flex-col border-r border-line bg-surface shadow-sheet pt-safe pb-safe"
       >
         {/* Padding here, not on the sheet, so it cannot collide with the
             safe-area padding. `min-h-0` lets this scroll, and it always does,
@@ -487,7 +487,7 @@ export function StickyHeader({
       // Read by index.css, which keeps focus inside the header from scrolling.
       data-sticky-header
       className={cn(
-        "sticky top-0 z-30 border-b border-line bg-canvas/90 backdrop-blur transition-transform duration-200 pt-safe",
+        "sticky top-0 z-sticky border-b border-line bg-canvas/90 backdrop-blur transition-transform duration-200 pt-safe",
         hidden && !pinned && "max-md:-translate-y-full",
         mobileOnly && "md:hidden",
       )}

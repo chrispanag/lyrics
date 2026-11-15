@@ -20,7 +20,7 @@ import { cn } from "@/lib/cn";
 const fieldClasses = cn(
   fieldChrome,
   // Drops the browser's own clear cross; see styles/index.css.
-  "search-own-clear h-12 w-full rounded-2xl pl-10 pr-10 text-base",
+  "search-own-clear h-12 w-full rounded-card pl-10 pr-10 text-base",
 );
 
 export function SearchField({

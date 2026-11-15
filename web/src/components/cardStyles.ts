@@ -6,7 +6,13 @@
  */
 
 /** The resting border, shared by everything card-shaped. */
-export const cardChrome = "rounded-2xl border border-line";
+export const cardChrome = "rounded-card border border-line";
+
+/**
+ * A filled panel set into the page rather than bordered: a song's notes, the
+ * account details. Padding included, since every panel has the same.
+ */
+export const panelChrome = "rounded-card bg-panel p-4";
 
 /** The accent a card takes under the pointer, for the cards that are links. */
 export const cardHover = "transition-colors hover:border-line-accent hover:bg-accent-subtle";

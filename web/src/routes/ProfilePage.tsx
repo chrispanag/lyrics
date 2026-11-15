@@ -8,6 +8,7 @@ import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { Button, ErrorMessage, Field, Input, Sheet, Spinner } from "@/components/ui";
 import { buttonClasses } from "@/components/buttonStyles";
+import { panelChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
 import type { Identity } from "@/lib/avatar";
 import { cn } from "@/lib/cn";
@@ -164,7 +165,7 @@ export function ProfilePage() {
         </div>
       )}
 
-      <dl className="mb-6 space-y-2 rounded-2xl bg-panel p-4 text-sm">
+      <dl className={cn(panelChrome, "mb-6 space-y-2 text-sm")}>
         <div className="flex justify-between gap-3">
           <dt className="text-fg-tertiary">Email</dt>
           <dd className="truncate font-medium">{user.email}</dd>
@@ -245,7 +246,7 @@ function PictureButton({
           // Straddles the perimeter: inside it covers the face.
           "absolute -right-0.5 -bottom-0.5 flex size-8 items-center justify-center rounded-full",
           // The ring is the body's ground color, so it reads as a bite out of the circle.
-          "bg-accent text-white ring-2 ring-canvas transition-colors",
+          "bg-accent text-fg-on-fill ring-2 ring-canvas transition-colors",
           !busy && "group-hover:bg-accent-hover group-active:bg-accent-active",
         )}
       >
@@ -363,13 +364,16 @@ function ThemeToggle({
   return (
     <div className={className}>
       <SectionHeading id={`${id}-heading`}>Appearance</SectionHeading>
-      <fieldset aria-labelledby={`${id}-heading`} className="flex gap-1 rounded-xl bg-muted p-1">
+      <fieldset
+        aria-labelledby={`${id}-heading`}
+        className="flex gap-1 rounded-control bg-muted p-1"
+      >
         {THEME_OPTIONS.map((option) => (
           <label
             key={option.value}
             className={cn(
-              "flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors",
-              theme === option.value ? "bg-canvas text-fg shadow-sm" : "text-fg-tertiary",
+              "flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-compact text-sm font-medium transition-colors",
+              theme === option.value ? "bg-canvas text-fg shadow-raised" : "text-fg-tertiary",
             )}
           >
             <input

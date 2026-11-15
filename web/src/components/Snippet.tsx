@@ -16,7 +16,9 @@ export function Snippet({ text, className }: { text: string; className?: string 
         // biome-ignore lint/suspicious/noArrayIndexKey: segments are re-derived whole from the text and never reorder.
         <Fragment key={index}>
           {segment.highlighted ? (
-            <mark className="rounded bg-highlight px-0.5 font-medium text-fg">{segment.text}</mark>
+            <mark className="rounded-inline bg-highlight px-0.5 font-medium text-fg">
+              {segment.text}
+            </mark>
           ) : (
             segment.text
           )}
