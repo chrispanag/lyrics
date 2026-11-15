@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
         -o /out/ ./cmd/api ./cmd/migrate
 
 # --- runtime -----------------------------------------------------------------
-FROM alpine:3.25
+FROM alpine:3.24
 
 # ca-certificates is required: the API calls the Prelude Management API and
 # fetches the JWKS over TLS, both of which fail without a trust store.

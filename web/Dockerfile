@@ -1,7 +1,11 @@
 # syntax=docker/dockerfile:1
 
+# One value for both stages: node_modules built under one major and run under
+# another would build green.
+ARG NODE_VERSION=26
+
 # --- build -------------------------------------------------------------------
-FROM node:26-alpine AS build
+FROM node:${NODE_VERSION}-alpine AS build
 
 WORKDIR /app
 
@@ -46,7 +50,7 @@ RUN npm run build && rm -rf .next/cache
 # to a web server, and nginx.conf is gone with it. What it declared lives in
 # next.config.ts (the security headers) or is Next's own default (immutable
 # caching for /_next/static, no-store for documents, gzip).
-FROM node:26-alpine
+FROM node:${NODE_VERSION}-alpine
 
 WORKDIR /app
 ENV NODE_ENV=production
