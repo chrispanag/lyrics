@@ -5,14 +5,8 @@ import { makeRecording, makeSong } from "@/test/handlers";
 import { songJsonLd } from "./jsonLd";
 
 /*
- * The structured description of a song, and above all the escaping in it.
- *
- * This is the app's only `dangerouslySetInnerHTML` carrying contributor-typed
- * text, so the first case is the one that matters: it is a stored-XSS test, and
- * the failure it names is a lyric that closes the script tag and turns the rest
- * of the document into markup a contributor wrote. The rest pin the shape a
- * crawler reads, where being wrong is invisible from inside the app — nothing in
- * the product renders any of this.
+ * The first case is a stored-XSS test: a lyric must not close the script tag.
+ * The rest pin the shape a crawler reads, which nothing in the app renders.
  */
 
 const ADDRESS = "https://songfolio.live/songs/thalassa-platia";
@@ -31,13 +25,10 @@ describe("songJsonLd", () => {
 
     const body = songJsonLd(song, ADDRESS);
 
-    // The literal test, and it is the whole point: with `<` escaped there is no
-    // `<` left at all, so no tag can be closed and no comment opened — whatever
-    // case, spacing or trailing junk the payload used.
+    // No `<` at all, so no tag can be closed and no comment opened.
     expect(body).not.toContain("<");
     expect(body).toContain("\\u003c");
-    // And the escaping is a JSON escape rather than a mangling: the text the
-    // crawler reads back is exactly what the contributor typed.
+    // A JSON escape, not a mangling: the text round-trips.
     expect(parsed(song, ADDRESS).lyrics.text).toBe(song.lyrics);
     expect(parsed(song, ADDRESS).name).toBe(song.title);
   });
@@ -70,14 +61,12 @@ describe("songJsonLd", () => {
     expect(parsed(song, ADDRESS).recordedAs).toEqual([
       {
         "@type": "MusicRecording",
-        // The song's title: a MusicRecording needs a name and a label is not
-        // one.
+        // A MusicRecording needs a name, and a label is not one.
         name: song.title,
         alternateName: "Live at Herodion",
         byArtist: [{ "@type": "Person", name: "Γιώργος Νταλάρας" }],
         datePublished: "1977",
-        // Built from the id, never from `youtube_url` — the same rule
-        // WatchOnYouTube keeps, and the reason both go through `watchUrl`.
+        // Built from the id, never from `youtube_url`.
         url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
       },
     ]);
@@ -88,10 +77,7 @@ describe("songJsonLd", () => {
 
     const data = parsed(bare, ADDRESS);
 
-    // An empty array is a positive claim that nobody wrote this song, and an
-    // empty CreativeWork a claim that the lyrics are known to be blank. Both are
-    // wrong about a catalog whose credits are mostly partial, and a crawler
-    // reads them as stated.
+    // Empty would be a positive claim (nobody wrote it, lyrics are blank).
     expect(data).not.toHaveProperty("composer");
     expect(data).not.toHaveProperty("lyricist");
     expect(data).not.toHaveProperty("recordedAs");

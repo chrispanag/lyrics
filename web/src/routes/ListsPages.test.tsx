@@ -11,8 +11,7 @@ import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
 /**
- * Serves each list by id, so a copy that navigates to its own page finds
- * something there rather than a 404 the spec would have to work around.
+ * Serves each list by id, so a copy navigating to its own page finds it.
  */
 function serveLists(...lists: ReturnType<typeof makeList>[]) {
   server.use(listById(...lists));
@@ -26,8 +25,7 @@ function renderDetail(
     <Routes>
       <Route path="/lists/:id" element={<ListDetailPage />} />
       <Route path="/login" element={<h1>Sign in</h1>} />
-      {/* Where a deleted list leaves its owner. Stubbed so that landing is
-          something a spec can see. */}
+      {/* Where a deleted list leaves its owner. */}
       <Route path="/lists" element={<h1>Your lists</h1>} />
     </Routes>,
     { route, ...options },
@@ -35,10 +33,8 @@ function renderDetail(
 }
 
 describe("ListDetailPage", () => {
-  // A request that goes out before the Prelude session is restored carries no
-  // token, so a private list answers 404 — and its owner is told, on every
-  // reload, that their own list does not exist. It cannot self-correct either:
-  // apiFetch retries a 401 with a fresh token, and this is deliberately not one.
+  // A tokenless request makes a private list 404 to its owner, and apiFetch
+  // retries only 401s. See CLAUDE.md, "Frontend".
   it("does not ask for a list until the session is known", async () => {
     let requested = 0;
     server.use(
@@ -54,9 +50,7 @@ describe("ListDetailPage", () => {
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
 
     expect(requested).toBe(0);
-    // And the wait must read as a wait: a disabled query is not "loading" to
-    // React Query, so the page has to hold the skeleton itself rather than fall
-    // through to reporting a list it never asked for as unavailable.
+    // A disabled query is not `isLoading`; the page must hold its own skeleton.
     expect(screen.queryByText(/not available/i)).not.toBeInTheDocument();
   });
 
@@ -81,13 +75,11 @@ describe("ListDetailPage sharing", () => {
 
     await user.click(await screen.findByRole("button", { name: /save to my lists/i }));
 
-    // The copy is its own list, so the page moves to it — that is what makes it
-    // editable rather than merely readable.
+    // The page moves to the copy, which the reader can edit.
     await waitFor(() => expect(screen.getByRole("button", { name: /delete list/i })).toBeInTheDocument());
   });
 
-  // Names are unique per owner, so copying the same list twice is a routine
-  // outcome the user can resolve, not an error to report and stop at.
+  // Names are unique per owner, so a second copy asks for a new name.
   it("asks for a new name when the copy collides with an existing list", async () => {
     const user = userEvent.setup();
     const source = makeList({ id: "list-1", owner_id: "someone-else", name: "Ρεμπέτικα" });
@@ -132,8 +124,6 @@ describe("ListDetailPage sharing", () => {
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
   });
 
-  // The order is the list, so an owner must be able to change it — and a reader
-  // must not be handed the affordance to try.
   it("lets the owner reorder their list and saves the new order", async () => {
     const user = userEvent.setup();
     const songs = [
@@ -165,8 +155,7 @@ describe("ListDetailPage sharing", () => {
     await waitFor(() => expect(posted).toEqual(["song-2", "song-1"]));
   });
 
-  // Two drags in quick succession race: the first response can land after the
-  // second, and reinstating it would undo a move the user already made.
+  // A stale first response landing after the second must not undo the move.
   it("keeps the newest order when an earlier save answers last", async () => {
     const user = userEvent.setup();
     const songs = [
@@ -214,8 +203,6 @@ describe("ListDetailPage sharing", () => {
     );
   });
 
-  // Both owner affordances are withheld by the same condition, so they are
-  // asserted together rather than from two specs with the same fixture.
   it("does not offer reordering or removal to someone reading a shared list", async () => {
     serveLists(
       makeList({
@@ -247,8 +234,7 @@ describe("ListDetailPage sharing", () => {
     expect(screen.queryByRole("button", { name: /save to my lists/i })).not.toBeInTheDocument();
   });
 
-  // Publishing is what makes a link work at all, so it is asked for rather than
-  // applied silently behind the share button.
+  // Publishing is asked for, never applied silently behind Share.
   it("asks the owner to publish a private list before handing out a link", async () => {
     const user = userEvent.setup();
     serveLists(makeList({ id: "list-1", owner_id: "user-1", is_public: false }));
@@ -274,12 +260,8 @@ describe("ListDetailPage sharing", () => {
 });
 
 /**
- * Serves one list that a removal actually changes.
- *
- * Nothing is written to the cache ahead of the answer, so the row leaves the
- * page only when the refetch that follows the DELETE returns a list without it.
- * A fixed fixture would keep serving the song back and every assertion below
- * would time out on a removal that had in fact worked.
+ * Serves one list that a removal actually changes: the row leaves only when the
+ * refetch after the DELETE omits it, so a fixed fixture would never let it go.
  */
 function serveRemovableList(list: ReturnType<typeof makeList>) {
   serveLists(list);
@@ -324,9 +306,7 @@ describe("ListDetailPage removal", () => {
     expect(screen.getByText("Second")).toBeInTheDocument();
   });
 
-  // A list of one has nothing to reorder, so it renders without the drag
-  // machinery — and that is the rendering that has to carry the removal too, or
-  // the last song in a list can never be taken out of it.
+  // A list of one renders without drag machinery and must still offer removal.
   it("offers removal on a list of one, where there is nothing to reorder", async () => {
     const user = userEvent.setup();
     serveRemovableList(
@@ -348,8 +328,7 @@ describe("ListDetailPage removal", () => {
     expect(await screen.findByText(/this list is empty/i)).toBeInTheDocument();
   });
 
-  // Nothing is removed from the page ahead of the answer, so a failure leaves
-  // the song where it is — and has to say so, or the tap reads as ignored.
+  // A failure leaves the song in place and must say so.
   it("keeps the song and reports the failure when the removal is refused", async () => {
     const user = userEvent.setup();
     serveLists(
@@ -375,9 +354,7 @@ describe("ListDetailPage removal", () => {
   });
 });
 
-// The confirmation is `ConfirmSheet`, shared with the song and genre deletes.
-// Neither of the two older sheets had a spec when it was extracted, so this and
-// its counterpart in SongDetailPage are what keep the shared component honest.
+// Exercises the shared `ConfirmSheet`, as does SongDetailPage's delete spec.
 describe("ListDetailPage deletion", () => {
   it("asks before deleting a list, and deletes the one it named", async () => {
     serveLists(makeList({ id: "list-1", owner_id: "user-1", name: "Ρεμπέτικα" }));

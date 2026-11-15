@@ -49,12 +49,8 @@ describe("Snippet", () => {
     expect(mark.tagName).toBe("MARK");
   });
 
-  /*
-   * The security property this whole design exists for. PostgreSQL's
-   * ts_headline returns the source lyrics verbatim, so markup a contributor
-   * typed arrives here untouched. Because the component renders text nodes
-   * rather than parsing HTML, that markup can only ever be displayed.
-   */
+  // ts_headline returns lyrics verbatim, so contributor markup arrives here and
+  // must only ever be displayed.
   it("renders markup in lyrics as text, never as elements", () => {
     const { container } = render(
       <Snippet text={`innocent <img src=x onerror=alert(1)> ⟦θάλασσα⟧ here`} />,

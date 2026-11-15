@@ -38,9 +38,8 @@ export function PersonAutocomplete({
   const blurTimer = useRef<number | undefined>(undefined);
 
   const query = useDebounced(value.name, 200);
-  // Keeping the previous page of suggestions on screen while the next request
-  // is in flight is what stops the listbox unmounting and remounting once per
-  // debounce pause — the same treatment useSongs and useUsers already get.
+  // Keeps the previous suggestions up while the next request is in flight, so
+  // the listbox does not remount on every debounce pause.
   const { data } = usePeople(query, {
     enabled: open && query.trim().length > 0,
     placeholderData: (previous) => previous,
@@ -80,11 +79,8 @@ export function PersonAutocomplete({
           blurTimer.current = window.setTimeout(() => setOpen(false), 150);
         }}
         onKeyDown={(event) => {
-          // Enter is handled before the "nothing to pick" bail-out. This field
-          // sits inside the song form, so letting Enter through submitted the
-          // whole editor — which is never what someone typing a credit name
-          // means, and it happened on every keystroke path because `highlighted`
-          // resets to -1 as soon as the text changes.
+          // Before the bail-out below: this field sits inside the song form, and
+          // an Enter let through would submit the whole editor.
           if (event.key === "Enter") {
             event.preventDefault();
             const person = open && highlighted >= 0 ? suggestions[highlighted] : undefined;

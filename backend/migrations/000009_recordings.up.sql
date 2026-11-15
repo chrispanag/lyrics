@@ -1,46 +1,31 @@
 -- Recordings (εκτελέσεις): the performances of a song, each with its own
 -- performers, YouTube link and year.
 --
--- A song is a work — a title, lyrics, and the people who wrote them. Who
--- *performed* it, when, and where to watch it are properties of a recording,
--- and a Greek song typically has several. Before this migration the schema
--- could hold exactly one of each, so a song with three well-known recordings
--- had to pick one and discard the rest.
+-- A song is the work; performers, year and link belong to a recording, and a
+-- song may have several.
 --
--- Two consequences shape everything below.
+-- The `artist` and `performer` roles move to recordings, and `song_credits`
+-- narrows to composer and lyricist.
 --
--- First, the `artist` and `performer` credit roles were describing a
--- performance, not the work, so they move to a recording and `song_credits`
--- narrows to composer and lyricist. The CHECK is tightened rather than left
--- permissive: an `artist` row written after this point would be attribution
--- that no screen reads and no search finds.
---
--- Second, `songs.youtube_url`, `songs.youtube_video_id` and
--- `songs.release_year` stay — as denormalized read-only copies of the *first*
--- recording, maintained by trigger exactly like `credits_text`. That is what
--- keeps the browse year filters, the catalog sort and the card's video badge
--- working without a single query changing. Nothing else may write them; see
--- refresh_songs_denorm below.
+-- `songs.youtube_url`, `youtube_video_id` and `release_year` stay as
+-- trigger-maintained copies of the *first* recording. Nothing else may write
+-- them; see CLAUDE.md, "Recordings".
 
 CREATE TABLE recordings (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   song_id           uuid        NOT NULL REFERENCES songs (id) ON DELETE CASCADE,
 
-  -- A short free-text name for the performance: the album it appeared on, or a
-  -- descriptor like "Live στο Λυκαβηττό". Optional, because most recordings are
-  -- identified by their performers and year alone.
+  -- Optional free-text name: an album, or "Live στο Λυκαβηττό".
   label             text,
 
   youtube_url       text,
   youtube_video_id  text,
-  -- Mirrors songs.release_year's bound, since this is now where the year a
-  -- reader sees actually comes from.
+  -- Same bound as songs.release_year.
   release_year      int         CHECK (release_year BETWEEN 1000 AND 2200),
   notes             text,
 
-  -- Whether this is the song's original recording. It is a claim about history,
-  -- not a position: a contributor who does not know which came first leaves it
-  -- false on all of them, and the ordering below falls back to the year.
+  -- A claim about history, not a position: may be false on every recording,
+  -- and the ordering below then falls back to the year.
   is_first          boolean     NOT NULL DEFAULT false,
   position          int         NOT NULL DEFAULT 0,
 
@@ -50,21 +35,16 @@ CREATE TABLE recordings (
 
 CREATE INDEX recordings_song_idx ON recordings (song_id, position);
 
--- At most one first recording per song. A partial unique index rather than a
--- CHECK, because the rule spans rows: a CHECK sees only the row being written
--- and would pass every second `true`.
+-- At most one first recording per song. Not a CHECK: the rule spans rows.
 CREATE UNIQUE INDEX recordings_one_first_per_song ON recordings (song_id) WHERE is_first;
 
 CREATE TRIGGER recordings_set_updated_at
   BEFORE UPDATE ON recordings
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- The performers of one recording. No role column: everyone credited here
--- performed it, which is the whole distinction from song_credits.
---
--- person_id is RESTRICT for the same reason song_credits' is: deleting a person
--- must fail loudly rather than silently stripping attribution. The store maps
--- the violation to ErrInUse already, so this needs no Go change.
+-- The performers of one recording; no role column. person_id is RESTRICT like
+-- song_credits', so deleting a credited person fails rather than stripping
+-- attribution.
 CREATE TABLE recording_credits (
   recording_id uuid NOT NULL REFERENCES recordings (id) ON DELETE CASCADE,
   person_id    uuid NOT NULL REFERENCES people (id)     ON DELETE RESTRICT,
@@ -81,31 +61,21 @@ COMMENT ON COLUMN recordings.is_first IS
 COMMENT ON TABLE recording_credits IS
   'Performers of a recording. Roleless by design: song_credits holds authorship, this holds performance.';
 
--- Recompute the denormalized columns, now five of them.
+-- credits_text must include recording performers, or fuzzy artist search
+-- cannot find a song by its singer.
 --
--- credits_text gains the recording performers, which is not optional: it feeds
--- the search vector at weight B and the trigram index behind fuzzy artist
--- matching, so leaving performers out would make every song findable by its
--- composer and none by the singer everybody knows it for.
+-- The ORDER BY defines "first" and must match the recordings query in
+-- attachRelations (backend/internal/store/songs.go);
+-- TestFirstRecordingRuleHasOneAuthority pins them.
 --
--- The three first-recording copies are the second half. The ORDER BY is the
--- definition of "first" and it exists in exactly one other place — the
--- recordings query in attachRelations (backend/internal/store/songs.go), which
--- is what hands clients an already-ordered list so nothing re-derives the rule.
--- The two must agree; a test pins them against each other.
---
--- A song with no recordings yields no row from that sub-SELECT, and PostgreSQL
--- assigns NULL to all three targets. That is deliberate: removing a song's last
--- recording takes its year and video away, which is the truth about it.
+-- A song with no recordings gets NULL in all three copies, deliberately.
 CREATE OR REPLACE FUNCTION refresh_songs_denorm(p_song_ids uuid[]) RETURNS void
 LANGUAGE sql AS $$
   UPDATE songs s SET
     credits_text = coalesce((
       SELECT string_agg(name, ' ' ORDER BY name)
       FROM (
-        -- UNION, not UNION ALL: a person who both wrote and performed a song
-        -- must appear once, which is what migration 000005 established and why
-        -- it is restated here rather than nested.
+        -- UNION, not UNION ALL: someone who wrote and performed a song is one name.
         SELECT p.name
         FROM song_credits sc
         JOIN people p ON p.id = sc.person_id
@@ -147,10 +117,8 @@ BEGIN
 END;
 $$;
 
--- recording_credits carries no song_id, so the song is resolved through
--- recordings. During a cascade the recording may already be gone and the lookup
--- comes back empty — which is correct, not a miss: the recordings trigger has
--- fired for that song already.
+-- The song is resolved through recordings. During a cascade the recording may
+-- already be gone; that is fine, since the recordings trigger has fired.
 CREATE OR REPLACE FUNCTION songs_denorm_from_recording_credits() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -165,9 +133,8 @@ BEGIN
 END;
 $$;
 
--- A renamed person must reindex the songs they appear on through *either*
--- table. Left reading song_credits alone, correcting a singer's spelling
--- silently failed to make them searchable under it.
+-- A rename must reindex songs through *both* tables, or a corrected singer's
+-- spelling never becomes searchable.
 CREATE OR REPLACE FUNCTION songs_denorm_from_person_rename() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -185,29 +152,16 @@ BEGIN
 END;
 $$;
 
--- Backfill: one first recording for every song that has anything
--- recording-shaped about it — performers, a link, or a year. A song with none
--- of the three gets no recording, because there would be nothing in it.
+-- Backfill: one first recording for every song with performers, a link, or a
+-- year.
 --
--- The functions above are already installed at this point, deliberately: the
--- DELETE further down fires the credits trigger for every moved row, and a
--- function that did not yet know about recordings would write a credits_text
--- with the performers missing. The final rebuild would repair it, but there is
--- no reason to pass through a wrong state on the way.
+-- The functions above are installed first so the DELETE below, which fires the
+-- credits trigger, already writes performers into credits_text. The new
+-- tables' triggers are created after this block: row by row they would only
+-- duplicate the final rebuild, and the file runs as one transaction.
 --
--- The two *triggers* on the new tables are created after this block for the
--- opposite reason: row-level, they would refresh a song once per inserted
--- recording and once per inserted performer — roughly 1,800 full-song rewrites,
--- each recomputing a tsvector over the whole lyrics — and the rebuild at the end
--- makes every one of them dead work. Nothing observes the gap: the file runs as
--- one implicit transaction, and that rebuild closes it.
---
--- youtube_video_id is in the predicate as well as the URL, and it is not
--- redundant: both writers of that pair set them together, so an id without a
--- link is a state nothing produces today — but this is the one moment such a
--- row could be rescued, and left out of the test it would get no recording and
--- the rebuild at the end would then null the id it was the only record of. A
--- column this block copies has to be a column it looks at.
+-- youtube_video_id is in the predicate too: an id without a URL would
+-- otherwise get no recording and be nulled by the rebuild.
 WITH source AS (
   SELECT s.id AS song_id, s.youtube_url, s.youtube_video_id, s.release_year
   FROM songs s
@@ -225,10 +179,8 @@ new_recordings AS (
   FROM source
   RETURNING id, song_id
 ),
--- A person credited as both artist and performer on one song is one performer:
--- the primary key is (recording_id, person_id) and would refuse the second row.
--- DISTINCT ON keeps the artist-role row, whose position is the stronger signal
--- of intended order.
+-- An artist-and-performer on one song is one performer (the primary key would
+-- refuse a second row). DISTINCT ON keeps the artist row's position.
 moved AS (
   SELECT DISTINCT ON (nr.id, sc.person_id)
          nr.id AS recording_id,
@@ -239,8 +191,7 @@ moved AS (
   FROM new_recordings nr
   JOIN song_credits sc ON sc.song_id = nr.song_id AND sc.role IN ('artist', 'performer')
   JOIN people p        ON p.id = sc.person_id
-  -- role_rank, not a second copy of its CASE: the DISTINCT ON tie-break and the
-  -- rank the row_number() below orders by have to be the same expression.
+  -- role_rank, not a copy of the CASE: row_number() below must order the same way.
   ORDER BY nr.id, sc.person_id, role_rank, sc.position
 )
 INSERT INTO recording_credits (recording_id, person_id, position)
@@ -251,8 +202,6 @@ SELECT recording_id,
        row_number() OVER (PARTITION BY recording_id ORDER BY role_rank, old_position, name) - 1
 FROM moved;
 
--- The second half of the move. Everything worth keeping is in
--- recording_credits now.
 DELETE FROM song_credits WHERE role IN ('artist', 'performer');
 
 -- Narrow song credits to authorship. The inline CHECK from 000002 took
@@ -269,8 +218,5 @@ CREATE TRIGGER recording_credits_denorm
   AFTER INSERT OR UPDATE OR DELETE ON recording_credits
   FOR EACH ROW EXECUTE FUNCTION songs_denorm_from_recording_credits();
 
--- Rebuild every row, so credits_text and the three first-recording columns are
--- right regardless of how the backfill above left them (000005 precedent). This
--- is also what stands in for the trigger firings the backfill deliberately ran
--- without.
+-- Rebuild every row; this also stands in for the trigger firings skipped above.
 SELECT refresh_songs_denorm(ARRAY(SELECT id FROM songs));

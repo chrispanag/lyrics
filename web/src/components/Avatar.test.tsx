@@ -11,8 +11,6 @@ describe("Avatar", () => {
     expect(screen.getByText("ΜΚ")).toBeInTheDocument();
   });
 
-  // The fallback still has to say something for an account that never set a
-  // name, which is most of them until someone visits their profile.
   it("falls back to the email when there is no name either", () => {
     render(<Avatar user={makeUser({ display_name: null, email: "singer@example.com" })} />);
 
@@ -24,16 +22,14 @@ describe("Avatar", () => {
 
     render(<Avatar user={user} />);
 
-    // Written out rather than composed the way the code composes it, so the
-    // assertion cannot pass by making the same mistake twice.
+    // Written out, not composed like the code, so one mistake cannot pass twice.
     expect(screen.getByRole("presentation")).toHaveAttribute(
       "src",
       `${API}/api/v1/users/${user.id}/avatar?v=2026-08-22T20%3A00%3A00Z`,
     );
   });
 
-  // The address of a picture never changes, so the version in the query string
-  // is the only thing that makes a replacement visible.
+  // The version in the query string is the only thing that busts the cache.
   it("changes the address when the picture is replaced", () => {
     const { rerender } = render(
       <Avatar user={makeUser({ avatar_updated_at: "2026-08-22T20:00:00Z" })} />,
@@ -45,25 +41,19 @@ describe("Avatar", () => {
     expect(screen.getByRole("presentation").getAttribute("src")).not.toBe(before);
   });
 
-  // The picture a page is about must not wait behind its layout, and on the
-  // profile screen it is also the element the upload flow watches change.
   it("loads a page's focal picture eagerly", () => {
     render(<Avatar user={makeUser({ avatar_updated_at: "2026-08-22T20:00:00Z" })} size="lg" />);
 
     expect(screen.getByRole("presentation")).toHaveAttribute("loading", "eager");
   });
 
-  // The other half of the same decision: a page of admin rows is fifty of these,
-  // most of them below the fold, which is what deferring is for.
   it("leaves a picture in a list of rows lazy", () => {
     render(<Avatar user={makeUser({ avatar_updated_at: "2026-08-22T20:00:00Z" })} size="md" />);
 
     expect(screen.getByRole("presentation")).toHaveAttribute("loading", "lazy");
   });
 
-  // Keyed on the record rather than on the image having loaded: a picture that
-  // fails to load is a picture, and initials underneath it would be worse than
-  // an empty circle.
+  // A picture that fails to load is still a picture; no initials underneath.
   it("decides from the record, not from the response", () => {
     render(<Avatar user={makeUser({ display_name: "Never Shown", avatar_updated_at: "2026-01-01T00:00:00Z" })} />);
 

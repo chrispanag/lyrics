@@ -2,22 +2,17 @@
 #
 # Create or update the DigitalOcean App Platform app described by .do/app.yaml.
 #
-# The tracked spec carries placeholders where credentials belong; this fills
-# them in from .env at request time, so no secret is ever written to a file that
-# could be committed. Values reach the API and the helpers below through stdin
-# and the environment rather than argv, which keeps them out of `ps`.
+# Fills the spec's placeholders from .env at request time, so no secret is
+# written to a tracked file. Values travel via stdin and env, never argv (`ps`).
 #
 # Usage:
 #   DIGITALOCEAN_ACCESS_TOKEN=dop_v1_... ./scripts/deploy-do.sh --validate
 #   DIGITALOCEAN_ACCESS_TOKEN=dop_v1_... ./scripts/deploy-do.sh
 #
-# --validate stops after the API's own dry run (POST /v2/apps/propose), which
-# checks the spec, the repository access and the resulting bill without creating
-# anything. The plain form validates first and then applies: it creates the app
-# when no app of this name exists, and updates it in place when one does.
+# --validate stops after the API's dry run (POST /v2/apps/propose). The plain
+# form validates, then creates the app or updates it in place.
 #
-# The token may also live in .env, which is where every other credential here
-# comes from and is already ignored by git.
+# The token may also live in .env.
 
 set -euo pipefail
 
@@ -45,13 +40,10 @@ python3 -c 'import yaml' 2>/dev/null || {
 	exit 1
 }
 
-# --- helpers -----------------------------------------------------------------
-#
-# The readers below take their program from -c rather than a heredoc: a heredoc
-# occupies stdin, which is where the data they are meant to read arrives.
+# The readers below take their program from -c, not a heredoc: their data
+# arrives on stdin, which a heredoc would occupy.
 
-# Renders the spec to JSON on stdout, substituting every placeholder. Nothing is
-# piped in, so this one can afford the more legible heredoc form.
+# Renders the spec to JSON on stdout, substituting every placeholder.
 render_spec() {
 	python3 <<'PY'
 import json
@@ -60,12 +52,9 @@ import sys
 
 import yaml
 
-# Which environment variable supplies each placeholder. The frontend's app id and
-# session domain are the same values as the backend's under a NEXT_PUBLIC_ name,
-# because Next only exposes variables carrying that prefix — and for the session
-# domain that shared source is load-bearing, not a convenience: the token issuer
-# follows whichever host the browser authenticates against, so the two copies
-# disagreeing means every login is rejected.
+# Which environment variable supplies each placeholder. Both session domains
+# must come from one source: the issuer is per-host, so a mismatch rejects
+# every login.
 SOURCES = {
     "PRELUDE_APP_ID": "PRELUDE_APP_ID",
     "PRELUDE_API_KEY": "PRELUDE_API_KEY",
@@ -77,10 +66,7 @@ SOURCES = {
     "NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID": "PRELUDE_OTP_LOGIN_CONFIG_ID",
 }
 
-# The session client works without an SDK key, so an empty one is not a failure.
-# It is still reported, on the line below: "optional and empty" and "renamed in
-# .env and therefore empty" are the same thing from here, and the second is how
-# a build silently ships without a value this script is the only guard for.
+# Empty is allowed but warned about: a variable renamed in .env looks the same.
 OPTIONAL = {"NEXT_PUBLIC_PRELUDE_SDK_KEY"}
 
 PLACEHOLDER = "SET_BY_DEPLOY_SCRIPT"
@@ -149,13 +135,9 @@ sys.stdout.write(json.dumps(parsed) if parsed is not None else body)
 '
 }
 
-# --- find the app ------------------------------------------------------------
-
 APP_NAME="$(python3 -c 'import os, yaml; print(yaml.safe_load(open(os.environ["SPEC"]))["name"])')"
 export APP_NAME
 
-# The app is looked up by name every run rather than recorded here: its id lives
-# only in DigitalOcean, so there is no local copy to fall out of date.
 APP_ID="$(do_api GET "/apps?per_page=200" | check_response | python3 -c '
 import json
 import os
@@ -168,8 +150,6 @@ print(next((a["id"] for a in apps if a["spec"]["name"] == name), ""))
 export APP_ID
 
 SPEC_JSON="$(render_spec)"
-
-# --- validate ----------------------------------------------------------------
 
 if [[ -n "$APP_ID" ]]; then
 	echo "==> $APP_NAME exists ($APP_ID); validating an update"
@@ -187,8 +167,7 @@ else
 	PROPOSAL="$SPEC_JSON"
 fi
 
-# propose is the API's own dry run: it rejects an invalid spec, reports whether
-# the repository is reachable, and prices the result — without creating a thing.
+# propose is a dry run: it validates the spec and repo access and prices it.
 do_api POST "/apps/propose" --data-binary @- <<<"$PROPOSAL" | check_response | python3 -c '
 import json
 import sys
@@ -201,8 +180,6 @@ if [[ "$VALIDATE_ONLY" == true ]]; then
 	echo "==> --validate given; nothing was created or changed"
 	exit 0
 fi
-
-# --- apply -------------------------------------------------------------------
 
 if [[ -n "$APP_ID" ]]; then
 	echo "==> updating $APP_NAME"

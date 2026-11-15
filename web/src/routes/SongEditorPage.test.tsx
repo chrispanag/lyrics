@@ -12,15 +12,9 @@ import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
 /**
- * Stands in for the song page the editor is opened from and returns to.
- *
- * It names the address it was reached at, because "the song page" is not what
- * these specs are about — *which* song page is, down to the query string that
- * says which list the song is being read from. The back control is here for the
- * same reason: whether an entry was pushed or replaced is invisible in the
- * address, and pressing Back is the only way to see it. It is the real
- * `BackButton`, the one the song page ships, so what these specs press is the
- * control a reader presses rather than a second opinion about what it does.
+ * Stands in for the song page the editor returns to. It names the address it
+ * was reached at, query included, and carries the real `BackButton`, since
+ * push versus replace is only visible by pressing Back.
  */
 function SongStub() {
   return (
@@ -52,8 +46,7 @@ async function save() {
 }
 
 describe("SongEditorPage", () => {
-  // The trail is what is pinned here, not the address alone: the address was
-  // right the whole time the duplicate entry made Back take two presses.
+  // Pins the trail, not just the address: a duplicate entry keeps the address right.
   it("returns a saved edit to the page it was opened from, list and all", async () => {
     server.use(savesTheSong);
     renderEditor({ route: ["/lists/list-1", "/songs/song-1?list=list-1", "/songs/song-1/edit"] });
@@ -77,16 +70,13 @@ describe("SongEditorPage", () => {
     expect(await screen.findByRole("heading", { name: "List page" })).toBeInTheDocument();
   });
 
-  // Opening the editor's address in a fresh tab is the one way in with nothing
-  // behind it. Popping there would leave the site, so the song is navigated to —
-  // and replaces the editor, or Back returns to a form already saved.
+  // A fresh tab has nothing behind it, so the editor replaces itself with the song.
   it("sends a deep-linked edit to the song and leaves no form behind it", async () => {
     server.use(savesTheSong);
     renderEditor({ route: "/songs/song-1/edit" });
 
     await save();
-    // The address it came in on, verbatim — which is what deriving the fallback
-    // from the route parameter buys, rather than building one from the song.
+    // The address it came in on, verbatim.
     expect(await screen.findByText("Address: /songs/song-1")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
@@ -102,9 +92,8 @@ describe("SongEditorPage", () => {
     expect(await screen.findByText("Address: /songs/song-1")).toBeInTheDocument();
   });
 
-  // The other half of that fallback, and the half with no song to name: the add
-  // form deep-linked into a fresh tab has neither a page behind it nor an id, so
-  // the catalog is where canceling has to land.
+  // The add form in a fresh tab has no song to fall back to, so cancel lands on
+  // the catalog.
   it("sends a deep-linked cancel on the add form to the catalog", async () => {
     renderEditor({ route: "/songs/new" });
 
@@ -113,9 +102,7 @@ describe("SongEditorPage", () => {
     expect(await screen.findByRole("heading", { name: "Catalog" })).toBeInTheDocument();
   });
 
-  // Adding a song is the one save that does not go back — the reader has to land
-  // on what they created, not on the catalog they opened the form from — so this
-  // one replaces its own entry, and Back reaches the catalog past the form.
+  // Adding a song lands on it, replacing the form, so Back reaches the catalog.
   it("replaces the add form with the song it created", async () => {
     server.use(http.post(`${API}/api/v1/songs`, () => HttpResponse.json(makeSong())));
     renderEditor({ route: ["/", "/songs/new"] });
@@ -123,19 +110,15 @@ describe("SongEditorPage", () => {
     await userEvent.type(await screen.findByLabelText("Title"), "Καινούριο");
     await userEvent.click(screen.getByRole("button", { name: "Add song" }));
 
-    // The created song's *slug*, not its id: a reader is landed on an address,
-    // and the fixture keeps a song's two identifiers deliberately different so
-    // this cannot pass against code that confuses them.
+    // The slug, not the id; the fixture keeps them distinct.
     expect(await screen.findByText("Address: /songs/thalassa-platia")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(await screen.findByRole("heading", { name: "Catalog" })).toBeInTheDocument();
   });
 
-  // Which shapes are recognized is `extractVideoId`'s own spec, in
-  // `lib/youtube.test.ts` — what these two pin is that a recording's link field
-  // is wired to it at all, in both directions. A field wired to nothing passes
-  // every shape spec in that file and previews neither of these.
+  // Link shapes are `lib/youtube.test.ts`'s; these pin that the field is wired to
+  // `extractVideoId` at all.
   it("previews a recognized link on a recording", async () => {
     renderEditor({ route: "/songs/new" });
 
@@ -163,10 +146,8 @@ describe("SongEditorPage", () => {
     expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
   });
 
-  // The payload was untested before recordings existed, and it is where every
-  // save-time rule lives: blank rows dropped, positions derived from the array,
-  // a person named by id or by name but never both — and, now, the absence of
-  // the two fields that moved onto recordings.
+  // Save-time rules: blank rows dropped, positions from the array, a person by id
+  // or by name but never both, and no song-level link or year.
   it("sends recordings, dropping blank rows and deriving positions", async () => {
     let body: SongInput | undefined;
     server.use(
@@ -203,15 +184,12 @@ describe("SongEditorPage", () => {
         performers: [{ name: "Γιώργος Νταλάρας", position: 0 }],
       },
     ]);
-    // The link and the year are the recording's now. Sent at the top level they
-    // are a 400, so their absence here is part of the contract rather than tidy.
+    // Sent at the top level, the link and year are a 400.
     expect(body).not.toHaveProperty("youtube_url");
     expect(body).not.toHaveProperty("release_year");
   });
 
-  // At most one recording may claim to be the first — the database enforces it
-  // with a unique index — so the control is a radio group and marking a second
-  // has to unmark the first rather than produce a payload the server refuses.
+  // At most one recording may be first, so marking a second unmarks the first.
   it("lets only one recording be marked as the first", async () => {
     let body: SongInput | undefined;
     server.use(
@@ -237,10 +215,7 @@ describe("SongEditorPage", () => {
     expect(body!.recordings.map((recording) => recording.is_first)).toEqual([false, true]);
   });
 
-  // All-false is a state the data really holds: the mark is a claim about
-  // history, and a contributor who cannot make it has to be able to say so. A
-  // radio group cannot be cleared by pressing a member again, hence the extra
-  // option.
+  // All-false is a real state, and a radio cannot be unpressed: hence "none".
   it("can leave every recording unmarked", async () => {
     let body: SongInput | undefined;
     server.use(
@@ -263,11 +238,8 @@ describe("SongEditorPage", () => {
     expect(body!.recordings[0]!.is_first).toBe(false);
   });
 
-  // A stored link this app cannot parse is a real thing — the importer kept
-  // whatever it was given — and the server carries such a value through a save
-  // that resends it unchanged. So the field must hydrate it verbatim and send it
-  // back untouched, with the preview simply staying dark: the preview is
-  // confirmation, never a gate.
+  // An unparseable stored link hydrates and resends verbatim; the preview stays
+  // dark and never gates the save.
   it("round-trips a stored link it cannot parse", async () => {
     const stored = "https://youtube.com/watch?feature=share";
     let body: SongInput | undefined;
@@ -295,10 +267,8 @@ describe("SongEditorPage", () => {
     expect(body!.recordings[0]!.youtube_url).toBe(stored);
   });
 
-  // The hydration gate is keyed on the song's id, not on the object: react-query
-  // hands back a fresh one on every refetch, and an effect that re-ran then
-  // would overwrite a recording being edited and reset the unsaved-changes
-  // guard with it.
+  // Hydration is keyed on the song's id: a refetch's fresh object must not
+  // overwrite unsaved edits.
   it("keeps an edited recording through a refetch", async () => {
     server.use(
       http.get(`${API}/api/v1/songs/song-1`, () =>
@@ -316,13 +286,8 @@ describe("SongEditorPage", () => {
     expect(screen.getByLabelText("Label")).toHaveValue("Live στο Λυκαβηττό");
   });
 
-  // A field error has to land on the row that earned it, and the row's index in
-  // the form is not the index the server counted: blank rows are dropped from
-  // the payload, so the server keys `recordings[0]` on what is Recording 2 here.
-  // Read by the draft index instead, the message appears under the empty row —
-  // which has no link in it at all — and the row that does looks fine. Both
-  // halves are asserted, because the wrong-row version satisfies "the message is
-  // on screen" perfectly.
+  // Blank rows are not sent, so the server's `recordings[0]` is Recording 2 here.
+  // Both rows are asserted: the error shown on the wrong row is still on screen.
   it("puts a recording's error on the row the server counted", async () => {
     server.use(
       http.post(`${API}/api/v1/songs`, () =>

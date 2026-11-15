@@ -26,10 +26,8 @@ import { scrollDown, setScrollY } from "@/test/scroll";
 import { server } from "@/test/server";
 
 /**
- * Stands in for the sign-in screen, showing where it would send the visitor back
- * to. It reads the address with `returnDestination`, which is what the real
- * screen reads it with, so the address it names here is the one a signed-in
- * visitor lands on rather than a second opinion about it.
+ * Stands in for the sign-in screen, naming where it would return the visitor,
+ * read with the real screen's `returnDestination`.
  */
 function SignInStub() {
   const { state } = useLocation();
@@ -41,12 +39,8 @@ function SignInStub() {
   );
 }
 
-// `scrollDown()` leaves the window at an offset that outlives the render, and
-// `StickyHeader` reads its starting point at mount — so every spec in this file
-// starts from the top, not just the ones that scroll. Reset in one describe
-// instead, a spec added after that one mounts a header that is already scrolled
-// and a later `scrollDown()` is no movement at all: the assertion passes without
-// having asked the header to move.
+// `scrollDown()`'s offset outlives the render and `StickyHeader` reads it at
+// mount, so every spec in the file starts from the top.
 beforeEach(() => setScrollY(0));
 
 function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
@@ -54,11 +48,8 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
     <Routes>
       <Route path="/songs/:id" element={<SongDetailPage />} />
       <Route path="/login" element={<SignInStub />} />
-      {/* The page a reader comes into a list from, and so the page Back has to
-          reach again — whether they read one song or ten. Whether a step pushed
-          or replaced is invisible in the address, so pressing Back is the only
-          way a spec can see it, and it carries the real `BackButton` for the one
-          spec that presses it from here rather than from the song. */}
+      {/* The list page Back has to reach again, with the real `BackButton`:
+          push versus replace is only visible by pressing Back. */}
       <Route
         path="/lists/:id"
         element={
@@ -68,8 +59,7 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
           </div>
         }
       />
-      {/* Where a deleted song leaves the reader, since the song they were on is
-          gone. Stubbed so that landing is something a spec can see. */}
+      {/* Where a deleted song leaves the reader. */}
       <Route path="/" element={<h1>Catalog</h1>} />
     </Routes>,
     { route: "/songs/song-1", ...options },
@@ -77,21 +67,10 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
 }
 
 /**
- * Drives a one-finger horizontal swipe across an element, in the client
- * coordinates that decide whether it is a swipe: where it starts across the
- * screen, and how far and which way it went.
- *
- * At module scope because two describes read it now: the list-paging specs, and
- * the recordings sheet's guard against being swiped through.
- *
- * jsdom lays nothing out, so none of this is measured — the coordinates are the
- * whole of what the listener reads, and `window.innerWidth` is the 1024 jsdom
- * reports. Dispatched on an element inside the song rather than on the article
- * itself, because the gesture is read across the whole page and has to arrive by
- * bubbling for that to be true.
- *
- * `fingers` is how many touches the move reports: a second one landing partway
- * through is a pinch, and the movement is no longer a swipe.
+ * Drives a one-finger horizontal swipe across an element in client coordinates
+ * (jsdom lays nothing out; `window.innerWidth` is 1024). Dispatched inside the
+ * song so it reaches the article by bubbling. `fingers` is the touch count the
+ * moves report; more than one is a pinch.
  */
 function swipe(
   target: Element,
@@ -117,8 +96,7 @@ describe("SongDetailPage", () => {
     expect(screen.getByText(/Στης θάλασσας τα βάθη/)).toBeInTheDocument();
   });
 
-  // The lyrics are stored as plain text with meaningful line breaks; losing
-  // them would run every verse together.
+  // Lyrics are plain text whose line breaks carry the verses.
   it("preserves line breaks in the lyrics", async () => {
     renderDetail();
 
@@ -169,13 +147,8 @@ describe("SongDetailPage", () => {
     expect(await screen.findByRole("link", { name: /edit/i })).toBeInTheDocument();
   });
 
-  // The video leaves the page entirely: no player, no thumbnail, nothing that
-  // loads from YouTube before someone asks for it.
-  //
-  // The fixture sets only the id, which is also the gate: `youtube_url` is
-  // stored unvalidated by the catalog importer, so the page must not reach for
-  // it. A page that regressed to reading the URL would fail here rather than
-  // quietly rendering whatever the old database held.
+  // A link out, nothing loaded from YouTube. The fixture sets only the id, the
+  // gate: the importer stores `youtube_url` unvalidated.
   it("links out to the video in a new tab instead of embedding it", async () => {
     server.use(
       http.get(`${API}/api/v1/songs/:id`, () =>
@@ -191,12 +164,8 @@ describe("SongDetailPage", () => {
     expect(container.querySelector("iframe")).toBeNull();
   });
 
-  // The other half of the gate, and the half that catches the URL being read
-  // back: the fixture here carries a `youtube_url` and no id, which is
-  // exactly the row the catalog importer leaves behind when the old database
-  // held a link it could not parse. Offering a link there would send a reader
-  // to whatever that text is, under a label promising YouTube — and the spec
-  // above cannot see it, since a page reading either field passes that one.
+  // The other half of the gate: a `youtube_url` with no id (an unparseable
+  // imported link) must offer nothing.
   it("offers no video link when the song has no video id", async () => {
     server.use(
       http.get(`${API}/api/v1/songs/:id`, () =>
@@ -212,8 +181,7 @@ describe("SongDetailPage", () => {
     expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
   });
 
-  // Saving is the reason to hold an account, so a guest is invited into it
-  // rather than shown a page with the affordance missing.
+  // A guest is offered Save and sent to sign in.
   it("offers saving to a guest and sends them to sign in", async () => {
     const user = userEvent.setup();
 
@@ -242,12 +210,7 @@ describe("SongDetailPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Song was not found.");
   });
 
-  // The same failure with the song already in hand, which is not the same
-  // failure at all: react-query refetches on every return to the tab, so this is
-  // a phone that lost signal mid-song. Taking the lyrics off the screen of
-  // somebody reading them, to report a request they never made, is worse than
-  // both of the things keeping them costs — a failed refresh says nothing, and a
-  // song deleted elsewhere stays readable here until the page is reloaded.
+  // A failed refetch with the song in hand keeps the lyrics on screen.
   it("keeps a song a reader already has when a refetch fails", async () => {
     const { queryClient } = renderDetail();
 
@@ -256,12 +219,8 @@ describe("SongDetailPage", () => {
     server.use(http.get(`${API}/api/v1/songs/:id`, () => notFound("Song was not found.")));
     await act(() => queryClient.refetchQueries({ queryKey: keys.song("song-1") }));
 
-    // The refusal has to reach a *render* before anything below means anything.
-    // The promise above resolves before react-query has told the page, so
-    // asserting straight after it passes against a page that has not heard yet —
-    // which is not a hypothetical: written that way, this spec passed with the
-    // guard it exists to pin put back. Pressing a control is the least contrived
-    // way to ask for that render, being what a reader still on the song does.
+    // The refetch promise resolves before the page re-renders, so a control is
+    // pressed first; asserting straight away passes even with `isError` back.
     await userEvent.click(screen.getByRole("button", { name: "Increase text size" }));
 
     expect(screen.getByRole("heading", { name: "Θάλασσα Πλατιά" })).toBeInTheDocument();
@@ -271,13 +230,8 @@ describe("SongDetailPage", () => {
 });
 
 /*
- * What is on screen before the song is.
- *
- * The chrome around a song is the same chrome for every song, so it stays while
- * one loads rather than being replaced by a grey block: a reader who stepped
- * into a song that is slow to arrive keeps the way back, the way into a list,
- * and — where they have one — the way to the editor. Only the song's own half
- * waits for the song.
+ * What is on screen before the song is: the chrome stays; only the song's own
+ * content waits.
  */
 describe("SongDetailPage while the song loads", () => {
   /** Serves the song only once the spec lets it through, answering with the release. */
@@ -306,10 +260,7 @@ describe("SongDetailPage while the song loads", () => {
     expect(await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" })).toBeInTheDocument();
   });
 
-  // A song in flight is a song with no error about it. `!song` is true for the
-  // whole of the wait, so the guard on the failure branch has to read the
-  // request rather than the absence — without it every song paints "not
-  // available" on its way in.
+  // `!song` holds for the whole wait, so the failure branch must read `isLoading`.
   it("does not report the song as unavailable while it is in flight", async () => {
     const release = serveHeldSong();
 
@@ -321,11 +272,8 @@ describe("SongDetailPage while the song loads", () => {
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
   });
 
-  // An admin can edit every song, so their row is decided without one. Asserted
-  // against a song somebody else wrote, which is the case `canEditSong` answers
-  // on the strength of the role alone — put its `!song` guard back in front of
-  // the admin check and this link appears only once the song lands, under the
-  // finger of an admin reaching for Save.
+  // `canEditSong` answers an admin before the song arrives; its admin check must
+  // stay ahead of the `!song` guard.
   it("offers an admin the editor before the song has arrived", async () => {
     const release = serveHeldSong(makeSong({ created_by: "someone-else" }));
 
@@ -340,7 +288,7 @@ describe("SongDetailPage while the song loads", () => {
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
   });
 
-  // The confirmation names the song, so there has to be a song to name.
+  // The confirmation names the song, so it waits for one.
   it("holds the delete control until there is a song for it to name", async () => {
     const release = serveHeldSong();
 
@@ -360,14 +308,8 @@ describe("SongDetailPage while the song loads", () => {
  */
 describe("SongDetailPage recordings", () => {
   /**
-   * A song with these recordings — and with the denormalized copies the server
-   * keeps in step with the first of them.
-   *
-   * Mirroring them is what makes the fixture a shape a real response can have:
-   * `refresh_songs_denorm` copies the first recording's year and link onto the
-   * song, and the page reads them off the song for exactly that reason. Setting
-   * only the recording described a row the database cannot hold, and a spec built
-   * on one asserts against a disagreement the schema forbids.
+   * A song with these recordings and the copies `refresh_songs_denorm` makes of
+   * the first one's year and link, as a real response has.
    */
   function withRecordings(recordings: Recording[]) {
     const first = recordings[0];
@@ -386,10 +328,8 @@ describe("SongDetailPage recordings", () => {
   }
 
   /**
-   * A two-song list where both songs have a recording, so the sheet can be
-   * opened on one of them and the page still has somewhere to page to. The
-   * guard specs below need both halves: without a list there is no paging to
-   * suppress, and the assertion would pass against a page that never moves.
+   * A two-song list where both have a recording, so the guard specs have paging
+   * to suppress.
    */
   function servePagedList() {
     const songs = [
@@ -403,8 +343,7 @@ describe("SongDetailPage recordings", () => {
     ];
     server.use(
       listById(makeList({ id: "list-1", name: "Ρεμπέτικα", songs, item_count: songs.length })),
-      // By either identifier, as the API answers: a song is addressed by its
-      // slug, and by its id for every link written before slugs existed.
+      // By slug or id, as the API answers.
       http.get(`${API}/api/v1/songs/:id`, ({ params }) => {
         const found = songs.find((song) => songMatchesRef(song, String(params.id)));
         return found ? HttpResponse.json(found) : notFound("Song was not found.");
@@ -425,8 +364,7 @@ describe("SongDetailPage recordings", () => {
     expect(screen.getByText("1971")).toBeInTheDocument();
   });
 
-  // The commonest recording in the catalog by a wide margin: a year, and nobody
-  // named. The row has to be absent rather than a label above an empty value.
+  // The commonest recording: a year and nobody named, so no "Performed by" row.
   it("omits the performers row when the recording names nobody", async () => {
     withRecordings([makeRecording({ performers: [] })]);
 
@@ -437,8 +375,7 @@ describe("SongDetailPage recordings", () => {
     expect(screen.getByText("1964")).toBeInTheDocument();
   });
 
-  // Both halves of the video gate, per recording this time, and they fail for
-  // different reasons — see the pair above for why one spec cannot cover both.
+  // Both halves of the video gate, per recording; see the pair above.
   it("builds the watch link from the first recording's video id", async () => {
     withRecordings([makeRecording({ youtube_video_id: "dQw4w9WgXcQ" })]);
 
@@ -472,11 +409,8 @@ describe("SongDetailPage recordings", () => {
     expect(screen.queryByRole("button", { name: /show all/i })).not.toBeInTheDocument();
   });
 
-  // The commonest row in the catalog, and the one every other sheet spec here
-  // steps past: a year, `is_first`, and nothing else. The year is the row's own
-  // text when there is neither a performer nor a label, so the column on the
-  // right has to stand down — rendered anyway it read "1964 First recording
-  // 1964", and no spec using the default fixture could see it.
+  // A row with only a year and `is_first`: the year is its text, so the right
+  // column must not repeat it.
   it("names a year-only recording once", async () => {
     const user = userEvent.setup();
     withRecordings([makeRecording({ performers: [], label: null, release_year: 1964 })]);
@@ -489,8 +423,7 @@ describe("SongDetailPage recordings", () => {
     expect(within(sheet).getAllByText("1964")).toHaveLength(1);
   });
 
-  // And the year is still shown beside a row that does have its own text, which
-  // is what stops the fix above from suppressing it everywhere.
+  // A row with its own text still shows the year beside it.
   it("still shows the year beside a named recording", async () => {
     const user = userEvent.setup();
     withRecordings([makeRecording({ release_year: 1971 })]);
@@ -525,14 +458,11 @@ describe("SongDetailPage recordings", () => {
     expect(within(sheet).getByText("Γιώργος Νταλάρας")).toBeInTheDocument();
     expect(within(sheet).getByText("Χάρις Αλεξίου")).toBeInTheDocument();
     expect(within(sheet).getByText("Live στο Λυκαβηττό")).toBeInTheDocument();
-    // The badge is on the marked recording and on nothing else. Keyed on index
-    // it would appear on the 1964 row here either way, so the assertion that
-    // matters is the count.
+    // The count matters: keyed on index, the badge would also be on the 1964 row.
     expect(within(sheet).getAllByText("First recording")).toHaveLength(1);
   });
 
-  // A recording nobody has claimed as the first gets no badge. The mark is a
-  // statement about history, and index 0 must not make it on a reader's behalf.
+  // No `is_first`, no badge: index 0 makes no claim.
   it("badges no recording when none is marked", async () => {
     const user = userEvent.setup();
     withRecordings([makeRecording({ is_first: false })]);
@@ -545,10 +475,8 @@ describe("SongDetailPage recordings", () => {
     expect(within(sheet).queryByText("First recording")).not.toBeInTheDocument();
   });
 
-  // Copies of the two guard specs the save sheet has. The sheet renders inside
-  // the article the swipe is read across, so both gestures reach it and both
-  // have to stand down — which they do by the `role="dialog"`/`aria-modal` pair
-  // `Sheet` writes and `lib/modal.ts` looks for.
+  // The sheet renders inside the swiped article, so paging must stand down for
+  // it via the modal marking `lib/modal.ts` reads.
   it("leaves the arrow keys to an open recordings sheet", async () => {
     const user = userEvent.setup();
     servePagedList();
@@ -575,8 +503,7 @@ describe("SongDetailPage recordings", () => {
     expect(screen.getByRole("heading", { name: "Θάλασσα Πλατιά" })).toBeInTheDocument();
   });
 
-  // Closing unmounts the control that opened it, so without the restore in
-  // `Sheet` a keyboard reader is dropped at the top of the document.
+  // Closing must return focus to the trigger.
   it("returns focus to the control that opened it", async () => {
     const user = userEvent.setup();
     withRecordings([makeRecording()]);
@@ -593,12 +520,7 @@ describe("SongDetailPage recordings", () => {
   });
 });
 
-/*
- * Reading a song from inside a list.
- *
- * The list is named by a query parameter rather than router state, so these
- * specs drive it the way a shared link does: by the URL alone.
- */
+/* Reading a song from inside a list, named by `?list=` in the URL alone. */
 describe("SongDetailPage inside a list", () => {
   const inList = [
     makeSong({ id: "song-1", slug: "first", title: "First" }),
@@ -607,12 +529,8 @@ describe("SongDetailPage inside a list", () => {
   ];
 
   /**
-   * Serves list-1 with the given songs, and every song by id.
-   *
-   * Both are needed together: a spec that pages forward asks for a song the
-   * default handler would answer with the one it always returns, and the whole
-   * point is that the reader arrives at a different one. Only the songs half is
-   * local — a list by id is what every list spec needs, so it is shared.
+   * Serves list-1 with the given songs, and each song by ref, since the default
+   * handler always answers with the same song.
    */
   function serveList(songs = inList) {
     server.use(
@@ -624,13 +542,8 @@ describe("SongDetailPage inside a list", () => {
     );
   }
 
-  // Asked of both addresses, because a song has two and a shared list link may
-  // hold either: the slug is what every link written from here on says, and the
-  // id is what the ones already out there say. `listPosition` finds the song by
-  // either, and if it ever stops doing so the failure is silent — the page
-  // renders perfectly and the list bar, the swipe and the arrow keys are simply
-  // not there. Parameterized rather than written twice so an assertion cannot be
-  // changed in one copy and not the other.
+  // Both addresses: shared links hold either, and `listPosition` missing one
+  // silently drops the bar, swipe and arrow keys.
   it.each([
     ["by id", "/songs/song-2?list=list-1"],
     ["by slug", "/songs/second?list=list-1"],
@@ -646,8 +559,7 @@ describe("SongDetailPage inside a list", () => {
     expect(screen.getByText("2 of 3")).toBeInTheDocument();
   });
 
-  // The context has to survive the step, or the second song is a dead end — which
-  // is the whole failure this exists to prevent.
+  // `?list=` must survive the step.
   it("steps to the next song and stays in the list", async () => {
     const user = userEvent.setup();
     serveList();
@@ -661,13 +573,8 @@ describe("SongDetailPage inside a list", () => {
   });
 
   /*
-   * Back is the way out of the list, and the trail is the only place that shows
-   * it: the address is right either way, and it was right the whole time pushed
-   * entries made leaving a twenty-song list twenty presses of one control.
-   *
-   * Asserted of each of the three ways through a list, since each says "replace"
-   * in its own way — a prop on the bar's links, an option on the two `navigate`
-   * calls — so one of them regressing is invisible in the other two.
+   * Steps through a list replace, so one Back leaves it. Only the trail shows
+   * that, and each way through says `replace` separately, so each is asserted.
    */
 
   /** One press of the page's own Back, and the list is behind the reader. */
@@ -676,8 +583,7 @@ describe("SongDetailPage inside a list", () => {
     expect(await screen.findByRole("heading", { name: "List page" })).toBeInTheDocument();
   }
 
-  // Two steps rather than one, because the claim is that the trail does not grow
-  // however far a reader reads.
+  // Two steps: the trail must not grow.
   it("leaves the list on the first Back press, however far the reader stepped", async () => {
     const user = userEvent.setup();
     serveList();
@@ -705,11 +611,8 @@ describe("SongDetailPage inside a list", () => {
     await backLeavesTheList(user);
   });
 
-  // The exception, and the only claim of the three that a step *not* replacing
-  // would satisfy: the list's own name is a link to another page rather than a
-  // step through this one. Given `replace` "for consistency with the arrows" it
-  // would leave a reader who came from that list holding two identical entries,
-  // and a Back press that appears not to move.
+  // The exception: the list's name pushes. Replacing would leave two identical
+  // list entries and a Back that appears not to move.
   it("keeps the song behind the list when the bar's own name is pressed", async () => {
     const user = userEvent.setup();
     serveList();
@@ -724,9 +627,7 @@ describe("SongDetailPage inside a list", () => {
     expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
   });
 
-  // The bar says where the reader is in the list, and the address already says
-  // it — so a step through the list keeps the bar up while the next song loads
-  // instead of dropping it and drawing it again a moment later.
+  // The bar comes from the address, so it stays up while the next song loads.
   it("keeps the list navigation up while the next song loads", async () => {
     serveList();
     const [held, release] = deferred();
@@ -740,7 +641,7 @@ describe("SongDetailPage inside a list", () => {
 
     renderDetail({ route: "/songs/song-2?list=list-1" });
 
-    // The list is what the bar is drawn from, and it is not the slow half.
+    // The list is not the slow half.
     expect(await screen.findByText("2 of 3")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Next song" })).toBeInTheDocument();
 
@@ -749,11 +650,8 @@ describe("SongDetailPage inside a list", () => {
     expect(screen.getByText("2 of 3")).toBeInTheDocument();
   });
 
-  // The mark that explains the swipe is shown once per device, the moment it is
-  // on screen — so it must not be built over a song that has not arrived, which
-  // may yet turn out to be a song that never does. Asserted as the mark being
-  // watched by nobody rather than as the pill being absent: unspent, the pill is
-  // rendered invisible and waiting, so its absence is the whole of the claim.
+  // The once-per-device swipe mark must not be built before the song arrives.
+  // Asserted as nothing being observed, since an unspent pill renders invisibly.
   it("does not spend the swipe mark on a song still in flight", async () => {
     serveList();
     const [held, release] = deferred();
@@ -769,8 +667,7 @@ describe("SongDetailPage inside a list", () => {
 
     await screen.findByText("2 of 3");
     expect(observedElements()).toHaveLength(0);
-    // And a reader who scrolled — or a browser reporting the fold — spends
-    // nothing either, there being nothing observed to report on.
+    // Nothing observed, so an intersection spends nothing either.
     act(() => intersectAll());
     expect(localStorage.getItem("lyrics:swipe-hint-seen")).toBeNull();
 
@@ -791,10 +688,7 @@ describe("SongDetailPage inside a list", () => {
     expect(await screen.findByRole("heading", { name: "First" })).toBeInTheDocument();
   });
 
-  // An open sheet owns the arrow keys. The nav asks the DOM whether a modal is
-  // up rather than being handed a list of this page's sheets — a list the next
-  // sheet would not be on, and paging the song out from under an open one reads
-  // as a bug in the sheet.
+  // An open sheet owns the arrow keys; the nav asks the DOM via `lib/modal.ts`.
   it("leaves the arrow keys to an open sheet", async () => {
     const user = userEvent.setup();
     serveList();
@@ -819,10 +713,8 @@ describe("SongDetailPage inside a list", () => {
   });
 
   /**
-   * The middle song of the list, open, with the lyrics a thumb would be over.
-   *
-   * Every swipe spec starts here: it has a song on either side, so a gesture
-   * read the wrong way round is a different song rather than nothing at all.
+   * The middle song of the list, open: a gesture read the wrong way round lands
+   * on a different song rather than nowhere.
    */
   async function openSecond(options: Parameters<typeof renderDetail>[0] = {}) {
     serveList();
@@ -836,10 +728,7 @@ describe("SongDetailPage inside a list", () => {
     expect(screen.getByRole("heading", { name: "Second" })).toBeInTheDocument();
   }
 
-  // Left is onward, the way a page turns. This is what replaced the tap strips
-  // that used to stand in for the arrows on a phone: a swipe is a movement
-  // rather than a press, so it cannot take a tap meant for something else, and
-  // the page carries no invisible targets to keep controls clear of.
+  // Left is onward, the way a page turns.
   it("steps on with a swipe left across the song", async () => {
     swipe(await openSecond(), 500, 380);
 
@@ -852,9 +741,7 @@ describe("SongDetailPage inside a list", () => {
     expect(await screen.findByRole("heading", { name: "First" })).toBeInTheDocument();
   });
 
-  // The third of the three ways through a list, and the one a phone actually
-  // uses — so a swipe that pushed would put the whole trail back exactly where
-  // Back is the system gesture. See the trail specs above for why this matters.
+  // The swipe replaces too; see the trail specs above.
   it("leaves the list on the first Back press after a swipe", async () => {
     const user = userEvent.setup();
 
@@ -864,9 +751,7 @@ describe("SongDetailPage inside a list", () => {
     await backLeavesTheList(user);
   });
 
-  // Both screen edges are already spoken for — back and forward in Safari, the
-  // system's back gesture on Android — so a gesture that starts there would page
-  // the list *and* leave the page in the same movement.
+  // Screen edges belong to the browser's back/forward gestures.
   it("leaves a swipe that starts at the screen edge to the browser", async () => {
     const lyrics = await openSecond();
 
@@ -876,29 +761,22 @@ describe("SongDetailPage inside a list", () => {
     stillOnSecond();
   });
 
-  // Reading a song is vertical scrolling, which is this gesture with the axes
-  // swapped, so the two are told apart by which way the finger actually went.
+  // Vertical scrolling must not read as a swipe.
   it("leaves a drag that went mostly up or down alone", async () => {
     swipe(await openSecond(), 500, 400, { dy: -260 });
 
     stillOnSecond();
   });
 
-  // A second finger means a pinch, and the page belongs to it. One landing
-  // inside the song is already dropped by its own touchstart; this is the other
-  // one — a finger that goes down outside the article, where the only sign of it
-  // is the touch count on the moves of the finger that is still here.
+  // A second finger landing outside the article shows only in the moves' touch
+  // count; it is a pinch.
   it("drops the gesture when a second finger joins it", async () => {
     swipe(await openSecond(), 500, 380, { fingers: 2 });
 
     stillOnSecond();
   });
 
-  // A long press and a drag sideways ends exactly where a swipe ends and means
-  // the opposite of leaving. Compared against how the gesture started rather
-  // than simply read, so a selection made earlier and left on the page cannot
-  // quietly kill every swipe after it — which is why the selection is made
-  // *during* the gesture here.
+  // A selection made during the gesture means it was not a swipe.
   it("leaves a movement that selected text alone", async () => {
     const lyrics = await openSecond();
     const line = screen.getByText(/Στης θάλασσας τα βάθη/);
@@ -910,12 +788,8 @@ describe("SongDetailPage inside a list", () => {
     stillOnSecond();
   });
 
-  // The same movement from the other side, and the case a guard that only asked
-  // "is anything selected now" let through: a reader who already has a word
-  // selected and drags a handle sideways to grow it is not leaving either. What
-  // is compared is *what* is selected, so both are refused — otherwise this one
-  // pages the song and takes the selection and the reader's place in the list
-  // with it.
+  // Extending an existing selection by its handle is refused too, which is why
+  // the selected text is compared rather than its presence checked.
   it("leaves a movement that extended an existing selection alone", async () => {
     const lyrics = await openSecond();
     const line = screen.getByText(/Στης θάλασσας τα βάθη/);
@@ -931,8 +805,7 @@ describe("SongDetailPage inside a list", () => {
       selection?.addRange(range);
     };
 
-    // Already selected when the finger goes down, which is what tells this case
-    // apart from the one above.
+    // Already selected at touchdown.
     select(5);
     fireEvent.touchStart(lyrics, { touches: [{ clientX: 500, clientY: 400 }] });
     select(15);
@@ -941,9 +814,7 @@ describe("SongDetailPage inside a list", () => {
     stillOnSecond();
   });
 
-  // A selection made earlier and simply left on the page is the other half of
-  // that comparison: it must not quietly kill every swipe after it, which is why
-  // what is selected is compared rather than merely read.
+  // A selection merely left on the page must not block swipes.
   it("still reads a swipe over a selection the reader left behind", async () => {
     const lyrics = await openSecond();
     window.getSelection()?.selectAllChildren(screen.getByText(/Στης θάλασσας τα βάθη/));
@@ -953,10 +824,8 @@ describe("SongDetailPage inside a list", () => {
     expect(await screen.findByRole("heading", { name: "Third" })).toBeInTheDocument();
   });
 
-  // An open sheet owns the gestures over it, as it owns the arrow keys: paging
-  // the song out from under one reads as a bug in the sheet. The sheet is fixed
-  // over the page but rendered inside it, so its touches reach the listener and
-  // have to be turned away by hand.
+  // An open sheet owns the gestures; it renders inside the page, so its touches
+  // reach the listener and must be turned away.
   it("leaves the swipe to an open sheet", async () => {
     const user = userEvent.setup();
     await openSecond({ user: makeUser({ id: "user-1" }) });
@@ -969,11 +838,8 @@ describe("SongDetailPage inside a list", () => {
     stillOnSecond();
   });
 
-  // Belt and suspenders, and the safe way round: a swipe that begins on a control
-  // does nothing, rather than a control being unreachable under the gesture,
-  // which is exactly how the tap strips went wrong. Swiping *back* here, so a
-  // guard that failed would be visible as the previous song rather than as the
-  // one the control itself leads to.
+  // A swipe starting on a control does nothing. Swiping back, so a failed guard
+  // shows as the previous song rather than the control's own destination.
   it("does not read a swipe that started on a control", async () => {
     await openSecond();
 
@@ -982,11 +848,7 @@ describe("SongDetailPage inside a list", () => {
     stillOnSecond();
   });
 
-  // The swipe has nothing visible about it, so the mark is the only thing that
-  // says the gesture is there — and it is shown once, which makes when it plays
-  // the whole question. Gated on the mark really being on screen: at a desk it
-  // is display:none, so it never comes into view and the one showing is not
-  // spent on a machine that has no gesture to explain.
+  // The once-per-device swipe mark is spent only when it is actually on screen.
   it("shows the swipe mark when it comes into view, once per device", async () => {
     await openSecond();
 
@@ -996,8 +858,7 @@ describe("SongDetailPage inside a list", () => {
     act(() => intersectAll());
     expect(mark).toHaveClass("opacity-100");
 
-    // The next song of the list, on the same device: the mark has done its job,
-    // and is not built at all rather than left invisible over the lyrics.
+    // Once spent, the mark is not built at all.
     cleanup();
     serveList();
     renderDetail({ route: "/songs/song-3?list=list-1" });
@@ -1007,13 +868,8 @@ describe("SongDetailPage inside a list", () => {
     expect(screen.queryByText("Swipe through the list")).not.toBeInTheDocument();
   });
 
-  // The gesture has to outlive the mark, and only the order of two lines makes
-  // that true: the component that installs the swipe is the same one that draws
-  // the mark, and it renders nothing at all once the single showing is spent — so
-  // the hook runs above that early return. Every phone that has already been
-  // shown the mark is in this state permanently, which is why it is pinned:
-  // moving the hook below the return, or making the component conditional at its
-  // call site, would take paging away from all of them with nothing else failing.
+  // The swipe must outlive the spent mark: the hook runs above the component's
+  // early return, and the component must not be made conditional at its call site.
   it("still pages the list on a device that has already seen the mark", async () => {
     localStorage.setItem("lyrics:swipe-hint-seen", "1");
 
@@ -1025,13 +881,8 @@ describe("SongDetailPage inside a list", () => {
     expect(await screen.findByRole("heading", { name: "Third" })).toBeInTheDocument();
   });
 
-  // Every touch listener is passive and nothing calls `preventDefault`: the
-  // gesture is read after the movement rather than taken from it, which is what
-  // leaves a long song's vertical scroll alone. A listener registered
-  // `{ passive: false }` — the natural way to add a drag-follow animation later —
-  // kills scrolling on every phone, and neither jsdom, which has no scrolling,
-  // nor a desktop mouse, which has no such conflict, would show it. The
-  // registration is the only readable form of the rule.
+  // Every touch listener must be passive: `{ passive: false }` kills vertical
+  // scrolling on phones, invisibly in jsdom and on a desktop.
   it("reads every touch passively, so a long song still scrolls", async () => {
     const registered: { type: string; on: Element; options?: boolean | AddEventListenerOptions }[] =
       [];
@@ -1046,18 +897,13 @@ describe("SongDetailPage inside a list", () => {
     try {
       await openSecond();
 
-      // Only what landed on the song itself: React delegates every browser
-      // event, touches included, on the root container it owns. Scoping to the
-      // surface also says where these belong — pointed at a part of the page
-      // instead, the gesture would quietly narrow to it.
+      // Only the surface's own: React registers its delegated listeners on the root.
       const article = screen.getByRole("article");
       const touches = registered.filter(
         ({ type, on }) => on === article && type.startsWith("touch"),
       );
 
-      // Distinct types, because the listeners are torn down and put back as the
-      // list query settles and the addresses either side arrive. What matters is
-      // that all four are here and that every registration of them is passive.
+      // Distinct types: listeners are re-registered as the list settles.
       expect([...new Set(touches.map(({ type }) => type))].sort()).toEqual([
         "touchcancel",
         "touchend",
@@ -1072,16 +918,12 @@ describe("SongDetailPage inside a list", () => {
     }
   });
 
-  // Past its showing the mark is not rendered at all, rather than left invisible
-  // over the page, which is the shape of thing the tap strips were. Stepping to a
-  // song already in the query cache does not tear the page down, so a mark that
-  // merely went transparent would sit over every song for the rest of the
-  // session. Dropped after the fade rather than with it, so the fade is seen.
+  // Past its showing the mark unmounts, after the fade: stepping to a cached song
+  // does not remount the page, so a transparent mark would linger.
   it("drops the mark once the fade has run, rather than leaving it invisible", async () => {
     await openSecond();
 
-    // Installed before the showing starts, so the dwell and the fade below are
-    // scheduled on these rather than on the clock openSecond needed.
+    // Fake timers before the showing starts, so the dwell and fade use them.
     vi.useFakeTimers();
     try {
       act(() => intersectAll());
@@ -1098,12 +940,8 @@ describe("SongDetailPage inside a list", () => {
     }
   });
 
-  // Which element is watched is the whole of the rule: `md:hidden` has to sit on
-  // the observed box rather than on the pill inside it. Moved inward the mark is
-  // still hidden at a desk — but the box keeps its box, so the observer fires
-  // there and spends the one showing on a machine with no gesture to explain, and
-  // the reader who later picks up a phone is never told. jsdom applies no CSS, so
-  // the class is the only way to say this.
+  // `md:hidden` must be on the observed box, not the pill, or a desk spends the
+  // showing. jsdom applies no CSS, so the class is asserted.
   it("watches the box that has no box at a desk, not the pill inside it", async () => {
     await openSecond();
 
@@ -1113,20 +951,14 @@ describe("SongDetailPage inside a list", () => {
     expect(observed[0]).toContainElement(screen.getByText("Swipe through the list"));
   });
 
-  // A list of one has nowhere to swipe to, and the mark that says the gesture is
-  // there is spent once per device — so building it here would spend that showing
-  // on a page with no gesture on it, which is the failure `useSwipeHint`'s
-  // observer exists to prevent, arriving from a third side. The bar stays: "1 of
-  // 1", two dead arrows, and the link to the list, which is still the way back
-  // for a shared link. The one spec that served a one-song list was the footer's,
-  // and it went with the footer — leaving this guard pinned by nothing.
+  // A list of one has nowhere to swipe, so no mark is built to spend its
+  // showing. The bar stays, with the link back to the list.
   it("draws no swipe mark on a list of one, and spends no showing on it", async () => {
     serveList([inList[1]!]);
 
     renderDetail({ route: "/songs/song-2?list=list-1" });
 
-    // The song, not just the list: the swipe waits for one, so asserting before
-    // it lands would pass against a mark that simply had not been built yet.
+    // Wait for the song: the swipe is not built before it.
     await screen.findByRole("heading", { name: "Second" });
     expect(screen.getByText("1 of 1")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Next song" })).not.toBeInTheDocument();
@@ -1138,8 +970,7 @@ describe("SongDetailPage inside a list", () => {
     expect(localStorage.getItem("lyrics:swipe-hint-seen")).toBeNull();
   });
 
-  // A song taken out of the list in another tab, or a parameter typed by hand.
-  // The song was what was asked for and it is there; the navigation is what goes.
+  // A song not in the named list still renders, without list navigation.
   it("shows the song with no navigation when it is not in the list", async () => {
     serveList([inList[0]!, inList[2]!]);
 
@@ -1158,11 +989,7 @@ describe("SongDetailPage inside a list", () => {
     expect(screen.queryByRole("navigation", { name: /song navigation/i })).not.toBeInTheDocument();
   });
 
-  // The sign-in round trip is the one way out of this page that comes back to
-  // it, so it is the one that must carry the parameter. Sent away with the path
-  // alone, a guest who presses Save returns to the same song stripped of its
-  // list — the dead end this navigation exists to prevent, reached by the only
-  // control on the page that promises to bring them back.
+  // The sign-in round trip must carry `?list=`.
   it("keeps the list across the sign-in round trip", async () => {
     const user = userEvent.setup();
     serveList();
@@ -1174,10 +1001,7 @@ describe("SongDetailPage inside a list", () => {
     expect(await screen.findByText("Return to /songs/song-2?list=list-1")).toBeInTheDocument();
   });
 
-  // The search box and the paging keys are now on the same page, and the box
-  // wins while it has the caret: `useArrowKeyPaging` stands down for a focused
-  // field, which is also what lets the results panel keep focus in the field
-  // rather than on rows an arrow key could be pressed against.
+  // A focused search field owns the arrow keys; `useArrowKeyPaging` stands down.
   it("does not page the list while the reader is typing in the search box", async () => {
     const user = userEvent.setup();
     serveList();
@@ -1193,8 +1017,7 @@ describe("SongDetailPage inside a list", () => {
     expect(screen.getByRole("heading", { name: "Second" })).toBeInTheDocument();
   });
 
-  // Nothing asks for a list when a song is opened from browse, where there is
-  // none — a request per song page for a list nobody named would be pure waste.
+  // No `?list=`, no list request.
   it("asks for no list when a song is opened on its own", async () => {
     let requested = 0;
     server.use(
@@ -1211,11 +1034,7 @@ describe("SongDetailPage inside a list", () => {
   });
 });
 
-// The confirmation is `ConfirmSheet`, shared with the list and genre deletes.
-// Neither of the two older sheets had a spec when it was extracted, so this and
-// its counterpart in ListsPages are what keep the shared component honest — a
-// change to its buttons or its wiring would otherwise land silently on three
-// screens at once.
+// Exercises the shared `ConfirmSheet`, as does ListsPages' delete spec.
 describe("SongDetailPage deletion", () => {
   it("asks before deleting a song, and deletes the one it named", async () => {
     let deleted = "";
@@ -1238,9 +1057,7 @@ describe("SongDetailPage deletion", () => {
     expect(await screen.findByRole("heading", { name: "Catalog" })).toBeInTheDocument();
   });
 
-  // A refused delete is the one failure on this page with nowhere else to be
-  // reported: the sheet stays open with the same button on it, and nothing
-  // navigates, so silence reads as the press not having landed.
+  // A refused delete must say so in the sheet.
   it("reports a delete the server refused, and forgets it on the way out", async () => {
     server.use(
       http.delete(`${API}/api/v1/songs/:id`, () =>
@@ -1254,9 +1071,7 @@ describe("SongDetailPage deletion", () => {
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Song is referenced by a list.");
-    // And the refusal belongs to the attempt that was made, not to the next
-    // opening of the sheet — which would report a failure against a press
-    // nobody has made yet.
+    // The refusal does not survive into the next opening.
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await userEvent.click(screen.getByRole("button", { name: "Delete song" }));
 
@@ -1283,17 +1098,11 @@ describe("SongDetailPage deletion", () => {
 });
 
 /*
- * The search box above the song.
- *
- * What the box itself does is pinned in `SongSearch.test.tsx`, and the header's
- * hide-on-a-phone rule in `Layout.test.tsx`, where the component both pages share
- * lives. Left here are the two things that only exist once the box is on this
- * page: it has to survive the states the song does not, and its open results have
- * to hold the header still.
+ * The search box above the song, as placed on this page. The box itself is
+ * `SongSearch.test.tsx`'s; the header's rule is `Layout.test.tsx`'s.
  */
 describe("SongDetailPage search", () => {
-  // Searching again is the way off a song that will not load. The alternative is
-  // the browser's Back, and a shared link has nothing behind it.
+  // Searching again is the way off a song that will not load.
   it("keeps the search box on a song that could not be loaded", async () => {
     server.use(http.get(`${API}/api/v1/songs/:id`, () => notFound("Song was not found.")));
 
@@ -1303,14 +1112,11 @@ describe("SongDetailPage search", () => {
     expect(screen.getByRole("combobox", { name: /search songs/i })).toBeInTheDocument();
   });
 
-  // The results hang off the header, so a header that slid away would take them
-  // with it — and on iOS the scroll that focusing a field causes is exactly the
-  // movement that would set that off, mid-query.
+  // Open results pin the header: on iOS, focusing the field scrolls the page.
   it("holds the header still while the results are up", async () => {
     const user = userEvent.setup();
 
-    // Read as an element rather than by role: inside the app's <main> a <header>
-    // is no banner, and this spec renders the page without that shell.
+    // By element, not role: a <header> inside <main> is no banner.
     const { container } = renderDetail();
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
     const header = container.querySelector("header");
@@ -1319,8 +1125,7 @@ describe("SongDetailPage search", () => {
     await screen.findByRole("listbox");
     scrollDown();
 
-    // `toHaveClass` rather than a search of the class string, which would also be
-    // true of a header this spec had failed to find at all.
+    // `toHaveClass`, which fails on a missing header too.
     expect(header).not.toHaveClass("max-md:-translate-y-full");
   });
 });

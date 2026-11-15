@@ -8,9 +8,8 @@ BEGIN
 END;
 $$;
 
--- Users mirror Prelude Auth accounts. Prelude owns credentials and sessions; we
--- own authorization. Roles live here rather than in Prelude custom claims so a
--- promotion takes effect on the next request instead of the next token refresh.
+-- Users mirror Prelude Auth accounts. Roles live here, not in Prelude claims, so
+-- a promotion applies on the next request rather than the next token refresh.
 CREATE TABLE users (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   prelude_user_id  text        NOT NULL UNIQUE,
@@ -41,9 +40,8 @@ CREATE TABLE people (
   updated_at       timestamptz NOT NULL DEFAULT now()
 );
 
--- Deduplicates "Μίκης Θεοδωράκης" against "μικης θεοδωρακης" on insert. The
--- tradeoff is that two genuinely distinct artists sharing a name collide; that
--- is the right default for a catalog this size.
+-- Deduplicates "Μίκης Θεοδωράκης" against "μικης θεοδωρακης"; two distinct
+-- artists sharing a name collide.
 CREATE UNIQUE INDEX people_normalized_name_key ON people (normalized_name);
 
 CREATE TRIGGER people_set_updated_at
@@ -74,10 +72,8 @@ CREATE TABLE songs (
   release_year      int         CHECK (release_year BETWEEN 1000 AND 2200),
   notes             text,
 
-  -- Denormalized copies of the credited names and genre names, maintained by
-  -- trigger in the next migration. They exist because a generated column may
-  -- only reference its own row: without them, artist names could not
-  -- participate in the weighted search vector at all.
+  -- Trigger-maintained copies of credited and genre names: a generated column
+  -- can only read its own row, and the search vector needs them.
   credits_text      text        NOT NULL DEFAULT '',
   genres_text       text        NOT NULL DEFAULT '',
 

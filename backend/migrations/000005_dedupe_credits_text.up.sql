@@ -1,9 +1,7 @@
 -- Deduplicate the denormalized credit names.
 --
--- A person credited in more than one capacity on the same song (composer and
--- lyricist, say) appeared once per credit: "Leonard Cohen Leonard Cohen". That
--- is noise in the search vector, and it drags down the word-similarity score
--- used for fuzzy artist matching.
+-- A person with several credits on one song appears once, not once per credit;
+-- repeats drag down the word-similarity score fuzzy artist matching uses.
 
 CREATE OR REPLACE FUNCTION refresh_songs_denorm(p_song_ids uuid[]) RETURNS void
 LANGUAGE sql AS $$

@@ -13,27 +13,14 @@ import (
 	"github.com/christos/lyrics/backend/internal/imaging"
 )
 
-// avatarCacheControl is how long a browser may reuse a picture before asking
-// again. Five minutes, and deliberately not immutable: the version the client
-// appends to the URL makes a *replacement* a new address, but a removal mints no
-// new version, so nothing busts the URL a reader is already holding — and
-// nothing recalls a cache entry either. This number is therefore the whole of a
-// deletion's latency, and a year of it meant a removed picture served for a year
-// from an address the origin had started answering 404 to.
-//
-// Five minutes is affordable because of the ETag below: a revalidation is a 304
-// of a couple of hundred bytes rather than another copy of the image, and after
-// a removal it is that revalidation which reaches the 404 and ends the exposure.
-// The residual is bounded and named — for up to five minutes after a removal,
-// other people's caches may still serve the old picture.
+// avatarCacheControl is short and not immutable: a removal mints no new URL,
+// so max-age is the deletion's latency. See CLAUDE.md "Profile pictures".
 const avatarCacheControl = "public, max-age=300"
 
 func (s *Server) handleUploadAvatar(w http.ResponseWriter, r *http.Request) error {
 	user := auth.MustFromContext(r.Context())
 
-	// Asked before a byte of the body is read, so a refused upload costs
-	// neither the megabyte's read nor the decode behind it. Only this route:
-	// the removal below is a row delete, with no image work to loop over.
+	// Before reading the body. DELETE is deliberately not limited.
 	if !s.avatarLimiter.allow(user.ID.String()) {
 		return httpx.RateLimited("Too many picture uploads. Please try again shortly.")
 	}
@@ -42,18 +29,13 @@ func (s *Server) handleUploadAvatar(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			// Answered the same way the decoder answers an image that is too
-			// large, so a form has one message about size rather than two that
-			// depend on how far over the limit the file was.
+			// Same answer as the decoder's, so a form has one size message.
 			return avatarError(imaging.ErrTooLarge)
 		}
 		return httpx.BadRequest("That picture could not be read.").WithCause(err)
 	}
 
-	// The request's own Content-Type is not consulted: the bytes are decoded to
-	// find out what they are, and a declared type is only ever the client's
-	// word for it. What comes back is the type to store, from the code that
-	// chose the encoding.
+	// The request's Content-Type is ignored; the type comes from the encoder.
 	normalized, contentType, err := imaging.Normalize(body)
 	if err != nil {
 		return avatarError(err)
@@ -64,9 +46,7 @@ func (s *Server) handleUploadAvatar(w http.ResponseWriter, r *http.Request) erro
 		return storeError(err, "Account")
 	}
 
-	// Responds with the updated user, like PATCH /me: the client hands it
-	// straight to the auth context instead of following up with a GET /me for a
-	// record it is already holding.
+	// Responds with the updated user, like PATCH /me.
 	httpx.JSON(w, http.StatusOK, updated)
 	return nil
 }
@@ -90,9 +70,7 @@ func (s *Server) handleGetUserAvatar(w http.ResponseWriter, r *http.Request) err
 
 	avatar, err := s.store.Avatar(r.Context(), id)
 	if err != nil {
-		// "No such user" and "that user has no picture" are deliberately the
-		// same answer, so this route cannot be used to find out which
-		// identifiers belong to accounts.
+		// No user and no picture are the same 404, so ids cannot be probed.
 		return storeError(err, "Picture")
 	}
 
@@ -101,12 +79,8 @@ func (s *Server) handleGetUserAvatar(w http.ResponseWriter, r *http.Request) err
 	w.Header().Set("Cache-Control", avatarCacheControl)
 	w.Header().Set("Content-Type", avatar.ContentType)
 
-	// ServeContent answers the conditional request rather than this handler
-	// comparing the tag itself. A browser echoes an ETag verbatim, so a string
-	// comparison covers the browser — but `Cache-Control: public` invites a
-	// shared cache in front of this route, and those revalidate with a *list*
-	// of tags, or a weak one. Either misses an exact comparison and is answered
-	// with the whole image, silently. Content-Length and Range come with it.
+	// ServeContent, not a string compare: shared caches send ETag lists or weak
+	// tags, which an exact comparison silently misses.
 	http.ServeContent(w, r, "", avatar.UpdatedAt, bytes.NewReader(avatar.Image))
 	return nil
 }

@@ -14,10 +14,8 @@ type nameRequest struct {
 }
 
 // nameProblem returns the field-level message for a trimmed display name, or ""
-// if the name is acceptable. The rule is shared with the list handlers, which
-// accumulate field problems instead of failing on the first one and so cannot
-// call validateName — without this, the limit and both messages were written
-// out three times and could be changed in two.
+// if the name is acceptable. Shared with the list handlers, which accumulate
+// field problems and so cannot call validateName.
 func nameProblem(name string) string {
 	switch {
 	case name == "":
@@ -32,10 +30,6 @@ func nameProblem(name string) string {
 // validateName applies the shared rules for a person or genre name.
 func validateName(raw string) (string, error) {
 	name := strings.TrimSpace(raw)
-	// The envelope summary reads as a sentence about the request while the
-	// detail is the field label, so the two are worded differently on purpose.
-	// Only the field wording is shared; the summaries stay constant format
-	// strings, which is what httpx.Validation expects.
 	switch problem := nameProblem(name); {
 	case problem == "":
 		return name, nil
@@ -48,9 +42,7 @@ func validateName(raw string) (string, error) {
 	}
 }
 
-// decodeName reads the shared { "name": ... } body and validates it. Four
-// handlers take exactly this payload; written out per handler, any change to
-// name intake had to be made in four places and was easy to make in three.
+// decodeName reads the shared { "name": ... } body and validates it.
 func decodeName(w http.ResponseWriter, r *http.Request) (string, error) {
 	var req nameRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
@@ -68,11 +60,8 @@ func (s *Server) handleListPeople(w http.ResponseWriter, r *http.Request) error 
 		Limit:  limit,
 		Offset: offset,
 	}
-	// All four spellings are still accepted, which is why the message still
-	// names them: `composer` and `lyricist` are credit roles and match on
-	// song_credits, while `performer` — and `artist`, kept for the links already
-	// out there — ask whether the person performed on a recording, which is a
-	// different table and so a different field on the filter.
+	// composer/lyricist match song_credits; performer (and its alias artist)
+	// match recording performers, a different table.
 	if role := strings.TrimSpace(q.Get("role")); role != "" {
 		switch lowered := strings.ToLower(role); lowered {
 		case "performer", "artist":
@@ -152,8 +141,6 @@ func (s *Server) handleDeletePerson(w http.ResponseWriter, r *http.Request) erro
 	}
 
 	if err := s.store.DeletePerson(r.Context(), id); err != nil {
-		// The store classifies the RESTRICT-ed foreign key itself, so this reads
-		// a predicate rather than matching a constraint name out of the message.
 		if store.IsInUse(err) {
 			return httpx.Conflict(
 				"This person is still credited on songs. Remove those credits first.").WithCause(err)
@@ -208,9 +195,7 @@ func (s *Server) handleUpdateGenre(w http.ResponseWriter, r *http.Request) error
 
 	genre, err := s.store.UpdateGenre(r.Context(), id, name)
 	if err != nil {
-		// Named the way the person handler names it: the generic conflict
-		// reads "Genre already exists.", which is confusing advice when the
-		// genre being renamed plainly does.
+		// Not the generic "Genre already exists.", which misreads a rename.
 		if store.IsConflict(err) {
 			return httpx.Conflict("Another genre already uses that name.").WithCause(err)
 		}

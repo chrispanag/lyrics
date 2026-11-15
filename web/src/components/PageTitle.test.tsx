@@ -4,12 +4,7 @@ import { PageTitle } from "@/components/PageTitle";
 import { ProfilePage } from "@/routes/ProfilePage";
 import { renderWithProviders } from "@/test/render";
 
-/**
- * These specs assert on `document.title` rather than on the rendered markup,
- * because the markup is not where a `<title>` ends up: React 19 hoists it out
- * of the component into `<head>`. Querying the container would pass on a
- * component that rendered a title nowhere useful.
- */
+// Asserts on `document.title`, not the container: React 19 hoists the title.
 describe("PageTitle", () => {
   it("appends the product name to the page's own", () => {
     renderWithProviders(<PageTitle name="Your lists" />);
@@ -18,8 +13,7 @@ describe("PageTitle", () => {
   });
 
   it("renders the product name alone when the page has none yet", () => {
-    // The state a page fetching a record is in before it resolves. The failure
-    // this pins is a tab reading "undefined — Songfolio".
+    // Pins against a tab reading "undefined — Songfolio".
     renderWithProviders(<PageTitle />);
 
     expect(document.title).toBe("Songfolio");
@@ -31,25 +25,12 @@ describe("PageTitle", () => {
 
     unmount();
 
-    // Left standing, a title outlives the route that set it — which is what
-    // makes the editor's name stick to the song page it pops back to.
+    // Otherwise the editor's name sticks to the song page it pops back to.
     expect(document.title).not.toBe("Edit song — Songfolio");
   });
 
-  // An end-to-end pass rather than another unit: a route that imports PageTitle
-  // but never renders it looks identical to one that does, and only the
-  // document says otherwise.
-  //
-  // All three of ProfilePage's branches, because they are three separate
-  // insertions of the same line and one spec covers exactly one of them — with
-  // only the signed-in case here, deleting the title from the other two leaves
-  // the suite green, which is the regression the comment beside them exists to
-  // prevent. A branch left without one does not fall back to the previous
-  // page's title, and no longer falls back to a product name either: nothing
-  // else in the document declares a title now that app/layout.tsx deliberately
-  // exports none, so the head is left with no title at all and the tab reads
-  // the URL. Which is why the assertions below are on `document.title` being
-  // the page's own name rather than on it merely having changed.
+  // Each of ProfilePage's branches renders its own PageTitle, so each needs a
+  // spec. A branch without one leaves no title at all; the tab reads the URL.
   describe("titles every branch of a route that renders it", () => {
     const user = { id: "u1", email: "reader@example.com", role: "user" } as const;
 

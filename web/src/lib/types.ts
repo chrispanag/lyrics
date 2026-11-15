@@ -3,12 +3,8 @@
 export type Role = "user" | "contributor" | "admin";
 
 /**
- * The capacity a person is credited in on a song — authorship only.
- *
- * Performing is a property of a recording rather than of the work, so the
- * `artist` and `performer` roles this once had live on `Recording.performers`
- * now. The server refuses them, so a widened union here would render a picker
- * option every save rejects.
+ * The capacity a person is credited in on a song — authorship only. Performers
+ * are on `Recording.performers`; the server refuses other roles here.
  */
 export type CreditRole = "composer" | "lyricist";
 
@@ -43,19 +39,10 @@ export function hasRole(role: Role | undefined, minimum: Role): boolean {
 
 /**
  * Whether a user may edit a song: admins anywhere, contributors on their own.
+ * Decides what to render only; the server is the authority.
  *
- * Shared by the detail page and the editor so the Edit affordance and the
- * editor's own guard cannot disagree about who gets in. As with hasRole, the
- * server is the authority; this only decides what to render.
- *
- * The admin answer comes before the song is looked at, which is what lets a
- * caller ask before it has one: a song page renders its controls while the song
- * is in flight, and an admin's row has to be the row it will still be once the
- * song lands rather than gaining a link a moment later, under the finger of
- * someone reaching for the button beside it. Guarding on `!song` first — as this
- * did — pushed that caller into re-deriving the admin case for itself, which is
- * the disagreement the sharing exists to prevent. A contributor is the one who
- * cannot be answered early, their claim being on the song itself.
+ * The admin check comes before `!song`, so a page can ask while its song is
+ * still in flight.
  */
 export function canEditSong(
   user: Pick<User, "id" | "role"> | null | undefined,
@@ -79,11 +66,8 @@ export interface User {
    */
   email_verified_at: string | null;
   /**
-   * When the profile picture was last written, or null when there is none.
-   *
-   * The picture's URL is stable, so this is both what decides whether there is
-   * one to show and what busts its cache once a new one is stored — see
-   * `lib/avatar.ts`.
+   * When the profile picture was last written, or null when there is none. Also
+   * its cache-busting version; see `lib/avatar.ts`.
    */
   avatar_updated_at: string | null;
   created_at: string;
@@ -124,11 +108,9 @@ export interface RecordingPerformer {
 /**
  * One performance of a song — an εκτέλεση.
  *
- * A song's `recordings` arrive **already ordered, first recording first**: the
- * server sorts by `is_first`, then the earliest year, then position. So
- * `recordings[0]` is the first recording and nothing here re-derives that rule.
- * `is_first` is a claim about history and may be false on every one of them,
- * which is why the order does not depend on it alone.
+ * A song's `recordings` arrive **already ordered, first recording first**
+ * (`is_first`, then earliest year, then position), so `recordings[0]` is the
+ * first recording. `is_first` may be false on every one.
  */
 export interface Recording {
   id: string;
@@ -146,31 +128,20 @@ export interface Song {
   id: string;
   title: string;
   /**
-   * The song's address: `/songs/<slug>`.
-   *
-   * Derived from the title when the row is inserted and never recomputed, so
-   * correcting a title cannot move a bookmarked URL. Build links with
-   * `songHref` rather than from this directly — the id still resolves too, and
-   * which one a route parameter holds is `songMatchesRef`'s question.
+   * The song's address: `/songs/<slug>`, fixed at insert. Build links with
+   * `songHref`, and compare route parameters with `songMatchesRef`.
    */
   slug: string;
   alt_title: string | null;
   /**
-   * The song body, present only on single-song reads.
-   *
-   * Browse, search and a list's songs project it away — nothing that shows more
-   * than one song renders it, and it dwarfs the rest of the payload. Absent is
-   * not the same as empty: a song may genuinely have no lyrics recorded.
+   * The song body, present only on single-song reads. Absent is not empty: a
+   * song may have no lyrics recorded.
    */
   lyrics?: string;
   language: string;
   /**
-   * Denormalized copies of the first recording's, maintained server-side.
-   *
-   * They are what `SongCard` reads for its video badge and what the browse year
-   * filters sort and filter on — a listing that had to carry every recording to
-   * answer "is there a video" would pay for the whole set to draw one icon. A
-   * song with no recordings has all three null.
+   * Denormalized copies of the first recording's, maintained server-side; all
+   * null when there are no recordings. Read these, not `recordings[0]`.
    */
   youtube_url: string | null;
   youtube_video_id: string | null;
@@ -217,11 +188,9 @@ export interface ApiErrorBody {
 }
 
 /**
- * Writable shape of a song, matching the API's create/update payload.
- *
- * No `youtube_url` and no `release_year`: both belong to a recording now, and
- * the server refuses a payload that still names them at this level rather than
- * ignoring it. Recordings are replaced wholesale on every save, like credits.
+ * Writable shape of a song, matching the API's create/update payload. No
+ * `youtube_url` or `release_year` (they belong to a recording; the server
+ * refuses them here). Recordings are replaced wholesale on every save.
  */
 export interface SongInput {
   title: string;
@@ -268,10 +237,7 @@ export interface RecordingInput {
 
 export interface SongFilters {
   q?: string;
-  // The honest name for the filter, which is what the API calls it too. It kept
-  // `artist` as an alias for links already out in the world, and nothing here
-  // should reach for that spelling — a client type naming only the deprecated
-  // one is how the alias becomes impossible to retire.
+  // Not `artist`: the API keeps that only as an alias for old links.
   performer?: string;
   composer?: string;
   lyricist?: string;

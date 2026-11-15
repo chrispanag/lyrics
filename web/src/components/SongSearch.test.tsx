@@ -10,32 +10,21 @@ import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 import type { Song } from "@/lib/types";
 
-/**
- * Where the panel has taken the reader, as something a spec can read.
- *
- * Serialized by `createPath`, the way `SongEditorPage.test.tsx` does it, rather
- * than by joining `pathname` and `search` — a hand-joined address silently drops
- * anything else the location carries.
- */
+/** The current address, serialized by `createPath` so nothing is dropped. */
 function Address() {
   return <p>Now at {createPath(useLocation())}</p>;
 }
 
 /**
- * The box, with the address beside it.
- *
- * No `<Routes>`, deliberately: on the real page the box lives above the route
- * element rather than inside it, so it stays mounted across a jump from one song
- * to the next — which is the only way the "empties itself on the way out" rule
- * below can be observed at all.
+ * The box, with the address beside it. No `<Routes>`: the box stays mounted
+ * across a jump, as on the real page, so the reset on navigation is observable.
  */
 function renderSearch(route: string | string[] = "/songs/song-1") {
   return renderWithProviders(
     <>
       <SongSearch />
       <Address />
-      {/* Somewhere for focus to go that is not the box — the song page has its
-          Back and Save buttons here. */}
+      {/* Somewhere for focus to go that is not the box. */}
       <button type="button">Elsewhere</button>
       <Back />
     </>,
@@ -65,13 +54,8 @@ const more = [
 ];
 
 /**
- * What the catalog answers a search with, and how many it says there are.
- *
- * The override is passed only when there is one: `{ total: undefined }` would
- * overwrite `list()`'s count of the rows it was given with nothing, which is the
- * drift that helper's own docstring exists to prevent — every spec here would
- * then read `meta.total` as 0 and the "See all …" row would be unreachable in
- * all of them.
+ * What the catalog answers a search with. `total` is passed only when given:
+ * `{ total: undefined }` would overwrite `list()`'s own count.
  */
 function searchAnswers(songs: Song[], total?: number) {
   server.use(
@@ -94,9 +78,7 @@ describe("SongSearch", () => {
     await user.click(await screen.findByRole("option", { name: /Λίμνης/ }));
 
     expect(screen.getByText("Now at /songs/to-tragoydi-tis-limnis")).toBeInTheDocument();
-    // And the box is empty behind it. Landing on the song with the search that
-    // found it still in the field, and its panel still over the first verse, is
-    // the state this component spends an effect on avoiding.
+    // And the box is emptied behind it.
     expect(box()).toHaveValue("");
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
@@ -126,8 +108,7 @@ describe("SongSearch", () => {
 
     const second = screen.getByRole("option", { name: /Πουκάμισο/ });
     expect(second).toHaveAttribute("aria-selected", "true");
-    // The field keeps focus and names the row instead of handing it over, which
-    // is what leaves the song page's own arrow keys out of this.
+    // Focus stays in the field, keeping the page's arrow-key paging out of it.
     expect(box()).toHaveFocus();
     expect(box()).toHaveAttribute("aria-activedescendant", second.id);
 
@@ -136,9 +117,6 @@ describe("SongSearch", () => {
     expect(screen.getByText("Now at /songs/aspro-poykamiso")).toBeInTheDocument();
   });
 
-  // Never a dead Enter: a query with nothing behind it is worth taking to the
-  // catalog, which has the filters and the advice about spelling that six rows
-  // in a panel cannot carry.
   it("takes a query that matched nothing to the catalog", async () => {
     const user = userEvent.setup();
     searchAnswers([]);
@@ -152,9 +130,6 @@ describe("SongSearch", () => {
     expect(screen.getByText("Now at /?q=zzz")).toBeInTheDocument();
   });
 
-  // A failed request has no rows either, so a panel reading only the count says
-  // nothing matched and sends the reader off to check their spelling. Both admin
-  // screens shipped without this and both told that same lie.
   it("says a search failed rather than saying nothing matched", async () => {
     const user = userEvent.setup();
     server.use(http.get(`${API}/api/v1/songs`, () => apiError(500, "internal", "boom")));
@@ -166,9 +141,7 @@ describe("SongSearch", () => {
     expect(screen.queryByText(/No songs matched/)).not.toBeInTheDocument();
   });
 
-  // An absent `q` is not an empty result but the entire catalog, so a box that
-  // asked anyway would open on the newest songs and call them matches for the
-  // query that had just been deleted.
+  // An absent `q` returns the entire catalog, not an empty result.
   it("asks for nothing while the box is empty", async () => {
     const user = userEvent.setup();
     const asked: string[] = [];
@@ -185,9 +158,8 @@ describe("SongSearch", () => {
 
     await user.clear(box());
     await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
-    // Longer than the debounce, so anything an empty box was going to ask for
-    // has been asked by the time this is read. Inside `act`, since the wait is
-    // exactly long enough for the debounce to settle and that is a state update.
+    // Longer than the debounce; inside `act`, since the debounce settling is a
+    // state update.
     await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
 
     expect(asked).not.toContain("");
@@ -212,9 +184,7 @@ describe("SongSearch", () => {
     expect(await screen.findByRole("listbox")).toBeInTheDocument();
   });
 
-  // The rows are still in hand when the panel is closed — `placeholderData` holds
-  // them — so an Enter after Escape would open a song from a panel the reader
-  // shut, chosen from rows they can no longer see.
+  // The rows are still held after Escape, but the reader can no longer see them.
   it("takes the query to the catalog on Enter once the panel is closed", async () => {
     const user = userEvent.setup();
     searchAnswers(matches);
@@ -229,9 +199,7 @@ describe("SongSearch", () => {
     expect(screen.getByText("Now at /?q=love")).toBeInTheDocument();
   });
 
-  // A highlight the results no longer have is no highlight. Carried forward, the
-  // next arrow steps from a row nobody can see: from row 6 of a panel that now
-  // has two, ArrowDown used to land on the *second* and skip the first.
+  // Carried forward, the next ArrowDown would skip the first row.
   it("starts the highlight over when the results shrink under it", async () => {
     const user = userEvent.setup();
     searchAnswers([...matches, ...more]);
@@ -253,13 +221,8 @@ describe("SongSearch", () => {
     );
   });
 
-  // Nothing else closes it for a reader who never touches the screen: the rows
-  // are not tab stops, so focus leaves the panel behind, open over the lyrics.
-  //
-  // Focus is moved to the control outside rather than tabbed there, because the
-  // first Tab from the field lands on the clear button — which is part of the box,
-  // and where the panel is meant to stay open. What the rule is about is focus
-  // reaching something that is not.
+  // Focused directly rather than tabbed: the first Tab lands on the clear
+  // button, which is inside the box.
   it("closes when focus moves to something outside it", async () => {
     const user = userEvent.setup();
     searchAnswers(matches);
@@ -273,8 +236,6 @@ describe("SongSearch", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
-  // And stays open while focus is still somewhere in the box, which the clear
-  // button and the catalog row both are.
   it("stays open while focus is still inside it", async () => {
     const user = userEvent.setup();
     searchAnswers(matches);
@@ -288,9 +249,6 @@ describe("SongSearch", () => {
     expect(screen.getByRole("listbox")).toBeInTheDocument();
   });
 
-  // Only while a listbox is really rendered: the panel also answers with
-  // "Searching…" and with nothing matched, and an id pointing at neither is a
-  // promise to a screen reader that a list is there.
   it("names the listbox only when there are rows in it", async () => {
     const user = userEvent.setup();
     searchAnswers([]);
@@ -316,18 +274,13 @@ describe("SongSearch", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
-  // A reader can find the song they are already on by searching its own lyrics.
-  // Pushed, that is a second entry for one address: the page appears not to have
-  // moved and the next Back is a press that does nothing — and inside a list it
-  // eats one step of the trail. The same failure the editor's exit documents.
+  // A pushed duplicate entry would make the next Back appear to do nothing.
   it("does not push a second entry for the song already open", async () => {
     const user = userEvent.setup();
     searchAnswers([makeSong({ id: "song-1", slug: "this-very-song", title: "This Very Song" })]);
 
-    // Opened at the song's *id* form, which is what a link shared before slugs
-    // existed says — so this also pins that "the song already open" is asked of
-    // the song rather than of the address. The step still replaces, and the
-    // address it replaces with is the canonical one.
+    // Opened at the id form, pinning that "already open" is asked of the song,
+    // not the address.
     renderSearch(["/songs/song-0", "/songs/song-1"]);
     await user.type(box(), "τραγ");
 
@@ -339,10 +292,7 @@ describe("SongSearch", () => {
     expect(screen.getByText("Now at /songs/song-0")).toBeInTheDocument();
   });
 
-  // A song found by searching is not the next song in whatever list the reader
-  // was reading — it may well not be in it at all — so the address carries no
-  // list. Keeping `?list=` here would put a list bar on a song with steps to
-  // either side of a position it does not hold.
+  // Deliberate: a search result may not be in the list at all.
   it("leaves the list behind when the song was found by searching", async () => {
     const user = userEvent.setup();
     searchAnswers(matches);

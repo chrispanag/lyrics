@@ -13,17 +13,9 @@ function fixedRect(top: number, height: number): DOMRect {
 }
 
 /**
- * Lays out every `ul` in a container as a stack of equal rows.
- *
- * jsdom reports every element as a zero-sized box at the origin, and dnd-kit
- * decides both what a drag is over and how far it may travel by comparing
- * rectangles — so without this a keyboard drag lifts a row and finds nowhere to
- * put it. The list itself is measured as well as its rows: it is the bound the
- * drag is clamped to, and left at zero height it pins every row in place.
- *
- * Shared by every spec that drives a sortable list, so they cannot disagree
- * about the geometry. Call it again after a drag — the rects are pinned to
- * nodes that reordering has since moved, where a browser would re-read layout.
+ * Lays out every `ul` in a container as a stack of equal rows, since dnd-kit
+ * needs real rectangles and jsdom has none. The list is sized too: it bounds
+ * the drag. Call again after a drag, as the rects stay with the moved nodes.
  */
 export function stubRowRects(container: HTMLElement, height = 100): void {
   container.querySelectorAll("ul").forEach((list) => {

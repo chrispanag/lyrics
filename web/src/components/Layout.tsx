@@ -20,36 +20,15 @@ interface NavItem {
   authOnly?: boolean;
   adminOnly?: boolean;
   /**
-   * Rendered as the identity card at the foot of the navigation rather than as
-   * one of the links above it — and only while there is an identity to render.
-   *
-   * A guest gets the Sign in button where the card would be, so a guest keeps
-   * the link: `/profile` is where the theme switch lives and nowhere else, so
-   * dropping the entry whatever the reader is leaves a signed-out visitor with
-   * no route to that screen at all, and through it no second route to signing
-   * in. Nothing says so from a signed-in navigation, which has its card.
-   *
-   * Both navigations render the same panel, so this is answered once for the
-   * sidebar and the phone's drawer together — which is the whole of why the
-   * drawer replaced the tab bar rather than being written beside one. A third
-   * navigation gets the entry unless it says otherwise, since there is nothing
-   * here that could withhold it.
+   * Replaced by the identity card while signed in. A guest keeps the link:
+   * `/profile` is the only home of the theme switch.
    */
   identityCard?: boolean;
 }
 
 /**
- * The lit and pressable treatments the navigation's links share with the
- * identity card standing in for one of them.
- *
- * Tokens rather than two copies: nothing pins the two agreeing, so retuning
- * either on the links would otherwise be a change to make twice.
- *
- * The lit one carries its text color and the pressable one does not, which is
- * the asymmetry between the two call sites and not an oversight: lit, both the
- * label and the card's name take the brand color, while at rest the links state
- * a stone the card leaves to inherit. The card's role line names its own stone
- * either way, so it stays put under both.
+ * The lit and pressable treatments shared by the nav links and the identity
+ * card. Only the lit one carries a text color: at rest the card inherits.
  */
 const SIDEBAR_ACTIVE = "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200";
 const SIDEBAR_HOVER = "hover:bg-stone-100 dark:hover:bg-stone-800";
@@ -58,65 +37,37 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Browse", icon: Search },
   { to: "/lists", label: "Lists", icon: ListMusic, authOnly: true },
   { to: "/profile", label: "Profile", icon: UserIcon, identityCard: true },
-  // The console's own section rather than one of its screens: a NavLink matches
-  // on prefix, so this stays lit while an admin moves between users and genres,
-  // and `/admin` redirects to the first of them.
+  // The section, not a screen: NavLink matches on prefix, so it stays lit
+  // across the console's screens.
   { to: "/admin", label: "Admin", icon: Shield, adminOnly: true },
 ];
 
 /**
  * App shell: a fixed sidebar from `md` up, and the same navigation behind a
  * hamburger on a phone.
- *
- * The drawer replaced a bottom tab bar, and vertical room is what it bought:
- * the bar stood over the last 96px of every screen for as long as the app was
- * open, which on a phone is a stanza of lyrics. What the two surfaces show is
- * now one panel rather than two lists that happened to agree — the tab bar had
- * no identity card and no way to sign in, and each of those was a rule someone
- * editing `NAV_ITEMS` had to keep in mind.
  */
 export function Layout() {
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
 
-  // Route changes should start at the top; without this, navigating from
-  // halfway down a search results page lands mid-lyrics on the next screen.
+  // Route changes start at the top. Keyed on `pathname` so a filter written
+  // into the query string does not scroll the catalog.
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [location.pathname]);
 
-  // Going somewhere is the whole point of the drawer, so arriving closes it.
-  // Keyed on the location rather than on its pathname — the entry a link pushes
-  // is a new location whether or not the path changed, and a reader who presses
-  // the screen they are already on would otherwise be left looking at a drawer
-  // with nothing having happened. Not keyed with the effect above, whose
-  // `pathname` key is deliberate: a filter written into the catalog's query
-  // string must not scroll that page back to the top. Reset while rendering, so
-  // the new screen is never drawn with the drawer still open over it.
+  // Any navigation closes the drawer, before the new screen is drawn. Keyed on
+  // the location, not the pathname, so a link to the current screen closes it
+  // too.
   const [navKey, setNavKey] = useState(location.key);
   if (navKey !== location.key) {
     setNavKey(location.key);
     setNavOpen(false);
   }
 
-  // A window too wide for the drawer closes it, and this is the one thing about
-  // it that is not cosmetic. Both the panel and the hamburger are `md:hidden`,
-  // so growing past the breakpoint takes the whole control off the screen while
-  // `navOpen` goes on saying it is open — and an open drawer nobody can see
-  // still costs everything an open modal costs. The scroll lock freezes a desk's
-  // page with no modal on it, and `modalIsOpen()` asks the DOM for the marking
-  // rather than asking what is visible, so the song page's paging swipe and its
-  // arrow keys stand down for the rest of the session. A phone turned to
-  // landscape is 812px or more, so that is one rotation away rather than a
-  // resize nobody performs.
-  //
-  // This is deliberately a one-way close rather than a rendered answer, which is
-  // why it does not contradict `StickyHeader`'s reason for refusing
-  // `matchMedia`: that one keeps a *class* in step with a window and hands the
-  // job to CSS, while here the state itself has to change once the control that
-  // owns it is gone. 768px is Tailwind's `md`, the breakpoint both of those
-  // `md:hidden`s name. Nothing has to run on mount — `navOpen` starts false and
-  // only the hamburger, which is hidden above `md`, can set it.
+  // Growing past `md` (768px) closes the drawer. The drawer and hamburger are
+  // `md:hidden`, so an open but invisible drawer would keep the scroll lock and
+  // the modal marking, silently disabling the song page's swipe and arrow keys.
   useEffect(() => {
     const desk = window.matchMedia("(min-width: 768px)");
     const close = (event: MediaQueryListEvent) => {
@@ -127,10 +78,7 @@ export function Layout() {
     return () => desk.removeEventListener("change", close);
   }, []);
 
-  // Memoized so the hamburger — this context's one consumer, and there is one
-  // per screen — re-renders when the drawer opens and closes, rather than on
-  // every render of the shell, which a fresh object literal makes of every
-  // navigation and every filter written into the catalog's query string.
+  // Memoized so consumers re-render only when the drawer opens or closes.
   const drawer = useMemo(() => ({ open: navOpen, setOpen: setNavOpen }), [navOpen]);
 
   return (
@@ -139,9 +87,7 @@ export function Layout() {
         <DesktopSidebar />
         <MobileNavDrawer open={navOpen} onClose={() => setNavOpen(false)} />
 
-        {/* The tab bar took its `pb-safe` with it, so the last thing on a page
-            has to clear the home indicator on its own — hence more room here
-            than a desk needs, and still a third of what a fixed bar cost. */}
+        {/* Extra bottom room on a phone to clear the home indicator. */}
         <main className="min-w-0 flex-1 pb-12 md:pb-8">
           {/* One boundary for every lazy route, rather than one per route element.
               The shell stays mounted while a chunk loads. */}
@@ -158,16 +104,8 @@ export function Layout() {
  * The navigation itself: the wordmark, the links, and the identity card or the
  * Sign in button at its foot.
  *
- * Shared by the sidebar and the drawer, which differ only in how they are placed
- * on the screen. Written twice instead, the `identityCard` rule above would be a
- * rule to apply twice — and the phone's copy is the one that was missing it,
- * having been a row of icons with no card on it and no way in.
- *
- * All three of the visibility rules are answered here rather than the two role
- * ones being answered by the shell and the third by the panel. Which entries a
- * navigation shows is one question, and split across two components it is a
- * question a reader has to find the other half of — the same argument
- * `identityCard` makes above for not asking it from outside at all.
+ * Shared by the sidebar and the drawer. Every visibility rule is answered here,
+ * not at either call site.
  */
 function NavPanel() {
   const { user } = useAuth();
@@ -175,8 +113,7 @@ function NavPanel() {
   const links = NAV_ITEMS.filter((item) => {
     if (item.adminOnly) return hasRole(user?.role, "admin");
     if (item.authOnly) return Boolean(user);
-    // The card at the foot stands in for this entry, but only while there is a
-    // card: a guest gets the Sign in button in its place and keeps the link.
+    // Only a guest, who has no card, keeps the link.
     if (item.identityCard) return !user;
     return true;
   });
@@ -187,13 +124,9 @@ function NavPanel() {
         <Wordmark />
       </NavLink>
 
-      {/* The card and the Sign in button are inside the landmark, not beside
-          it: whichever of them is rendered is this navigation's only way to
-          `/profile`, and left outside, a reader navigating by landmark finds
-          Browse, Lists and Admin and no route to their own profile. `flex-1` is
-          what keeps that free — it gives the nav the height the container was
-          holding, so the `mt-auto` below still has the room to push itself to
-          the bottom rather than to the foot of the links. */}
+      {/* The card stays inside the <nav> landmark: it is the way to
+          `/profile`. `flex-1` gives the `mt-auto` below room to reach the
+          bottom. */}
       <nav className="flex flex-1 flex-col gap-1">
         {links.map((item) => (
           <NavLink
@@ -216,14 +149,8 @@ function NavPanel() {
 
         <div className="mt-auto px-2 pt-6">
           {user ? (
-            // The navigation's profile entry, which is why the list above drops
-            // it. It takes the links' own treatments: without the lit one the
-            // profile screen is the one place in the app where nothing in the
-            // navigation is lit, and without the hover one — the link being
-            // gone — nothing says the card can be pressed. `-mx-2` against its
-            // own padding widens the background out to the container's inner
-            // edge, so it lines up with those entries while the card's contents
-            // stay where they were.
+            // The profile entry, with the links' lit and hover treatments.
+            // `-mx-2` lines its background up with the links above.
             <NavLink
               to="/profile"
               className={({ isActive }) =>
@@ -263,36 +190,16 @@ function DesktopSidebar() {
 /**
  * The same navigation on a phone, slid in over the page.
  *
- * It overlays rather than pushing the page aside, which is what keeps opening it
- * free of any layout work at all: nothing underneath moves, so a long song is not
- * re-laid-out behind a panel that is about to close again.
- *
- * Three things here are load-bearing and none of them is the animation.
- *
- * It stays **mounted while closed**, because a panel that unmounts cannot slide
- * back out — the transform is what is animated, and there is nothing to
- * transition from once the element is gone. Everything below is what that costs.
- *
- * It carries `role="dialog"` and `aria-modal` **only while it is open**, and that
- * is not a cosmetic detail: `lib/modal.ts` asks the DOM whether a modal is up, by
- * exactly that pair of attributes and never by whether anything is visible. Left
- * on a closed drawer they sit on the page for the whole session, so the song
- * page's paging swipe and its arrow keys stand down permanently — on phones only,
- * silently, and with the drawer itself looking perfectly well behaved.
- *
- * And it is `inert` while closed, so the links inside are out of the tab order
- * and out of the accessibility tree rather than being a second copy of the
- * navigation that a keyboard reaches through the page. `pointer-events-none` says
- * as much to a browser that does not know `inert`, and is what keeps an invisible
- * backdrop from swallowing every press on the page behind it.
+ * Stays mounted while closed so it can slide. That costs three things: the
+ * dialog marking must apply only while open (or `modalIsOpen()` disables the
+ * song page's swipe and arrow keys for good), it must be `inert` while closed,
+ * and `pointer-events-none` keeps the invisible backdrop from eating presses.
+ * See "Frontend" in CLAUDE.md.
  */
 function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const panel = useRef<HTMLDivElement>(null);
 
-  // Escape, the scroll lock, the focus, and the marking — the same `lib/modal.ts`
-  // the sheet uses, which is what keeps the two from being two answers to what a
-  // modal is. The focus target is passed because this one stays mounted: there
-  // is no unmount to leave the reader outside, so it has to be sent in.
+  // A focus target is passed because this stays mounted while closed.
   const marking = useModal({ open, onClose, focus: panel });
 
   return (
@@ -305,20 +212,14 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
         onClick={onClose}
         className={cn(
           "absolute inset-0 bg-black/40 transition-opacity duration-200",
-          // The blur goes with the state rather than riding along at zero
-          // opacity: `backdrop-filter` makes this a composited layer the size
-          // of the viewport, and on a phone that would be one on every page for
-          // as long as the app is open. It drops the moment the drawer starts
-          // closing rather than fading with the wash, which is a difference
-          // nobody can see behind 40% black on its way out.
+          // Blur only while open: `backdrop-filter` is a viewport-sized
+          // composited layer that would otherwise persist on every page.
           open ? "opacity-100 backdrop-blur-sm" : "opacity-0",
         )}
       />
       <div
         ref={panel}
-        // Focusable only as a target for `useModal`: a dialog that opens with
-        // focus left outside it is one a keyboard reader has to go looking for,
-        // and this is the element whose label announces the drawer.
+        // Focusable only as `useModal`'s focus target.
         tabIndex={-1}
         {...marking}
         aria-label="Navigation"
@@ -329,11 +230,8 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        {/* The padding is in here rather than on the panel because the safe-area
-            insets above are padding too, and `cn` is a plain join: `py-6` and
-            `pt-safe` would both land in the class list with source order picking
-            the winner. `min-h-0` is what lets this scroll inside a column that is
-            exactly as tall as the screen. */}
+        {/* Padding here, not on the panel, so it cannot collide with the
+            safe-area padding. `min-h-0` lets this scroll. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-6">
           <NavPanel />
         </div>
@@ -343,14 +241,8 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
 }
 
 /**
- * Opens the phone's navigation drawer.
- *
- * Rendered by the app bars rather than by the shell, because the shell has no row
- * of its own on a phone: the header a page already carries is where this has to
- * go, or the drawer costs back the vertical room the tab bar was removed to
- * reclaim. `md:hidden` because the sidebar is the navigation from `md` up, and a
- * hidden flex child takes no part in its row's `gap` — so nothing about the search
- * box beside it moves at a desk.
+ * Opens the phone's navigation drawer. Rendered by the page's own header bar,
+ * since the shell has no row on a phone.
  */
 export function MenuButton() {
   const { open, setOpen } = useNavDrawer();
@@ -373,26 +265,15 @@ export function MenuButton() {
 /**
  * A sticky page header that gets out of the way on a phone.
  *
- * It hides as the reader scrolls down and returns on the way up, which is what
- * gives lyrics the full height of a phone screen while keeping search one
- * gesture away. Only on a phone, though: the hiding is scoped to `max-md`, since
- * a desk has the height to spare and a header that comes and goes under the
- * pointer is movement in exchange for nothing. The scroll listener still runs
- * there — the class it toggles is simply a no-op above the breakpoint — rather
- * than asking `matchMedia` and then keeping that answer in step with a window
- * that can be dragged across the breakpoint at any time.
+ * Hides on scroll down and returns on scroll up, below `md` only: the
+ * `max-md:` prefix does that in CSS rather than tracking `matchMedia`, whose
+ * answer would have to be kept in step with a window resized across the
+ * breakpoint.
  *
- * `pinned` holds it still regardless, and what needs that is a header with
- * something hanging off it: the song page's search results are anchored to this
- * box, so a header that slid away would take the results with it. On iOS,
- * focusing a field can scroll the page by itself — which is exactly the movement
- * this reads as "scrolling down to the lyrics".
+ * `pinned` holds it still, for a header with something anchored to it.
  *
- * `mobileOnly` is for a header that exists to carry the hamburger and nothing
- * else — see `MenuHeader`. It belongs on the `<header>` rather than on whatever
- * a caller puts inside, because a bordered box with a hidden child is still a
- * bordered box: a hairline across the top of every screen at a desk, where the
- * sidebar is the navigation and there is nothing for this bar to hold.
+ * `mobileOnly` goes on the `<header>` itself, since a bordered box with a
+ * hidden child still draws a hairline at a desk.
  */
 export function StickyHeader({
   children,
@@ -407,15 +288,12 @@ export function StickyHeader({
 
   useEffect(() => {
     let lastY = window.scrollY;
-    // Scroll fires at frame rate and most deltas clear the threshold, so
-    // dispatching on every one of them meant ~60 state updates a second to
-    // re-assert a value that had not changed. Only transitions are dispatched.
+    // Only transitions are dispatched; scroll fires at frame rate.
     let current = false;
 
     const onScroll = () => {
       const y = window.scrollY;
-      // The 8px threshold stops the header from flickering on the small
-      // scroll jitter that momentum scrolling produces.
+      // Threshold against momentum-scroll jitter.
       if (Math.abs(y - lastY) > 8) {
         const next = y > lastY && y > 80;
         if (next !== current) {

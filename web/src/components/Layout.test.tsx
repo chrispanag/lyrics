@@ -11,38 +11,16 @@ import { renderWithProviders } from "@/test/render";
 import { scrollDown, scrollUp, setScrollY } from "@/test/scroll";
 
 /*
- * Which of the two navigations holds the way to the profile, and whether it
- * holds one at all. Why either does is on `identityCard` in Layout.tsx.
- *
- * Both are asserted because jsdom has no breakpoints: the sidebar and the phone's
- * drawer are in the document at once, so which one holds the link is the only
- * readable form of which reader is served. Each is asked twice, since the card
- * only stands in for the entry while there is a card, and a guest has none.
+ * jsdom has no breakpoints, so the sidebar and the drawer are both in the
+ * document; each is asserted separately. See `identityCard` in Layout.tsx.
  */
 describe("Layout navigation", () => {
-  /*
-   * The two navigations, reached by what tells them apart.
-   *
-   * Only ever one of them is on screen — `hidden md:flex` against `md:hidden` —
-   * so the sidebar's own `<nav>` is deliberately unnamed, and the `<aside>`
-   * around it is what there is to ask for. The drawer is asked for by its label,
-   * which it carries whether or not it is open: its `role="dialog"` deliberately
-   * does not, and asking by role would leave the closed drawer — the state the
-   * spec below is about — unreachable.
-   */
+  // The drawer by its label: it has `role="dialog"` only while open.
   const sidebar = () => screen.getByRole("complementary");
   const drawer = () => screen.getByLabelText("Navigation");
 
-  /*
-   * Asked of the destination rather than of the label the entry carried:
-   * renamed rather than removed, a second route to the profile would sit above
-   * the card with every assertion about "Profile" still passing.
-   *
-   * Asked inside the sidebar's `<nav>` rather than anywhere in the `<aside>`,
-   * which is what pins the card as part of the navigation: rendered beside the
-   * landmark instead of within it, the card still works for everyone who can see
-   * it and leaves a reader navigating by landmark no route to their own profile.
-   */
+  // By destination, not label, so a renamed entry is still caught; and inside
+  // the `<nav>`, pinning the card as part of the landmark.
   const routesToProfile = (navigation: HTMLElement) =>
     within(within(navigation).getByRole("navigation"))
       .getAllByRole("link")
@@ -62,10 +40,6 @@ describe("Layout navigation", () => {
   it("keeps the link for a guest, who has no identity card", () => {
     renderWithProviders(<Layout />, { user: null });
 
-    // The card stands in for the entry only while there is a card, and a guest
-    // gets the Sign in button in its place. Filtered out for them too,
-    // `/profile` — and the theme switch, which is on no other screen — would be
-    // unreachable, and with it a second way to sign in.
     expect(routesToProfile(sidebar())).toHaveLength(1);
     expect(routesToProfile(drawer())).toHaveLength(1);
   });
@@ -73,28 +47,13 @@ describe("Layout navigation", () => {
   it("offers a guest the way in from either navigation", () => {
     renderWithProviders(<Layout />, { user: null });
 
-    // The tab bar this drawer replaced had no Sign in button, which is why the
-    // profile entry had to be there whatever the reader was. Both surfaces
-    // render one panel now, so both have it — and this is what says so.
     expect(within(sidebar()).getByRole("link", { name: "Sign in" })).toBeInTheDocument();
     expect(within(drawer()).getByRole("link", { name: "Sign in" })).toBeInTheDocument();
   });
 });
 
-/*
- * The drawer's own behavior: what it is while closed, and what opens and closes
- * it.
- *
- * It is mounted the whole time so that it can slide, which is what makes the
- * first spec here the load-bearing one — see `MobileNavDrawer`.
- */
 describe("Mobile navigation drawer", () => {
-  /**
-   * The shell with something in it that renders the trigger, which the shell
-   * itself deliberately does not: on a phone the header a page already carries
-   * is the only row the hamburger can go in without costing the vertical space
-   * the drawer was built to reclaim.
-   */
+  /** The shell plus a header to render the trigger, which the shell does not. */
   const renderShell = () =>
     renderWithProviders(
       <Routes>
@@ -107,15 +66,8 @@ describe("Mobile navigation drawer", () => {
 
   const trigger = () => screen.getByRole("button", { name: "Open menu" });
 
-  /*
-   * A closed drawer must not look like an open modal.
-   *
-   * `lib/modal.ts` asks the DOM for `[role="dialog"][aria-modal="true"]` and
-   * never for anything visible, and both the song page's paging swipe and its
-   * arrow keys stand down whenever it answers yes. A drawer that carried the
-   * pair while closed would carry it for the whole session: the gestures die on
-   * every phone, silently, and nothing about the drawer looks wrong.
-   */
+  // The drawer stays mounted; marked as a modal while closed, it would disable
+  // the song page's swipe and arrow keys for the whole session.
   it("is no modal at all while it is closed", () => {
     renderShell();
 
@@ -145,10 +97,7 @@ describe("Mobile navigation drawer", () => {
     expect(modalIsOpen()).toBe(false);
   });
 
-  // Keyed on the location rather than its pathname, which is why Browse — the
-  // screen this spec is already on — is the one worth pressing: the path does
-  // not change, so a drawer watching only that is left standing open with
-  // nothing having happened.
+  // Browse is the current screen, so the pathname does not change.
   it("closes on arriving, even where it was already", async () => {
     const user = userEvent.setup();
     renderShell();
@@ -159,9 +108,7 @@ describe("Mobile navigation drawer", () => {
     expect(modalIsOpen()).toBe(false);
   });
 
-  // Closing unmounts nothing, so focus is not dropped the way `Sheet` describes
-  // — but it is inside a panel the reader can no longer see, which is the same
-  // dead end by another route.
+  // Closing unmounts nothing, so focus would otherwise stay in a hidden panel.
   it("hands focus back to the hamburger", async () => {
     const user = userEvent.setup();
     renderShell();
@@ -172,19 +119,8 @@ describe("Mobile navigation drawer", () => {
     expect(trigger()).toHaveFocus();
   });
 
-  /*
-   * A window that grows past `md` takes the drawer and its hamburger away
-   * together — and an open drawer nobody can see still costs everything an open
-   * modal costs. `modalIsOpen()` reads the marking off the DOM and never asks
-   * what is visible, so the song page's paging swipe and its arrow keys would
-   * stand down for the rest of the session, with the scroll lock freezing a
-   * desk's page behind them. One rotation of a phone is all it takes: landscape
-   * is 812px or more.
-   *
-   * The suite-wide `matchMedia` stub answers `false` forever and registers no
-   * listeners, which is exactly what a spec about crossing the breakpoint cannot
-   * use — so this installs one that can be moved, and puts the old one back.
-   */
+  // The suite-wide `matchMedia` stub never changes and registers no listeners,
+  // so this installs one that can cross the breakpoint.
   it("stops being open once the window is too wide for it", async () => {
     const user = userEvent.setup();
     const crossInto = stubBreakpoint();
@@ -201,8 +137,7 @@ describe("Mobile navigation drawer", () => {
 
 /**
  * A `window.matchMedia` whose answer can be changed, returning the function that
- * changes it. Restored by the `afterEach` below, so the suite-wide stub is back
- * in place for every other spec in this file.
+ * changes it. Restored by the `afterEach` below.
  */
 let restoreMatchMedia: (() => void) | undefined;
 
@@ -238,27 +173,15 @@ function stubBreakpoint() {
 }
 
 /*
- * The header both the catalog and a song page put their search box in.
- *
- * Its rule is a class, and jsdom has no breakpoints — so which class it carries
- * is the only readable form of "out of the way on a phone, sticky at a desk".
- * Pinned here rather than through either page: the rule belongs to the component
- * they share, and read through one page's render the other page's behavior rides
- * on a spec that has nothing to do with it. Dropping the `max-md:` prefix would
- * make the desktop header slide away on both.
+ * jsdom has no breakpoints, so the `max-md:` class is the readable form of
+ * "hides on a phone, sticky at a desk". Pinned on the shared component rather
+ * than through either page.
  */
 describe("StickyHeader", () => {
   beforeEach(() => setScrollY(0));
 
-  /**
-   * The header itself: inside the app's `<main>` it is no banner to query by role.
-   *
-   * Asserted against with `toHaveClass` rather than by searching the class string,
-   * so the two negative specs below cannot pass on an element that was never
-   * found — `expect(undefined).not.toContain(…)` is true of nothing at all. It
-   * also matches whole class names, which is what lets the unprefixed transform be
-   * ruled out separately from the `max-md:` one.
-   */
+  // Use `toHaveClass`, so negative assertions fail on a missing element and
+  // whole class names are matched.
   const header = () => screen.getByText("Search").closest("header");
 
   it("gets out of the way on the way down, and only on a phone", () => {
@@ -279,9 +202,6 @@ describe("StickyHeader", () => {
     expect(header()).not.toHaveClass("max-md:-translate-y-full");
   });
 
-  // What needs this is a header with something hanging off it — the song page's
-  // results are anchored to that box, so a header that slid away would take them
-  // with it.
   it("stays put while it is pinned", () => {
     render(<StickyHeader pinned>Search</StickyHeader>);
 

@@ -62,8 +62,7 @@ func seedCatalog(t *testing.T, st *store.Store) map[string]*store.Song {
 			}},
 			GenreIDs: []uuid.UUID{entechno.ID},
 		}},
-		// "love" has no recording at all, which after the split is a real state
-		// and not a broken one: 85 songs in the live catalog are in it.
+		// "love" has no recording at all, which is a real state, not a broken one.
 		{"love", store.SongInput{
 			// Mentions the sea only in the lyrics, so it must rank below "sea"
 			// for a sea query but above nothing.
@@ -104,7 +103,7 @@ func seedCatalog(t *testing.T, st *store.Store) map[string]*store.Song {
 	return songs
 }
 
-// createSong needs a real creator, so tests that assert on created_by make one.
+// seedUser provisions a real user, for tests that assert on created_by.
 func seedUser(t *testing.T, st *store.Store, email string, role store.Role) *store.User {
 	t.Helper()
 	user, err := st.ProvisionUser(context.Background(), "usr_"+email, email, role)
@@ -148,9 +147,7 @@ func TestSearchDiacriticInsensitive(t *testing.T) {
 }
 
 // Matching and highlighting fail independently: the search vector is built from
-// normalized text while ts_headline reads the raw lyrics. A test that only
-// checks matching would not notice highlighting silently degrading to "the
-// first N words of the song".
+// normalized text while ts_headline reads the raw lyrics.
 func TestSearchHighlightsAccentedGreek(t *testing.T) {
 	st := testutil.NewStore(t)
 	seedCatalog(t, st)
@@ -200,18 +197,9 @@ func TestSearchToleratesMisspelledArtist(t *testing.T) {
 	}
 }
 
-// Fuzzy matching must not decay as a song accumulates credits.
-//
-// Scoring the query against the whole concatenated credits field means every
-// extra name dilutes the score, so the songs with the richest metadata are the
-// first to stop matching a misspelling — the opposite of what anyone expects.
-// word_similarity scores against the best-matching run of words instead, which
-// is what this pins down.
-//
-// The four extra names are performers on a recording, which is also what makes
-// this the test that a performer reaches credits_text at all: without the union
-// in refresh_songs_denorm the field holds one name and the dilution being
-// guarded against cannot even occur.
+// Fuzzy matching must not decay as a song accumulates credits (word_similarity,
+// not similarity). The extra names are performers, so this also pins that
+// performers reach credits_text.
 func TestFuzzyArtistMatchSurvivesManyCredits(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()
@@ -251,13 +239,9 @@ func TestFuzzyArtistMatchSurvivesManyCredits(t *testing.T) {
 	}
 }
 
-// A person attached to a song twice must appear once in the denormalized field,
-// not once per attachment.
-//
-// The two attachments are deliberately one of each kind — a credit on the work
-// and a performance of it — because that is the pairing the UNION in
-// refresh_songs_denorm has to collapse, and the one a per-table DISTINCT would
-// not. Cohen wrote Hallelujah and sang it.
+// A person attached to a song twice must appear once in credits_text. One
+// credit and one performance: the pairing the UNION in refresh_songs_denorm
+// collapses and a per-table DISTINCT would not.
 func TestCreditsTextIsDeduplicated(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()
@@ -373,9 +357,8 @@ func TestFiltersIntersect(t *testing.T) {
 		}
 	})
 
-	// A credit filter and a performer filter must intersect, and they now read
-	// two different tables — so this is also what says the two EXISTS clauses
-	// compose rather than one of them widening the result.
+	// A credit filter and a performer filter read different tables and must
+	// still intersect.
 	t.Run("two credit filters intersect", func(t *testing.T) {
 		got, total, err := st.ListSongs(ctx, store.SongFilter{
 			ComposerID:  &composerID,
@@ -485,11 +468,8 @@ func TestRenamingPersonReindexesSongs(t *testing.T) {
 	}
 }
 
-// A rename leaves the slug alone so shared filter links keep working, which is
-// what let a rename walk one genre onto another's name — creating two genres
-// that read identically in the browse filter and the song editor, with nothing
-// to say which songs were behind which. Creating cannot reach this: the slug is
-// derived from the name, so two genres named alike collide there.
+// A rename keeps the slug, so only the unique index on name stops a rename onto
+// another genre's name.
 func TestRenamingGenreOntoAnotherIsRefused(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()
@@ -533,12 +513,8 @@ func TestUpsertPersonDeduplicates(t *testing.T) {
 	}
 }
 
-// Deleting a person who is still credited must report "in use", not "not found".
-//
-// Both cases arrive as the same PostgreSQL foreign key violation, and only the
-// statement that issued it can tell them apart: on an insert the code means a
-// referenced row is missing, on this RESTRICT-ed delete it means the referencing
-// credits remain. Conflating the two told the caller the person did not exist.
+// Deleting a person who is still credited must report "in use", not "not
+// found": only the issuing statement can classify the foreign key violation.
 func TestDeleteCreditedPersonReportsInUse(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()
@@ -709,18 +685,14 @@ func TestPagination(t *testing.T) {
 	}
 }
 
-// An explicit sort has to survive relevance mode. Search took a different code
-// path that never consulted the requested ordering, so picking "Title (A–Z)"
-// with a query in the box changed nothing at all — the control moved, the
-// request carried the parameter, and the same relevance-ranked page came back.
+// An explicit sort has to survive relevance mode.
 func TestSearchHonorsExplicitSort(t *testing.T) {
 	st := testutil.NewStore(t)
 	seedCatalog(t, st)
 	ctx := context.Background()
 
-	// Both Greek songs mention the sea, but only one has it in the title — so
-	// relevance ranks that one first while newest-first ranks it last. The two
-	// orderings disagree, which is what makes the sort observable at all.
+	// Relevance and newest-first disagree on these two songs, which is what
+	// makes the sort observable.
 	relevance, _, err := st.ListSongs(ctx, store.SongFilter{Query: "θαλασσα", Limit: 10})
 	if err != nil {
 		t.Fatalf("ListSongs: %v", err)
@@ -757,10 +729,8 @@ func equal(a, b []string) bool {
 	return true
 }
 
-// ts_headline returns the source text verbatim rather than escaping it, so
-// markup in the lyrics reaches the snippet unchanged. The delimiters must
-// therefore not be HTML: if they were, a client rendering the snippet as
-// markup would execute whatever a contributor put in the lyrics.
+// ts_headline returns lyrics verbatim, so the snippet delimiters must not be
+// HTML.
 func TestSnippetDelimitersAreNotMarkup(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()
@@ -792,18 +762,8 @@ func TestSnippetDelimitersAreNotMarkup(t *testing.T) {
 	}
 }
 
-// Listings must not carry the lyrics body.
-//
-// No screen that shows more than one song renders it, and it outweighs
-// everything else in a page of twenty several times over — the list page paid
-// that cost on every removal, refetching every remaining song in full to redraw
-// a row of titles. Search is the shape to keep in view: it ships a ts_headline
-// excerpt precisely so the body does not have to travel.
-//
-// Absent is not blank. A song may genuinely have no lyrics recorded, so the
-// summary leaves nil and only a single-song read fills the field in — a
-// projection that returned "" instead would be indistinguishable from a song
-// whose lyrics nobody has typed yet.
+// Listings omit the lyrics body; single reads keep it. Absent (nil) is not
+// blank: "" would read as a song with no lyrics.
 func TestListingsOmitLyricsAndSingleReadsKeepThem(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()
@@ -828,9 +788,7 @@ func TestListingsOmitLyricsAndSingleReadsKeepThem(t *testing.T) {
 		t.Fatalf("CreateSong: %v", err)
 	}
 
-	// Recordings are the counter-case to the lyrics: they are on every read, so
-	// a listing can render the performer under a title and the card can say
-	// whether there is a video. Only the body is projected away.
+	// Recordings, unlike the body, are on every read.
 	hasPerformer := func(what string, s store.Song) {
 		t.Helper()
 		if len(s.Recordings) != 1 {
@@ -847,9 +805,7 @@ func TestListingsOmitLyricsAndSingleReadsKeepThem(t *testing.T) {
 		}
 	}
 	hasPerformer("CreateSong", *created)
-	// Create answers through GetSong, so this is the single-song read as well
-	// as the write — the client caches it as the song and would blank the
-	// detail page if it arrived without a body.
+	// Create answers through GetSong, so it must carry the body too.
 	if created.Lyrics == nil || *created.Lyrics != body {
 		t.Errorf("CreateSong lyrics = %v, want the body", created.Lyrics)
 	}
@@ -910,14 +866,9 @@ func TestListingsOmitLyricsAndSingleReadsKeepThem(t *testing.T) {
 	hasPerformer("SongsInList", inList[0])
 }
 
-// The ordering of a song's recordings is the API's answer to "which one is
-// first", and the same rule decides which one's year and link get copied onto
-// the song. Two SQL sites carry it — the ORDER BY in attachRelations and the one
-// inside refresh_songs_denorm — and this is what holds them to each other.
-//
-// The fixture is built so that every clause matters: the marked recording is not
-// the earliest, the earliest year is not first in insertion order, and one
-// recording has no year at all so NULLS LAST is exercised.
+// The recordings ORDER BY in attachRelations and the one in refresh_songs_denorm
+// must agree. Every clause matters here: the marked recording is not the
+// earliest, the earliest is not first inserted, and one has no year (NULLS LAST).
 func TestFirstRecordingRuleHasOneAuthority(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()
@@ -975,9 +926,8 @@ func TestFirstRecordingRuleHasOneAuthority(t *testing.T) {
 	}
 }
 
-// Two recordings claiming to be the first is refused by the schema. The API
-// answers 422 before reaching here; this is the backstop under it, and what
-// makes "at most one" a property of the data rather than of one code path.
+// Two first recordings are refused by the schema, the backstop under the API's
+// 422.
 func TestSecondFirstRecordingIsRefused(t *testing.T) {
 	st := testutil.NewStore(t)
 
@@ -1058,10 +1008,8 @@ func TestPeopleSongCountIncludesPerformances(t *testing.T) {
 	}
 }
 
-// A renamed performer must become searchable under the new spelling, which
-// needs the person-rename trigger to reach songs through recordings as well as
-// through credits. Left reading song_credits alone this is silent: the rename
-// succeeds and the song simply stops matching either spelling.
+// A renamed performer must become searchable under the new spelling: the
+// person-rename trigger has to reach songs through recordings too.
 func TestRenamingPerformerReindexesSongs(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()
@@ -1081,9 +1029,7 @@ func TestRenamingPerformerReindexesSongs(t *testing.T) {
 	}
 }
 
-// Deleting someone who only ever performed must fail like deleting a credited
-// person does — the RESTRICT is on both references, and the classification the
-// callers rely on has to hold for the new one too.
+// Deleting someone who only performed must report ErrInUse too.
 func TestDeletePerformerReportsInUse(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()

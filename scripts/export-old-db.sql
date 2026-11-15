@@ -23,8 +23,7 @@
 --   1. person."firstName" + "lastName" -> a single people.name, the shape the
 --      new schema stores. The old split cannot round-trip a mononym anyway.
 --   2. song.year is a varchar. Only a bare four-digit value converts; anything
---      else becomes null rather than failing the export. (Every populated row
---      in the source is four digits, so this only guards future edits.)
+--      else becomes null rather than failing the export.
 --   3. The source role enum is passed through verbatim. 'songwriter' means the
 --      person who wrote the words, which the loader maps onto 'lyricist'.
 --
@@ -50,10 +49,9 @@ SELECT json_build_object(
          'credits',      (
            SELECT coalesce(json_agg(
                     json_build_object(
-                      -- concat_ws, not `||`: concatenation propagates NULL, so a
-                      -- mononym stored with a NULL surname exported as
-                      -- `"name": null` and the loader then dropped the credit —
-                      -- that artist's whole catalog arrived unattributed.
+                      -- concat_ws, not `||`: `||` propagates NULL, so a mononym
+                      -- with a NULL surname would export `"name": null` and the
+                      -- loader would drop the credit.
                       'name', btrim(concat_ws(' ', p."firstName", p."lastName")),
                       'role', sp.role
                     )

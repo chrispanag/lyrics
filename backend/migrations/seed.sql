@@ -83,11 +83,9 @@ WITH new_songs AS (
     )
   RETURNING id, title
 ),
--- The credits, the recordings and the genres all attach to `new_songs`, so they
--- must share one statement: a CTE is not visible to the next one, and reaching
--- for `songs` instead would join on title across the whole catalog. A
--- data-modifying CTE runs to completion whether or not the primary query reads
--- its output, so nesting them here does not skip them.
+-- Everything attaching to `new_songs` shares one statement: a CTE is not visible
+-- to the next, and joining `songs` on title would reach the whole catalog.
+-- Data-modifying CTEs run even when nothing reads their output.
 new_credits AS (
 INSERT INTO song_credits (song_id, person_id, role, position)
 SELECT s.id, p.id, c.role, c.position
@@ -107,10 +105,8 @@ JOIN people p ON p.normalized_name = app_norm(c.person_name)
 ON CONFLICT DO NOTHING
 RETURNING 1
 ),
--- The recordings carry the year and the link, and the performers who were
--- `artist` credits before migration 000009. `Χάρτινο το Φεγγαράκι` deliberately
--- gets none: a song known only as a work is a real state, and one the app has
--- to render.
+-- Recordings carry the year, link and performers. `Χάρτινο το Φεγγαράκι` gets
+-- none on purpose: a song with no recordings is a real state the app renders.
 new_recordings AS (
   INSERT INTO recordings (song_id, youtube_url, youtube_video_id, release_year, is_first)
   SELECT s.id, r.youtube_url, r.youtube_video_id, r.release_year, true

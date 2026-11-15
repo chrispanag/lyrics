@@ -59,8 +59,8 @@ func run() error {
 	}
 	defer st.Close()
 
-	// Fetching the key set here means a wrong PRELUDE_APP_ID fails at startup
-	// rather than on the first user's login attempt.
+	// Fetching the key set here makes a misconfigured Prelude host fail at
+	// startup rather than at the first login.
 	verifier, err := auth.NewVerifier(ctx, cfg.JWKSURL(), cfg.Issuer())
 	if err != nil {
 		return fmt.Errorf("initialize token verifier: %w", err)

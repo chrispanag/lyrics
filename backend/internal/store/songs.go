@@ -23,13 +23,10 @@ const (
 // newest first.
 type SongFilter struct {
 	Query string
-	// PersonID matches anyone involved in any capacity — credited on the work or
-	// performing on one of its recordings. Two tables, therefore, since the
-	// split in 000009: a song page links every name it shows to this filter, so
-	// missing the performers here reads as an artist being on no songs at all.
+	// PersonID matches anyone credited on the work or performing on one of its
+	// recordings. Song pages link every name to it, so both tables are asked.
 	PersonID *uuid.UUID
-	// PerformerID matches someone who performed one of the recordings. It has no
-	// song_credits arm: performing is not a credit any more.
+	// PerformerID matches someone who performed one of the recordings.
 	PerformerID *uuid.UUID
 	ComposerID  *uuid.UUID
 	LyricistID  *uuid.UUID
@@ -45,31 +42,18 @@ type SongFilter struct {
 }
 
 // songSummaryColumns is the projection every song read starts from: everything
-// but the body.
-//
-// Listings use it as-is. The lyrics of twenty songs outweigh the rest of a
-// browse page several times over, and no screen that shows more than one song
-// renders them — search ships a ts_headline excerpt instead, which is the
-// point of having one.
+// but the body, which no listing renders.
 const songSummaryColumns = `s.id, s.title, s.slug, s.alt_title, s.language, s.youtube_url,
 	s.youtube_video_id, s.release_year, s.notes, s.created_by, s.updated_by,
 	s.created_at, s.updated_at`
 
-// songColumns is the full read: the summary with the body appended.
-//
-// Appended, rather than spliced into the middle, so that the two projections
-// compose in exactly the way their scan destinations do below — the full read
-// cannot gain or lose a column without the summary doing the same.
+// songColumns is the full read: the summary with the body appended, mirroring
+// how songScanDest extends songSummaryScanDest.
 const songColumns = songSummaryColumns + `, s.lyrics`
 
 // songSummaryScanDest returns scan targets in songSummaryColumns order, and
-// songScanDest appends the body exactly as the projection does.
-//
-// Both reads go through this pair, so a projection and its destinations cannot
-// drift apart — a mismatch there does not fail to compile, it silently lands
-// values in the wrong fields wherever two columns share a type. Keeping the
-// difference between the two an append at one end is what makes that structural
-// rather than a matter of reading both lists carefully.
+// songScanDest appends the body as the projection does. A mismatch compiles and
+// silently lands values in the wrong fields.
 func songSummaryScanDest(s *Song) []any {
 	return []any{&s.ID, &s.Title, &s.Slug, &s.AltTitle, &s.Language, &s.YouTubeURL,
 		&s.YouTubeVideoID, &s.ReleaseYear, &s.Notes, &s.CreatedBy, &s.UpdatedBy,
@@ -85,10 +69,8 @@ func scanSong(row pgx.Row, s *Song) error {
 	return row.Scan(songScanDest(s)...)
 }
 
-// buildSongFilters renders the filter clauses common to listing, searching, and
-// counting. Each credit filter is an EXISTS subquery rather than a join: joining
-// song_credits would multiply a song by its number of matching credits, and two
-// credit filters would then intersect incorrectly.
+// buildSongFilters renders the WHERE clauses shared by list, search and count.
+// Credit filters are EXISTS, not joins: a join multiplies rows and breaks AND.
 func buildSongFilters(f SongFilter, a *args) []string {
 	var conds []string
 
@@ -101,17 +83,10 @@ func buildSongFilters(f SongFilter, a *args) []string {
 			a.next(*id), a.next(string(role))))
 	}
 
-	// The two places a person can be attached to a song, one spelling each.
-	//
-	// They take an already-rendered placeholder rather than an id because the
-	// ?person= arm below references one placeholder twice — which is why these
-	// were a closure over the id and a second, inline copy of the same SQL, and
-	// so why a change to the performing join could fix ?performer= and silently
-	// leave ?person= matching the old shape. That is the "?person= has to ask
-	// both tables" trap one level down.
-	//
-	// A join inside an EXISTS is fine — it cannot multiply the outer song rows,
-	// which is the only thing the rule above is about.
+	// The two places a person can be attached to a song, one spelling each, so
+	// ?person= and ?performer= cannot drift apart. They take a placeholder
+	// because ?person= references one twice. A join inside EXISTS cannot
+	// multiply the outer rows.
 	creditedOn := func(ph string) string {
 		return fmt.Sprintf(
 			`EXISTS (SELECT 1 FROM song_credits sc WHERE sc.song_id = s.id AND sc.person_id = %s)`,
@@ -126,8 +101,7 @@ func buildSongFilters(f SongFilter, a *args) []string {
 	}
 
 	if f.PersonID != nil {
-		// One placeholder, referenced by both arms: the same person, asked about
-		// in the two places a person can be attached to a song.
+		// One placeholder, referenced by both arms.
 		p := a.next(*f.PersonID)
 		conds = append(conds, "("+creditedOn(p)+" OR "+performedBy(p)+")")
 	}
@@ -165,18 +139,13 @@ func buildSongFilters(f SongFilter, a *args) []string {
 }
 
 // matchClause renders the relevance predicate: an exact full-text hit, or a
-// trigram-similar title or credit. The trigram arms use the `%` operator (not
-// `similarity() >= x`) because only `%` can be answered from the GIN trigram
-// indexes; its threshold is set per connection in New.
-//
-// It returns the placeholders it allocated so the caller can reuse the same
-// parameters for scoring and snippet generation instead of assuming positions.
+// word-similar title or credit. The `<%` operator, not `word_similarity() >= x`,
+// because only the operator uses the GIN trigram indexes; its threshold is set
+// per connection in New. It returns its placeholders for scoring and snippets.
 func matchClause(a *args, query string) (clause, tsqParam, rawParam string) {
 	tsqParam = a.next(BuildTSQuery(query))
 	rawParam = a.next(query)
-	// `<%` reads as "the left operand is word-similar to some run of words in
-	// the right operand", and the right operand is what the GIN trigram indexes
-	// cover — so the query goes on the left.
+	// The query goes on the left of `<%`; the indexed column on the right.
 	clause = fmt.Sprintf(`(
 		s.search_vector @@ to_tsquery('public.app_simple', %[1]s)
 		OR app_norm(%[2]s) <%% app_norm(s.title)
@@ -207,15 +176,9 @@ func orderClause(sort SongSort) string {
 	}
 }
 
-// searchOrderClause is orderClause's counterpart for relevance mode, expressed
-// over the columns the `scored`/`hits` CTEs carry rather than over `songs`.
-//
-// Without it an explicit sort was accepted and then silently discarded whenever
-// a query was present: the UI offers Title and Newest alongside a search box,
-// and picking one changed nothing. The prefix lets the same ordering be written
-// twice — once inside the CTE that applies LIMIT, once on the join that reads
-// it back — which must agree or the page is ordered differently from the way it
-// was selected.
+// searchOrderClause is orderClause for relevance mode, over the `scored`/`hits`
+// CTE columns. The prefix lets one ordering be written in the CTE that applies
+// LIMIT and on the outer join; the two must agree.
 func searchOrderClause(sort SongSort, prefix string) string {
 	col := func(name string) string { return prefix + name }
 	switch sort {
@@ -274,12 +237,8 @@ func (s *Store) browseSongs(ctx context.Context, f SongFilter) ([]Song, int, err
 	return songs, total, nil
 }
 
-// searchSongs handles the relevance case.
-//
-// The pipeline is deliberately three stages: score and filter, then rank and
-// paginate, and only then generate snippets. ts_headline re-parses the full
-// lyrics body of every row it touches, so computing it before the LIMIT would
-// pay that cost for the entire result set instead of a single page.
+// searchSongs handles the relevance case: score and filter, rank and paginate,
+// then snippets. ts_headline re-parses each body, so it runs after the LIMIT.
 func (s *Store) searchSongs(ctx context.Context, f SongFilter) ([]Song, int, error) {
 	a := &args{}
 	match, tsqParam, rawParam := matchClause(a, f.Query)
@@ -338,10 +297,8 @@ func (s *Store) countSongs(ctx context.Context, where string, values []any) (int
 	return s.count(ctx, "count songs", "SELECT count(*) FROM songs s WHERE "+where, values...)
 }
 
-// collectSongs runs a song query and attaches credits and genres to the result.
-//
-// Every caller reads the summary projection, so the body is left nil rather
-// than blank — see Song.Lyrics for why the two are different answers.
+// collectSongs runs a summary-projection song query and attaches relations.
+// Lyrics stay nil (not loaded), not blank.
 func (s *Store) collectSongs(ctx context.Context, query string, values []any, withRelevance bool) ([]Song, error) {
 	rows, err := s.pool.Query(ctx, query, values...)
 	if err != nil {
@@ -376,13 +333,9 @@ func (s *Store) collectSongs(ctx context.Context, query string, values []any, wi
 	return songs, nil
 }
 
-// attachRelations loads credits, genres and recordings for a page of songs.
-// Fetching them as part of the main query would multiply each song by its
-// credit count, which breaks LIMIT.
-//
-// Every read goes through here — browse, search, a single song and a list's
-// songs — so a relation attached here is attached everywhere, and only the
-// lyrics differ between a listing and a single read.
+// attachRelations loads credits, genres and recordings for a page of songs, in
+// separate queries so joins cannot multiply rows past LIMIT. Every song read
+// goes through here.
 func (s *Store) attachRelations(ctx context.Context, songs []Song) error {
 	if len(songs) == 0 {
 		return nil
@@ -451,10 +404,8 @@ func (s *Store) attachRelations(ctx context.Context, songs []Song) error {
 		return err
 	}
 
-	// Normalize nil slices so the JSON encoder emits [] rather than null. The
-	// recordings and their performers are normalized by attachRecordings, which
-	// is the function that owns that shape — reaching two levels into it from
-	// here is how the next relation hung off a recording comes to be missed.
+	// Normalize nil slices so JSON emits [] rather than null. attachRecordings
+	// normalizes its own.
 	for i := range songs {
 		if songs[i].Credits == nil {
 			songs[i].Credits = []Credit{}
@@ -466,24 +417,15 @@ func (s *Store) attachRelations(ctx context.Context, songs []Song) error {
 	return nil
 }
 
-// attachRecordings loads each song's recordings and their performers.
-//
-// Two queries rather than one join, for the same reason the credits are their
-// own query: a recording with four performers would otherwise arrive four
-// times. The performers are keyed on the recording, which is why this cannot be
-// folded into the loop above — see the comment at the index below.
+// attachRecordings loads each song's recordings and their performers, as two
+// queries so a recording is not repeated per performer.
 func (s *Store) attachRecordings(
 	ctx context.Context,
 	songs []Song,
 	ids []uuid.UUID,
 	index map[uuid.UUID]*Song,
 ) error {
-	// Nil slices become empty ones so the JSON encoder emits [] rather than
-	// null. Here rather than in attachRelations because this is the function
-	// that owns the shape — normalized from the caller, it was a loop reaching
-	// two levels into a recording, which is not where anyone adding a relation
-	// to one will look. Deferred because there are two success returns below and
-	// the early one would otherwise leave a song's recordings null.
+	// Nil slices become [] for JSON. Deferred to cover both success returns.
 	defer func() {
 		for i := range songs {
 			if songs[i].Recordings == nil {
@@ -497,16 +439,9 @@ func (s *Store) attachRecordings(
 		}
 	}()
 
-	// The ORDER BY is the definition of "first recording", and it is what makes
-	// that the API's answer rather than every client's calculation: the list
-	// arrives ordered and index 0 is the first recording. IsFirst leads because
-	// it is a stated fact where the year is an inference, and `id` settles the
-	// remaining ties so a page never reorders between two identical reads.
-	//
-	// refresh_songs_denorm (migration 000009) carries a mirror of this ORDER BY
-	// to pick the row whose year and link are copied onto the song. The two
-	// disagreeing would put a year on the page that belongs to a different
-	// recording than the one shown; a test pins them against each other.
+	// This ORDER BY defines "first recording": index 0 is it. `id` breaks the
+	// remaining ties. Mirrored in refresh_songs_denorm (migration 000009);
+	// TestFirstRecordingRuleHasOneAuthority pins the two together.
 	recordingRows, err := s.pool.Query(ctx, `
 		SELECT r.song_id, r.id, r.label, r.youtube_url, r.youtube_video_id,
 		       r.release_year, r.notes, r.is_first, r.position
@@ -540,11 +475,8 @@ func (s *Store) attachRecordings(
 		return nil
 	}
 
-	// Indexed only now that every recording has been appended. Taking these
-	// pointers inside the loop above would hand out addresses into a slice that
-	// the next append can reallocate, and the performers would then be written
-	// into an array nothing points at any more — silently, since the write
-	// itself succeeds.
+	// Indexed only after every append: pointers taken earlier could point into
+	// a reallocated slice, silently losing the performers.
 	byRecording := make(map[uuid.UUID]*Recording, len(recordingIDs))
 	for i := range songs {
 		for j := range songs[i].Recordings {
@@ -584,24 +516,14 @@ func (s *Store) GetSong(ctx context.Context, id uuid.UUID) (*Song, error) {
 	return s.getSongWhere(ctx, "s.id = $1", id)
 }
 
-// GetSongBySlug is the same read by the song's address rather than its id.
-//
-// A sibling rather than one query matching either column: translateErr already
-// maps pgx.ErrNoRows onto ErrNotFound, so both forms answer 404 for free, and
-// keeping them apart is what lets the handler decide which one a path segment is
-// before it asks — which is the whole of the precedence rule.
+// GetSongBySlug is GetSong by the song's address. Separate so the handler
+// decides which form a path segment is before asking.
 func (s *Store) GetSongBySlug(ctx context.Context, slug string) (*Song, error) {
 	return s.getSongWhere(ctx, "s.slug = $1", slug)
 }
 
-// SongIDBySlug resolves an address to the identity behind it, and nothing else.
-//
-// For the callers that want a song's id rather than the song: deleting it,
-// asking which of your lists hold it, and the two ways it moves in and out of
-// one. GetSongBySlug would answer them too, at
-// the cost of the whole row plus the four queries attachRelations runs — the
-// lyrics body and every credit, genre, recording and performer read, scanned and
-// thrown away to keep sixteen bytes.
+// SongIDBySlug resolves an address to the song's id only, for callers that do
+// not need the row or its relations.
 func (s *Store) SongIDBySlug(ctx context.Context, slug string) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := s.pool.QueryRow(ctx, `SELECT id FROM songs WHERE slug = $1`, slug).Scan(&id)
@@ -625,9 +547,8 @@ func (s *Store) getSongWhere(ctx context.Context, where string, arg any) (*Song,
 	return &songs[0], nil
 }
 
-// actorRef maps a zero actor onto NULL. created_by/updated_by are nullable
-// because catalog content outlives the account that entered it — a seeded or
-// imported song legitimately has no author.
+// actorRef maps a zero actor onto NULL; seeded and imported songs have no
+// author.
 func actorRef(actor uuid.UUID) *uuid.UUID {
 	if actor == uuid.Nil {
 		return nil
@@ -635,12 +556,8 @@ func actorRef(actor uuid.UUID) *uuid.UUID {
 	return &actor
 }
 
-// SongInput is the writable shape of a song.
-//
-// No YouTube link and no release year: those belong to a recording now, and the
-// song's copies of them are written by trigger. Naming them here would give
-// them a second writer, which is the thing that lets a denormalized column
-// disagree with what it was copied from.
+// SongInput is the writable shape of a song. No YouTube link or release year:
+// the song's copies are trigger-written and must have no second writer.
 type SongInput struct {
 	Title      string
 	AltTitle   *string
@@ -652,13 +569,9 @@ type SongInput struct {
 	Recordings []RecordingInput
 }
 
-// RecordingInput is the writable shape of one recording.
-//
-// Nothing here is validated: the URL and the id are stored as given, and they
-// are allowed to disagree. That is deliberate and load-bearing — the importer
-// keeps a link it could not parse while leaving the id NULL, and the API's
-// tests plant exactly that row to check the read path copes with it. The
-// canonicalization and the refusal both live in the API layer.
+// RecordingInput is the writable shape of one recording. Unvalidated: the URL
+// and id may disagree (the importer keeps unparseable links); the API layer
+// canonicalizes.
 type RecordingInput struct {
 	Label          *string
 	YouTubeURL     *string
@@ -667,12 +580,11 @@ type RecordingInput struct {
 	Notes          *string
 	IsFirst        bool
 	Position       int
-	// Performers name people by id. Name is ignored — a name that has to become
-	// a person is resolved before it reaches the store.
+	// Performers name people by id; Name is ignored.
 	Performers []RecordingPerformer
 }
 
-// CreateSong inserts a song together with its credits and genres, atomically.
+// CreateSong inserts a song together with its relations, atomically.
 func (s *Store) CreateSong(ctx context.Context, in SongInput, actor uuid.UUID) (*Song, error) {
 	var id uuid.UUID
 
@@ -695,7 +607,7 @@ func (s *Store) CreateSong(ctx context.Context, in SongInput, actor uuid.UUID) (
 	return s.GetSong(ctx, id)
 }
 
-// UpdateSong replaces a song's fields, credits, and genres.
+// UpdateSong replaces a song's fields and relations.
 func (s *Store) UpdateSong(ctx context.Context, id uuid.UUID, in SongInput, actor uuid.UUID) (*Song, error) {
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
@@ -717,14 +629,8 @@ func (s *Store) UpdateSong(ctx context.Context, id uuid.UUID, in SongInput, acto
 	return s.GetSong(ctx, id)
 }
 
-// replaceRelations rewrites a song's credits, genres and recordings wholesale.
-// Delete-then-insert keeps the caller's payload authoritative and lets the
-// denormalization triggers fire once per affected row.
-//
-// Recordings are replaced like the rest, which means their ids are minted afresh
-// on every save. A recording id is therefore stable within a read and not across
-// a write — the same property the credits list has always had, and the reason
-// the API matches a stored YouTube link by its string rather than by an id.
+// replaceRelations rewrites a song's credits, genres and recordings wholesale,
+// so recording ids do not survive a write.
 func replaceRelations(ctx context.Context, tx pgx.Tx, songID uuid.UUID, in SongInput) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM song_credits WHERE song_id = $1`, songID); err != nil {
 		return fmt.Errorf("clear credits: %w", translateErr(err))
@@ -766,15 +672,12 @@ func replaceRelations(ctx context.Context, tx pgx.Tx, songID uuid.UUID, in SongI
 			songID, r.Label, r.YouTubeURL, r.YouTubeVideoID, r.ReleaseYear,
 			r.Notes, r.IsFirst, r.Position).Scan(&recordingID)
 		if err != nil {
-			// A second is_first lands here, as a unique violation on
-			// recordings_one_first_per_song, and is reported as a conflict. The
-			// API refuses that payload before it gets this far; this is the
-			// backstop for anything that does not go through it.
+			// A second is_first is a unique violation (conflict); the API refuses
+			// it first, this is the backstop.
 			return fmt.Errorf("insert recording: %w", translateErr(err))
 		}
 		for _, p := range r.Performers {
-			// ON CONFLICT because a payload may name the same person twice, the
-			// same allowance the credits above make.
+			// ON CONFLICT: a payload may name the same person twice.
 			_, err := tx.Exec(ctx, `
 				INSERT INTO recording_credits (recording_id, person_id, position)
 				VALUES ($1, $2, $3)

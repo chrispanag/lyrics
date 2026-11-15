@@ -13,10 +13,7 @@ import { fieldChrome } from "@/components/fieldStyles";
 import { cn } from "@/lib/cn";
 import { useModal } from "@/lib/modal";
 
-/*
- * Shared primitives. Every interactive control is at least 44px tall on
- * touch — below that, taps land on neighbours.
- */
+/* Shared primitives. Touch-target sizing lives in buttonStyles.ts. */
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -43,20 +40,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
 });
 
-// The shape the three field primitives share; the chrome they share with the
-// browse search box lives in fieldStyles. Everything a call site might vary —
-// size, padding, width — is stated by the primitive itself rather than shared
-// here, because cn is a plain join: two classes for one property both land in
-// the list and CSS source order picks the winner.
-//
-// That is not hypothetical. A shared `w-full` outranked the `w-36` the credit
-// editor passes for its role picker, so that row rendered with the person
-// field crushed to a sliver and the picker swallowing the rest — while the
-// admin filter's `sm:w-44` survived the same collision, since a variant is
-// always emitted after the base utility it qualifies. Width now belongs to
-// whoever places the control: an <Input> or <Textarea> always fills its field,
-// a <Select> sits in a toolbar or beside another control just as often, so it
-// asks. A select that forgets is visibly shrink-to-fit, not subtly wrong.
+// The shape the field primitives share. Size, padding and width are stated per
+// primitive, since `cn` cannot override a shared class. <Select> sets no width:
+// its caller does.
 const fieldLayout = "rounded-xl";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
@@ -89,9 +75,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
     return (
       <select
         ref={ref}
-        // select-chevron draws the arrow the native control would; see the rule
-        // in styles/index.css for why that one is given up. No width here — see
-        // fieldLayout.
+        // select-chevron replaces the native arrow; see styles/index.css.
         className={cn(fieldChrome, fieldLayout, "select-chevron h-11 appearance-none pl-3 pr-9", className)}
         {...props}
       >
@@ -127,9 +111,7 @@ export function Field({
         </p>
       )}
       {error && (
-        // role="alert" so a screen reader announces the failure without the
-        // user having to hunt for it. Callers point the control at these ids
-        // with aria-describedby.
+        // Callers point the control at these ids with aria-describedby.
         <p id={`${htmlFor}-error`} role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">
           {error}
         </p>
@@ -158,10 +140,8 @@ export function Chip({
     onClick && "cursor-pointer hover:opacity-80",
   );
 
-  // A clickable chip is a real button rather than a span wearing role="button":
-  // that gets focus, Enter, and Space from the platform instead of hand-rolled
-  // key handling. It stays conditional because a chip with onRemove already
-  // contains a button, and buttons cannot nest.
+  // A real button when clickable; not always, since a chip with onRemove
+  // already contains one and buttons cannot nest.
   if (onClick) {
     return (
       <button type="button" onClick={onClick} className={classes}>
@@ -252,11 +232,8 @@ export function ErrorMessage({ children }: { children: ReactNode }) {
 }
 
 /**
- * A bottom sheet on mobile, a centered dialog on larger screens.
- *
- * Filters and pickers need a lot of vertical room on a phone; a sheet anchored
- * to the bottom keeps controls within thumb reach instead of at the top of a
- * tall screen.
+ * A bottom sheet on mobile (within thumb reach), a centered dialog on larger
+ * screens.
  */
 export function Sheet({
   open,
@@ -269,11 +246,7 @@ export function Sheet({
   title: string;
   children: ReactNode;
 }) {
-  // Escape, the scroll lock, the focus handed back on the way down, and the
-  // marking that tells the page's gestures to stand down — all of it in
-  // `lib/modal.ts`, which is where the phone's navigation drawer gets the same.
-  // No focus target is passed: a sheet unmounts when it closes, so focus is
-  // already inside it and there is nothing to send.
+  // No focus target: a sheet unmounts when closed, so focus is already inside.
   const marking = useModal({ open, onClose });
 
   if (!open) return null;
@@ -286,10 +259,8 @@ export function Sheet({
         aria-hidden
       />
       <div
-        // The marking is the whole of how a sheet announces itself, and both
-        // the arrow keys and the paging swipe stand down while it is on the
-        // page. It comes from `useModal` rather than being written here, so
-        // there is one answer to what a modal looks like — see `lib/modal.ts`.
+        // role="dialog" + aria-modal from `useModal`; the page's swipe and arrow
+        // keys stand down while it is present.
         {...marking}
         aria-label={title}
         className={cn(
@@ -318,17 +289,7 @@ export function Sheet({
 /**
  * A sheet that asks before something irreversible happens.
  *
- * Three screens had this character for character — a song, a list, and a genre
- * — down to the `flex-1` on both buttons and the muted paragraph above them.
- * Stated three times, the next spacing or dark-mode change lands on one of them
- * and nothing reports that the other two have drifted, which is the failure
- * `cardStyles` records happening across five sites.
- *
- * `children` is the sentence rather than a prop, because what each one has to
- * say differs in more than wording: one counts the songs that lose a label,
- * another promises the songs are untouched. `error` is here because a refusal
- * has to be readable without the sheet closing on it — the delete that can be
- * refused is the one that needed it, and the other two get it for free.
+ * `error` shows a refusal without closing the sheet.
  */
 export function ConfirmSheet({
   open,

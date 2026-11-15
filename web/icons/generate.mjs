@@ -1,6 +1,5 @@
-// Renders the tracked SVG sources in this directory into the PNG/ICO assets in
-// ../public. Run it with `make icons` after changing a source; nothing in the
-// build does, and that target is where the install step lives.
+// Renders the SVG sources here into the PNG/ICO assets in ../public. Run with
+// `make icons` after changing a source; nothing in the build does.
 
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -14,20 +13,13 @@ const out = path.resolve(here, "..", "public");
 const SQUARE = path.join(here, "icon-square.svg");
 const MASKABLE = path.join(here, "icon-maskable.svg");
 const OG = path.join(here, "og-card.svg");
-// The tab icon, drawn at a 32 viewBox with rounded corners. It is a source here
-// as well as a shipped asset — see the ICO note at the bottom.
+// Both a shipped asset and the ICO's source (see below).
 const FAVICON = path.resolve(out, "favicon.svg");
 
 /**
- * The brand ramp, converted to sRGB by hand.
- *
- * These are the values `--color-brand-600` and `--color-brand-700` in
- * styles/index.css evaluate to. Nothing derives them: the ramp exists only as
- * `oklch()` custom properties, and neither a static SVG nor the manifest can
- * read those without build tooling this project does not have. So they are
- * copied, and `assertBrand` below is what stops the copies drifting apart —
- * that check replaced a prose inventory of which files hold them, which was
- * wrong within a release of being written.
+ * `--color-brand-600`/`-700` from styles/index.css, converted to sRGB by hand:
+ * the ramp is `oklch()` only and a static SVG cannot read it. `assertBrand`
+ * fails the run if the hardcoded copies drift apart.
  */
 const BRAND = { "brand-600": "#c6481c", "brand-700": "#a33b14" };
 
@@ -60,17 +52,8 @@ async function assertBrand() {
 }
 
 /**
- * `density` scales rasterization: the sources declare 512 and 1200 CSS px at the
- * default 72, so 384 supersamples 5.3x. That is worth it for the icons, which
- * are all downscales of a 512 source — the 16px ICO entry most of all.
- *
- * `palette: true` is bit-exact on the icons and halves them: flat ground, one
- * disc, one ring, comfortably under 256 colors even counting antialiased edges.
- * It is deliberately NOT used on the og card, whose ground is a two-stop
- * gradient across the full diagonal — quantizing that means dithering a smooth
- * ramp, and social platforms re-encode whatever we send them. The card is
- * fetched by scrapers rather than by visitors, so its bytes are unfurl latency
- * and not page weight, which is the wrong side of that trade to optimize.
+ * The default `density` supersamples the downscaled icons. `palette: true` is
+ * lossless on the flat icons; not on the og card, whose gradient would dither.
  */
 const render = (src, width, height = width, { density = 384, ...png } = {}) =>
   sharp(src, { density })
@@ -95,26 +78,14 @@ for (const [name, src, size] of targets) {
   console.log(`${name} (${size}x${size})`);
 }
 
-// The og card is the one non-square output, and the only one whose text is
-// resolved against a system font — look at it after regenerating. Rendered at
-// its native density because the source is already the output size, so the text
-// rasterizes straight to its final scale rather than through a 6400px
-// intermediate.
+// The og card's text uses a system font — look at it after regenerating.
+// Native density: the source is already the output size.
 await writeFile(path.join(out, "og-card.png"), await render(OG, 1200, 630, { density: 72 }));
 console.log("og-card.png (1200x630)");
 
-// The ICO comes from favicon.svg, NOT from icon-square.svg like everything
-// above. An .ico is drawn into a tab exactly as authored, so it has to be the
-// same rounded tile the SVG shows — otherwise the icon's shape depends on which
-// entry the browser happened to pick. The square full-bleed source exists for
-// the platforms that composite their own mask over it, which a tab does not do.
-// It also matters at 16px: favicon.svg is drawn at a 32 viewBox for this size,
-// where the 512 source's ring is a sub-pixel smudge.
-//
-// 16/32 is the whole list on purpose: png-to-ico stores uncompressed 32-bit
-// BMP, not PNG, so an entry costs width*height*4 bytes flat however few colors
-// the art has. A 48px entry is 9,640 B of them — it was two thirds of this file.
-// Adding 64 or 128 "for Windows shortcuts" costs 17 kB and 66 kB.
+// The ICO comes from favicon.svg, not icon-square.svg: a tab draws it as
+// authored, so it must be the same rounded tile the SVG favicon shows.
+// Only 16/32: png-to-ico stores uncompressed BMP, so larger entries are costly.
 const ico = await pngToIco(await Promise.all([16, 32].map((s) => icon(FAVICON, s))));
 await writeFile(path.join(out, "favicon.ico"), ico);
 console.log("favicon.ico (16/32)");

@@ -3,60 +3,35 @@ import { PrldSessionClient } from "@prelude.so/js-sdk/session";
 import { setTokenProvider } from "@/api/client";
 
 const APP_ID = process.env.NEXT_PUBLIC_PRELUDE_APP_ID ?? "";
-// Optional. The SDK key is a publishable client identifier, not a secret — it
-// is safe in the bundle, unlike the Management API key, which must stay
-// server-side.
+// Optional, and publishable: safe in the bundle (unlike the Management API key).
 const SDK_KEY = process.env.NEXT_PUBLIC_PRELUDE_SDK_KEY ?? "";
 
-// The host this app authenticates against. A custom domain keeps the session
-// cookies first-party — `auth.songfolio.live` is a subdomain of the site, where
-// `<app_id>.session.prelude.dev` is a third party every modern browser is
-// entitled to block. It must name the same host the API expects to see in `iss`
-// (PRELUDE_SESSION_DOMAIN), because Prelude's issuer is per-host: point the two
-// at different hosts and every token verifies as invalid. The fallback covers an
-// unset variable — an environment that never registered a domain — rather than
-// being the local default; `localhost` is a third party to either host, so
-// development runs against the same one production does.
+// Must name the same host as the API's PRELUDE_SESSION_DOMAIN: the issuer is
+// per-host, so two different hosts reject every token. The custom domain keeps
+// session cookies first-party.
 const SESSION_DOMAIN =
   (process.env.NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN ?? "").trim() ||
   `${APP_ID}.session.prelude.dev`;
 
 /**
- * The email OTP login configuration password reset sends its code through.
- *
- * Reset has to name a configuration explicitly because this one is deliberately
- * *not* the application's default: an emailed code is a way into the account, so
- * it is reachable only from the screen that asks for one, and never offered
- * beside the password field as a way to sign in. Prelude has no anonymous email
- * channel other than a login configuration — step-up is only available to a
- * session that already exists — which is why resetting a password starts by
- * signing in with the code. See CLAUDE.md, "Password reset".
+ * The email OTP login configuration password reset sends its code through. Not
+ * the app's default login, so a code is never offered as a way to sign in. See
+ * CLAUDE.md, "Password reset".
  */
 export const OTP_LOGIN_CONFIG_ID = (
   process.env.NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID ?? ""
 ).trim();
 
-/**
- * The Prelude session client.
- *
- * A module singleton rather than component state: it owns session storage and
- * token refresh, so a second instance would keep its own cache and the two
- * would disagree about who is signed in.
- */
+/** The Prelude session client. A singleton: a second instance would disagree about the session. */
 export const sessionClient = new PrldSessionClient({
   domain: SESSION_DOMAIN,
   ...(SDK_KEY ? { sdkKey: SDK_KEY } : {}),
 });
 
 /**
- * Returns the current access token, or null when signed out.
- *
- * `refresh()` is served from the SDK's cache while the token is still valid, so
- * calling it per request is cheap — and on the first call it is also what
- * restores a stored session. That is why a request issued before `AuthProvider`
- * has finished mounting still carries a token: it awaits the same restore the
- * provider is waiting on. Tokens are never copied into application state or
- * storage; the SDK is the single owner.
+ * Returns the current access token, or null when signed out. `refresh()` is
+ * cached while valid and restores a stored session on first call. Tokens are
+ * never copied out of the SDK.
  */
 export async function getAccessToken(forceRefresh?: boolean): Promise<string | null> {
   try {
@@ -71,11 +46,7 @@ export async function getAccessToken(forceRefresh?: boolean): Promise<string | n
   }
 }
 
-// Registered at import time, and deliberately not from an effect in
-// AuthProvider. React flushes child effects before parent ones, so a query
-// mounted underneath the provider begins fetching *before* the provider's own
-// effects run — and every such request went out with the module default, which
-// returns no token, and was answered as a guest. `GET /lists/{id}` was the
-// visible case: a private list 404ing to its own owner on every page load, with
-// no 401 for the client to retry. Module scope has no ordering left to lose.
+// At import time, never from an effect: child queries fetch before the
+// provider's effects run, and would go out as a guest (a private list 404s to
+// its owner, with no 401 to retry).
 setTokenProvider(getAccessToken);

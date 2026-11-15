@@ -13,11 +13,8 @@ export interface SnippetSegment {
 /**
  * Splits a delimited snippet into plain and highlighted runs.
  *
- * The API delimits matches with sentinel characters rather than HTML because
- * PostgreSQL's ts_headline returns the source lyrics verbatim — any markup a
- * contributor typed comes back untouched. Splitting on sentinels means the
- * lyrics are only ever rendered as text, so there is nothing to sanitize and
- * no way to inject markup.
+ * Sentinels, not HTML: ts_headline returns raw lyrics verbatim, so rendering
+ * only text makes markup injection impossible.
  */
 export function parseSegments(text: string): SnippetSegment[] {
   const segments: SnippetSegment[] = [];

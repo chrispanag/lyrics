@@ -25,11 +25,7 @@ interface CreditDraft extends PersonSelection {
   role: CreditRole;
 }
 
-/**
- * One recording being edited. Every value is a string because every one of them
- * is an input's value — the year included, which is why it is converted at save
- * rather than held as a number that an empty field has no honest value for.
- */
+/** One recording being edited. All strings, as input values; the year converts at save. */
 interface RecordingDraft {
   label: string;
   youtubeUrl: string;
@@ -49,28 +45,15 @@ const emptyRecording = (): RecordingDraft => ({
 });
 
 /**
- * Whether a person row names anybody — either one picked from the autocomplete
- * or one typed in.
- *
- * The same question decides three things: which credits are sent, which
- * performers are sent, and whether a recording is worth sending at all. Written
- * out at each of them, the second and third can come to disagree, and a
- * recording is then submitted whose performers are all dropped.
+ * Whether a person row names anybody, picked or typed. The one test for which
+ * credits, performers and recordings are sent, so they cannot disagree.
  */
 const named = (person: PersonSelection): boolean => Boolean(person.personId || person.name.trim());
 
 /**
- * Whether a recording row is an abandoned add rather than a performance.
- *
- * Beside `RecordingDraft` and `emptyRecording` deliberately: it is a field-by-
- * field mirror of that shape, so the shape and the "is anything in it" test have
- * to be read together. Held down in `onSubmit` instead, a field added to the
- * draft is a field this predicate does not know about — and a row carrying only
- * that field is then dropped at save, silently, since the form still looks
- * filled in and the whole payload is sent on the next save anyway.
- *
- * `isFirst` is deliberately not among the fields consulted: marking an empty row
- * as the first recording says nothing about any performance.
+ * Whether a recording row is an abandoned add. Mirrors `RecordingDraft` field by
+ * field: a new draft field must be added here, or a row holding only it is
+ * silently dropped at save. `isFirst` alone says nothing about a performance.
  */
 const isBlankRecording = (recording: RecordingDraft): boolean =>
   !recording.label.trim() &&
@@ -104,20 +87,15 @@ export function SongEditorPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [dirty, setDirty] = useState(false);
 
-  // Populate once the song arrives, and only once per song.
-  //
-  // Keying this on `existing` alone made it re-run on every refetch — react-query
-  // hands back a fresh object each time — so a reconnect or a cache invalidation
-  // silently overwrote whatever was in the form and reset `dirty`, taking the
-  // unsaved-changes guard down with it.
+  // Populate once per song, not per refetch: react-query returns a fresh object
+  // each time, which would overwrite unsaved edits. Everything hydrated goes here.
   const hydratedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!existing || hydratedFor.current === existing.id) return;
     hydratedFor.current = existing.id;
     setTitle(existing.title);
     setAltTitle(existing.alt_title ?? "");
-    // This page reads a single song, so the body is there; the fallback is for
-    // the type, which allows for the listing projections that leave it out.
+    // Present on a single song; the type also covers listings that omit it.
     setLyrics(existing.lyrics ?? "");
     setLanguage(existing.language);
     setNotes(existing.notes ?? "");
@@ -129,14 +107,8 @@ export function SongEditorPage() {
       })),
     );
     setGenreIds(existing.genres.map((genre) => genre.id));
-    // Hydrated here rather than in an effect of its own, for the reason above:
-    // keyed on `existing`, a refetch would overwrite recordings a contributor
-    // had edited and not yet saved.
-    //
-    // The link is taken verbatim, unparsed. A stored link this app cannot read
-    // is a real thing — the importer kept what it was given — and the server
-    // carries such a value through a save that resends it unchanged. Cleaning
-    // it up here would break that match and refuse the save.
+    // The link is taken verbatim: the server exempts an unparseable stored link
+    // only when it is resent unchanged.
     setRecordings(
       existing.recordings.map((recording) => ({
         label: recording.label ?? "",
@@ -153,8 +125,7 @@ export function SongEditorPage() {
     setDirty(false);
   }, [existing]);
 
-  // Warn before a tab close discards unsaved lyrics. Route-level navigation is
-  // guarded separately by the confirm in the cancel handler.
+  // Warn before a tab close discards unsaved lyrics.
   useEffect(() => {
     if (!dirty) return;
 
@@ -167,16 +138,11 @@ export function SongEditorPage() {
   if (!hasRole(user?.role, "contributor")) return <Navigate to="/" replace />;
   if (isEdit && loadingSong) return <Spinner />;
 
-  // A failed load must not fall through to the form. The fields would render
-  // empty under an "Edit song" heading, and every save sends the whole song —
-  // so a contributor who assumed the page had merely lost focus and retyped the
-  // title would overwrite the real lyrics, credits, and genres with blanks.
+  // A failed load must not fall through to the form: every save sends the whole
+  // song, so saving an empty form would blank it.
   if (isEdit && (songFailed || !existing)) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-6">
-        {/* This branch persists rather than resolving, so it needs a name like
-            the equivalent states on the song and list pages — otherwise the one
-            page a contributor is stuck on is the one whose tab says nothing. */}
         <PageTitle name="Edit song" />
         <ErrorMessage>
           This song could not be loaded, so it cannot be edited right now. Reload the page to
@@ -186,29 +152,15 @@ export function SongEditorPage() {
     );
   }
 
-  // The server enforces this too; the redirect just avoids showing a form that
-  // is guaranteed to be rejected.
+  // Display only; the server enforces this too.
   if (isEdit && existing && !canEditSong(user, existing)) {
     return <Navigate to={songHref(existing)} replace />;
   }
 
   /**
-   * Leaves the editor for the page it was opened from.
-   *
-   * Popping rather than navigating, because an edit is only ever reached from
-   * the song's own page: pushing the song again — or replacing the editor entry
-   * with it, which is the same thing one entry earlier — leaves two identical
-   * song entries in a row, and the reader has to press Back twice to get past a
-   * page that never appeared to change. Popping also restores the previous
-   * address verbatim, which is what keeps `?list=` on a song reached from a
-   * list; building the destination would drop it, the Edit link having dropped
-   * it first.
-   *
-   * `key` is `"default"` only on the entry a tab was opened on, so an editor
-   * address opened in a fresh tab — the one way in with nothing behind it —
-   * takes the fallback instead, and replaces so Back does not return to a form
-   * already saved or abandoned. The fallback is derived rather than passed,
-   * since where the editor belongs is the same question at both call sites.
+   * Leaves the editor by popping history: navigating to the song duplicates its
+   * entry and drops `?list=`. A fresh tab (`key === "default"`) has nothing
+   * behind it, so it replaces with the song instead. See CLAUDE.md, "Frontend".
    */
   const leaveEditor = () => {
     if (location.key === "default") navigate(id ? songRefHref(id) : "/", { replace: true });
@@ -226,14 +178,7 @@ export function SongEditorPage() {
       recordings.map((recording, i) => (i === index ? { ...recording, ...patch } : recording)),
     );
 
-  /**
-   * Rewrites one recording's performers.
-   *
-   * Three controls edit that list — the name field, the remove button and the add
-   * button — and each spelled out the `editRecording(index, { performers: ... })`
-   * wrapper around its own one-line change, which is the nesting rather than the
-   * change being what the row read as.
-   */
+  /** Rewrites one recording's performers. */
   const editPerformers = (
     index: number,
     next: (performers: PersonSelection[]) => PersonSelection[],
@@ -244,34 +189,16 @@ export function SongEditorPage() {
       ),
     );
 
-  /**
-   * Marks one recording as the first, or none of them.
-   *
-   * Written across every row rather than on the one pressed, because at most one
-   * may claim it — the database enforces that with a unique index and the API
-   * refuses the payload before then, so a second `true` is not something to
-   * discover at save time.
-   */
+  /** Marks one recording as the first, or none; at most one may claim it. */
   const markFirst = (index: number | null) =>
     track(setRecordings)(
       recordings.map((recording, i) => ({ ...recording, isFirst: i === index })),
     );
 
   /**
-   * A recording's field error, looked up by the index the server keyed it on.
-   *
-   * That is not the row's index in the form. Blank rows are dropped from the
-   * payload, so the server counts only the rows it was actually sent — and read
-   * by the draft index instead, a message lands on whichever row happens to sit
-   * at the payload's position: with one abandoned empty row above a bad link,
-   * "Not a recognizable YouTube link." appears under the empty row, which has no
-   * link in it at all, and the row that does shows nothing wrong. With two, the
-   * key matches no row and the message disappears, leaving only "The song could
-   * not be saved."
-   *
-   * A blank row is sent nothing and so can own no error, which is what the guard
-   * says; without it a blank row would claim the message belonging to the next
-   * row down.
+   * A recording's field error, by the payload index the server keyed it on.
+   * Blank rows are not sent, so that differs from the form index, and a blank
+   * row owns no error.
    */
   const recordingError = (index: number, field: string): string | undefined => {
     if (isBlankRecording(recordings[index]!)) return undefined;
@@ -290,8 +217,7 @@ export function SongEditorPage() {
       lyrics,
       language,
       notes: notes.trim() || null,
-      // Blank rows are dropped rather than rejected: an empty credit is an
-      // abandoned edit, not a mistake worth interrupting the save for.
+      // Blank rows are abandoned edits, dropped rather than rejected.
       credits: credits
         .filter(named)
         .map((credit, index) => ({
@@ -300,9 +226,7 @@ export function SongEditorPage() {
           position: index,
         })),
       genre_ids: genreIds,
-      // A recording with nothing in it is an abandoned add, like a blank credit
-      // row. What counts as "nothing in it" is stated beside the draft shape it
-      // reads, which is the only place both can be kept in step.
+      // Blank recordings are dropped too; see `isBlankRecording`.
       recordings: recordings
         .filter((recording) => !isBlankRecording(recording))
         .map((recording, index) => ({
@@ -328,10 +252,7 @@ export function SongEditorPage() {
         ? await updateSong.mutateAsync(payload)
         : await createSong.mutateAsync(payload);
       setDirty(false);
-      // Adding a song is the one save that does not go back: the reader has to
-      // land on what they just created, not wherever they opened the form from
-      // — which for `/songs/new` is usually the catalog, and popping would
-      // return them there with nothing to show for it.
+      // A new song lands the reader on it rather than popping back.
       if (isEdit) leaveEditor();
       else navigate(songHref(saved), { replace: true });
     } catch (caught) {
@@ -345,11 +266,7 @@ export function SongEditorPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
-      {/* Named after the form rather than the song being edited, so the entry
-          the editor leaves behind is distinguishable from the song page it was
-          opened from — which is the whole point on a route that pops history to
-          get out. One binding for the tab and the heading, so the two cannot
-          drift into disagreeing about which form this is. */}
+      {/* Named after the form, so its history entry differs from the song page. */}
       <PageTitle name={heading} />
       <h1 className="mb-6 text-2xl font-bold tracking-tight">{heading}</h1>
 
@@ -374,8 +291,6 @@ export function SongEditorPage() {
           />
         </Field>
 
-        {/* The year used to sit beside this. It belongs to a recording now, so
-            there is one field here rather than a grid of two. */}
         <Field label="Language" htmlFor="language" error={fieldErrors.language}>
           <Select
             id="language"
@@ -431,10 +346,7 @@ export function SongEditorPage() {
               <Button
                 type="button"
                 variant="ghost"
-                // Nothing but an icon, so the size states that rather than a
-                // `px-2` fighting the one `md` brings: `cn` is a plain join, so
-                // both paddings stayed in the class list and the width of this
-                // button was whichever Tailwind emitted last.
+                // `size="icon"`, not a padding override: `cn` is a plain join.
                 size="icon"
                 aria-label={`Remove credit ${index + 1}`}
                 onClick={() => track(setCredits)(credits.filter((_, i) => i !== index))}
@@ -491,10 +403,7 @@ export function SongEditorPage() {
           </p>
 
           {recordings.map((recording, index) => {
-            // Per row, in the render body like the single field this replaced.
-            // The parser is shared with every other caller — see lib/youtube.ts
-            // — because a copy per field is a copy per field to keep in step
-            // with the server.
+            // Mirrors the server's parser; see lib/youtube.ts.
             const videoId = extractVideoId(recording.youtubeUrl);
 
             return (
@@ -515,9 +424,7 @@ export function SongEditorPage() {
                   <Input
                     id={`recording-${index}-label`}
                     value={recording.label}
-                    // Field renders the hint and the error under ids derived
-                    // from htmlFor and leaves pointing at them to the caller,
-                    // so an input that names neither has a hint nobody hears.
+                    // `Field` leaves pointing at its hint or error to the caller.
                     aria-describedby={
                       recordingError(index, "label")
                         ? `recording-${index}-label-error`
@@ -559,9 +466,7 @@ export function SongEditorPage() {
                     type="url"
                     inputMode="url"
                     value={recording.youtubeUrl}
-                    // The song-level field this replaced carried the same pair,
-                    // and it is the only thing saying which link shapes are
-                    // accepted — dropped, a screen reader hears the label alone.
+                    // The hint is the only statement of accepted link shapes.
                     aria-describedby={
                       recordingError(index, "youtube_url")
                         ? `recording-${index}-youtube-error`
@@ -571,11 +476,8 @@ export function SongEditorPage() {
                   />
                 </Field>
 
-                {/* The only confirmation that a pasted link was recognized, now
-                    that there is no thumbnail to show: nothing appears until the
-                    id parses, and it parses exactly what the server does. Its
-                    absence is not a refusal — a stored link this cannot read
-                    still saves, which is why nothing here gates on it. */}
+                {/* Confirms a pasted link was recognized. Never a gate: an
+                    unparseable stored link still saves. */}
                 {videoId && <WatchOnYouTube videoId={videoId} />}
 
                 <div className="space-y-2">
@@ -601,10 +503,7 @@ export function SongEditorPage() {
                       <Button
                         type="button"
                         variant="ghost"
-                        // Nothing but an icon, exactly like the remove-credit
-                        // button above: `size` says so rather than a `px-2`
-                        // joining `md`'s `px-4` in the class list and leaving the
-                        // width to whichever Tailwind emitted last.
+                        // `size="icon"`, not a padding override: `cn` is a plain join.
                         size="icon"
                         aria-label={`Remove performer ${performerIndex + 1} from recording ${index + 1}`}
                         onClick={() =>
@@ -629,11 +528,6 @@ export function SongEditorPage() {
                   </Button>
                 </div>
 
-                {/* The notes a recording carries are rendered on the song page's
-                    recordings sheet and validated per row by the server, so
-                    without a control here they were a value nothing could write
-                    and nothing could correct — and isBlankRecording consulting a
-                    field no input sets was dead logic. */}
                 <Field
                   label="Notes"
                   htmlFor={`recording-${index}-notes`}
@@ -654,8 +548,7 @@ export function SongEditorPage() {
                 </Field>
 
                 <div className="flex items-center justify-between gap-2">
-                  {/* A radio, so at most one recording can claim it by
-                      construction rather than by a check at save time. */}
+                  {/* A radio, so at most one recording can claim it. */}
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="radio"
@@ -684,11 +577,8 @@ export function SongEditorPage() {
             );
           })}
 
-          {/* The way to say "none of them". A radio group cannot be cleared by
-              pressing a member again, and all-false is a state the data really
-              holds — first-ness is a claim a contributor may not be able to
-              make. It also means removing the marked recording needs no rule
-              about which one inherits the mark: none does. */}
+          {/* "None of them": a radio cannot be unpressed, and all-false is a
+              real state, since first-ness is a claim nobody may be able to make. */}
           {recordings.length > 0 && (
             <label className="flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400">
               <input

@@ -38,14 +38,7 @@ const ROLE_DESCRIPTIONS: Record<Role, string> = {
   admin: "Full access, including deleting anything",
 };
 
-/**
- * The row both consoles list their records in.
- *
- * Stated once because the two screens sit behind the same tabs and so have to
- * look alike: typed twice, the next padding or dark-mode change lands on one of
- * them and nothing says the other has drifted — which is the failure
- * `cardStyles` itself exists to stop.
- */
+/** The row both console screens list records in, shared so they cannot drift. */
 const adminRowChrome = cn(
   cardChrome,
   "flex flex-col gap-3 bg-white p-4 sm:flex-row sm:items-center sm:justify-between dark:bg-stone-900",
@@ -63,38 +56,20 @@ function RowSkeletons() {
 }
 
 /**
- * The console's shell: the container, the heading, and the way between screens.
- *
- * This is the element of the `/admin` layout route, which is what lets
- * `RequireAdmin` wrap the section once instead of every screen in it — a screen
- * added below it is admin-only by position rather than by someone remembering
- * the wrapper. The heading is read from the tab that matches the address, so a
- * screen's name is written in one place rather than in the route, the tab, and
- * a title prop.
- *
- * The console gets a single entry in the app's navigation, naming the section
- * rather than either screen in it, so moving between these screens is something
- * the console itself has to offer. That was once forced — the phone's tab bar
- * was a row of equal shares and a fifth would have crowded it — and the drawer
- * that replaced it has room to spare. It stays one entry because the reason it
- * points at `/admin` has not changed: a `NavLink` matches on prefix, so the one
- * entry is lit on both screens, where two would light one and darken the other
- * as an admin moved between them.
+ * The console's shell: the `/admin` layout route's element, wrapped once by
+ * `RequireAdmin`. The heading and title come from the tab matching the address,
+ * and the tabs are the only way between screens: the app nav has one `/admin`
+ * entry so its prefix match stays lit on both.
  */
 export function AdminConsole() {
   const { pathname } = useLocation();
-  // Matched by segment, not by characters: `startsWith` would hand a future
-  // `/admin/users-archive` the heading "Users" while the NavLink beside it,
-  // which matches segments, correctly stayed dark.
+  // By segment, like NavLink: a bare `startsWith` would match `/admin/users-x`.
   const current = ADMIN_TABS.find(
     (tab) => pathname === tab.to || pathname.startsWith(`${tab.to}/`),
   );
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
-      {/* Named here for the same reason the heading is: the tab that matches
-          the address is the one place a screen's name is written, so a screen
-          added to ADMIN_TABS is titled without touching this file. */}
       <PageTitle name={current ? `Admin · ${current.label}` : "Admin"} />
       {current && <h1 className="text-2xl font-bold tracking-tight">{current.label}</h1>}
 
@@ -151,9 +126,7 @@ export function AdminUsersPage() {
       </div>
 
       {error && <ErrorMessage>{error}</ErrorMessage>}
-      {/* Said, rather than shown as an empty result: "No users matched." for a
-          request that failed sends an admin looking for an account away
-          believing it does not exist. */}
+      {/* A failure must not read as "No users matched." */}
       {isError && (
         <ErrorMessage>{errorMessage(fetchError, "Users could not be loaded.")}</ErrorMessage>
       )}
@@ -163,10 +136,7 @@ export function AdminUsersPage() {
       <ul className="space-y-2">
         {data?.data.map((row) => (
           <li key={row.id} className={adminRowChrome}>
-            {/* The picture belongs to the name, so the two travel together:
-                the row itself is a stack on a phone and spreads its children to
-                its edges from `sm` up, which would put the two halves of one
-                identity at opposite ends of it. */}
+            {/* Grouped so `sm:justify-between` keeps picture and name together. */}
             <div className="flex min-w-0 items-center gap-3">
               <Avatar user={row} size="md" />
               <div className="min-w-0">
@@ -213,26 +183,15 @@ export function AdminUsersPage() {
   );
 }
 
-/**
- * Which sheet is up, and what it is about.
- *
- * One value rather than three flags, which is what makes two open sheets
- * impossible to reach rather than merely unlikely — and what lets the subject
- * of a rename or a delete travel with the sheet instead of in a state slot of
- * its own that has to be cleared in step with it.
- */
+/** Which sheet is up and its subject; one value, so two cannot be open. */
 type GenreSheet =
   | { kind: "create" }
   | { kind: "rename"; genre: Genre }
   | { kind: "delete"; genre: Genre };
 
 /**
- * The two ways the name form is used.
- *
- * A table rather than two near-identical sheets: the wording is the whole of
- * the difference between them, and side by side it can be compared. Only one is
- * ever on the page — `Sheet` renders nothing while closed — which is why the
- * field below carries a single id.
+ * The name form's wording per use. Only one is ever mounted (`Sheet` renders
+ * nothing closed), which is why the field below carries a single id.
  */
 const NAME_FORMS = {
   create: {
@@ -256,13 +215,8 @@ interface Failure {
 }
 
 /**
- * Where genres come from.
- *
- * The song editor offers the genres that exist and nothing more, so until this
- * screen there was no way to add one at all — the catalog was stuck with
- * whatever the seed and the import had created. Naming a genre is the whole of
- * it: the slug the filter URLs are built from is derived server-side, and a
- * rename deliberately leaves it alone so a shared link keeps working.
+ * Creates, renames and deletes genres. The slug is derived server-side, and a
+ * rename leaves it alone so shared filter links keep working.
  */
 export function AdminGenresPage() {
   const { data, isLoading, isError, error: fetchError } = useGenres();
@@ -274,9 +228,7 @@ export function AdminGenresPage() {
   const [name, setName] = useState("");
   const [failure, setFailure] = useState<Failure | null>(null);
 
-  // Opening a sheet drops what the last attempt said — otherwise a rename opens
-  // under the message a failed creation left behind. Only a rename starts with
-  // a name in the field, since it is the one editing a name that exists.
+  // Clears the last attempt's failure, or a rename opens under a create's error.
   const openSheet = (next: GenreSheet) => {
     setFailure(null);
     setName(next.kind === "rename" ? next.genre.name : "");
@@ -284,13 +236,8 @@ export function AdminGenresPage() {
   };
 
   /**
-   * Runs one of the three writes.
-   *
-   * A success closes the sheet; a failure leaves it open holding the reason,
-   * with the name still in the field — so a refusal the server can explain, a
-   * name already taken above all, is corrected rather than retyped. The message
-   * is read the way the song editor reads one: a sentence for the attempt, and
-   * whatever the server said about the field under the field.
+   * Runs a write. Success closes the sheet; failure keeps it open with the name
+   * still typed and the server's reason, the field's own under the field.
    */
   const attempt = async (write: () => Promise<unknown>, fallback: string) => {
     setFailure(null);
@@ -320,8 +267,6 @@ export function AdminGenresPage() {
 
   const closeSheet = () => setSheet(null);
   const genres = data?.data ?? [];
-  // The delete sheet is a confirmation rather than a form, so the name form
-  // answers to the other two kinds.
   const nameForm = sheet && sheet.kind !== "delete" ? NAME_FORMS[sheet.kind] : null;
 
   return (
@@ -333,9 +278,7 @@ export function AdminGenresPage() {
         </Button>
       </div>
 
-      {/* A failed fetch must not read as an empty catalog: told there are no
-          genres, an admin adds the ones that already exist — and every one of
-          those is then refused as a duplicate slug, which explains nothing. */}
+      {/* A failure must not read as "No genres yet": re-adding them all is refused. */}
       {isError && (
         <ErrorMessage>{errorMessage(fetchError, "Genres could not be loaded.")}</ErrorMessage>
       )}
@@ -396,9 +339,7 @@ export function AdminGenresPage() {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder={nameForm.placeholder}
-                // `Field` renders one or the other under this input and says
-                // outright that the control has to point at it; unpointed,
-                // neither the hint nor a refusal is read out with the field.
+                // `Field` requires the control to point at its hint or error.
                 aria-describedby={failure?.field ? "genre-name-error" : "genre-name-hint"}
               />
             </Field>
@@ -427,8 +368,7 @@ export function AdminGenresPage() {
             )
           }
         >
-          {/* The count is the point of this sheet: deleting a genre takes it off
-              every song that carries it, and nothing else says how many. */}“
+          {/* The count is the point: nothing else says how many songs lose it. */}“
           {sheet.genre.name}” will be removed, and {songCount(sheet.genre.song_count ?? 0)} will
           lose this label. The songs themselves are not deleted.
         </ConfirmSheet>

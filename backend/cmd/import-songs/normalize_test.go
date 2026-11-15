@@ -39,17 +39,14 @@ func TestNormalizeRole(t *testing.T) {
 		want  creditClass
 		known bool
 	}{
-		// The old catalog's enum. "songwriter" is the load-bearing case: it
-		// means whoever wrote the words, which this schema calls a lyricist.
+		// The old catalog's enum; "songwriter" means the lyricist.
 		{"composer", classComposer, true},
 		{"songwriter", classLyricist, true},
 		{"COMPOSER", classComposer, true},
 		{"μουσική", classComposer, true},
 		{"μουσικη", classComposer, true}, // unaccented spelling agrees
 		{"στιχουργός", classLyricist, true},
-		// The performing vocabulary. "artist" is the old catalog's word for the
-		// act a song is known by, which is a performance of it and not its
-		// authorship — so it sends the person to the recording.
+		// The performing vocabulary; "artist" goes to the recording.
 		{"singer", classPerformer, true},
 		{"artist", classPerformer, true},
 		{"performer", classPerformer, true},
@@ -81,8 +78,7 @@ func TestYouTubeVideoID(t *testing.T) {
 			t.Errorf("youTubeVideoID(%q) = %q, want %q", in, got, id)
 		}
 	}
-	// A non-YouTube or malformed link must yield "" so the column stays NULL
-	// rather than holding a wrong identifier.
+	// A non-YouTube or malformed link must yield "" so the column stays NULL.
 	for _, in := range []string{"", "https://vimeo.com/12345", "not a url", "https://youtu.be/tooshort"} {
 		if got := youTubeVideoID(in); got != "" {
 			t.Errorf("youTubeVideoID(%q) = %q, want empty", in, got)
@@ -123,8 +119,7 @@ func TestCleanAppliesSchemaConstraints(t *testing.T) {
 		}
 	})
 
-	// An out-of-range year leaves nothing worth a recording behind it, so the
-	// record ends up with none at all rather than with an empty one.
+	// An out-of-range year leaves nothing for a recording, so none is made.
 	t.Run("out-of-range year becomes NULL", func(t *testing.T) {
 		w := newWarnings()
 		s, err := record{Title: "x", ReleaseYear: &badYear}.clean(w)
@@ -139,8 +134,7 @@ func TestCleanAppliesSchemaConstraints(t *testing.T) {
 		}
 	})
 
-	// A year on its own is enough to describe a performance, so it synthesizes
-	// the first recording and lands there rather than on the song.
+	// A year alone synthesizes the first recording.
 	t.Run("in-range year is kept on a synthesized first recording", func(t *testing.T) {
 		w := newWarnings()
 		s, err := record{Title: "x", ReleaseYear: &goodYear}.clean(w)
@@ -174,8 +168,7 @@ func TestCleanAppliesSchemaConstraints(t *testing.T) {
 func TestCleanCreditsDeduplicates(t *testing.T) {
 	w := newWarnings()
 	// The same person in the same role twice would violate the song_credits
-	// primary key mid-transaction; in two different roles it is legitimate and
-	// must survive (487 songs in the source catalog look like this).
+	// primary key; in two different roles it is legitimate and must survive.
 	s, err := record{
 		Title: "Φραγκοσυριανή",
 		Credits: []credit{
@@ -216,8 +209,7 @@ func TestFingerprintIgnoresCreditOrderAndCase(t *testing.T) {
 		t.Errorf("fingerprints differ:\n  %q\n  %q", a, b)
 	}
 
-	// Distinct songs sharing a title must not collide — the source catalog has
-	// seven such groups, and collapsing them would silently lose songs.
+	// Distinct songs sharing a title must not collide, or songs are lost.
 	c := fingerprint("Ο χωρισμός", []string{"Βασίλης Τσιτσάνης"})
 	d := fingerprint("Ο χωρισμός", []string{"Μάρκος Βαμβακάρης"})
 	if c == d {
@@ -225,12 +217,8 @@ func TestFingerprintIgnoresCreditOrderAndCase(t *testing.T) {
 	}
 }
 
-// The split: authorship stays on the song, performance goes to its recording.
-//
-// This is the shape every row of the old export has, and it must land where
-// migration 000009 put the rows already in the catalog — the migration moved
-// artist credits onto a first recording, so importing the same export again has
-// to produce the same thing rather than a second copy of the song.
+// Authorship stays on the song and performance goes to its recording, matching
+// migration 000009 so a re-import does not duplicate the song.
 func TestCleanSplitsCreditsFromPerformers(t *testing.T) {
 	w := newWarnings()
 	year := 1964
@@ -275,9 +263,7 @@ func TestCleanSplitsCreditsFromPerformers(t *testing.T) {
 	}
 }
 
-// A record saying nothing about any performance gets no recording. An empty one
-// would claim a performance nobody described, and 85 songs in the live catalog
-// are legitimately in this state.
+// A record saying nothing about any performance gets no recording.
 func TestCleanSynthesizesNoRecordingWithoutOne(t *testing.T) {
 	w := newWarnings()
 	s, err := record{
@@ -293,9 +279,8 @@ func TestCleanSynthesizesNoRecordingWithoutOne(t *testing.T) {
 	}
 }
 
-// An explicit recordings array is taken as given rather than synthesized, and
-// a source claiming two firsts keeps the first claim — the alternative is a
-// unique-violation that fails the whole transaction.
+// An explicit recordings array is taken as given, and of two firsts the first
+// claim wins (two would violate the unique index).
 func TestCleanTakesExplicitRecordings(t *testing.T) {
 	w := newWarnings()
 	s, err := record{
@@ -333,8 +318,7 @@ func TestFingerprintCountsPerformers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The same title with that person's name is what the stored row yields,
-	// whichever table the name is now reached through.
+	// What the stored row yields via either table.
 	want := fingerprint("Θάλασσα Πλατιά", []string{"Γιώργος Νταλάρας"})
 	if got := s.fingerprint(); got != want {
 		t.Errorf("fingerprint = %q, want %q — a re-import would duplicate the song", got, want)

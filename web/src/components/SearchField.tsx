@@ -8,38 +8,18 @@ import { cn } from "@/lib/cn";
  * The catalog's search box: the field, the icon inside it, and the way to empty
  * it.
  *
- * Two headers carry this — the catalog's own and the one above a song — and
- * every detail of it is a detail that only shows on a phone: the icon sits
- * inside the field rather than beside it so the box keeps the full width, the
- * clear button is a 44px target rather than a 14px glyph, and the text is
- * `text-base`, because iOS Safari zooms the whole page when a field with smaller
- * text takes focus. Restated at the second call site, that last one is invisible
- * until someone reads the page on a phone.
+ * `text-base` is required: iOS Safari zooms the page when a field with smaller
+ * text takes focus. The clear button is a 44px target.
  *
- * It shares `fieldChrome` with the form primitives but not their layout: this
- * box is taller and rounder than an `<Input>`, and `cn` is a plain join, so
- * passing h-12/rounded-2xl through one would leave both values in the class list
- * with CSS source order picking the winner.
+ * Not built on `<Input>`: its height and radius differ, and `cn` cannot override.
  *
- * `className` lands on the wrapper rather than the field, because the wrapper is
- * the box a caller would place. No caller places one today — `SearchHeader` owns
- * the field's share of its row, `flex-1` and all — and the prop stays named here
- * rather than left to `...rest`, which would put a caller's class on the input,
- * where it replaces `fieldClasses` outright instead of adding to it.
- *
- * Everything else an input can be handed comes through `...rest`, which is what
- * lets the song page's box be a combobox — its role, the aria that goes with it,
- * and its own key handling — without this file knowing that a results panel
- * exists. The label and placeholder are written below rather than defaulted in
- * the signature, since `...rest` comes after them: neither caller overrides one
- * today, and one that needs to still can.
+ * `className` goes on the wrapper; left to `...rest` it would replace
+ * `fieldClasses` on the input. `...rest` comes after the label and placeholder,
+ * so callers can override them.
  */
 const fieldClasses = cn(
   fieldChrome,
-  // search-own-clear drops the cross the browser draws inside a search field,
-  // which lands on top of the one below; see the rule in styles/index.css for
-  // why that is switched off by class here rather than for every search field in
-  // the app.
+  // Drops the browser's own clear cross; see styles/index.css.
   "search-own-clear h-12 w-full rounded-2xl pl-10 pr-10 text-base",
 );
 
@@ -50,7 +30,7 @@ export function SearchField({
   ...rest
 }: {
   value: string;
-  /** The text, not the event: both call sites hold it as plain state. */
+  /** The text, not the event. */
   onChange: (value: string) => void;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type">) {
   return (

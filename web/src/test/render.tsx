@@ -7,22 +7,16 @@ import { AuthContext, type AuthContextValue } from "@/auth/context";
 import type { User } from "@/lib/types";
 
 /**
- * Renders with the router, query client, and auth context in place.
- *
- * The auth context is stubbed rather than using the real AuthProvider, so
- * tests never touch the Prelude SDK — which would try to reach a live session
- * domain and makes the signed-in state hard to control.
+ * Renders with the router, query client, and auth context in place. The auth
+ * context is a stub, so tests never touch the Prelude SDK.
  */
 export function renderWithProviders(
   ui: ReactElement,
   options: {
     user?: User | null;
     /**
-     * The address to render at, or the history behind it: an array is the
-     * entries a visitor arrived through, oldest first, rendered at the last of
-     * them. That is the only way to give a spec something to go Back to, which
-     * anything popping the history — the editor leaving for the page it was
-     * opened from — has to be tested against.
+     * The address to render at, or the history behind it (oldest first,
+     * rendered at the last), for specs that go Back.
      */
     route?: string | string[];
     auth?: Partial<AuthContextValue>;
@@ -51,9 +45,6 @@ export function renderWithProviders(
     resendVerificationCode: async () => {},
     startPasswordReset: async () => {},
     resendPasswordResetCode: async () => {},
-    // Flow-neutral like every other entry here: which of the two supported
-    // step-up configurations is deployed is not something an app-wide helper
-    // should decide for every spec. The reset's own specs say which they walk.
     confirmPasswordResetCode: async () => ({ secondCodeSent: false }),
     startPasswordChange: async () => {},
     confirmPasswordWriteCode: async () => {},

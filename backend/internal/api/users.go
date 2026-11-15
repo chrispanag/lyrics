@@ -130,9 +130,7 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) error 
 		}
 	}
 
-	// Only the local record is removed. The Prelude account is deliberately
-	// left intact: deleting it is irreversible and belongs in the Prelude
-	// dashboard, not behind a list row's delete button.
+	// Only the local record; the Prelude account is left for its dashboard.
 	if err := s.store.DeleteUser(r.Context(), id); err != nil {
 		return storeError(err, "User")
 	}

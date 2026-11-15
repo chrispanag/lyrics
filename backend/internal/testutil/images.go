@@ -15,9 +15,8 @@ import (
 // Opaque is the fill SolidPNG takes when a test only cares about the size.
 var Opaque = color.NRGBA{R: 0x33, G: 0x66, B: 0x99, A: 0xff}
 
-// SolidPNG encodes a one-color PNG of the given size. It is opaque unless a
-// color with a zero alpha is asked for, which is how a test gets the
-// transparency that JPEG cannot carry.
+// SolidPNG encodes a one-color PNG of the given size; a zero-alpha fill gives
+// a transparent image.
 func SolidPNG(t testing.TB, width, height int, fill color.NRGBA) []byte {
 	t.Helper()
 
@@ -32,10 +31,8 @@ func SolidPNG(t testing.TB, width, height int, fill color.NRGBA) []byte {
 }
 
 // BandsPNG encodes a PNG of equal-width vertical bands, one square of the given
-// edge per fill, so the picture is len(fills):1. With an odd number of fills the
-// largest centered square inside it is exactly the middle band, which is what
-// lets a test tell a centered crop apart from a whole picture squashed into the
-// square — the output dimensions alone cannot, since both are square.
+// edge per fill. With an odd number of fills the centered square crop is exactly
+// the middle band, distinguishing a crop from a squash.
 func BandsPNG(t testing.TB, band int, fills ...color.NRGBA) []byte {
 	t.Helper()
 
@@ -52,16 +49,12 @@ func BandsPNG(t testing.TB, band int, fills ...color.NRGBA) []byte {
 	return out.Bytes()
 }
 
-// SolidJPEG encodes a one-color JPEG of the given size. JPEG carries no alpha,
-// so this is the opaque path — and the only format the browser ever uploads,
-// which is why it is worth having beside SolidPNG.
+// SolidJPEG encodes a one-color JPEG of the given size, the format the browser
+// uploads.
 func SolidJPEG(t testing.TB, width, height int) []byte {
 	t.Helper()
 
-	// Mid-gray: 0x80 luma, and neutral chroma. Leaving Cb and Cr at zero is not
-	// gray but the far corner of the color space, which converts to black — a
-	// fixture that would fail an assertion about its own pixels for reasons
-	// having nothing to do with the code under test.
+	// Mid-gray needs neutral chroma (0x80); zero Cb/Cr is not gray.
 	img := image.NewYCbCr(image.Rect(0, 0, width, height), image.YCbCrSubsampleRatio420)
 	for i := range img.Y {
 		img.Y[i] = 0x80
@@ -78,11 +71,8 @@ func SolidJPEG(t testing.TB, width, height int) []byte {
 	return out.Bytes()
 }
 
-// PNGHeader builds a PNG that *declares* the given dimensions and carries no
-// pixel data whatsoever. Only the header is well formed, which is all a
-// decompression bomb needs to be: the size is read from IHDR long before any
-// pixels are, so a few dozen bytes here stand in for the gigabytes of bitmap
-// that decoding them would allocate.
+// PNGHeader builds a PNG that declares the given dimensions and carries no
+// pixel data: a decompression bomb, since the size is read from IHDR first.
 func PNGHeader(width, height uint32) []byte {
 	ihdr := []byte("IHDR")
 	ihdr = binary.BigEndian.AppendUint32(ihdr, width)

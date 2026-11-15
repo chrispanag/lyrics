@@ -33,18 +33,14 @@ import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
 import type { Song } from "@/lib/types";
 
-// Drag-and-drop machinery is worth its weight only to someone who can reorder,
-// which is the list's owner and nobody else. Everyone else reads the same songs
-// without it, so it loads on demand rather than in the page's own chunk.
+// Only an owner can reorder, so the drag machinery loads on demand.
 const SortableSongList = lazy(() =>
   import("@/components/SortableSongList").then((m) => ({ default: m.SortableSongList })),
 );
 
 /**
- * The list without its drag machinery: how a reader sees it, and how an owner
- * sees a list of one — where there is nothing to reorder but still something to
- * remove. Hence `onRemove` is optional here and required on the sortable list;
- * omitted, the rows are read-only.
+ * The list without drag machinery, for readers and for an owner's list of one.
+ * Without `onRemove` the rows are read-only.
  */
 function StaticSongList({
   songs,
@@ -181,8 +177,8 @@ export function ListDetailPage() {
   const location = useLocation();
   const { user, loading: sessionLoading } = useAuth();
 
-  // Held until the session is known: asked for a moment too early, a private
-  // list reads as a guest request and comes back 404 to its own owner.
+  // Waiting on the session is redundant now that auth/session registers the
+  // token provider at import time, but harmless; see CLAUDE.md "Frontend".
   const { data: list, isLoading, isError } = useList(id, !sessionLoading);
   const updateList = useUpdateList(id ?? "");
   const deleteList = useDeleteList();
@@ -196,27 +192,21 @@ export function ListDetailPage() {
   const [naming, setNaming] = useState(false);
   const [copyName, setCopyName] = useState("");
   const [copyError, setCopyError] = useState("");
-  // Where this app is being served from. `window` is not there for a render a
-  // server performed, so the share link below was the page's one line that
-  // could not survive the `ssr: false` coming off. The server snapshot is what
-  // a server render and hydration both use, and the browser's answer follows.
-  // The origin never changes under a running page, so there is nothing to
-  // subscribe to.
+  // A server render has no `window`: its snapshot is "" and the browser's
+  // answer follows on hydration. The origin never changes, so there is
+  // nothing to subscribe to.
   const origin = useSyncExternalStore(
     subscribeToNothing,
     () => window.location.origin,
     () => "",
   );
 
-  // A disabled query is not "loading" as far as React Query is concerned, so the
-  // wait for the session has to be spelled out here — otherwise the page falls
-  // straight through to its error state and reports a list it has yet to ask for
-  // as unavailable.
+  // A disabled query is not `isLoading`, so the session wait is spelled out, or
+  // the page reports a list it has not asked for yet as unavailable.
   if (sessionLoading || isLoading) {
     return (
       <div className="mx-auto max-w-2xl space-y-3 px-4 py-6">
-        {/* Nameless on purpose while the list is in flight — the alternative is
-            a tab reading "undefined — Songfolio" on the way in. */}
+        {/* Nameless while in flight, rather than "undefined — Songfolio". */}
         <PageTitle />
         <Skeleton className="h-8 w-1/2" />
         <Skeleton className="h-24 w-full" />
@@ -241,17 +231,13 @@ export function ListDetailPage() {
   const removeFromList = (songId: string) => removeSong.mutate(songId);
   // Undefined for a reader, which is what leaves their rows read-only.
   const onRemove = isOwner ? removeFromList : undefined;
-  // `variables` outlives the request it belongs to, so the row it names would
-  // stay disabled after the removal settled were this not held to the flight.
+  // `variables` outlives its request, so it is held to the flight.
   const pendingRemoval = removeSong.isPending ? removeSong.variables : undefined;
-  // Built from the origin rather than the whole of the current address, so the
-  // link is the canonical one whatever query or hash this page was reached with.
+  // From the origin, so no query or hash leaks into the shared link.
   const shareUrl = `${origin}/lists/${list.id}`;
 
   const copyLink = async () => {
-    // Clipboard access needs a secure context and can be refused outright. The
-    // link is on screen and selectable, so a refusal asks for a manual copy
-    // rather than leaving a button that silently does nothing.
+    // Clipboard access can be refused; then the page asks for a manual copy.
     try {
       await navigator.clipboard.writeText(shareUrl);
       setLinkState("copied");
@@ -267,9 +253,7 @@ export function ListDetailPage() {
       setNaming(false);
       navigate(`/lists/${copied.id}`);
     } catch (caught) {
-      // Names are unique per owner, so a second copy of the same list — or a
-      // copy of one's own — is an ordinary outcome rather than a failure. It
-      // opens the rename step instead of reporting an error nobody can act on.
+      // Names are unique per owner, so a 409 opens the rename step.
       if (caught instanceof ApiError && caught.status === 409) {
         setCopyName(name ?? list.name);
         setNaming(true);
@@ -300,9 +284,7 @@ export function ListDetailPage() {
           {songCount(list.item_count)}
         </p>
 
-        {/* A reader only ever reaches a list that is public, so the copy is
-            offered unconditionally to everyone but its owner — guests included,
-            who are sent to sign in and returned here. */}
+        {/* A non-owner only reaches a public list; guests are sent to sign in. */}
         {!isOwner && (
           <div className="mt-4">
             <Button size="sm" onClick={onSave} loading={copyList.isPending}>
@@ -350,8 +332,7 @@ export function ListDetailPage() {
               )}
             </Button>
 
-            {/* The default list is where one-tap saves land, so it has no
-                delete affordance at all rather than a button that 403s. */}
+            {/* The default list cannot be deleted (the server 403s). */}
             {!list.is_default && (
               <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
                 <Trash2 aria-hidden className="size-4 text-red-600" />
@@ -362,20 +343,15 @@ export function ListDetailPage() {
         )}
       </header>
 
-      {/* `songs` carries `omitempty` on the Go side, so an empty list arrives
-          with the key absent rather than as []. `undefined === 0` is false, so
-          the strict comparison rendered an empty <ul> instead of the empty
-          state — exactly the case the empty state exists for. */}
+      {/* `songs` is `omitempty` in Go, hence the `?? []` above. */}
       {songs.length === 0 ? (
         <EmptyState
           icon={<ListMusic className="size-12" />}
           title="This list is empty"
           description={isOwner ? "Open a song and use Save to add it here." : undefined}
         />
-      ) : /* Only an owner can reorder, and a single song has nowhere to go, so
-             everyone else is served the plain list and never downloads the drag
-             library. It doubles as the fallback while that chunk loads, which
-             keeps the songs on screen instead of blanking the page. */
+      ) : /* Sortable only for an owner with two or more songs; the static list
+             is also the fallback while that chunk loads. */
       isOwner && songs.length > 1 ? (
         <Suspense
           fallback={
@@ -391,9 +367,7 @@ export function ListDetailPage() {
             songs={songs}
             listId={list.id}
             onReorder={(songIds) => reorderList.mutate(songIds)}
-            // The unnarrowed callback: this branch is owner-only, and the
-            // prop is required, so the optional `onRemove` would need an
-            // assertion to be passed here.
+            // Owner-only branch, and the prop is required: pass the unnarrowed one.
             onRemove={removeFromList}
             pendingRemoval={pendingRemoval}
           />
@@ -443,8 +417,7 @@ export function ListDetailPage() {
             </Button>
           </div>
         ) : (
-          /* Publishing is what makes the link work, so it is stated and asked
-             for rather than done quietly behind a Share button. */
+          /* Publishing is asked for, never done quietly behind Share. */
           <div className="space-y-4">
             <p className="text-sm text-stone-600 dark:text-stone-400">
               “{list.name}” is private. Publishing it lets anyone holding the link read it and
@@ -466,8 +439,7 @@ export function ListDetailPage() {
       <Sheet
         open={naming}
         onClose={() => {
-          // The conflict that opened this sheet is resolved by abandoning it,
-          // so its message goes too rather than lingering on the page behind.
+          // Abandoning the rename drops the conflict message too.
           setNaming(false);
           setCopyError("");
         }}

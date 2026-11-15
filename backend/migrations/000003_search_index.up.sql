@@ -1,9 +1,8 @@
 -- Weighted search index over songs, plus the triggers that keep the
 -- denormalized credit and genre text in sync with the join tables.
 
--- Recomputes both denormalized columns for the given songs. Recomputing both
--- when only one changed costs a negligible amount at this scale and removes any
--- chance of the two paths drifting apart.
+-- Recomputes both denormalized columns for the given songs, always both, so
+-- there is one path and nothing to drift.
 CREATE OR REPLACE FUNCTION refresh_songs_denorm(p_song_ids uuid[]) RETURNS void
 LANGUAGE sql AS $$
   UPDATE songs s SET
@@ -89,18 +88,14 @@ CREATE TRIGGER genres_rename_denorm
   AFTER UPDATE ON genres
   FOR EACH ROW EXECUTE FUNCTION songs_denorm_from_genre_rename();
 
--- The weighted vector. Weights encode intent: a title match is a different kind
--- of hit from a phrase buried in the third verse, and ts_rank_cd is given the
--- weight array {D,C,B,A} at query time to score them accordingly.
+-- The weighted vector; ts_rank_cd is given {D,C,B,A} at query time.
 --
 --   A  title            the strongest possible signal
 --   B  alt title, credits   searching an artist name should surface their work
 --   C  genres           weak but useful
 --   D  lyrics           the largest field, so the weakest per-hit weight
 --
--- The configuration name is schema-qualified for the same reason app_norm's
--- body is: a generated-column expression is evaluated under a restricted
--- search_path, where a bare 'app_simple' does not resolve.
+-- Schema-qualified: generated columns run under a restricted search_path.
 ALTER TABLE songs ADD COLUMN search_vector tsvector
 GENERATED ALWAYS AS (
   setweight(to_tsvector('public.app_simple', app_norm(coalesce(title,        ''))), 'A') ||

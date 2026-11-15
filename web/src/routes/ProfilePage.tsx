@@ -41,37 +41,23 @@ export function ProfilePage() {
   const [pictureMenu, setPictureMenu] = useState(false);
   const [theme, setTheme] = useState<Theme>(storedTheme);
 
-  // Adjusted while rendering, and keyed on the stored name rather than on the
-  // user object. Every write to the auth context replaces that object — a new
-  // picture, a removed one — and an effect watching it reset this field each
-  // time, throwing away a display name the reader had typed and not yet saved.
-  // The stored name actually changing is the one case that should win.
+  // Keyed on the stored name, not the user object: every auth-context write
+  // (e.g. a new picture) replaces the object and would discard a typed name.
   if (savedName !== syncedName) {
     setSyncedName(savedName);
     setDisplayName(savedName);
   }
 
-  // Applying the theme is the button's side effect, not a consequence of state
-  // changing. As an effect it also re-ran on mount, redoing the matchMedia query
-  // the inline script in app/layout.tsx already ran before first paint, and
-  // writing back to storage the value just read from it.
+  // An event handler, not an effect: app/layout.tsx's script already applied
+  // the stored theme before first paint.
   const selectTheme = (next: Theme) => {
     setTheme(next);
     applyTheme(next);
     storeTheme(next);
   };
 
-  // The title is repeated across all three branches rather than hoisted, which
-  // is a trade rather than a necessity: collapsing the branches into one
-  // insertion point means lifting three unrelated layouts into a variable and
-  // moving `onSubmit` above the guard it sits below. Three copies of a
-  // five-word line is the cheaper side of that.
-  //
-  // What is not optional is having one on each. React unmounts the hoisted
-  // title with the branch that rendered it, so a branch without one does not
-  // inherit the previous page's name — the head is left with no title at all
-  // and the tab falls back to the URL for as long as that state lasts. On the
-  // guest branch that is until they sign in.
+  // Every branch needs its own PageTitle: the hoisted title unmounts with the
+  // branch, and a branch without one leaves the tab showing the URL.
   if (loading)
     return (
       <>
@@ -112,8 +98,7 @@ export function ProfilePage() {
     event.preventDefault();
     setError("");
     try {
-      // The PATCH responds with the updated user, so handing it straight to the
-      // context saves a GET /me for a record we are already holding.
+      // The PATCH returns the updated user, saving a GET /me.
       const updated = await updateProfile.mutateAsync({
         display_name: displayName.trim() || null,
       });
@@ -121,32 +106,22 @@ export function ProfilePage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (caught) {
-      // Without this the rejection is unhandled and the button simply returns
-      // to "Save changes", leaving no way to tell a failed save from a
-      // successful one.
       setError(errorMessage(caught, "Your profile could not be saved."));
     }
   };
 
   const onPickPicture = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    // Belt to the close below's suspenders, which unmounts this input and so
-    // already empties it: on one that outlived the pick, retrying the same file
-    // — the usual one after a failure — would raise no change event at all.
+    // Lets the same file be picked again; closing the sheet also empties it.
     event.target.value = "";
     setPictureMenu(false);
     if (!file) return;
 
     setPictureError("");
-    // Set before the canvas work rather than only around the request:
-    // preparing a 12MP photo is the slow half, on the device where it is
-    // slowest, and left out of the pending state the control reads "Add
-    // picture" throughout — so a second pick starts a second decode and a
-    // second upload, and two reloads land in whatever order they finish.
+    // Set before the canvas work, the slow half, so a second pick is refused.
     setPreparing(true);
     try {
-      // Cropped and shrunk here, which is what keeps a phone photo under the
-      // API's 1 MB cap. The server re-encodes it regardless.
+      // Shrunk here to stay under the API's upload cap; the server re-encodes.
       const updated = await uploadAvatar.mutateAsync(await toSquareJpeg(file));
       await reload(updated);
     } catch (caught) {
@@ -175,13 +150,8 @@ export function ProfilePage() {
 
       <div className="mb-6">
         <PictureButton user={user} busy={busy} onClick={() => setPictureMenu(true)} />
-        {/* The badge's spinner said this to everyone who could see it and to
-            nobody else — the button's name does not change and the badge is
-            `aria-hidden`, so between choosing a photo and its landing (a 12MP
-            decode, on the device where that is slowest) a screen reader had
-            silence. Rendered always and emptied rather than mounted on demand:
-            a live region has to be on the page before its text changes, or the
-            change is the region arriving and there is nothing to announce. */}
+        {/* Announces the wait the aria-hidden badge spinner shows. Always
+            rendered: a live region must exist before its text changes. */}
         <span role="status" className="sr-only">
           {busy ? busyMessage(removeAvatar.isPending) : ""}
         </span>
@@ -229,9 +199,7 @@ export function ProfilePage() {
 
       <div className="mt-8">
         <SectionHeading>Security</SectionHeading>
-        {/* A link rather than a form on this page: changing a password takes an
-            emailed code first, which is a flow of its own and not something to
-            begin by accident beside the display name. */}
+        {/* A link: changing a password is its own emailed-code flow. */}
         <Link to="/change-password" className={buttonClasses("secondary", "lg", "w-full")}>
           <KeyRound aria-hidden className="size-4" />
           Change password
@@ -249,22 +217,9 @@ export function ProfilePage() {
 }
 
 /**
- * The picture, and the one control that changes it.
- *
- * The whole circle is the button rather than the pencil alone. A badge small
- * enough to sit on the perimeter of an 80px circle is around 32px across, well
- * under the 44px floor every other control on this page keeps — and pressing
- * the pencil still works, because it is drawn inside the button it marks.
- * What the pair of buttons this replaces could not do is line up with the
- * circle: a `<label>` and a `<Button>` are separate elements sized separately,
- * so the stack beside the picture sat visibly ragged against it and against
- * each other, which no spacing on the row could fix.
- *
- * Busy is drawn on the circle for the same reason the pending state is set
- * before the canvas work rather than around the request alone: preparing a
- * 12MP photo is the slow half, on the device where it is slowest, and the
- * sheet holding the control has closed by then — so the circle is the only
- * thing left on screen that can say something is happening.
+ * The picture, and the one control that changes it. The whole circle is the
+ * button, since the badge alone is under the 44px touch floor. Busy is drawn
+ * here because the sheet has closed by then.
  */
 function PictureButton({
   user,
@@ -279,47 +234,25 @@ function PictureButton({
     <button
       type="button"
       onClick={onClick}
-      // Deliberately not `disabled` while busy, which is what it was: closing
-      // the sheet hands focus back here, and focus cannot land on a disabled
-      // element — so the reader who pressed the control that just unmounted was
-      // dropped on `<body>` instead. Reopening mid-upload is harmless because
-      // the sheet refuses its own controls while busy, which is where that guard
-      // belongs anyway: it is the pick that must not happen twice, not the menu.
+      // Not `disabled` while busy: closing the sheet returns focus here, which a
+      // disabled element cannot take. The sheet refuses its own controls instead.
       aria-busy={busy}
       aria-label="Edit picture"
       className={
-        // `group` so the badge can answer a hover over the whole circle: it is
-        // the part that looks pressable, and lighting up only when the pointer
-        // is on the badge itself makes the other 80% of the target look inert.
-        //
-        // `inline-flex` and not the button's own `inline-block`, which leaves a
-        // line box under the picture for a descender that is not there — three
-        // or four pixels of it, enough to drop the badge clear of the circle it
-        // is meant to straddle. Nor plain `flex`, which is block-level and
-        // would stretch the target across the column.
-        //
-        // No focus classes: `index.css` outlines every `:focus-visible` in
-        // `brand-500`, and this is a real button, so the outline lands on it —
-        // following the `rounded-full` as an outline does. The `<label>` below
-        // draws its own only because focus there is on an `sr-only` input the
-        // outline would trace instead.
+        // `group`: the badge lights on hover anywhere over the circle.
+        // `inline-flex`: `inline-block` leaves a descender gap under the picture.
+        // No focus classes: index.css's global `:focus-visible` outline applies.
         "group relative inline-flex cursor-pointer rounded-full"
       }
     >
       <Avatar user={user} size="lg" className={busy ? "opacity-50" : undefined} />
       <span
-        // Decorative: the button around it carries the name, and a second one
-        // here would have a screen reader announce the control twice.
+        // Decorative: the button carries the name.
         aria-hidden
         className={cn(
-          // Straddling the perimeter, not inside it: a badge within the circle
-          // covers the face, and one clear of it reads as a separate control
-          // beside the picture — which is the arrangement this replaces.
+          // Straddles the perimeter: inside it covers the face.
           "absolute -right-0.5 -bottom-0.5 flex size-8 items-center justify-center rounded-full",
-          // The ring is the page's own ground rather than a color of its own
-          // — `stone-50`, which is what `body` paints, not white — so the badge
-          // separates from a photo of any brightness while reading as a bite
-          // out of the circle rather than as a second disc on top of it.
+          // The ring is the body's ground color, so it reads as a bite out of the circle.
           "bg-brand-600 text-white ring-2 ring-stone-50 transition-colors dark:ring-stone-950",
           !busy && "group-hover:bg-brand-700 group-active:bg-brand-800",
         )}
@@ -331,20 +264,9 @@ function PictureButton({
 }
 
 /**
- * The choice between the two things that can be done to a picture.
- *
- * A sheet rather than a menu anchored to the badge: it is the app's one modal,
- * so Escape, the scroll lock and the pair of attributes `lib/modal.ts` reads
- * all come with it. An anchored menu would need its own dismissal listener over
- * the page, which is the shape of thing the tap strips were.
- *
- * Both actions close it the moment they start, so failure is reported on the
- * page rather than in here: waiting instead would leave the sheet over the
- * picture it is in the middle of replacing. What it does still have to say is
- * that a picture is already on its way, because the trigger no longer refuses a
- * press while one is — this is where that refusal lives now, and it has to be
- * stated rather than inferred from the sheet being shut, or the second pick is
- * a second decode and two reloads landing in whatever order they finish.
+ * Change or remove the picture. A `Sheet`, so it gets Escape, scroll lock and
+ * the modal marking. Both actions close it as they start, so failures show on
+ * the page; while busy it disables its own controls, since the trigger does not.
  */
 function PictureMenu({
   open,
@@ -364,19 +286,12 @@ function PictureMenu({
   return (
     <Sheet open={open} onClose={onClose} title="Profile picture">
       <div className="space-y-2">
-        {/* A label around a visually hidden input, rather than a button that
-            clicks one: this way the control is a real file picker to a
-            keyboard and a screen reader, and `sr-only` keeps the input
-            focusable where `hidden` would not. */}
+        {/* A label around an `sr-only` input, so it stays a focusable file picker. */}
         <label
           className={cn(
             buttonClasses("secondary", "lg", "w-full"),
-            // The ring belongs to the label because the input it wraps is
-            // `sr-only`: the browser draws focus on a 1px clipped box, so a
-            // keyboard user got no visible focus here while every other
-            // control on the page — a real button — shows one. The disabled
-            // pair is conditional for the same reason: a `disabled:` variant
-            // can never match a label, only the input inside it.
+            // Focus and disabled styles live on the label: the `sr-only` input
+            // shows no focus, and `disabled:` cannot match a label.
             "cursor-pointer focus-within:ring-2 focus-within:outline-none",
             busy && "cursor-not-allowed opacity-60",
           )}
@@ -392,13 +307,7 @@ function PictureMenu({
           {busy ? "Working…" : hasPicture ? "Change picture" : "Add picture"}
         </label>
         {hasPicture && (
-          // Ghost and not `danger`, and with no color passed through either:
-          // `cn` is a plain join, so a `text-red-600` here lands beside the
-          // variant's own `text-stone-700` and loses to it on source order —
-          // rendering exactly as it does without the class, which is how a
-          // dead override survives being looked at. The trash is what marks
-          // this as the destructive one, and a removed picture can be put
-          // back, which is not what the solid red is for.
+          // Ghost, with no color override: `cn` is a plain join, so one would lose.
           <Button variant="ghost" className="w-full" disabled={busy} onClick={onRemove}>
             <Trash2 aria-hidden className="size-4" />
             Remove picture
@@ -419,31 +328,16 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * What the live region says while a picture is in flight.
- *
- * Two sentences rather than one, because the two waits end in opposite places:
- * a reader told "saving" who then finds no picture has been given the wrong
- * account of what they just did.
- */
+/** What the live region says while a picture is saving or being removed. */
 function busyMessage(removing: boolean): string {
   return removing ? "Removing your picture…" : "Saving your picture…";
 }
 
 /**
- * What to say when a picture does not get stored.
- *
- * The failures worth distinguishing happen on either side of the request. One
- * is the API's, and carries its own sentence. The other never leaves the
- * browser — an image it has no decoder for, a file far too big to decode — and
- * carries none, so `errorMessage` would render the fallback and send whoever
- * read it looking for a server fault. That one is matched by name, the way the
- * auth screens match Prelude's.
+ * What to say when a picture is not stored. Browser-side failures carry no API
+ * message, so they are matched by error name.
  */
 function pictureFailure(caught: unknown): string {
-  // Two names, because one message cannot serve both: a photo refused on size
-  // was perfectly readable, and telling whoever chose it to try a JPEG is
-  // advice their JPEG already satisfied.
   if (caught instanceof Error && caught.name === IMAGE_TOO_LARGE_ERROR) {
     return `That photo is too large to prepare. Use one under ${MAX_SOURCE_MB} MB.`;
   }
@@ -452,10 +346,7 @@ function pictureFailure(caught: unknown): string {
   }
 
   const message = errorMessage(caught, "Your picture could not be saved.");
-  // The API's message says what went wrong and its `image` detail says what to
-  // do about it — the size and dimension limits. There is no field here to hang
-  // a field-level detail on, the way a form would, so the two are read as one
-  // sentence rather than the half that is actionable being dropped.
+  // No field to hang the `image` detail on, so it joins the message.
   const detail = errorDetails(caught).image;
   return detail ? `${message} ${detail}` : message;
 }

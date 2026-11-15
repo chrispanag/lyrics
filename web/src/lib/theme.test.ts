@@ -3,18 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { THEME_BOOT_SCRIPT, applyTheme, storedTheme } from "./theme";
 
 /**
- * The theme rule is written twice — once as `applyTheme`, once as the inline
- * script `app/layout.tsx` puts in every document — because nothing bundled runs
- * early enough to be the first application of a load. Adjacent definitions are
- * all the sharing that is available, so this is what stops them drifting: the
- * two disagreeing is silent in the only direction that matters, a dark-theme
- * visitor getting one white frame on every page, which no other spec would see
- * and which a light-theme machine never shows at all.
+ * Holds the inline boot script to `applyTheme(storedTheme())`; a divergence shows
+ * only as a white frame for dark-theme visitors.
  *
- * The script is run through *indirect* eval on purpose. Direct `eval` would give
- * it the scope of this function, where a stray `var` is a local; a `<script>`
- * runs in global scope, which is the only place the leak the last case checks
- * for can happen.
+ * Indirect eval, so the script runs in global scope like a real `<script>`.
  */
 const runBootScript = () => (0, eval)(THEME_BOOT_SCRIPT);
 
@@ -65,10 +57,7 @@ describe("THEME_BOOT_SCRIPT", () => {
     },
   );
 
-  // The key is the half of the duplication that fails forever rather than for
-  // one frame: written differently in the two places, every visitor's saved
-  // choice is read back as "system" on the way in and re-saved under the other
-  // name on the way out.
+  // A mismatched key would silently ignore every saved choice.
   it("reads the key applyTheme's own reader writes", () => {
     prefersDark(false);
     localStorage.setItem("lyrics:theme", "dark");
@@ -79,8 +68,6 @@ describe("THEME_BOOT_SCRIPT", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 
-  // A browser that refuses to hand its storage over must leave the document
-  // unthemed rather than throw before a line of the app has loaded.
   it("survives a storage that throws", () => {
     prefersDark(true);
     const getItem = vi
@@ -95,8 +82,7 @@ describe("THEME_BOOT_SCRIPT", () => {
     getItem.mockRestore();
   });
 
-  // An inline script runs in global scope, so `var` in there is a property of
-  // `window` for the life of the page. These two are named `t` and `d`.
+  // A `var` in an inline script lands on `window`.
   it("leaves no globals behind", () => {
     prefersDark(false);
 

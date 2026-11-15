@@ -21,8 +21,8 @@ const (
 	scopesKey    contextKey = "scopes"
 )
 
-// UserStore is the slice of the data layer the auth middleware needs. Narrowing
-// it to two methods keeps the middleware testable without a database.
+// UserStore is the slice of the data layer the auth middleware needs, narrow so
+// the middleware is testable without a database.
 type UserStore interface {
 	GetUserByPreludeID(ctx context.Context, preludeID string) (*store.User, error)
 	ProvisionUser(ctx context.Context, preludeID, email string, role store.Role) (*store.User, error)
@@ -50,10 +50,8 @@ func FromContext(ctx context.Context) *store.User {
 	return user
 }
 
-// HasScope reports whether the token on this request carries a step-up grant.
-//
-// The grant is short-lived and specific to the challenge that produced it, so
-// this answers "did the caller just prove something", not "who is the caller".
+// HasScope reports whether the token on this request carries a step-up grant:
+// "did the caller just prove something", not "who is the caller".
 func HasScope(ctx context.Context, scope string) bool {
 	scopes, _ := ctx.Value(scopesKey).([]string)
 	return slices.Contains(scopes, scope)
@@ -104,9 +102,8 @@ func (a *Authenticator) resolve(ctx context.Context, raw string) (*store.User, *
 		return nil, nil, httpx.Internal("Unable to load your account.").WithCause(err)
 	}
 
-	// Just-in-time provisioning. This covers a user created directly in the
-	// Prelude dashboard, and a local database restored from a backup older than
-	// the account — both of which would otherwise present as a confusing 403.
+	// Just-in-time provisioning: covers users created in the Prelude dashboard
+	// and databases restored from a backup older than the account.
 	if claims.Email == "" {
 		return nil, nil, httpx.Internal("Account cannot be provisioned.").WithCause(
 			errors.New("token has no email claim; configure an `email` custom claim " +
@@ -120,19 +117,9 @@ func (a *Authenticator) resolve(ctx context.Context, raw string) (*store.User, *
 
 	user, err = a.users.ProvisionUser(ctx, claims.UserID, claims.Email, role)
 	if err != nil {
-		// A local row already holds this address under a different Prelude
-		// account, which is the one provisioning failure that is not a fault and
-		// will not pass on the next request either. Reported as itself rather than
-		// as a server error: "Unable to provision your account" sends whoever
-		// reads it looking for an outage, and every sign-in by this account
-		// answers the same way until the stale row is dealt with by hand.
-		//
-		// Logged here because answering 409 rather than 500 also moved the cause
-		// out of sight: WriteError logs a 4xx cause at Debug and the default level
-		// is Info, so the one path that tells a reader to contact support would
-		// tell support nothing. Warn rather than Error — nothing here is failing,
-		// and the answer above repeats — carrying the id and the address that
-		// finding the stale row takes.
+		// A stale local row holds this address under another Prelude account;
+		// it persists until fixed by hand, so answer 409, not 500. Logged here
+		// because WriteError logs 4xx causes only at Debug.
 		if store.IsEmailTaken(err) {
 			slog.Warn("local row holds this address under another prelude account",
 				"prelude_user_id", claims.UserID, "email", claims.Email)
@@ -148,14 +135,9 @@ func (a *Authenticator) resolve(ctx context.Context, raw string) (*store.User, *
 	return user, claims, nil
 }
 
-// Optional attaches a principal when one is present.
-//
-// A request with no Authorization header proceeds as a guest, which is what
-// makes the catalog browsable without an account. A request that *does* carry a
-// token but fails verification is rejected with 401 rather than downgraded to
-// guest: silently rendering signed-out content to someone holding an expired
-// token looks like data loss, whereas a 401 tells the client to refresh and
-// retry.
+// Optional attaches a principal when one is present. No Authorization header
+// proceeds as a guest; a token that fails verification is a 401, never a
+// downgrade to guest, so the client refreshes and retries.
 func (a *Authenticator) Optional(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := bearerToken(r)
@@ -171,9 +153,7 @@ func (a *Authenticator) Optional(next http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(r.Context(), principalKey, user)
-		// Scopes ride alongside the principal rather than on it: they belong to
-		// the token this request arrived with, not to the account, and the next
-		// request from the same user will usually carry none.
+		// Scopes belong to this request's token, not the account.
 		ctx = context.WithValue(ctx, scopesKey, claims.Scopes)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -192,16 +172,9 @@ func (a *Authenticator) Required(next http.Handler) http.Handler {
 }
 
 // RequireVerifiedEmail rejects a principal whose address has not been confirmed.
-//
-// It gates the authenticated groups as a whole rather than route by route, so
-// the exemptions are the ones written out at the mount point — read your own
-// profile, and finish verifying — and a route added later is gated by being
-// added, not left open by omission.
-//
-// An account reaches this point with a perfectly valid session: verification is
-// a property of the address, not of the credentials, so this is a 403 and never
-// a 401. Answering 401 would send the client off to refresh a token that is
-// already fine, and land it back here.
+// It gates whole route groups (see CLAUDE.md, "Email verification"). It answers
+// 403, never 401: the session is valid, and a 401 would loop the client through
+// a token refresh.
 func RequireVerifiedEmail(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := FromContext(r.Context())
@@ -238,14 +211,8 @@ func RequireRole(minimum store.Role) func(http.Handler) http.Handler {
 }
 
 // CanEditSong reports whether a user may modify a song, given the account that
-// created it — nil for catalog content entered without an author.
-//
-// Admins may edit anything. Contributors may edit only what they created: the
-// role exists to let trusted users grow the catalog, not to let any one of them
-// rewrite another's work.
-//
-// Taking the owner rather than the whole song keeps the caller free to fetch
-// just that column, and keeps this decision independent of the song's shape.
+// created it (nil when unattributed). Admins may edit anything; contributors
+// only what they created.
 func CanEditSong(user *store.User, createdBy *uuid.UUID) bool {
 	if user == nil {
 		return false

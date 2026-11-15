@@ -21,24 +21,14 @@ const SORTS = ["relevance", "title", "newest", "oldest"] as const;
 
 /**
  * Reads the page number from the URL, treating anything unusable as page one.
- *
- * `Number("abc")` is NaN, and every comparison against NaN is false — so a
- * truncated or hand-edited link left both pagination buttons enabled, wrote
- * `page=NaN` back on every click, and pinned the reader to the first page under
- * a header reading "Page NaN of 3".
+ * NaN would pass every comparison as false and break pagination.
  */
 function pageNumber(raw: string | null): number {
   const parsed = Number(raw ?? "0");
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
-/**
- * Browse and search.
- *
- * Filter state lives in the URL rather than component state so a filtered
- * search can be shared, bookmarked, and survives the back button — which is
- * how people actually navigate a catalog.
- */
+/** Browse and search. Filter state lives in the URL, so it is shareable. */
 export function BrowsePage() {
   const [params, setParams] = useSearchParams();
   const { user } = useAuth();
@@ -47,14 +37,9 @@ export function BrowsePage() {
   const query = params.get("q") ?? "";
   const [draft, setDraft] = useState(query);
 
-  // The box is re-synced to the URL *during render*, not from an effect.
-  //
-  // An effect runs after the commit, which left `draft` and `debounced` holding
-  // the previous query for one render after a back/forward navigation — long
-  // enough for the push effect below to write that stale value straight back
-  // over the URL the browser had just restored. Because that write is
-  // `{ replace: true }`, the restored history entry was overwritten too, so
-  // pressing Back on a search appeared to do nothing at all.
+  // Re-synced to the URL during render, not in an effect: an effect leaves the
+  // stale query for one render, and the push effect below writes it back over
+  // a Back navigation (with `replace`), so Back appears to do nothing.
   const [syncedQuery, setSyncedQuery] = useState(query);
   if (query !== syncedQuery) {
     setSyncedQuery(query);
@@ -63,15 +48,10 @@ export function BrowsePage() {
 
   const debounced = useDebounced(draft, 250);
 
-  // Push the debounced input into the URL, replacing history so typing a
-  // query does not fill the back stack with one entry per keystroke.
-  //
-  // Both guards are load-bearing. `setParams` is not referentially stable — its
-  // useCallback deps include the parsed params — so this effect re-runs after
-  // *any* param write, and without the second guard it would clear `page` again
-  // on every one of them, making pagination impossible to advance. The first
-  // guard keeps a debounce that has not yet caught up with the box from being
-  // mistaken for something the user typed.
+  // Pushes the debounced input into the URL, replacing history per keystroke.
+  // Both guards are load-bearing: the first skips a debounce still catching up;
+  // the second stops this clearing `page` after every param write, since
+  // `setParams` is not referentially stable.
   useEffect(() => {
     if (debounced !== draft) return;
     if (debounced === query) return;
@@ -91,35 +71,21 @@ export function BrowsePage() {
   const page = pageNumber(params.get("page"));
   const genreSlug = params.get("genre_slug") ?? "";
   const language = params.get("language") ?? "";
-  // Validated rather than cast: `as` laundered any URL text into the union, so
-  // a hand-edited or truncated link put an unknown value on the wire — which
-  // the API now rejects outright rather than silently reordering.
+  // Validated rather than cast: the API rejects an unknown sort.
   const sortParam = params.get("sort") ?? "";
   const sort = (SORTS as readonly string[]).includes(sortParam)
     ? (sortParam as SongFilters["sort"])
     : undefined;
-  // Song pages link every credit to `/?person=<id>`, so this has to be read
-  // here — otherwise clicking an artist quietly lands on the unfiltered
-  // catalog, which reads as "this artist is on every song".
+  // Song pages link every credit to `/?person=<id>`; unread, an artist link
+  // silently lands on the unfiltered catalog.
   const personId = params.get("person") ?? "";
 
-  // The ordering actually in effect, which is what the sort picker shows.
-  //
-  // An absent `sort` is not "unsorted" — it is whichever default the listing
-  // falls back to, so the picker has to name it. Deriving both from one value
-  // is what keeps them from disagreeing: while the picker carried its own
-  // placeholder option, the no-query case offered "Newest first" twice, once as
-  // that placeholder and once as itself.
-  //
-  // Relevance is meaningless without a query — the API orders by newest for it
-  // either way — so a stale `sort=relevance` left over from a cleared search
-  // folds back to the default rather than labelling the list wrongly.
+  // The ordering in effect, which the sort picker shows; an absent `sort` is
+  // the default, named. Relevance without a query folds back to the default.
   const requested = sort === "relevance" && !query ? undefined : sort;
   const activeSort = requested ?? (query ? "relevance" : "newest");
 
-  // Not memoized: react-query hashes query keys structurally, so a fresh object
-  // each render produces the same hash and never re-runs the query. A useMemo
-  // here would only add a dependency array to keep in sync.
+  // Not memoized: react-query hashes query keys structurally.
   const filters: SongFilters = {
     q: query || undefined,
     person: personId || undefined,
@@ -133,12 +99,7 @@ export function BrowsePage() {
   const { data, isLoading, isError, error } = useSongs(filters);
   const { data: genres } = useGenres();
 
-  /**
-   * Edits the query string through one code path.
-   *
-   * `keepPage` is opt-in because changing any filter invalidates the current
-   * offset — the pagination buttons are the only callers that mean to keep it.
-   */
+  /** Edits the query string. Any filter change resets the page unless `keepPage`. */
   const updateParams = (
     mutate: (next: URLSearchParams) => void,
     options: { keepPage?: boolean } = {},
@@ -171,9 +132,7 @@ export function BrowsePage() {
   const activeGenre = genres?.data.find((g) => g.slug === genreSlug);
   // Fetched by id so the chip can show a name rather than a UUID.
   const { data: activePerson } = usePerson(personId);
-  // One list of what counts as a filter: the button's variant and the badge's
-  // number read the same value, so a fourth filter cannot reach one and miss
-  // the other.
+  // The one list of what counts as a filter; the button and badge both read it.
   const filterCount = [personId, genreSlug, language].filter(Boolean).length;
   const hasFilters = filterCount > 0;
   const total = data?.meta.total ?? 0;
@@ -181,28 +140,16 @@ export function BrowsePage() {
 
   return (
     <>
-      {/* The query rather than a fixed "Browse" when there is one: filter state
-          lives in the URL, so a search is a history entry and a bookmark, and
-          those are exactly the two places a row of identical "Songfolio"
-          entries is useless. */}
+      {/* Named by the query, since a search is a history entry and a bookmark. */}
       <PageTitle name={query ? `Search: ${query}` : "Browse"} />
-      {/* The header, its column and the field's share of the row all belong to
-          `SearchHeader`, which is how the field keeps its place on a song page —
-          where, with no button beside it, it takes the width this one gives
-          up. */}
       <SearchHeader
         trailing={
           <Button
-            // Square, and the count rides on its corner rather than sitting
-            // beside the icon: as text in the row it widened the button, and a
-            // wider button is a narrower field, so applying a filter resized
-            // the search box in place.
+            // Square with a corner badge, so a filter count never resizes the field.
             size="icon"
             variant={hasFilters ? "primary" : "secondary"}
             onClick={() => setFiltersOpen(true)}
-            // The count is in the name because an `aria-label` replaces the
-            // content it labels, so a badge inside this button is announced by
-            // nobody.
+            // The count is in the label: `aria-label` hides the badge from AT.
             aria-label={hasFilters ? `Filters (${filterCount} active)` : "Filters"}
             className="relative"
           >
@@ -225,13 +172,8 @@ export function BrowsePage() {
                   {activePerson?.name ?? "Artist"}
                 </Chip>
               )}
-              {/* Keyed on the slug in the URL rather than on the genre being
-                  found, the way the artist chip above already is. A genre can
-                  be deleted from the admin console while someone holds a link
-                  filtered by it: the request still answers, with no songs, so
-                  waiting for a name that will never arrive leaves that reader
-                  on an empty catalog with a lit filter button and nothing to
-                  press to clear it. */}
+              {/* Keyed on the URL, not on the genre resolving: a deleted genre
+                  must still leave a chip to clear. */}
               {genreSlug && (
                 <Chip onRemove={() => setParam("genre_slug", null)}>
                   {activeGenre?.name ?? genreSlug}
@@ -246,9 +188,6 @@ export function BrowsePage() {
           )
         }
       >
-        {/* The same box the song page carries, chrome and quirks included — see
-            `SearchField`. This one drives the listing below it rather than a
-            panel, so it is handed nothing but its state. */}
         <SearchField value={draft} onChange={setDraft} />
       </SearchHeader>
 
@@ -258,8 +197,7 @@ export function BrowsePage() {
             {isLoading ? "Searching…" : songCount(total)}
           </p>
           {hasRole(user?.role, "contributor") && (
-            // A styled Link rather than a Button wrapping one: nesting an
-            // anchor inside a button is invalid and breaks keyboard handling.
+            // A styled Link: an anchor nested in a button is invalid.
             <Link
               to="/songs/new"
               className={buttonClasses("secondary", "sm")}
@@ -274,13 +212,7 @@ export function BrowsePage() {
 
         {isLoading && (
           <div className="space-y-3">
-            {/* A song card is one height now that its empty slots are reserved,
-                and `h-28` is that height. Restated rather than reserved: a
-                skeleton has nothing inside it to take a height from, so this
-                is the number to correct by hand if a card's padding or type
-                sizes change. A card carrying a search snippet is taller, so
-                the rows still move under a query; standing in for the
-                unfiltered catalog is the most this can do. */}
+            {/* `h-28` restates a song card's height; update it if cards change. */}
             {Array.from({ length: 5 }, (_, index) => (
               <Skeleton key={index} className="h-28 w-full" />
             ))}
@@ -394,10 +326,7 @@ export function BrowsePage() {
                 className="flex-1"
                 onClick={() =>
                   updateParams((next) => {
-                    // `person` belongs here too: hasFilters and the filter-count
-                    // badge both count it, so leaving it behind made "Clear all"
-                    // close the sheet with the artist chip still showing and the
-                    // results still filtered.
+                    // Every key `filterCount` counts must be cleared here.
                     next.delete("person");
                     next.delete("genre_slug");
                     next.delete("language");

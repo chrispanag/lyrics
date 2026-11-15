@@ -18,28 +18,17 @@ import (
 var (
 	ErrNotFound = errors.New("record not found")
 	ErrConflict = errors.New("record already exists")
-	// ErrInUse means the row exists but is still referenced by another table
-	// that forbids the deletion. A foreign key violation cannot be classified
-	// from the error alone — on an INSERT it means the *referenced* row is
-	// missing, on a RESTRICT-ed DELETE it means the referencing rows remain —
-	// so only the statement that issued it can tell the two apart.
+	// ErrInUse means a RESTRICT-ed reference forbids the deletion. Only the
+	// issuing statement can classify a foreign key violation; see
+	// execExpectingRow.
 	ErrInUse = errors.New("record is still referenced")
 	// ErrInvalid means the store rejected the input before touching the
-	// database. Every such rule is currently also checked by the handler in
-	// front of it — deliberately, since only the handler can name the offending
-	// field — so this classifies a path that should not be reachable over HTTP.
-	// It is the backstop for when that duplication drifts: an unclassified
-	// validation error reads as a server fault, so the answer would be 500
-	// rather than 422, and the mapping is what a newly added store-side rule
-	// inherits instead of waiting for a handler to anticipate it.
+	// database. Handlers check the same rules to name the field; this is the
+	// backstop so a drifted rule answers 422, not 500.
 	ErrInvalid = errors.New("invalid input")
-	// ErrEmailTaken means users.email is already held by a row belonging to a
-	// different Prelude account. It is separated from ErrConflict because the two
-	// call for opposite handling and only this one is permanent: provisioning
-	// upserts on prelude_user_id, so a conflict there is the ordinary idempotent
-	// case, while a collision on email is a row that no retry of the same request
-	// can get past. Callers that would otherwise wait for the next attempt to
-	// settle it have to stop instead — see ProvisionUser.
+	// ErrEmailTaken means users.email is held by a different Prelude account.
+	// Unlike ErrConflict it is permanent: no retry gets past it. See
+	// ProvisionUser.
 	ErrEmailTaken = errors.New("email already registered to another account")
 )
 
@@ -69,11 +58,8 @@ func New(ctx context.Context, databaseURL string) (*Store, error) {
 	cfg.MaxConnIdleTime = 30 * time.Minute
 	cfg.HealthCheckPeriod = time.Minute
 
-	// The `<%` word-similarity operator reads its cutoff from a session GUC, and
-	// it is the only fuzzy form the GIN trigram indexes can answer —
-	// `word_similarity(a, b) >= x` would be equivalent but forces a sequential
-	// scan. Setting the GUC per connection is what lets search be both fuzzy
-	// and indexed.
+	// `<%` reads its cutoff from this GUC and is the only fuzzy form the GIN
+	// trigram indexes answer; `word_similarity(a, b) >= x` forces a seq scan.
 	cfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 		_, err := conn.Exec(ctx,
 			fmt.Sprintf("SET pg_trgm.word_similarity_threshold = %v", wordSimilarityThreshold))
@@ -104,10 +90,6 @@ func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 func (s *Store) Pool() *pgxpool.Pool { return s.pool }
 
 // inTx runs fn inside a transaction, rolling back on error or panic.
-//
-// Multi-table writes (a song plus its credits and genres) must be atomic:
-// a song that half-committed its credits would produce a wrong search vector
-// with no indication anything went wrong.
 func (s *Store) inTx(ctx context.Context, fn func(pgx.Tx) error) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -128,9 +110,8 @@ func (s *Store) inTx(ctx context.Context, fn func(pgx.Tx) error) error {
 	return nil
 }
 
-// defaultLimit is the page size applied when a caller passes none. It is kept
-// equal to httpx.DefaultLimit deliberately, so a direct store call and an HTTP
-// request paginate identically.
+// defaultLimit is the page size when a caller passes none. Keep equal to
+// httpx.DefaultLimit.
 const defaultLimit = 20
 
 // clampLimit applies the default page size to an unset or nonsensical limit.
@@ -141,9 +122,7 @@ func clampLimit(n int) int {
 	return n
 }
 
-// requireName trims a display name and rejects a blank one. Every named write
-// in this package shares the guard; spelled out per method it was six copies
-// that could drift apart.
+// requireName trims a display name and rejects a blank one.
 func requireName(kind, raw string) (string, error) {
 	name := strings.TrimSpace(raw)
 	if name == "" {
@@ -153,15 +132,9 @@ func requireName(kind, raw string) (string, error) {
 }
 
 // execExpectingRow runs a DELETE that must affect an existing row, mapping
-// "affected nothing" onto ErrNotFound. That mapping is what makes every DELETE
-// endpoint answer 404 instead of 204 for a row that never existed; keeping it
-// here means a new delete inherits the contract rather than having to restate it.
-//
-// It must stay DELETE-only, because that is what makes the foreign key branch
-// safe: on a DELETE a violation can only mean rows still reference this one, so
-// ErrInUse is the single correct reading. On an INSERT the same SQLSTATE means
-// the opposite — a reference to something that does not exist — which is why
-// the generic translateErr maps it to ErrNotFound instead.
+// "affected nothing" onto ErrNotFound. DELETE-only: there a foreign key
+// violation can only mean ErrInUse, while on an INSERT it means a missing
+// referent (translateErr's ErrNotFound).
 func (s *Store) execExpectingRow(ctx context.Context, op, query string, args ...any) error {
 	tag, err := s.pool.Exec(ctx, query, args...)
 	if err != nil {
@@ -176,12 +149,8 @@ func (s *Store) execExpectingRow(ctx context.Context, op, query string, args ...
 	return nil
 }
 
-// queryAll runs a listing query and collects every row through the entity's
-// scan helper. The column/scan pairs already keep a projection and its
-// destinations together; this keeps the loop around them in one place too, so
-// forgetting rows.Err() and returning a half-filled slice stops being possible
-// per listing. Callers that must distinguish "no rows" from nil in their JSON
-// still have to normalize the result themselves.
+// queryAll runs a listing query and collects every row through the scan
+// helper. No rows yields nil; callers needing `[]` in JSON normalize it.
 func queryAll[T any](ctx context.Context, s *Store, kind, query string, scan func(pgx.Row, *T) error, args ...any) ([]T, error) {
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -216,13 +185,7 @@ func isPGCode(err error, code string) bool {
 }
 
 // isUniqueViolation reports whether err is a uniqueness failure on one named
-// constraint.
-//
-// Asked by name, because translateErr flattens every unique violation onto
-// ErrConflict and carries the constraint only as text in the message. A
-// statement whose table has more than one unique index gets different answers
-// depending on which one failed, and matching that text would tie the answer to
-// how the error happens to be formatted.
+// constraint, which translateErr's ErrConflict does not distinguish.
 func isUniqueViolation(err error, constraint string) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) &&

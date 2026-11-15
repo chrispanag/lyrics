@@ -16,11 +16,8 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jwt"
 )
 
-// TokenIssuer serves a JWKS over httptest and mints tokens against it.
-//
-// Testing the auth path against a locally generated key set rather than live
-// Prelude is what makes expiry, wrong-issuer, and wrong-key cases reachable at
-// all: none of them can be produced on demand from a real identity provider.
+// TokenIssuer serves a JWKS over httptest and mints tokens against it, so
+// expired, wrong-issuer and wrong-key tokens can be produced on demand.
 type TokenIssuer struct {
 	Server  *httptest.Server
 	Issuer  string
@@ -91,9 +88,8 @@ type TokenOptions struct {
 	OmitEmail bool
 	// Subject overrides `sub`.
 	Subject string
-	// Scopes are step-up grants, rendered as the space-delimited `scope` claim
-	// Prelude uses. Empty means no claim at all, which is what an ordinary
-	// session token looks like.
+	// Scopes are step-up grants, rendered as the space-delimited `scope`
+	// claim. Empty omits the claim, like an ordinary session token.
 	Scopes []string
 }
 

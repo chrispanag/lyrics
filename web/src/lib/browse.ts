@@ -1,21 +1,9 @@
 import type { SongFilters } from "@/lib/types";
 
 /*
- * Addresses into the catalog.
- *
- * Three places link into it from outside — a credit, a genre chip, and the
- * quick search's way to the rest of its matches — and each one used to spell out
- * the route and the parameter itself. CLAUDE.md already records what that costs:
- * a link built by hand with the wrong parameter still answers, with the
- * unfiltered catalog, which reads as "this artist is on every song" rather than
- * as a broken link. The same failure with `q` reads as a search that went
- * nowhere.
- *
- * The filters are `SongFilters` keys, so the names here are the same names the
- * listing and the API use, and renaming one is a compile error rather than three
- * dead links. `BrowsePage` still reads its own parameters from the URL by hand:
- * it owns them, the way `SongDetailPage` owns the `?list=` it reads while
- * `lib/listContext` builds it.
+ * Addresses into the catalog. A hand-built link with the wrong parameter still
+ * answers, with the unfiltered catalog, so build them here: the keys are
+ * `SongFilters` keys, and a rename is a compile error rather than a dead link.
  */
 
 /** The catalog, filtered by whatever is given. */

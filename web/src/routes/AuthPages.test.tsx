@@ -33,9 +33,7 @@ function renderVerifyPage(auth: Partial<AuthContextValue> = {}) {
 }
 
 describe("VerifyEmailPage", () => {
-  // The challenge belongs to the browser's session with Prelude, so nothing is
-  // sent until this screen opens — a user who lands here must not sit waiting
-  // for a code that was never requested.
+  // The code is requested when this screen opens.
   it("asks Prelude for a code when it opens", async () => {
     const startEmailVerification = vi.fn().mockResolvedValue(undefined);
     renderVerifyPage({ startEmailVerification });
@@ -53,8 +51,7 @@ describe("VerifyEmailPage", () => {
     await waitFor(() => expect(verifyEmail).toHaveBeenCalledWith("123456"));
   });
 
-  // The address is the whole point of the screen, and a user who mistyped it
-  // needs to see which one the code went to before they sit waiting for it.
+  // Shows the address, so a typo is visible.
   it("names the address the code was sent to", async () => {
     renderVerifyPage();
     expect(await screen.findByText(/new@example\.com/)).toBeInTheDocument();
@@ -70,8 +67,7 @@ describe("VerifyEmailPage", () => {
     expect(verifyEmail).not.toHaveBeenCalled();
   });
 
-  // Codes arrive in text that has more than digits in it — "Your code is
-  // 123456" — and pasting the lot must not leave an unsubmittable field.
+  // A pasted "Your code is 123456" is reduced to digits.
   it("keeps only the digits of what is typed", async () => {
     renderVerifyPage();
 
@@ -81,10 +77,7 @@ describe("VerifyEmailPage", () => {
     expect(field).toHaveValue("123456");
   });
 
-  // Prelude checks the code, so a wrong one comes back as its typed SDK error
-  // rather than as a response from our API. Left unnamed it would surface as a
-  // generic failure, which reads as "something is broken" for what is almost
-  // always a mistyped digit.
+  // A wrong code is Prelude's typed SDK error, and is named as such.
   it("names a wrong code as a wrong code", async () => {
     const verifyEmail = vi
       .fn()
@@ -111,8 +104,7 @@ describe("VerifyEmailPage", () => {
     expect(await screen.findByText("Confirm your email address.")).toBeInTheDocument();
   });
 
-  // A challenge that could not be opened leaves the user staring at a form for
-  // a code that is not coming.
+  // A challenge that could not be opened must say so.
   it("surfaces a challenge that could not be opened", async () => {
     const startEmailVerification = vi.fn().mockRejectedValue(new Error("stepup unavailable"));
     renderVerifyPage({ startEmailVerification });
@@ -122,8 +114,7 @@ describe("VerifyEmailPage", () => {
     ).toBeInTheDocument();
   });
 
-  // The first attempt can fail before a challenge exists, and the error tells
-  // the user to ask for another — so that button has to be able to open one.
+  // After a failed first attempt, resend must be able to open a challenge.
   it("can still ask for a code after the first attempt failed", async () => {
     const startEmailVerification = vi
       .fn()
@@ -146,14 +137,11 @@ describe("VerifyEmailPage", () => {
 
     await waitFor(() => expect(resendVerificationCode).toHaveBeenCalled());
     expect(await screen.findByRole("status")).toHaveTextContent(/most recent email/);
-    // And it rests, so the button a stuck user clicks repeatedly cannot fill
-    // their inbox — or spend a message per click.
+    // And it rests, so repeated clicks cannot fill the inbox.
     expect(screen.getByRole("button", { name: /Send another in \d+s/ })).toBeDisabled();
   });
 
-  // The one failure that is neither the user's fault nor recoverable by
-  // retrying: Prelude would not send the mail. Silence here reads as "the code
-  // is coming", and it never is.
+  // Prelude refusing to send must be said, not left as a wait.
   it("surfaces a code that could not be sent", async () => {
     const resendVerificationCode = vi
       .fn()
@@ -169,9 +157,7 @@ describe("VerifyEmailPage", () => {
     ).toBeInTheDocument();
   });
 
-  // The redirect is rendered after the effects have run, so a verified visitor
-  // passing through must not have opened a challenge — and been emailed a code
-  // for an address that needed nothing.
+  // Effects run before the redirect; a verified visitor must open no challenge.
   it("sends a verified account on its way without asking for a code", async () => {
     const startEmailVerification = vi.fn();
     renderWithProviders(<VerifyEmailPage />, {
@@ -184,11 +170,8 @@ describe("VerifyEmailPage", () => {
     expect(screen.queryByLabelText("Verification code")).not.toBeInTheDocument();
   });
 
-  // The account here may be the one this browser saw last rather than the one
-  // signed in now — it is seeded from storage, so the app paints its chrome
-  // without waiting. Nothing may be asked of Prelude on that guess: the session
-  // it names has not been restored yet, and a step-up opened on it fails as a
-  // code that could not be sent.
+  // `user` may be the stored snapshot; nothing is asked of Prelude until the
+  // session restores.
   it("asks for nothing until the session is confirmed", async () => {
     const startEmailVerification = vi.fn();
     renderVerifyPage({ startEmailVerification, loading: true });
@@ -199,12 +182,7 @@ describe("VerifyEmailPage", () => {
 });
 
 describe("ForgotPasswordPage", () => {
-  /**
-   * The step-up as configured: it emails a second code before granting the
-   * scope, so a spec that says nothing about it walks the flow real visitors
-   * walk. Kept here rather than in `renderWithProviders`, because which
-   * configuration is deployed is this flow's business and not every spec's.
-   */
+  /** The step-up as configured: a second code before the scope is granted. */
   const twoCodes: Partial<AuthContextValue> = {
     confirmPasswordResetCode: async () => ({ secondCodeSent: true }),
   };
@@ -238,10 +216,7 @@ describe("ForgotPasswordPage", () => {
     return view;
   }
 
-  /**
-   * The last rung, where the new password is asked for — so each spec starts
-   * where it tests instead of retyping the walk that got there.
-   */
+  /** The last rung, where the new password is asked for. */
   async function reachPasswordStep(auth: Partial<AuthContextValue> = {}) {
     const view = await reachConfirmStep(auth);
 
@@ -277,11 +252,8 @@ describe("ForgotPasswordPage", () => {
     expect(confirmPasswordWriteCode).toHaveBeenCalledWith("654321");
   });
 
-  // Which of the two routes a visitor takes is Prelude's answer rather than this
-  // screen's choice, so both have to work: the configuration can be flipped
-  // either way — and would be, to spare the reset its second code — with no
-  // deploy behind it. Pinned from both sides, because a screen that only ever
-  // showed the second form would pass every other spec in this file.
+  // Prelude's configuration decides the route, and can flip without a deploy,
+  // so both are pinned.
   it("goes straight to the new password when the step-up grants outright", async () => {
     const confirmPasswordResetCode = vi.fn().mockResolvedValue({ secondCodeSent: false });
     await reachCodeStep({ confirmPasswordResetCode });
@@ -293,10 +265,7 @@ describe("ForgotPasswordPage", () => {
     expect(screen.queryByLabelText("Confirmation code")).not.toBeInTheDocument();
   });
 
-  // The second code answers the same challenge the signed-in change-password
-  // screen answers, and a wrong one can be named here: only an address with an
-  // account reaches this form, which is the thing the step before it must not
-  // give away.
+  // Only a real account reaches the second code, so a wrong one can be named.
   it("names a wrong confirmation code", async () => {
     const confirmPasswordWriteCode = vi
       .fn()
@@ -333,13 +302,8 @@ describe("ForgotPasswordPage", () => {
     expect(confirmPasswordResetCode).not.toHaveBeenCalled();
   });
 
-  // An address with no account is given a code form and no code, so its attempt
-  // fails at this step — which is why every failure here has to say the same
-  // thing. A message that distinguished a wrong code from anything else would
-  // answer whether the address is registered, after the step before it took care
-  // not to. Both cases are checked against one string on purpose: that is the
-  // property, and matching Prelude's error names instead would leak the moment
-  // one of them differed for an unknown account.
+  // Every failure at the first code says one string, or the step reveals which
+  // addresses are registered.
   const SAME_CODE_FAILURE =
     "That code is not correct, or it has expired. Ask for another and try again.";
 
@@ -349,11 +313,8 @@ describe("ForgotPasswordPage", () => {
     ["a step-up Prelude refused", new Error('Prelude refused the "prld:pwd:write" step-up.')],
   ])("reports %s the same way", async (_case, failure) => {
     const confirmPasswordResetCode = vi.fn().mockRejectedValue(failure);
-    // The page logs the real cause for whoever has to find it; the assertion is
-    // that the *visitor* cannot tell these three apart. Restored from a finally
-    // rather than the last line: nothing here restores mocks between tests, so a
-    // failing assertion would otherwise silence console.error for every test
-    // after this one — which is exactly what several of them assert about.
+    // The cause is logged. Restored in a finally: mocks are not reset between
+    // tests, and later tests assert on console.error.
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
     try {
@@ -386,10 +347,7 @@ describe("ForgotPasswordPage", () => {
     expect(await screen.findByText("Password changed")).toBeInTheDocument();
   });
 
-  // changePassword goes browser→Prelude, so a rejection is one of the SDK's
-  // typed errors and never an ApiError — errorMessage would render its fallback
-  // for every one of them, which is why these two are matched by name. Asserting
-  // against an ApiError here would pass while the real path said nothing.
+  // changePassword rejects with SDK errors, never an ApiError, so stub those.
   it("keeps a rejected password on the password form and says why", async () => {
     const changePassword = vi
       .fn()
@@ -418,10 +376,7 @@ describe("ForgotPasswordPage", () => {
     }
   });
 
-  // The step-up that permits the write is granted for five minutes, so a slow
-  // choice of password is refused with nothing wrong with the password. Told to
-  // try another, the visitor is sent round a loop that no password escapes — so
-  // this one failure has to be named, and there has to be a way out of the step.
+  // An expired grant is named, with a way out, not "try another password".
   it("names an expired reset rather than blaming the password", async () => {
     const changePassword = vi.fn().mockRejectedValue(namedError("ForbiddenError", "Forbidden"));
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -443,8 +398,7 @@ describe("ForgotPasswordPage", () => {
     }
   });
 
-  // The reset ends by asking, rather than deciding for them, what should happen
-  // to sessions opened before the password changed.
+  // The reset ends by offering to end other sessions.
   it("signs out other devices when asked to", async () => {
     const signOutOtherDevices = vi.fn().mockResolvedValue(undefined);
     await reachPasswordStep({ signOutOtherDevices });
@@ -459,8 +413,7 @@ describe("ForgotPasswordPage", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(/other devices have been signed out/i);
   });
 
-  // The password is already saved by the time this button exists, so a failure
-  // here must not read as a reset that did not happen.
+  // The password is already saved; this failure must not read otherwise.
   it("does not report a failed sign-out as a failed reset", async () => {
     const signOutOtherDevices = vi.fn().mockRejectedValue(new Error("revoke failed"));
     await reachPasswordStep({ signOutOtherDevices });
@@ -494,11 +447,8 @@ describe("ForgotPasswordPage", () => {
     expect(screen.getByRole("button", { name: /Send another in \d+s/ })).toBeDisabled();
   });
 
-  // Only an address with an account has a dispatch to retry, so this button is
-  // the second place the flow could answer which addresses are registered — and
-  // every observable has to match, not just the message: an error, a cooldown
-  // that never started or a code field left filled would each be an oracle on
-  // its own. Checked against the successful case above, deliberately.
+  // A failed resend must look identical to the successful one above in every
+  // observable, or it reveals which addresses are registered.
   it("reports a failed resend exactly like a sent one", async () => {
     const resendPasswordResetCode = vi.fn().mockRejectedValue(new Error("no such verification"));
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -523,9 +473,7 @@ describe("ForgotPasswordPage", () => {
     }
   });
 
-  // The one failure an operator can fix, and the only one that would otherwise
-  // read as Prelude being down: a build that shipped without the login
-  // configuration to send a code through.
+  // A build without the OTP login configuration says so, not "Prelude is down".
   it("names an unconfigured deployment", async () => {
     const startPasswordReset = vi
       .fn()
@@ -580,9 +528,7 @@ describe("ChangePasswordPage", () => {
     return view;
   }
 
-  // The challenge belongs to the browser's session with Prelude, so nothing is
-  // emailed until this screen opens — a visitor who lands here must not sit
-  // waiting for a code nobody asked for.
+  // The code is requested when this screen opens.
   it("asks Prelude for a code when it opens", async () => {
     const startPasswordChange = vi.fn().mockResolvedValue(undefined);
     renderChangePage({ startPasswordChange });
@@ -640,10 +586,7 @@ describe("ChangePasswordPage", () => {
     expect(await screen.findByText("Password changed")).toBeInTheDocument();
   });
 
-  // The whole point of the screen. A step-up that grants the scope outright asks
-  // for nothing, so nothing distinguishes the account's owner from a stolen
-  // session — and a code form would then wait for a code that is never sent.
-  // What it offers instead is the reset, which proves the same mailbox.
+  // A no-code grant is refused, pointing at the reset instead.
   it("refuses to change a password when Prelude asks for nothing", async () => {
     const startPasswordChange = vi
       .fn()
@@ -671,9 +614,7 @@ describe("ChangePasswordPage", () => {
     }
   });
 
-  // A challenge that could not be opened leaves the visitor at a form for a code
-  // that is not coming, so the failure has to be said out loud — and told to ask
-  // for another, that button has to be able to open one.
+  // A failed open is said, and resend must be able to open a challenge.
   it("surfaces a challenge that could not be opened", async () => {
     const startPasswordChange = vi
       .fn()
@@ -690,10 +631,8 @@ describe("ChangePasswordPage", () => {
     await waitFor(() => expect(startPasswordChange).toHaveBeenCalledTimes(2));
   });
 
-  // Nothing has a challenge to retry until the first send comes back, so a click
-  // here would open a *second* step-up — retiring the challenge the first one is
-  // about to report, emailing two codes and leaving neither able to work. The
-  // cooldown cannot cover this: it has not started yet.
+  // Resend is held while the first send is in flight: a second step-up would
+  // retire it, and no cooldown has started.
   it("holds the resend while the first code is still in flight", async () => {
     const resendPasswordWriteCode = vi.fn();
     renderChangePage({
@@ -716,12 +655,7 @@ describe("ChangePasswordPage", () => {
     expect(screen.getByRole("button", { name: /Send another in \d+s/ })).toBeDisabled();
   });
 
-  // The permission the code buys lasts five minutes, so a slow choice of
-  // password is refused with nothing whatsoever wrong with the password. Told to
-  // try another, the visitor is sent round a loop no password escapes — and the
-  // way out cannot be the back button, the steps being state rather than routes.
-  // The spent challenge is why it asks for a new code rather than just stepping
-  // back to a form.
+  // An expired grant is named, and the way out asks for a new code.
   it("names an expired confirmation and asks for a new code", async () => {
     const changePassword = vi.fn().mockRejectedValue(namedError("ForbiddenError", "Forbidden"));
     const resendPasswordWriteCode = vi.fn().mockResolvedValue(undefined);
@@ -773,12 +707,8 @@ describe("ChangePasswordPage", () => {
     }
   });
 
-  // The compliancy check is asked once per password and its answer remembered,
-  // because clicking submit blurs the field and a refused password would be
-  // asked about twice in a second. Remembering the password without its reasons
-  // is the trap: the hints are cleared as soon as another password is judged, so
-  // coming back to a refused one — a paste, an undo — would skip the check and
-  // leave a password refused with nothing saying why.
+  // The check is remembered with its reasons, so returning to a refused
+  // password still shows why.
   it("still says why after another password was judged in between", async () => {
     const validatePassword = vi.fn(async (password: string) =>
       password === "short"
@@ -806,9 +736,7 @@ describe("ChangePasswordPage", () => {
     expect(await screen.findByText("• Use at least 8 characters.")).toBeInTheDocument();
   });
 
-  // A password change is exactly when somebody wants the sessions they no longer
-  // recognize ended, and a failure here must not read as a password that did not
-  // save — it did.
+  // Ending other sessions can fail without reading as the password not saving.
   it("signs out other devices when asked to", async () => {
     const signOutOtherDevices = vi.fn().mockResolvedValue(undefined);
     await reachPasswordStep({ signOutOtherDevices });
@@ -825,9 +753,7 @@ describe("ChangePasswordPage", () => {
     );
   });
 
-  // The redirect below the effect is rendered after it has run, so a visitor
-  // whose session ended must not have opened a challenge on their way out — and
-  // been emailed a code for a flow they cannot be in.
+  // Effects run before the redirect; a signed-out visitor must open no challenge.
   it("opens no challenge without a session", async () => {
     const startPasswordChange = vi.fn();
     renderWithProviders(<ChangePasswordPage />, {
@@ -849,8 +775,7 @@ describe("ChangePasswordPage", () => {
     );
   });
 
-  // A guest reaching the route is sent to sign in rather than shown a flow that
-  // cannot start — the guard is the route's, not the page's.
+  // A guest is sent to sign in by the route's guard.
   it("sends a guest to sign in", async () => {
     renderWithProviders(<App />, { user: null, route: "/change-password" });
 
@@ -859,10 +784,7 @@ describe("ChangePasswordPage", () => {
 });
 
 describe("sign-in and sign-up screens", () => {
-  // The user these screens read may be last time's — the app seeds it from
-  // storage so a refresh does not flash the guest chrome. Acting on that guess
-  // here is what they cannot do: a session that has since expired would send a
-  // visitor who came to sign in to the catalog, and leave them there as a guest.
+  // `user` may be a stored snapshot; the redirect waits for the restore.
   it("keeps the sign-in form up until the session is confirmed", () => {
     renderWithProviders(<LoginPage />, {
       user: makeUser(),
@@ -879,9 +801,7 @@ describe("sign-in and sign-up screens", () => {
     expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
   });
 
-  // The sign-up screen makes the same decision from the same guess, and being
-  // wrong on it costs the same thing: somebody who came to make an account put
-  // on the catalog instead.
+  // Sign-up waits for the restore too.
   it("keeps the sign-up form up until the session is confirmed", () => {
     renderWithProviders(<RegisterPage />, {
       user: makeUser(),
@@ -892,20 +812,14 @@ describe("sign-in and sign-up screens", () => {
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
   });
 
-  // Pinned from both sides, like the sign-in screen above it: with only the
-  // waiting half, a redirect that stopped firing altogether — the `user` half of
-  // the condition lost in an edit — leaves a signed-in visitor on a form that
-  // creates the account they already have, and every spec still passes.
+  // The other side: once restored, a signed-in visitor is redirected.
   it("sends a signed-in visitor away from the sign-up form", () => {
     renderWithProviders(<App />, { user: makeUser(), route: "/register" });
 
     expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
   });
 
-  // And the third side, which is the one an edit to that condition actually
-  // reaches: losing the `user` half sends *everybody* away once the restore
-  // settles, so the screen has no visitor left who can sign up. The sign-in
-  // screen has this pinned already, by every spec that renders it as a guest.
+  // And a restored guest stays.
   it("shows the sign-up form to a guest", () => {
     renderWithProviders(<App />, { user: null, route: "/register" });
 
@@ -914,8 +828,7 @@ describe("sign-in and sign-up screens", () => {
 });
 
 describe("verification gate", () => {
-  // Every page an unverified account can reach answers 403, so without the gate
-  // the app renders a catalog of empty shelves and blames the network.
+  // The API refuses an unverified account everything, so it is held on verification.
   it("holds an unverified account on the verification screen", async () => {
     renderWithProviders(<App />, { user: unverified, route: "/lists" });
 
@@ -928,31 +841,21 @@ describe("verification gate", () => {
     expect(await screen.findByRole("searchbox")).toBeInTheDocument();
   });
 
-  // Password reset signs the visitor in on its way to the password form, so the
-  // gate sees an unverified account sitting on a page that is not the
-  // verification screen. Bounced from there, the reset ends one step short of
-  // the new password — on a code form for a different challenge, which reads as
-  // the reset code having silently stopped working.
+  // The reset signs the visitor in mid-flow; the gate must not bounce it.
   it("leaves an unverified account on the reset screen", async () => {
     renderWithProviders(<App />, { user: unverified, route: "/forgot-password" });
 
     expect(await screen.findByText("Reset your password")).toBeInTheDocument();
   });
 
-  // The same flow seen from the other side: this page is reached by a signed-out
-  // visitor and finished by a signed-in one, so it must not send a signed-in
-  // visitor home the way the sign-in and sign-up screens do.
+  // Nor may the reset itself redirect a signed-in visitor.
   it("does not send a signed-in visitor away from the reset screen", async () => {
     renderWithProviders(<App />, { user: makeUser(), route: "/forgot-password" });
 
     expect(await screen.findByText("Reset your password")).toBeInTheDocument();
   });
 
-  // The gate reads a user that may be the last session this browser saw rather
-  // than this one — seeded from storage so the chrome does not flash the guest
-  // answer on every refresh. A snapshot taken before an address was verified
-  // elsewhere would otherwise put a verified visitor on a code form, and then on
-  // the catalog rather than the page they opened.
+  // The gate waits for the restore: a stale snapshot may predate verification.
   it("holds nobody until the session is confirmed", async () => {
     renderWithProviders(<App />, { user: unverified, route: "/", auth: { loading: true } });
 

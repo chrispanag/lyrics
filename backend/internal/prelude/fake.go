@@ -14,9 +14,8 @@ type Fake struct {
 
 	// Users maps a Prelude user ID to its email.
 	Users map[string]string
-	// Passwords records which users have a password set. A user present in
-	// Users but absent here is the half-created state that registration's
-	// compensation logic exists to prevent.
+	// Passwords records which users have a password set; a user missing here
+	// is the half-created state registration's compensation prevents.
 	Passwords map[string]string
 
 	// FailSetPassword makes SetPassword fail, to exercise the rollback path.
@@ -100,9 +99,8 @@ func (f *Fake) DeleteUser(_ context.Context, userID string) error {
 	return nil
 }
 
-// Orphans returns users that exist without a password — accounts that can
-// neither sign in nor be registered again. This should always be empty after a
-// failed registration, which is the property compensation guarantees.
+// Orphans returns users that exist without a password, which can neither sign
+// in nor register again. Compensation keeps it empty after a failed registration.
 func (f *Fake) Orphans() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()

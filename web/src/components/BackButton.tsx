@@ -6,12 +6,8 @@ import { cn } from "@/lib/cn";
 /**
  * Returns to the previous page.
  *
- * Its own module rather than ui.tsx, which is deliberately router-free: this is
- * the one control that needs useNavigate, and importing the router there would
- * make every primitive unusable outside a route.
- *
- * `className` is composed, not overridden — cn is a plain join, so callers may
- * only add utilities (spacing) that do not collide with the ones set here.
+ * Not in ui.tsx, which stays router-free so its primitives work outside a route.
+ * `cn` is a plain join: `className` may only add non-colliding utilities.
  */
 export function BackButton({ className }: { className?: string }) {
   const navigate = useNavigate();

@@ -38,16 +38,10 @@ func TestVerifyAcceptsValidToken(t *testing.T) {
 	}
 }
 
-/*
- * The next two tests encode the shape of a real Prelude access token, observed
- * against a live application. Both properties were wrong in the first
- * implementation, and both failed in a way that reads as "your session
- * expired" rather than as a bug.
- */
+// The next two tests pin the shape of a real Prelude access token; see
+// CLAUDE.md, "Prelude tokens".
 
-// A real token issues the bare host, while Prelude's OAuth metadata advertises
-// the same issuer with an https:// scheme. Pinning either spelling alone
-// rejects every genuine token.
+// A real token's `iss` is the bare host; Prelude's metadata adds https://.
 func TestVerifyAcceptsIssuerWithAndWithoutScheme(t *testing.T) {
 	ti := testutil.NewTokenIssuer(t)
 	host := strings.TrimPrefix(ti.Issuer, "http://")
@@ -70,10 +64,8 @@ func TestVerifyAcceptsIssuerWithAndWithoutScheme(t *testing.T) {
 	}
 }
 
-// `sub` and `user_id` are different identifiers in a real token: `sub` is the
-// `usr_...` id the Management API returns and that we store, while `user_id`
-// is Prelude's internal UUID. Joining on `user_id` matches no stored user and
-// silently re-provisions them as a duplicate.
+// `sub` is the stored `usr_...` id; `user_id` is Prelude's internal UUID and
+// joining on it re-provisions a duplicate user.
 func TestVerifyJoinsOnSubjectNotUserIDClaim(t *testing.T) {
 	ti := testutil.NewTokenIssuer(t)
 	v := newVerifier(t, ti)
@@ -191,14 +183,8 @@ func TestVerifyReportsMissingEmail(t *testing.T) {
 	}
 }
 
-// Step-up grants arrive as the `scope` claim, and reading them is what lets the
-// API confirm an email was proven in the browser. The claim is conventionally
-// one space-delimited string but is sometimes serialized as a list, and this
-// application cannot dictate which — a token whose grants were silently dropped
-// would present as a verification that never takes.
-//
-// Note this pins the parser against tokens minted here, not against Prelude:
-// only a live step-up can confirm the spelling Prelude actually sends.
+// Step-up grants arrive as the `scope` claim. This pins the parser against
+// tokens minted here; only a live step-up confirms Prelude's actual spelling.
 func TestVerifyReadsStepUpScopes(t *testing.T) {
 	ti := testutil.NewTokenIssuer(t)
 	v := newVerifier(t, ti)
@@ -240,9 +226,7 @@ func TestNewVerifierFailsOnUnreachableJWKS(t *testing.T) {
 	}
 }
 
-// Prelude access tokens live about a minute and set `nbf` to their issue time,
-// so a token issued a moment ahead of our clock must not be rejected as
-// not-yet-valid. Expiry beyond the tolerance must still be rejected.
+// Small clock skew is tolerated; expiry beyond the tolerance is still rejected.
 func TestVerifyToleratesSmallClockSkew(t *testing.T) {
 	ti := testutil.NewTokenIssuer(t)
 	v := newVerifier(t, ti)
