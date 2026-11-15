@@ -21,6 +21,14 @@ export function songHref(song: Pick<Song, "slug">, listId?: string): string {
 }
 
 /**
+ * A list's URL: written once, since the sitemap and the canonical name it too
+ * and nothing in the app would show the copies drifting apart.
+ */
+export function listHref(id: string): string {
+  return `/lists/${id}`;
+}
+
+/**
  * A song's URL when all that is in hand is what a route parameter held, for
  * pages that render before their song arrives. Either form is a valid address.
  */
@@ -111,7 +119,7 @@ export function listPosition(list: SongList, ref: string): ListPosition | null {
 
   return {
     listName: list.name,
-    listHref: `/lists/${list.id}`,
+    listHref: listHref(list.id),
     index,
     total: songs.length,
     previousHref: href(songs[index - 1]),

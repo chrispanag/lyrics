@@ -1,5 +1,5 @@
 import { groupCredits } from "./credits";
-import { songHref } from "./listContext";
+import { listHref, songHref } from "./listContext";
 import type { Recording, Song, SongList } from "./types";
 import { watchUrl } from "./youtube";
 
@@ -63,7 +63,7 @@ export function listJsonLd(list: SongList, origin: string): string {
     "@type": "ItemList",
     name: list.name,
     description: list.description ?? undefined,
-    url: `${origin}/lists/${list.id}`,
+    url: `${origin}${listHref(list.id)}`,
     numberOfItems: songs.length,
     itemListElement: songs.map((song, index) => ({
       "@type": "ListItem",

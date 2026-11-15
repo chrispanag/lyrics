@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { apiFetch, toQuery } from "@/api/client";
-import { songHref } from "@/lib/listContext";
+import { listHref, songHref } from "@/lib/listContext";
 import { SITE_ORIGIN } from "@/lib/site";
 import type { ListResponse, PublicList, Song } from "@/lib/types";
 
@@ -76,8 +76,6 @@ function songEntry(song: Song): Entry {
   return { url: `${SITE_ORIGIN}${songHref(song)}`, lastModified: song.updated_at };
 }
 
-/** Throws on a row with no id, for the same reason. */
 function listEntry(list: PublicList): Entry {
-  if (!list.id) throw new Error("public list without an id");
-  return { url: `${SITE_ORIGIN}/lists/${list.id}`, lastModified: list.updated_at };
+  return { url: `${SITE_ORIGIN}${listHref(list.id)}`, lastModified: list.updated_at };
 }

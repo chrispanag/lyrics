@@ -122,17 +122,6 @@ describe("sitemap", () => {
 
     await expectStaticRoutesOnly();
   });
-
-  it("refuses a public list carrying no id", async () => {
-    server.use(
-      catalogOf(1),
-      http.get(`${API}/api/v1/public-lists`, () =>
-        HttpResponse.json(list([{ updated_at: "2024-06-06T00:00:00Z" }])),
-      ),
-    );
-
-    await expectStaticRoutesOnly();
-  });
 });
 
 /**

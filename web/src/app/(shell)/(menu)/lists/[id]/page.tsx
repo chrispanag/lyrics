@@ -11,6 +11,7 @@ import { ApiError, apiFetch } from "@/api/client";
 import { keys } from "@/api/hooks";
 import { songCount } from "@/lib/format";
 import { listJsonLd } from "@/lib/jsonLd";
+import { listHref } from "@/lib/listContext";
 import { OG_BASE, SITE_ORIGIN } from "@/lib/site";
 import type { SongList } from "@/lib/types";
 import { ListDetailPage } from "@/routes/ListsPages";
@@ -94,7 +95,7 @@ export async function generateMetadata({
   const description = list.description
     ? `${list.description} — a list of ${songCount(list.item_count)}.`
     : `A list of ${songCount(list.item_count)}.`;
-  const path = `/lists/${list.id}`;
+  const path = listHref(list.id);
 
   return {
     description,

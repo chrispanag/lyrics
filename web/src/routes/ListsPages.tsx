@@ -33,6 +33,7 @@ import {
 import { BackButton } from "@/components/BackButton";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
+import { listHref } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
 import { Link, useParams, useRouter } from "@/lib/navigation";
 
@@ -122,7 +123,7 @@ export function ListsPage() {
         {data?.data.map((list) => (
           <li key={list.id}>
             <Link
-              href={`/lists/${list.id}`}
+              href={listHref(list.id)}
               className={cn(
                 cardChrome,
                 cardHover,
@@ -236,7 +237,7 @@ export function ListDetailPage() {
   // `variables` outlives its request, so it is held to the flight.
   const pendingRemoval = removeSong.isPending ? removeSong.variables : undefined;
   // From the origin, so no query or hash leaks into the shared link.
-  const shareUrl = `${origin}/lists/${list.id}`;
+  const shareUrl = `${origin}${listHref(list.id)}`;
 
   const copyLink = async () => {
     // Clipboard access can be refused; then the page asks for a manual copy.
@@ -253,7 +254,7 @@ export function ListDetailPage() {
     try {
       const copied = await copyList.mutateAsync({ id: list.id, name });
       setNaming(false);
-      router.push(`/lists/${copied.id}`);
+      router.push(listHref(copied.id));
     } catch (caught) {
       // Names are unique per owner, so a 409 opens the rename step.
       if (caught instanceof ApiError && caught.status === 409) {
