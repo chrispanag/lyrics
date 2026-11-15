@@ -364,7 +364,7 @@ func loadFingerprints(ctx context.Context, tx pgx.Tx) (map[string]struct{}, erro
 func resolveActor(ctx context.Context, tx pgx.Tx, email string) (*uuid.UUID, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
-		return nil, nil //nolint:nilnil // no actor given: the columns stay NULL.
+		return nil, nil
 	}
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `SELECT id FROM users WHERE email = $1`, email).Scan(&id)

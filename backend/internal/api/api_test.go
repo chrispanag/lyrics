@@ -1132,13 +1132,11 @@ func TestRegistrationRateLimited(t *testing.T) {
 
 // signUp registers an account over the API and returns it with a bearer token.
 // Pass EmailVerifyScope to simulate a completed step-up challenge.
-//
-//nolint:unparam // every caller passes its own subtest-local address; the parameter names it.
-func (h *harness) signUp(email string, scopes ...string) (*store.User, string) {
+func (h *harness) signUp(scopes ...string) (*store.User, string) {
 	h.t.Helper()
 
 	resp := h.do("POST", "/api/v1/auth/register", "", map[string]any{
-		"email": email, "password": "s3cret-password",
+		"email": "verify.me@example.com", "password": "s3cret-password",
 	})
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
@@ -1157,12 +1155,10 @@ func (h *harness) signUp(email string, scopes ...string) (*store.User, string) {
 }
 
 func TestEmailVerification(t *testing.T) {
-	const email = "verify.me@example.com"
-
 	t.Run("registration leaves the account unverified", func(t *testing.T) {
 		h := newHarness(t)
 
-		user, _ := h.signUp(email)
+		user, _ := h.signUp()
 		if user.EmailVerified() {
 			t.Error("a new account must start unverified")
 		}
@@ -1171,7 +1167,7 @@ func TestEmailVerification(t *testing.T) {
 	// The signed scope is the whole proof; there is no code in the request.
 	t.Run("a granted scope confirms the address and opens the account", func(t *testing.T) {
 		h := newHarness(t)
-		_, token := h.signUp(email, api.EmailVerifyScope)
+		_, token := h.signUp(api.EmailVerifyScope)
 
 		resp := h.do("POST", "/api/v1/auth/verify-email", token, nil)
 		if resp.StatusCode != http.StatusOK {
@@ -1191,7 +1187,7 @@ func TestEmailVerification(t *testing.T) {
 	// 403, not 401: a 401 makes the client refresh a token that is fine.
 	t.Run("a token without the scope cannot verify", func(t *testing.T) {
 		h := newHarness(t)
-		_, token := h.signUp(email)
+		_, token := h.signUp()
 
 		resp := h.do("POST", "/api/v1/auth/verify-email", token, nil)
 		if resp.StatusCode != http.StatusForbidden {
@@ -1205,7 +1201,7 @@ func TestEmailVerification(t *testing.T) {
 
 	t.Run("an unrelated scope cannot verify", func(t *testing.T) {
 		h := newHarness(t)
-		_, token := h.signUp(email, "prld:pwd:write")
+		_, token := h.signUp("prld:pwd:write")
 
 		if resp := h.do("POST", "/api/v1/auth/verify-email", token, nil); resp.StatusCode != http.StatusForbidden {
 			t.Errorf("status = %d, want 403", resp.StatusCode)
@@ -1214,7 +1210,7 @@ func TestEmailVerification(t *testing.T) {
 
 	t.Run("verifying twice is idempotent", func(t *testing.T) {
 		h := newHarness(t)
-		user, token := h.signUp(email, api.EmailVerifyScope)
+		user, token := h.signUp(api.EmailVerifyScope)
 
 		first := decode[store.User](t, h.do("POST", "/api/v1/auth/verify-email", token, nil))
 		second := decode[store.User](t, h.do("POST", "/api/v1/auth/verify-email", token, nil))
@@ -1232,7 +1228,7 @@ func TestEmailVerification(t *testing.T) {
 	// The code is between the browser and Prelude, never this API.
 	t.Run("registration does not talk to prelude about codes", func(t *testing.T) {
 		h := newHarness(t)
-		h.signUp(email)
+		h.signUp()
 
 		for _, call := range h.prelude.Calls {
 			if call != "CreateUser" && call != "SetPassword" {

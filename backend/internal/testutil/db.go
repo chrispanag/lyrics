@@ -24,10 +24,13 @@ import (
 // defaultTestDatabaseURL points at the Compose database on its published port.
 const defaultTestDatabaseURL = "postgres://lyrics:lyrics@localhost:5433/lyrics?sslmode=disable" //nolint:gosec // G101: the local Compose database's throwaway credentials.
 
-var (
-	migrateOnce sync.Once
-	errMigrate  error
-)
+// prepareDatabase creates and migrates this binary's database once.
+var prepareDatabase = sync.OnceValue(func() error {
+	if err := ensureDatabase(); err != nil {
+		return err
+	}
+	return runMigrations(TestDatabaseURL())
+})
 
 // baseDatabaseURL is the administrative connection string.
 func baseDatabaseURL() string {
@@ -110,14 +113,8 @@ func NewStore(t *testing.T) *store.Store {
 			"start one with `make up`, or set TEST_DATABASE_URL", baseDatabaseURL(), err)
 	}
 
-	migrateOnce.Do(func() {
-		if errMigrate = ensureDatabase(); errMigrate != nil {
-			return
-		}
-		errMigrate = runMigrations(TestDatabaseURL())
-	})
-	if errMigrate != nil {
-		t.Fatalf("prepare test database: %v", errMigrate)
+	if err := prepareDatabase(); err != nil {
+		t.Fatalf("prepare test database: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -197,7 +197,7 @@ func (s *Server) songID(r *http.Request, name string) (uuid.UUID, error) {
 func queryUUID(q url.Values, name string) (*uuid.UUID, error) {
 	raw := q.Get(name)
 	if raw == "" {
-		return nil, nil //nolint:nilnil // nil means the parameter was not given.
+		return nil, nil
 	}
 	id, err := uuid.Parse(raw)
 	if err != nil {

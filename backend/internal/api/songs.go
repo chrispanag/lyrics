@@ -522,7 +522,7 @@ func (s *Server) handleListSongs(w http.ResponseWriter, r *http.Request) error {
 func queryInt(q url.Values, name string) (*int, error) {
 	raw := strings.TrimSpace(q.Get(name))
 	if raw == "" {
-		return nil, nil //nolint:nilnil // nil means the parameter was not given.
+		return nil, nil
 	}
 	v, err := strconv.Atoi(raw)
 	if err != nil {

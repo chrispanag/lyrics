@@ -34,6 +34,10 @@ linters:
   settings:
     exhaustive:
       default-signifies-exhaustive: true
+    nilnil:
+      # The default list minus ptr: a nil pointer with a nil error is the house
+      # idiom for "not given".
+      checked-types: [chan, func, iface, map, uintptr, unsafeptr]
     gocritic:
       enabled-tags: [diagnostic, style, performance]
       disabled-checks:
@@ -52,7 +56,7 @@ linters:
     rules:
       # The API test harness closes every response body through t.Cleanup in
       # `send`, which bodyclose cannot follow across the helper.
-      - path: _test\.go
+      - path: internal/api/.*_test\.go
         linters: [bodyclose]
 
 issues:
