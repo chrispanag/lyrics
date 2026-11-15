@@ -11,7 +11,7 @@ import {
   RESET_UNCONFIGURED_ERROR,
   type AuthContextValue,
 } from "./context";
-import { storeUser, storedUser } from "./storedUser";
+import { SESSION_ATTRIBUTE, storeUser, storedUser } from "./storedUser";
 import { useAuth } from "./useAuth";
 import { API, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
@@ -132,6 +132,7 @@ describe("AuthProvider", () => {
   // No guest flash while restoring: asserted before the held token resolves.
   it("paints the last session's profile while the real one is on its way", async () => {
     storeUser(makeUser({ display_name: "Νίκος" }));
+    document.documentElement.setAttribute(SESSION_ATTRIBUTE, "");
 
     let landed: (token: string | null) => void = () => {};
     session.getAccessToken.mockImplementation(
@@ -142,6 +143,8 @@ describe("AuthProvider", () => {
 
     expect(screen.getByText("Νίκος")).toBeInTheDocument();
     expect(screen.getByText("restoring")).toBeInTheDocument();
+    // React draws the chrome now; the boot script's hint must not outlive it.
+    expect(document.documentElement.hasAttribute(SESSION_ATTRIBUTE)).toBe(false);
 
     landed("token");
 

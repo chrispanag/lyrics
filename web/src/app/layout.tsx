@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 
 import { OG_BASE, SITE_NAME, SITE_ORIGIN, SITE_SUMMARY } from "@/lib/site";
+import { SESSION_BOOT_SCRIPT } from "@/auth/storedUser";
 import { FONT_SIZE_BOOT_SCRIPT } from "@/lib/fontSize";
 import { THEME_BOOT_SCRIPT, THEME_COLORS } from "@/lib/theme";
 import "@/styles/index.css";
@@ -69,11 +70,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // neither. suppressHydrationWarning: the theme script edits this element.
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body>
-        {/* Must run before anything with a background color paints, or the
-            lyrics at their default size. Two scripts' worth of source in one
-            tag; each has its own try. */}
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: constants written here, with no input in them. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT + FONT_SIZE_BOOT_SCRIPT }} />
+        {/* Must run before anything with a background color paints, the
+            lyrics at their default size, or a signed-in reader's Sign in.
+            Three scripts' worth of source in one tag; each has its own try. */}
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: constants written here, with no input in them.
+          dangerouslySetInnerHTML={{
+            __html: THEME_BOOT_SCRIPT + FONT_SIZE_BOOT_SCRIPT + SESSION_BOOT_SCRIPT,
+          }}
+        />
         <Providers>{children}</Providers>
       </body>
     </html>

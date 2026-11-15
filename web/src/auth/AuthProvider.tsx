@@ -18,7 +18,7 @@ import {
   type AuthContextValue,
 } from "./context";
 import { OTP_LOGIN_CONFIG_ID, getAccessToken, sessionClient } from "./session";
-import { storeUser, storedUser } from "./storedUser";
+import { SESSION_ATTRIBUTE, storeUser, storedUser } from "./storedUser";
 import type { User } from "@/lib/types";
 
 /**
@@ -73,6 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     // biome-ignore lint/nursery/useReactCompiler: read once before paint, for the reason above.
     setUser(storedUser());
+    // React draws the right chrome from here; the boot script's hint would keep
+    // Sign in hidden from a reader who signs out.
+    document.documentElement.removeAttribute(SESSION_ATTRIBUTE);
   }, []);
   const queryClient = useQueryClient();
 

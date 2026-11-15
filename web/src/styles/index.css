@@ -482,6 +482,14 @@
   }
 }
 
+/* Guest chrome, hidden until hydration while the last session's profile is on
+   its way (`SESSION_BOOT_SCRIPT`, auth/storedUser.ts). Hidden rather than
+   removed, so the profile card takes the Sign in button's place without
+   shifting anything. */
+:root[data-session] [data-guest-only] {
+  visibility: hidden;
+}
+
 /* The reader's lyrics size, from the attribute `FONT_SIZE_BOOT_SCRIPT` puts on
    <html> before first paint (lib/fontSize.ts). Keyed on the attribute rather
    than on a class React picks, so the server's markup is the same for everyone
