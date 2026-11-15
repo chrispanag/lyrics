@@ -222,7 +222,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
         {...marking}
         aria-label="Navigation"
         className={cn(
-          "absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col bg-white shadow-2xl outline-none",
+          "absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col bg-white shadow-2xl outline-hidden",
           "border-r border-stone-200 transition-transform duration-200 pt-safe pb-safe",
           "dark:border-stone-800 dark:bg-stone-900",
           open ? "translate-x-0" : "-translate-x-full",
