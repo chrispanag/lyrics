@@ -124,11 +124,11 @@ describe("Sheet", () => {
 
     // Pressed inside (the zero rectangle's own point), released outside.
     fireEvent.pointerDown(dialog, { clientX: 0, clientY: 0 });
-    fireEvent.pointerUp(dialog, { clientX: 50, clientY: 50 });
+    fireEvent.click(dialog, { clientX: 50, clientY: 50 });
     expect(onClose).not.toHaveBeenCalled();
 
     fireEvent.pointerDown(dialog, { clientX: 50, clientY: 50 });
-    fireEvent.pointerUp(dialog, { clientX: 50, clientY: 50 });
+    fireEvent.click(dialog, { clientX: 50, clientY: 50 });
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("dialog")).toBeNull();
   });

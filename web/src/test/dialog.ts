@@ -5,7 +5,7 @@
  * handed back to the opener, Escape as a `cancel` then a `close`, and that
  * `close` event arriving a task later.
  *
- * Not modelled: the inert page, the top layer, and `closedby` — the pointer
+ * Not modeled: the inert page, the top layer, and `closedby` — the pointer
  * fallback in lib/modal.ts is what runs here.
  */
 

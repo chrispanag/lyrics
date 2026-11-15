@@ -1,4 +1,5 @@
 import {
+  type MouseEvent,
   type PointerEvent,
   type RefObject,
   type SyntheticEvent,
@@ -101,13 +102,13 @@ interface DialogProps {
   closedby: "any";
   onClose: (event: SyntheticEvent<HTMLDialogElement>) => void;
   onPointerDown: (event: PointerEvent<HTMLDialogElement>) => void;
-  onPointerUp: (event: PointerEvent<HTMLDialogElement>) => void;
+  onClick: (event: MouseEvent<HTMLDialogElement>) => void;
 }
 
 const lightDismissIsNative =
   typeof HTMLDialogElement !== "undefined" && "closedBy" in HTMLDialogElement.prototype;
 
-function outside(event: PointerEvent<HTMLDialogElement>): boolean {
+function outside(event: MouseEvent<HTMLDialogElement>): boolean {
   const r = event.currentTarget.getBoundingClientRect();
   return (
     event.clientX < r.left ||
@@ -174,11 +175,13 @@ export function useDialog({
     },
     // By position, not `event.target`: the dialog is also the target of its own
     // padding. Press *and* release outside, so a selection drag ending on the
-    // backdrop does not dismiss.
+    // backdrop does not dismiss. Closed on the `click`, not on `pointerup`: iOS
+    // hit-tests the tap's click after the pointer is released, so a dialog gone
+    // by then lets that click land on whatever the backdrop was covering.
     onPointerDown: (event) => {
       pressedOutside.current = !lightDismissIsNative && outside(event);
     },
-    onPointerUp: (event) => {
+    onClick: (event) => {
       if (pressedOutside.current && outside(event)) event.currentTarget.close();
       pressedOutside.current = false;
     },
