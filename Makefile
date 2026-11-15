@@ -106,6 +106,9 @@ lint-backend: ## Check formatting and lint the backend
 		echo "These files need gofmt (run: gofmt -w backend):"; echo "$$unformatted"; exit 1; fi
 	@want=$$(sed -n '/golangci-lint-action@/,/version:/s/^ *version: v\(.*\)$$/\1/p' .github/workflows/ci.yml); \
 	have=$$(golangci-lint version --short 2>/dev/null); \
+	if [ -z "$$want" ]; then \
+		echo "Could not read the golangci-lint pin from .github/workflows/ci.yml." >&2; exit 1; \
+	fi; \
 	if [ "$$have" != "$$want" ]; then \
 		echo "golangci-lint $${have:-is missing}; CI runs v$$want (.github/workflows/ci.yml)." >&2; \
 		echo "Install it: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$$want" >&2; exit 1; \

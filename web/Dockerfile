@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # One value for both stages: node_modules built under one major and run under
-# another would build green.
+# another would build green. Keep it on the major `engines.node` in
+# package.json names — that is what CI and App Platform's buildpack read, and
+# this stack would otherwise drift from both with nothing failing.
 ARG NODE_VERSION=26
 
 # --- build -------------------------------------------------------------------

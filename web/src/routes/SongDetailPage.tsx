@@ -121,6 +121,7 @@ function SongArticle() {
   // worse than the right one painted a beat late.
   const [fontSizeIndex, setFontSizeIndex] = useState(DEFAULT_FONT_SIZE);
   useLayoutEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the deliberate second pass above; the size is also the reader's own state, so a store would need a writer of its own
     setFontSizeIndex(storedFontSize());
   }, []);
 

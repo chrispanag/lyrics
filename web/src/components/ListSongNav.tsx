@@ -433,6 +433,7 @@ function useSwipeHint(): [boolean | null, (element: HTMLElement | null) => void]
   // cannot change under a mounted page since this hook is the only writer.
   const [unspent, setUnspent] = useState(false);
   useLayoutEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the deliberate second pass above; read once, since spending the hint must not unmount the mark mid-fade
     setUnspent(hintUnspent());
   }, []);
   const [hinting, setHinting] = useState(false);
