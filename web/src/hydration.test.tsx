@@ -1,4 +1,4 @@
-import { act, waitFor } from "@testing-library/react";
+import { act, waitFor, within } from "@testing-library/react";
 import { type DehydratedState, QueryClient, dehydrate, hydrate } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { hydrateRoot } from "react-dom/client";
@@ -149,10 +149,13 @@ describe("hydrating over a server render", () => {
       seed: () => storeFontSize(3),
     });
 
+    // The stored size, which only the browser has, so hydration has committed:
+    // 3 is the largest, so the page cannot grow it.
+    await waitFor(() =>
+      expect(within(container).getByRole("button", { name: "Increase text size" })).toBeDisabled(),
+    );
     expect(problems).toEqual([]);
     expect(container).toHaveTextContent(catalogSongs[0]?.title ?? "");
-    // Then takes the stored size before paint: 3 is the largest, so it cannot grow.
-    expect(container.querySelector('[aria-label="Increase text size"]')).toBeDisabled();
   });
 
   it("agrees about the profile's theme switch", async () => {
@@ -163,9 +166,11 @@ describe("hydrating over a server render", () => {
       seed: () => storeTheme("dark"),
     });
 
+    // The stored theme, so hydration has committed before problems are read.
+    await waitFor(() =>
+      expect(within(container).getByRole("radio", { name: "Dark" })).toBeChecked(),
+    );
     expect(problems).toEqual([]);
-    // Then takes the stored theme before paint.
-    expect(container.querySelector('[aria-checked="true"]')).toHaveTextContent("Dark");
   });
 
   // The real provider: a server renders a guest, the browser remembers a user.
@@ -183,8 +188,9 @@ describe("hydrating over a server render", () => {
       { state, seed: () => storeUser(reader) },
     );
 
+    // Before any restore has answered: the snapshot, not a guest flash. Only
+    // the browser has it, so hydration has also committed.
+    await waitFor(() => expect(container).toHaveTextContent("Νίκος"));
     expect(problems).toEqual([]);
-    // Before any restore has answered: the snapshot, not a guest flash.
-    expect(container).toHaveTextContent("Νίκος");
   });
 });
