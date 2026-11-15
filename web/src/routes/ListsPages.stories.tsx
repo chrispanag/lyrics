@@ -31,6 +31,10 @@ export const AsOwner: Story = {
   parameters: { user: owner },
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole("heading", { name: "Ρεμπέτικα" })).toBeVisible();
+    // The module the page's `lazy` names, so this resolves when the page's own
+    // import does: the dev server compiles it on first request, mid-play, and
+    // on a loaded machine that outlasts findBy's one second.
+    await import("@/components/SortableSongList");
     await expect(await canvas.findAllByRole("button", { name: /reorder/i })).toHaveLength(4);
     await expect(canvas.getByRole("button", { name: /delete list/i })).toBeVisible();
   },
