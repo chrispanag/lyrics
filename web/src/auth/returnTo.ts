@@ -3,7 +3,7 @@
  * the reader, so the address (search string included) means the same everywhere.
  *
  * It travels in the sign-in screen's own address, as `?next=`, rather than in
- * router state: state is react-router's alone, and the URL survives a reload of
+ * router state: Next's router has none, and the URL survives a reload of
  * the sign-in screen as well. The cost is that anyone can write the parameter,
  * so the reader accepts only a path on this site. See CLAUDE.md, "The routing
  * seam".

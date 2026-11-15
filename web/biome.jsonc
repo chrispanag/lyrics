@@ -36,17 +36,17 @@
           "level": "error",
           "options": { "allowConstantExport": true }
         },
-        // The routing seam: react-router is reached through @/lib/navigation,
-        // whose API `next/navigation` can implement too, so changing routers is
-        // a change to that module. The route table and the harness's
-        // `test/routes.tsx` are the only other importers (the override
-        // below). See CLAUDE.md, "The routing seam".
+        // The routing seam: Next's router is reached through @/lib/navigation,
+        // whose backend is injectable, so specs and stories run on an
+        // in-memory history with nothing to mock. Only the seam's Next backend
+        // and the route files may name it (the overrides below). See
+        // CLAUDE.md, "The routing seam".
         "noRestrictedImports": {
           "level": "error",
           "options": {
             "paths": {
-              "react-router-dom": "Import routing from @/lib/navigation, the app's routing seam.",
-              "react-router": "Import routing from @/lib/navigation, the app's routing seam."
+              "next/navigation": "Import routing from @/lib/navigation, the app's routing seam.",
+              "next/link": "Import Link from @/lib/navigation, the app's routing seam."
             }
           }
         }
@@ -89,7 +89,7 @@
               "level": "error",
               "options": {
                 "allowConstantExport": true,
-                "allowExportNames": ["metadata", "viewport", "generateMetadata"]
+                "allowExportNames": ["metadata", "viewport", "generateMetadata", "dynamic"]
               }
             }
           }
@@ -97,10 +97,31 @@
       }
     },
     {
-      // The route table, and the harness that stands in for it in specs and
-      // stories. The seam itself says so in its own file.
-      "includes": ["src/App.tsx", "src/test/routes.tsx"],
+      // The seam's Next backend; and the route files, for the server's own
+      // `notFound`, `redirect` and `permanentRedirect` and nothing else.
+      "includes": ["src/lib/nextNavigation.tsx"],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    },
+    {
+      "includes": ["src/app/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "next/navigation": {
+                    "message": "Route files take only the server's navigation functions; the rest goes through @/lib/navigation.",
+                    "allowImportNames": ["notFound", "permanentRedirect", "redirect"]
+                  },
+                  "next/link": "Import Link from @/lib/navigation, the app's routing seam."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     {
       // The routing seam exports its links beside its hooks on purpose: being

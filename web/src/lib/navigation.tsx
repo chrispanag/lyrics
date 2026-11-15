@@ -1,6 +1,6 @@
-// biome-ignore-all lint/style/noRestrictedImports: the one module that wraps the router.
 import {
   type ComponentPropsWithoutRef,
+  type ComponentType,
   createContext,
   type MouseEvent,
   type ReactNode,
@@ -11,71 +11,93 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  BrowserRouter,
-  MemoryRouter,
-  Navigate,
-  Link as RouterLink,
-  useLocation,
-  useParams as useRouterParams,
-  useSearchParams as useRouterSearchParams,
-  useNavigate,
-} from "react-router-dom";
 
 /*
  * The app's routing seam: every component reaches the router through this
- * module and nothing else, which Biome's `noRestrictedImports` enforces. Each
- * export is shaped like what `next/navigation` and `next/link` can implement
- * too — addresses are strings, there is no `location.state` and no
- * `location.key`, and Back is `back()` rather than `navigate(-1)` — so moving
- * the app onto the App Router replaces this module's insides and nothing that
- * imports it. See CLAUDE.md, "The routing seam".
+ * module and nothing else, which Biome's `noRestrictedImports` enforces. The
+ * router itself is a backend handed in through context — Next's App Router in
+ * the app (`lib/nextNavigation.tsx`, mounted by `app/Providers.tsx`), and an
+ * in-memory history in specs and stories (`TestRouter` below) — so no spec has
+ * to mock `next/navigation`, and what the app promises about history is
+ * written here once, above whichever router answers. See CLAUDE.md, "The
+ * routing seam".
  */
 
 /** A search string's reading half, which is all `next/navigation` hands out. */
 export type ReadonlySearchParams = Omit<URLSearchParams, "append" | "delete" | "set" | "sort">;
 
+/** What a backend's link takes: the seam has already decided `replace`. */
+export type BackendLinkProps = Omit<ComponentPropsWithoutRef<"a">, "href"> & {
+  href: string;
+  replace: boolean;
+};
+
+/**
+ * A router, as the seam needs one: where the reader is, and three ways to move.
+ * Navigations here never scroll; `Layout` scrolls to the top on a new pathname,
+ * which is the one scroll rule the app has.
+ */
+export interface NavigationBackend {
+  pathname: string;
+  searchParams: ReadonlySearchParams;
+  params: Readonly<Record<string, string | string[] | undefined>>;
+  /** Stable across navigations, as Next's router is. */
+  push(href: string): void;
+  replace(href: string): void;
+  back(): void;
+  Link: ComponentType<BackendLinkProps>;
+}
+
+const BackendContext = createContext<NavigationBackend | null>(null);
+
+function useBackend(): NavigationBackend {
+  const backend = useContext(BackendContext);
+  if (!backend) {
+    throw new Error("No router: mount NavigationProvider (the app) or TestRouter (specs).");
+  }
+  return backend;
+}
+
 /** The path of the current address, with no search string or hash. */
 export function usePathname(): string {
-  return useLocation().pathname;
+  return useBackend().pathname;
 }
 
 export function useSearchParams(): ReadonlySearchParams {
-  return useRouterSearchParams()[0];
+  return useBackend().searchParams;
 }
 
 /** The current address as a link would name it: path plus search string. No hash. */
 export function useCurrentHref(): string {
-  const { pathname, search } = useLocation();
-  return pathname + search;
+  const { pathname, searchParams } = useBackend();
+  return withSearch(pathname, searchParams.toString());
 }
 
 /** The dynamic segments of the route being rendered, by name. */
 export function useParams<T extends Record<string, string>>(): Partial<T> {
-  return useRouterParams() as Partial<T>;
+  return useBackend().params as Partial<T>;
 }
 
 /**
  * Rewrites the search string from what it holds now. `replace` for state that
  * should not grow history, such as a query typed letter by letter.
  *
- * Not referentially stable, exactly as react-router's setter is not: an effect
- * that lists it re-runs after every write, so it needs a guard of its own.
+ * Not referentially stable, exactly as react-router's setter was not: an
+ * effect that lists it re-runs after every write, so it needs a guard of its
+ * own. A search-string write is not counted as a navigation (`useNavigationKey`,
+ * `canGoBack`): it is the screen's own state, kept in the address.
  */
 export function useSetSearchParams(): (
   edit: (next: URLSearchParams) => void,
   options?: { replace?: boolean },
 ) => void {
-  const [, setParams] = useRouterSearchParams();
+  const { pathname, searchParams, push, replace } = useBackend();
   return (edit, options = {}) => {
-    setParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-        edit(next);
-        return next;
-      },
-      { replace: Boolean(options.replace) },
-    );
+    const next = new URLSearchParams(searchParams.toString());
+    edit(next);
+    const href = withSearch(pathname, next.toString());
+    if (options.replace) replace(href);
+    else push(href);
   };
 }
 
@@ -90,9 +112,9 @@ export interface Router {
   canGoBack(): boolean;
 }
 
-/** Stable for as long as react-router's `navigate` is, which is per pathname. */
+/** Stable for as long as the backend's functions are, which is for good. */
 export function useRouter(): Router {
-  const navigate = useNavigate();
+  const { push, replace, back } = useBackend();
   const { noteNavigation, canGoBack } = useContext(HistoryContext);
 
   return useMemo(
@@ -100,20 +122,17 @@ export function useRouter(): Router {
       push(href) {
         // A push to the address showing replaces it, as a link to it does:
         // two identical entries in a row make Back appear to do nothing.
-        const same = noteNavigation(href, "push");
-        // Typed to allow a promise, which only a data router returns.
-        void navigate(href, { replace: same });
+        if (noteNavigation(href, "push")) replace(href);
+        else push(href);
       },
       replace(href) {
         noteNavigation(href, "replace");
-        void navigate(href, { replace: true });
+        replace(href);
       },
-      back() {
-        void navigate(-1);
-      },
+      back,
       canGoBack,
     }),
-    [navigate, noteNavigation, canGoBack],
+    [push, replace, back, noteNavigation, canGoBack],
   );
 }
 
@@ -139,7 +158,11 @@ type LinkProps = Omit<ComponentPropsWithoutRef<"a">, "href"> & {
 
 /** A link inside the app. `href` is a path, with a search string if it needs one. */
 export function Link({ href, replace, onClick, ...rest }: LinkProps) {
+  const { Link: BackendLink } = useBackend();
   const { noteNavigation } = useContext(HistoryContext);
+  // Decided here rather than left to the router: a link to the address
+  // showing replaces it, whatever the router would have done.
+  const same = sameAddress(href, useCurrentHref());
 
   const onPress = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
@@ -148,17 +171,7 @@ export function Link({ href, replace, onClick, ...rest }: LinkProps) {
     }
   };
 
-  return (
-    <RouterLink
-      to={href}
-      // Only ever `true`: an explicit `false` would override react-router's own
-      // replace for a link to the address showing, which `noteNavigation` has
-      // just counted as one.
-      {...(replace ? { replace: true } : {})}
-      onClick={onPress}
-      {...rest}
-    />
-  );
+  return <BackendLink href={href} replace={Boolean(replace) || same} onClick={onPress} {...rest} />;
 }
 
 /**
@@ -208,9 +221,15 @@ export function NavLink({
   );
 }
 
-/** Sends the reader on while rendering, replacing the entry they arrived on. */
+/**
+ * Sends the reader on once rendered, replacing the entry they arrived on. A
+ * guard's redirect, decided in the browser: on a server every guard is still
+ * waiting for the session, so nothing renders this there.
+ */
 export function Redirect({ href }: { href: string }) {
-  return <Navigate to={href} replace />;
+  const { replace } = useRouter();
+  useEffect(() => replace(href), [replace, href]);
+  return null;
 }
 
 interface HistoryState {
@@ -228,9 +247,10 @@ const HistoryContext = createContext<HistoryState>({
 });
 
 /**
- * What this module knows about history that the router does not say: whether
- * anything in the app is behind the current entry, and how many navigations
- * have gone nowhere new. Mounted once, just inside the router.
+ * Mounts a backend, and what this module knows about history that no router
+ * says: whether anything in the app is behind the current entry, and how many
+ * navigations have gone nowhere new. The only way to provide a backend, so no
+ * tree has a router without it and quietly answers from the context defaults.
  *
  * `canGoBack` is whether this document has pushed an entry or been moved
  * through history since it loaded — the in-app trail, and nothing else. Not
@@ -239,18 +259,17 @@ const HistoryContext = createContext<HistoryState>({
  * would then pop to that other song after saving. Kept in memory, it reads a
  * reloaded editor as a fresh tab, which is the safe way to be wrong: the editor
  * replaces itself with its own song rather than popping somewhere unrelated.
- *
- * Mounted by `AppRouter` and `TestRouter`, never on its own, so no tree can have
- * the router without it and quietly answer from the context's defaults.
  */
-function HistoryProvider({
+export function NavigationProvider({
+  backend,
   entriesBehind = false,
   children,
 }: {
+  backend: NavigationBackend;
   entriesBehind?: boolean;
   children: ReactNode;
 }) {
-  const here = useCurrentHref();
+  const here = withSearch(backend.pathname, backend.searchParams.toString());
   const hereRef = useRef(here);
   const movedRef = useRef(entriesBehind);
   const [revisits, setRevisits] = useState(0);
@@ -283,34 +302,121 @@ function HistoryProvider({
     () => ({ noteNavigation, canGoBack, revisits }),
     [noteNavigation, canGoBack, revisits],
   );
-  return <HistoryContext.Provider value={value}>{children}</HistoryContext.Provider>;
-}
-
-/** The app's router, on the browser's address bar. Mounted once, by `AppRoot`. */
-export function AppRouter({ children }: { children: ReactNode }) {
   return (
-    <BrowserRouter>
-      <HistoryProvider>{children}</HistoryProvider>
-    </BrowserRouter>
+    <BackendContext.Provider value={backend}>
+      <HistoryContext.Provider value={value}>{children}</HistoryContext.Provider>
+    </BackendContext.Provider>
   );
 }
 
 /**
+ * Hands a matched route's dynamic segments to what renders under it, the way
+ * Next's `useParams` answers for the page it rendered. For the harness, which
+ * matches routes itself (`test/routes.tsx`); the app's backend has them already.
+ */
+export function RouteParams({
+  params,
+  children,
+}: {
+  params: Record<string, string>;
+  children: ReactNode;
+}) {
+  const backend = useBackend();
+  const value = useMemo(() => ({ ...backend, params }), [backend, params]);
+  return <BackendContext.Provider value={value}>{children}</BackendContext.Provider>;
+}
+
+interface MemoryHistory {
+  entries: URL[];
+  index: number;
+}
+
+/** Resolves `href` the way a browser would from `current`. */
+function resolve(href: string, current: URL | undefined): URL {
+  return new URL(href, current ?? ORIGIN);
+}
+
+const ORIGIN = "http://app.invalid";
+
+/**
  * A router held in memory, for specs and stories: rendered at the last of
  * `entries`, with the rest behind it (oldest first) for a spec that goes Back.
+ * Its `back()` moves no browser history, so it fires no `popstate`, exactly as
+ * react-router's memory router did.
  */
 export function TestRouter({ entries, children }: { entries: string[]; children: ReactNode }) {
-  return (
-    <MemoryRouter initialEntries={entries}>
-      <HistoryProvider entriesBehind={entries.length > 1}>{children}</HistoryProvider>
-    </MemoryRouter>
+  const [history, setHistory] = useState<MemoryHistory>(() => {
+    const urls: URL[] = [];
+    for (const entry of entries) urls.push(resolve(entry, urls.at(-1)));
+    return { entries: urls, index: urls.length - 1 };
+  });
+
+  const push = useCallback((href: string) => {
+    setHistory(({ entries: urls, index }) => ({
+      entries: [...urls.slice(0, index + 1), resolve(href, urls[index])],
+      index: index + 1,
+    }));
+  }, []);
+  const replace = useCallback((href: string) => {
+    setHistory(({ entries: urls, index }) => ({
+      entries: urls.map((url, at) => (at === index ? resolve(href, url) : url)),
+      index,
+    }));
+  }, []);
+  const back = useCallback(() => {
+    setHistory((current) =>
+      current.index > 0 ? { ...current, index: current.index - 1 } : current,
+    );
+  }, []);
+
+  const here = history.entries[history.index] ?? new URL(ORIGIN);
+  const { pathname, search } = here;
+  const backend = useMemo<NavigationBackend>(
+    () => ({
+      pathname,
+      searchParams: new URLSearchParams(search),
+      params: {},
+      push,
+      replace,
+      back,
+      Link: MemoryLink,
+    }),
+    [pathname, search, push, replace, back],
   );
+
+  return (
+    <NavigationProvider backend={backend} entriesBehind={entries.length > 1}>
+      {children}
+    </NavigationProvider>
+  );
+}
+
+/** A plain anchor whose plain clicks move the memory history instead. */
+function MemoryLink({ href, replace, onClick, ...rest }: BackendLinkProps) {
+  const backend = useBackend();
+  return (
+    <a
+      href={href}
+      onClick={(event) => {
+        onClick?.(event);
+        if (event.defaultPrevented || !isPlainClick(event)) return;
+        event.preventDefault();
+        if (replace) backend.replace(href);
+        else backend.push(href);
+      }}
+      {...rest}
+    />
+  );
+}
+
+/** A path with its search string, if it has one. */
+function withSearch(pathname: string, search: string): string {
+  return search ? `${pathname}?${search}` : pathname;
 }
 
 /** Whether two in-app addresses are the same screen, hash aside. */
 function sameAddress(href: string, current: string): boolean {
-  const base = "http://app.invalid";
-  const a = new URL(href, base + current);
-  const b = new URL(current, base);
+  const a = new URL(href, ORIGIN + current);
+  const b = new URL(current, ORIGIN);
   return a.pathname === b.pathname && a.search === b.search;
 }

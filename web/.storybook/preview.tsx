@@ -11,7 +11,7 @@ import { TestProviders } from "@/test/TestProviders";
 import "@/styles/index.css";
 
 /*
- * Stories render outside `AppRoot`, so the providers a component reaches for
+ * Stories render outside the root layout, so the providers a component reaches for
  * are supplied here, configured per story through parameters:
  *
  * - `user`: who is signed in, `null` (the default) for a guest.

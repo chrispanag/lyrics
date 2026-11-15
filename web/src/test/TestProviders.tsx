@@ -8,9 +8,9 @@ import type { User } from "@/lib/types";
 
 /**
  * The query client, router and auth stub a component reaches for outside
- * `AppRoot`, nested once for `renderWithProviders` and the Storybook preview.
+ * the root layout, nested once for `renderWithProviders` and the Storybook preview.
  * The router is the seam's `TestRouter`, so moving routers changes nothing
- * here; `./routes.tsx` is the one harness file that names react-router.
+ * here: it is the seam's in-memory backend, so nothing here mocks Next.
  * Pass `queryClient` to keep a handle on it; otherwise each mount makes its own.
  */
 export function TestProviders({

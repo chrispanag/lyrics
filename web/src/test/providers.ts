@@ -4,7 +4,7 @@ import type { AuthContextValue } from "@/auth/context";
 import type { User } from "@/lib/types";
 
 /*
- * The providers a component reaches for outside `AppRoot`, as specs and
+ * The providers a component reaches for outside the root layout, as specs and
  * stories both need them: `renderWithProviders` and `.storybook/preview.tsx`.
  */
 
