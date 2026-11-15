@@ -3,16 +3,9 @@ import { describe, expect, it } from "vitest";
 import { songCanonicalHref, songRefIsId } from "./listContext";
 
 /*
- * The two halves of the id-to-slug redirect, which is the one canonicalization
- * in the stack and lives on the server.
- *
- * Both are pinned from both sides, because both fail silently in one direction
- * only. A predicate that is too narrow leaves an old link on the id form
- * forever — which still works, so nothing says so; too wide, it fires on a
- * perfectly ordinary slug and redirects a reader to an address the API cannot
- * resolve. And a redirect that drops the query string leaves the reader on the
- * song with the list gone: the page renders, there is simply no bar, no swipe
- * and no arrow keys.
+ * The two halves of the id-to-slug redirect, pinned from both sides: too narrow
+ * leaves old links uncanonicalized, too wide redirects ordinary slugs, and a
+ * dropped query string silently takes the reader out of the list.
  */
 
 describe("songRefIsId", () => {
@@ -20,10 +13,7 @@ describe("songRefIsId", () => {
 
   it("reads both spellings a UUID is written in", () => {
     expect(songRefIsId(ID)).toBe(true);
-    // The dashes left out, which is the form Go's uuid.Parse also takes and
-    // which migration 000010 reserves for exactly that reason. Missed here, a
-    // link in this shape would be answered by the resolver and never
-    // canonicalized.
+    // Dashes left out: Go's uuid.Parse takes it, and migration 000010 reserves it.
     expect(songRefIsId(ID.replaceAll("-", ""))).toBe(true);
     // Hex is hex whichever case it arrives in.
     expect(songRefIsId(ID.toUpperCase())).toBe(true);
@@ -32,8 +22,7 @@ describe("songRefIsId", () => {
   it("reads a slug as a slug, including the ones that look close", () => {
     expect(songRefIsId("to-tragoydi-tis-agapis")).toBe(false);
     expect(songRefIsId("thalassa-platia-2")).toBe(false);
-    // The shapes worth naming: a slug is allowed dashes and digits, so what
-    // separates it from an id is only ever the exact arrangement of them.
+    // Slugs may hold dashes and digits; only the exact arrangement differs.
     expect(songRefIsId("1964")).toBe(false);
     expect(songRefIsId("dead-beef")).toBe(false);
     expect(songRefIsId(`${ID}-live`)).toBe(false);

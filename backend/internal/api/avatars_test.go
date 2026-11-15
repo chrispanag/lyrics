@@ -11,8 +11,7 @@ import (
 	"github.com/christos/lyrics/backend/internal/store"
 	"github.com/christos/lyrics/backend/internal/testutil"
 
-	// Registers the JPEG decoder, so a test can assert that what came back is
-	// one — which is the point of the API re-encoding every upload.
+	// Registers the JPEG decoder to check the re-encoded output.
 	_ "image/jpeg"
 )
 
@@ -35,8 +34,7 @@ func TestProfilePictureLifecycle(t *testing.T) {
 		t.Fatal("the upload response must carry the version the client caches against")
 	}
 
-	// Fetched as a guest, because that is what an <img> is: it does not go
-	// through the API client and has no token to send.
+	// Fetched as a guest: an <img> sends no token.
 	served := h.do("GET", path, "", nil)
 	if served.StatusCode != http.StatusOK {
 		t.Fatalf("guest GET picture = %d, want 200", served.StatusCode)
@@ -44,9 +42,7 @@ func TestProfilePictureLifecycle(t *testing.T) {
 	if got := served.Header.Get("Content-Type"); got != "image/jpeg" {
 		t.Errorf("Content-Type = %q, want image/jpeg", got)
 	}
-	// Pinned as a literal, because this header is the whole of what a removal
-	// can promise: `immutable`, or a year of freshness, leaves a removed picture
-	// on other people's screens with nothing able to recall it.
+	// Pinned as a literal: max-age is a removal's latency.
 	if got := served.Header.Get("Cache-Control"); got != "public, max-age=300" {
 		t.Errorf("Cache-Control = %q, want public, max-age=300", got)
 	}
@@ -55,8 +51,7 @@ func TestProfilePictureLifecycle(t *testing.T) {
 		t.Error("a picture must be served with an ETag, or every page load re-downloads it")
 	}
 
-	// A PNG went up and a JPEG came back, which is what says the stored bytes
-	// are the encoder's output rather than the file that was uploaded.
+	// PNG in, JPEG out: the stored bytes are the encoder's output.
 	body, err := io.ReadAll(served.Body)
 	if err != nil {
 		t.Fatalf("read served picture: %v", err)
@@ -69,8 +64,7 @@ func TestProfilePictureLifecycle(t *testing.T) {
 		t.Errorf("conditional GET = %d, want 304", again.StatusCode)
 	}
 
-	// Replacing the picture has to move the version, or the cache-busting
-	// parameter built from it keeps pointing at the old image.
+	// Replacing must move the version, or the ?v= keeps the old image.
 	replaced := decode[store.User](t, h.doRaw("POST", "/api/v1/me/avatar", token, "image/png",
 		testutil.SolidPNG(t, 32, 32, testutil.Opaque)))
 	if replaced.AvatarUpdatedAt == nil || !replaced.AvatarUpdatedAt.After(*uploaded.AvatarUpdatedAt) {
@@ -89,8 +83,7 @@ func TestProfilePictureLifecycle(t *testing.T) {
 		t.Errorf("GET a removed picture = %d, want 404", gone.StatusCode)
 	}
 
-	// Removing twice is a double tap on a control that was there a moment ago,
-	// not an error.
+	// Removing twice is not an error.
 	if second := h.do("DELETE", "/api/v1/me/avatar", token, nil); second.StatusCode != http.StatusOK {
 		t.Errorf("second removal = %d, want 200", second.StatusCode)
 	}
@@ -116,8 +109,7 @@ func TestProfilePictureRefusals(t *testing.T) {
 			want: http.StatusUnprocessableEntity,
 		},
 		{
-			// Refused on the declared dimensions alone. Nothing decodes it: the
-			// pixels this header promises are 1.6 GB of bitmap.
+			// Refused on the declared dimensions alone, before any decode.
 			name: "a header declaring 20000x20000",
 			body: func(testing.TB) []byte { return testutil.PNGHeader(20000, 20000) },
 			want: http.StatusUnprocessableEntity,
@@ -130,10 +122,7 @@ func TestProfilePictureRefusals(t *testing.T) {
 			want: http.StatusUnprocessableEntity,
 		},
 		{
-			// Noticed by the reader rather than by the decoder — the body is
-			// never read to the end — and deliberately answered the same way,
-			// so a form has one message about size instead of two that depend
-			// on how far over the limit the file was.
+			// Caught by the reader, answered like the decoder's size refusal.
 			name: "more bytes than the cap",
 			body: func(testing.TB) []byte { return make([]byte, imaging.MaxBytes*2) },
 			want: http.StatusUnprocessableEntity,
@@ -167,18 +156,11 @@ func TestProfilePictureRefusals(t *testing.T) {
 	})
 }
 
-// What this pins is the route, not the limiter — the counter has its own unit
-// tests, and the finding was that nothing was mounted in front of the one
-// handler that decodes an image. So it drives the endpoint, and from both sides
-// of the key: one account has to run out, and the account beside it must be
-// carrying none of that. Keyed on the caller's address instead, these two share
-// a bucket here exactly as an office behind one NAT would in production, and the
-// bystander is refused for something the first account did.
+// Pins the route, not the limiter, and the key: one account runs out while
+// another (same address) does not.
 func TestProfilePictureUploadsAreRateLimited(t *testing.T) {
 	h := newHarness(t)
 	token := h.tokenFor("picture.flood@example.com", store.RoleUser)
-	// Small on purpose: what is being counted is requests, and every one of
-	// them is decoded and re-encoded for real.
 	image := testutil.SolidPNG(t, 16, 16, testutil.Opaque)
 
 	first := h.doRaw("POST", "/api/v1/me/avatar", token, "image/png", image)
@@ -198,9 +180,7 @@ func TestProfilePictureUploadsAreRateLimited(t *testing.T) {
 		t.Error("uploading in a loop must start being refused: a decode and a re-encode is the most any single request in this API costs")
 	}
 
-	// Removal is deliberately outside the limit — a row delete with no image
-	// work behind it — and somebody who has just been refused an upload must
-	// still be able to take down the picture they have.
+	// Removal is outside the limit.
 	if removed := h.do("DELETE", "/api/v1/me/avatar", token, nil); removed.StatusCode != http.StatusOK {
 		t.Errorf("removal while uploads are limited = %d, want 200", removed.StatusCode)
 	}

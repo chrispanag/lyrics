@@ -57,10 +57,9 @@ jobs:
         working-directory: backend
         run: go vet ./...
 
-      # Keep this action on v8 or later: earlier majors install the last
-      # golangci-lint v1 release, which is built with Go 1.24 and refuses a
-      # module targeting anything newer — it fails before linting anything.
-      # `make lint-backend` reads this pin and refuses any other local version.
+      # v8 or later: earlier majors install golangci-lint v1, which refuses this
+      # module's Go version. `make lint-backend` reads this pin and refuses any
+      # other local version.
       - uses: golangci/golangci-lint-action@v9
         with:
           working-directory: backend
@@ -69,9 +68,7 @@ jobs:
       - name: Test
         working-directory: backend
         env:
-          # The suite creates a database per test binary from this connection.
-          # Without it the integration tests would skip themselves and a broken
-          # schema would report as a green build.
+          # Without it the integration tests skip and a broken schema goes green.
           TEST_DATABASE_URL: postgres://lyrics:lyrics@localhost:5433/lyrics?sslmode=disable
         run: go test ./... -count=1 -race
 

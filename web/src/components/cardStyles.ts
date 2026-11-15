@@ -1,17 +1,8 @@
 /*
- * The chrome of a card — the bordered panel a song, a list, a user, and the bar
- * naming the list a song is being read from are each shown in.
+ * The chrome of a card: the bordered panel songs, lists and users are shown in.
  *
- * Shared for the reason `rowControlChrome` next door is: five sites stated the
- * same border, and the brand hover twice character for character, and the copies
- * had already begun to drift, and nothing failed to say so: the lists index had a
- * partial version of the accent below, the border without the tint, until this
- * module took it over.
- *
- * Split in two, and neither holds a background or padding: `cn` is a plain join,
- * so a caller cannot take a property back out — and the hover belongs only to
- * the cards that are links. Every caller sets its own ground and its own
- * padding, which are the two that differ between them.
+ * No background or padding, since `cn` cannot take a property back out; each
+ * caller sets its own. The hover is separate, for cards that are links.
  */
 
 /** The resting border, shared by everything card-shaped. */

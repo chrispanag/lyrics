@@ -8,8 +8,7 @@ import (
 	"unicode/utf8"
 )
 
-// Field limits. These exist to bound storage and reject obvious junk, not to
-// enforce editorial policy.
+// Field limits bound storage and reject junk; they are not editorial policy.
 const (
 	maxTitleLen       = 300
 	maxNameLen        = 200
@@ -20,18 +19,9 @@ const (
 	minPasswordLen    = 8
 	maxPasswordLen    = 256
 
-	// Collection bounds. The 1 MB body cap alone is not a bound on *work*: a
-	// credit is about 30 bytes on the wire but costs one sequential round trip
-	// to upsert a person, and a bare UUID is 38 bytes but costs one UPDATE in
-	// an open transaction. Left uncapped, a single accepted request could hold
-	// one of the ten pooled connections for the full write timeout.
-	//
-	// maxPerformers is counted across all of a song's recordings rather than per
-	// recording, because it is the total number of person upserts that costs the
-	// round trips — sixteen recordings each allowed sixty-four performers would
-	// bound the wire and not the work at all. Worst case is now maxCredits +
-	// maxPerformers sequential upserts in one request, twice what it was before
-	// recordings existed; still bounded, still behind contributor auth.
+	// Collection bounds cap work, which the body-size cap does not: each entry
+	// costs a round trip or an UPDATE in an open transaction. maxPerformers
+	// counts across all of a song's recordings, since total upserts is the cost.
 	maxCredits     = 64
 	maxPerformers  = 64
 	maxRecordings  = 16
@@ -51,9 +41,7 @@ func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-// validEmail reports whether an address is plausibly deliverable. This is a
-// syntax check only — the authority on whether an address can receive mail is
-// the mail server, not a regex.
+// validEmail reports whether an address is syntactically plausible.
 func validEmail(email string) bool {
 	email = strings.TrimSpace(email)
 	if email == "" || len(email) > 320 || strings.ContainsAny(email, " \t\r\n") {
@@ -63,20 +51,13 @@ func validEmail(email string) bool {
 	return err == nil && addr.Address == email
 }
 
-// validatePassword applies only the bounds we can enforce meaningfully here.
-//
-// Composition rules (uppercase, symbols, and so on) are configured per
-// application in Prelude and are deliberately *not* duplicated: a second copy
-// would drift from the real policy and start rejecting passwords Prelude would
-// accept, or vice versa. Prelude is the authority, and its rejection is
-// surfaced to the user verbatim.
+// validatePassword checks length only. Composition rules live in Prelude and
+// are not duplicated here; its rejection is surfaced verbatim.
 func validatePassword(password string) string {
 	switch {
 	case utf8.RuneCountInString(password) < minPasswordLen:
 		return "Password must be at least 8 characters."
-	// Runes on both sides. Measuring the maximum in bytes rejected a 200-
-	// character Greek passphrase at roughly 400 bytes, while telling the user
-	// the limit was 256 characters.
+	// Runes, not bytes: Greek characters are two bytes each.
 	case utf8.RuneCountInString(password) > maxPasswordLen:
 		return "Password is too long."
 	default:
@@ -87,21 +68,11 @@ func validatePassword(password string) string {
 // youTubeIDPattern matches the 11-character video identifier.
 var youTubeIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 
-// parseYouTubeURL extracts a video ID from the URL shapes users actually paste:
-// a full watch link, a youtu.be short link, an embed link, or a bare ID.
+// parseYouTubeURL extracts a video ID from the URL shapes users paste: a watch
+// link, a youtu.be short link, an embed link, or a bare ID. Returns ("", false)
+// when the input is not recognizably YouTube.
 //
-// Returns ("", false) when the input is not recognizably YouTube, which rejects
-// tracking-laden and malformed links at the boundary. The extracted ID is stored
-// alongside the URL because the ID is the part that has been validated: the UI
-// builds its link out of it and never renders the stored URL as an href.
-//
-// The editor's live preview mirrors this function in TypeScript — extractVideoId
-// in web/src/lib/youtube.ts — because the preview is the only
-// confirmation a contributor gets that a pasted link was recognized. The two
-// cannot be made to share one implementation, so a host or a path shape added
-// here and not there reads as the field refusing a link this function would
-// have saved, and one added there and not here as a preview the save then
-// contradicts. Silent both ways round: change both.
+// Mirrored by extractVideoId in web/src/lib/youtube.ts; change both.
 func parseYouTubeURL(raw string) (videoID string, ok bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -121,9 +92,7 @@ func parseYouTubeURL(raw string) (videoID string, ok bool) {
 		return "", false
 	}
 
-	// Lowercase before trimming, not after: url.Parse preserves the host's case,
-	// so trimming first leaves "WWW.YOUTUBE.COM" with its prefix intact and the
-	// switch below rejects a perfectly ordinary pasted link.
+	// Lowercase before trimming: url.Parse preserves the host's case.
 	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 	switch host {
 	case "youtu.be":

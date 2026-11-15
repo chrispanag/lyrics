@@ -10,13 +10,9 @@ export type Identity = Pick<User, "id" | "email" | "display_name" | "avatar_upda
 /**
  * The URL of a user's picture, or null when they have none.
  *
- * Keyed on `avatar_updated_at` and never on whether an image loaded: the
- * fallback is decided from data already in hand, the same way a song's video
- * badge reads `youtube_video_id`. The version in the query string is what makes
- * a replacement visible immediately, and it has to: the path itself never
- * changes. A removal has no version to move to, so it is only ever as quick as
- * the response's freshness window — five minutes, which is why that response is
- * not served `immutable`.
+ * Decided from `avatar_updated_at`, never from whether an image loaded. The `?v=`
+ * is what makes a replacement visible at once, the path never changing; a removal
+ * has no new version and waits out the response's max-age.
  */
 export function avatarSrc(user: Identity): string | null {
   if (!user.avatar_updated_at) return null;
@@ -31,8 +27,7 @@ export function initials(user: Pick<User, "email" | "display_name">): string {
     return name
       .split(/\s+/)
       .slice(0, 2)
-      // Split into code points rather than sliced, so a name starting with an
-      // emoji or an astral character does not begin with half of one.
+      // By code point, so an emoji or astral initial is not cut in half.
       .map((word) => Array.from(word)[0] ?? "")
       .join("")
       .toLocaleUpperCase();
@@ -55,12 +50,7 @@ const PALETTE = [
   "bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-100",
 ] as const;
 
-/**
- * A stable color for a user, derived from their id.
- *
- * From the id rather than the name, so renaming yourself does not change the
- * face other people have learned to recognize in a list.
- */
+/** A stable color for a user, from the id so a rename does not change it. */
 export function avatarPalette(id: string): string {
   let hash = 0;
   for (const character of id) {

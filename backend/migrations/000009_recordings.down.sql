@@ -1,24 +1,17 @@
 -- Reverse the recordings split, best effort.
 --
--- Lossy by design, and the losses are worth naming: a song's second and later
--- recordings have nowhere to go, and neither do labels or per-recording notes.
--- What comes back is the first recording's performers, as `artist` credits,
--- which is the shape they had going in.
+-- Lossy: later recordings, labels and per-recording notes are dropped. The
+-- first recording's performers come back as `artist` credits.
 --
--- The order below matters. The CHECK has to be widened before 'artist' rows can
--- be written, and the old functions restored before the tables they do not
--- reference are dropped.
+-- Order matters: widen the CHECK before writing 'artist' rows, and restore the
+-- old functions before dropping the tables.
 
 ALTER TABLE song_credits DROP CONSTRAINT song_credits_role_check;
 ALTER TABLE song_credits ADD CONSTRAINT song_credits_role_check
   CHECK (role IN ('artist', 'composer', 'lyricist', 'performer'));
 
--- The first recording's performers become artist credits again. The ORDER BY is
--- the same "first" rule the up migration's function used.
---
--- songs.youtube_url, youtube_video_id and release_year need no copying back:
--- the trigger being dropped below kept them equal to this recording's values
--- all along, so dropping it simply freezes what is already there.
+-- Same "first" ORDER BY as the up migration. songs.youtube_url,
+-- youtube_video_id and release_year already hold this recording's values.
 WITH firsts AS (
   SELECT DISTINCT ON (r.song_id) r.id, r.song_id
   FROM recordings r

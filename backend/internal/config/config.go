@@ -1,8 +1,5 @@
-// Package config loads and validates process configuration from the environment.
-//
-// Configuration is read once at startup and validated eagerly: a missing or
-// malformed required value is a startup failure, never a surprise at the first
-// request that happens to need it.
+// Package config loads and validates process configuration from the
+// environment, once and eagerly: a bad required value fails startup.
 package config
 
 import (
@@ -22,32 +19,20 @@ type Config struct {
 	PreludeAppID   string
 	PreludeAPIKey  string
 	PreludeAPIBase string
-	// PreludeSessionDomain is the host serving this application's Prelude session
-	// endpoints — a custom domain such as `auth.songfolio.live`, rather than the
-	// `<app_id>.session.prelude.dev` default. Both the JWKS URL and the expected
-	// issuer derive from it, deliberately from one value: Prelude's issuer is
-	// per-host, so a token obtained through the custom domain names that host in
-	// `iss`, and a verifier still expecting the default rejects every login.
+	// PreludeSessionDomain is the custom host serving Prelude session endpoints
+	// (e.g. `auth.songfolio.live`). The JWKS URL and expected issuer both derive
+	// from it because Prelude's issuer is per-host; see CLAUDE.md, "Prelude tokens".
 	PreludeSessionDomain string
-	// PreludeJWKSURL and PreludeIssuer override the values derived above. Both
-	// are empty in normal operation; tests and offline development point them at
-	// a locally served key set, which is the only way to exercise the auth path
-	// without live Prelude credentials.
+	// PreludeJWKSURL and PreludeIssuer override the derived values; tests and
+	// offline development point them at a locally served key set.
 	PreludeJWKSURL string
 	PreludeIssuer  string
 	AdminEmails    []string
 	CORSOrigins    []string
-	// ClientIPHeader names the header carrying the real caller's address, for the
-	// one endpoint that rate limits by it. Empty means the peer address is used,
-	// which is correct anywhere the process is reached directly and is why local
-	// development needs no setting.
-	//
-	// Only ever set this to a header the fronting proxy writes itself and
-	// overwrites on the way in. Any header a client can set is a bypass: the
-	// limit is per key, so forging a fresh value per request buys an unlimited
-	// number of buckets. On App Platform that header is `DO-Connecting-IP` and
-	// deliberately not `X-Forwarded-For`, which the platform documents as
-	// carrying the address of its own ingress rather than the caller's.
+	// ClientIPHeader names the header carrying the caller's address for
+	// per-address rate limits; empty uses the peer address. Only name a header
+	// the proxy overwrites, or a forged value buys a fresh bucket per request.
+	// On App Platform it is `DO-Connecting-IP`, not `X-Forwarded-For`.
 	ClientIPHeader  string
 	LogLevel        slog.Level
 	ShutdownTimeout time.Duration
@@ -78,9 +63,8 @@ func (c Config) Issuer() string {
 	return "https://" + c.sessionHost()
 }
 
-// IsBootstrapAdmin reports whether an email is listed in ADMIN_EMAILS. Comparison
-// is case-insensitive because email local parts are conventionally case-preserving
-// but not case-sensitive in practice.
+// IsBootstrapAdmin reports whether an email is listed in ADMIN_EMAILS,
+// case-insensitively.
 func (c Config) IsBootstrapAdmin(email string) bool {
 	needle := strings.ToLower(strings.TrimSpace(email))
 	if needle == "" {
@@ -90,8 +74,7 @@ func (c Config) IsBootstrapAdmin(email string) bool {
 }
 
 // Load reads configuration from the environment, returning an error that names
-// every problem at once rather than failing on the first one. Operators fixing a
-// fresh deployment should not have to rerun the process per missing variable.
+// every problem at once rather than failing on the first one.
 func Load() (Config, error) {
 	var problems []string
 
@@ -120,8 +103,7 @@ func Load() (Config, error) {
 	if cfg.PreludeAPIKey == "" {
 		problems = append(problems, "PRELUDE_API_KEY is required (used to create users via the Management API)")
 	}
-	// A bare host, because both derived values add their own scheme and path. A
-	// scheme here would otherwise reach the verifier as `https://https://...`.
+	// A bare host: both derived values add their own scheme and path.
 	if strings.ContainsAny(cfg.PreludeSessionDomain, ":/") {
 		problems = append(problems, fmt.Sprintf(
 			"PRELUDE_SESSION_DOMAIN must be a bare host such as auth.songfolio.live, got %q",

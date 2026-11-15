@@ -1,37 +1,13 @@
 import type { ApiErrorBody } from "@/lib/types";
 
-// A production build defaults to the page's own origin, because that is how the
-// app is deployed: one domain, with `/api` routed to the API and everything
-// else to these assets. Baking an absolute URL in would survive until the
-// domain changed and then serve a bundle pointing at the old one.
+// Browser: production uses its own origin (never bake in a hostname); other
+// modes, vitest's "test" included, fall back to :8080. An explicit
+// NEXT_PUBLIC_API_BASE_URL wins, even "" (`make mobile`), hence `??`.
 //
-// Development is the case that needs an override — the dev server serves :5173
-// and the API listens on :8080 — so the fallback is only reached there. An
-// explicit NEXT_PUBLIC_API_BASE_URL still wins in either mode, including when
-// set to "", which is what `make mobile` relies on: emptied, every call goes to
-// this origin and through the rewrite in next.config.ts.
-//
-// The guard is `!== "production"` rather than `=== "development"` because
-// vitest runs as "test", and its specs expect the same :8080 fallback they got
-// from Vite's `import.meta.env.DEV`.
-//
-// A server render is the case that breaks all of that, which is why there are
-// two branches: "the page's own origin" is the empty string, and relative to
-// nothing is not a URL. So the Node process resolves API_ORIGIN instead — a
-// platform variable rather than one filled from `.env`, and deliberately *not*
-// NEXT_PUBLIC_, so it is never inlined into the bundle a browser downloads. It
-// is set on App Platform (`${APP_URL}`, so server fetches go back out through
-// the public ingress — there is no private service address configured today, and
-// that is a known cost) and in docker-compose (`http://api:8080`); `make web`,
-// `make mobile` and every node-environment spec are covered by the default
-// below, which is why this is the one mapping that does not exist in four
-// places.
-//
-// One resolution and not a second server-side fetcher, so `apiFetch` works
-// unchanged from either side and where the API lives stays decided in one place.
-// The two branches are independent on purpose: the server's deliberately does
-// not fall back through NEXT_PUBLIC_API_BASE_URL, because `make mobile` sets that
-// to the empty string — which is precisely the value a server cannot use.
+// Server: "" is not a URL, so Node reads API_ORIGIN, a run-time platform value
+// that is never NEXT_PUBLIC_. It must not fall back through
+// NEXT_PUBLIC_API_BASE_URL, which `make mobile` empties. See CLAUDE.md, "What
+// the server says while the app is still client-only".
 const LOCAL_API = "http://localhost:8080";
 
 const API_BASE =
@@ -40,13 +16,7 @@ const API_BASE =
     : (process.env.NEXT_PUBLIC_API_BASE_URL ??
       (process.env.NODE_ENV !== "production" ? LOCAL_API : ""));
 
-/**
- * The absolute URL of an API path.
- *
- * For the things the browser fetches by itself: an `<img src>` does not go
- * through `apiFetch`, and left relative it would ask the dev server on :5173
- * for an image the API serves on :8080.
- */
+/** The absolute URL of an API path, for what bypasses `apiFetch` (an `<img src>`). */
 export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
@@ -71,26 +41,15 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Supplies a bearer token, or null when signed out.
- *
- * The auth layer registers this at startup rather than the client importing
- * the Prelude SDK directly, which keeps this module free of any dependency on
- * how sessions are stored and makes it trivially mockable in tests.
- */
+/** Supplies a bearer token, or null when signed out. Registered by the auth layer. */
 type TokenProvider = (forceRefresh?: boolean) => Promise<string | null>;
 
 let getToken: TokenProvider = async () => null;
 let onUnauthorized: (() => void) | null = null;
 
 /**
- * Registers where access tokens come from.
- *
- * `auth/session` calls this at import time, not from a React effect — see the
- * comment there for why the difference matters. It is separate from the
- * unauthorized handler because the two become available at different moments:
- * the token provider is a module singleton that exists before the first render,
- * while reacting to a dead session needs React state that does not.
+ * Registers where access tokens come from. `auth/session` calls this at import
+ * time, not from an effect; see there.
  */
 export function setTokenProvider(provider: TokenProvider): void {
   getToken = provider;
@@ -112,31 +71,16 @@ export interface RequestOptions {
   anonymous?: boolean;
   signal?: AbortSignal;
   /**
-   * Server only: seconds this response may be reused before being fetched
-   * again. Omitted, nothing is cached.
-   *
-   * Next's own extension to `fetch`, so it does nothing in a browser and
-   * nothing under vitest — which is why it belongs to the caller rather than
-   * being a default here: a stale answer is fine for a crawler reading a song's
-   * metadata and is exactly wrong for the app, where a reader who just saved an
-   * edit would be shown the version before it.
-   *
-   * The measured reason it is on the request and not on the page: a
-   * `revalidate` segment export on `/songs/[id]` changes nothing, because a
-   * dynamic segment with no `generateStaticParams` is rendered per request
-   * whatever it says — verified against `next start`, one API request per page
-   * request with the export in place and one per five minutes with this.
+   * Server only (Next's `fetch` extension): seconds this response may be reused.
+   * Omitted, nothing is cached. Per call site, since staleness is wrong for the
+   * app. A segment `revalidate` export does nothing on a dynamic route.
    */
   revalidate?: number;
 }
 
 /**
  * Performs an API request, attaching the access token and decoding the
- * response.
- *
- * On a 401 the token is refreshed once and the request retried: access tokens
- * are short-lived, so an expiry during an ordinary session is routine and
- * should be invisible rather than bouncing the user to a login screen.
+ * response. A 401 forces one token refresh and retry.
  */
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await send(path, options, false);
@@ -171,25 +115,16 @@ async function send(
     headers,
     body: payload?.body,
     signal: options.signal,
-    // Spread rather than passed as `undefined`, so a request that asked for no
-    // caching is a request with no `next` key at all — which is what leaves the
-    // browser's own fetch and MSW looking at the init object they always saw.
+    // Spread so an uncached request carries no `next` key at all.
     ...(options.revalidate === undefined ? {} : { next: { revalidate: options.revalidate } }),
   });
 }
 
 /**
- * The body to send and the content type that describes it, or null for none.
+ * The body to send and its content type, or null for none.
  *
- * A `Blob` — an image being uploaded — is read out into its bytes rather than
- * handed to `fetch` as it is. A Blob is only recognized as one by the fetch
- * implementation that defined it, and an unrecognized one is *stringified*:
- * `"[object Blob]"` goes up as thirteen bytes of text, every byte of the image
- * dropped, and the request looks perfectly well formed doing it. Reading it
- * here is what makes an upload independent of whose Blob it is.
- *
- * Reading it per attempt also keeps the 401 retry above working, since a Blob
- * can be read again where a stream could not.
+ * A `Blob` is read into bytes: a fetch that does not recognize another
+ * implementation's Blob silently sends `"[object Blob]"` instead.
  */
 async function payloadOf(body: unknown): Promise<{ body: BodyInit; contentType: string } | null> {
   if (body === undefined) return null;
@@ -230,13 +165,7 @@ async function handle<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-/**
- * Turns an unknown thrown value into a sentence for the user.
- *
- * Lives beside ApiError rather than in each route: the rule for deciding
- * whether a failure carries a server message worth showing is a property of the
- * error type, and five call sites had drifted copies of it.
- */
+/** Turns an unknown thrown value into a sentence for the user. */
 export function errorMessage(caught: unknown, fallback: string): string {
   return caught instanceof ApiError ? caught.message : fallback;
 }
@@ -246,11 +175,7 @@ export function errorDetails(caught: unknown): Record<string, string> {
   return caught instanceof ApiError ? caught.details : {};
 }
 
-/**
- * Whether a failed request is worth retrying.
- *
- * 4xx responses will not become successes on retry.
- */
+/** Whether a failed request is worth retrying; a 4xx never is. */
 export function shouldRetry(failureCount: number, error: unknown): boolean {
   if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
     return false;

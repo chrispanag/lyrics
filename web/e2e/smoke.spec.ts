@@ -1,14 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 /*
- * End-to-end smoke suite.
- *
- * Split in two deliberately. The browsing half needs nothing but a running
- * stack, so it guards the guest experience on every run. The signed-in half
- * needs a real Prelude application, because `loginWithPassword` goes straight
- * from the browser to the session domain and cannot be stubbed from the app
- * side. Rather than fail CI over a missing secret, that half skips itself and
- * says why.
+ * The guest half needs only a running seeded stack. The signed-in half needs a
+ * real Prelude application (the SDK cannot be stubbed) and skips without one.
  */
 
 const hasPreludeCredentials = Boolean(
@@ -34,11 +28,8 @@ test.describe("browsing as a guest", () => {
     await expect(page.getByRole("heading", { name: /lyrics/i })).toBeVisible();
   });
 
-  // The only place the title rule can be checked at all. `PageTitle` renders a
-  // <title> that React hoists into a head it does not own alone, and whichever
-  // one sits first is the one read — so a `metadata.title` added to
-  // app/layout.tsx would pin every tab to the bare product name. jsdom has no
-  // competing title, so the unit specs pass either way; this needs a browser.
+  // The only check of the title rule (CLAUDE.md, Head assets): a `metadata.title`
+  // in app/layout.tsx would pin every tab, and jsdom cannot see that.
   test("a page's own name reaches the tab", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveTitle("Browse — Songfolio");
@@ -48,8 +39,7 @@ test.describe("browsing as a guest", () => {
     await expect(song).toBeVisible({ timeout: 10_000 });
     await song.click();
 
-    // The song's own name, so this also covers the title following a
-    // client-side navigation rather than only the first paint.
+    // Covers the title following a client-side navigation, not just first paint.
     await expect(page).toHaveTitle(/^Θάλασσα.* — Songfolio$/);
   });
 

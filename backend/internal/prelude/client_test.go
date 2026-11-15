@@ -67,9 +67,8 @@ func TestCreateUserRejectsEmptyID(t *testing.T) {
 	}
 }
 
-// The duplicate-email case is the most common registration outcome and the only
-// one a user can fix themselves, so it must be distinguishable from a generic
-// upstream failure regardless of which status Prelude uses to report it.
+// A duplicate email must be distinguishable from a generic upstream failure
+// whichever status Prelude reports it with.
 func TestCreateUserClassifiesErrors(t *testing.T) {
 	tests := []struct {
 		name   string

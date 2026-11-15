@@ -14,11 +14,8 @@ import (
 	"github.com/christos/lyrics/backend/internal/store"
 )
 
-// creditRequest identifies a credited person either by ID or by name.
-//
-// Accepting a bare name lets the editor create a person inline, which is how
-// most credits actually get entered — requiring a separate "create person" call
-// first would make adding a song a multi-step chore.
+// creditRequest identifies a credited person either by ID or by a name, which
+// creates the person inline.
 type creditRequest struct {
 	PersonID *uuid.UUID `json:"person_id"`
 	Name     string     `json:"name"`
@@ -35,8 +32,7 @@ type recordingPerformerRequest struct {
 }
 
 // recordingRequest is one recording as written. No video id: it is derived from
-// the URL here, exactly as the song's used to be, so a caller cannot state a
-// link and an id that disagree.
+// the URL, so a caller cannot state a link and an id that disagree.
 type recordingRequest struct {
 	Label       *string                     `json:"label"`
 	YouTubeURL  *string                     `json:"youtube_url"`
@@ -47,14 +43,8 @@ type recordingRequest struct {
 	Performers  []recordingPerformerRequest `json:"performers"`
 }
 
-// songRequest is the full write shape.
-//
-// The YouTube link and the release year are gone from it: both belong to a
-// recording now, and the song's copies are written by trigger. A payload still
-// naming them is refused outright rather than ignored, because DecodeJSON
-// disallows unknown fields — which is the right way round. Silently dropping a
-// link the caller believed it had saved is the failure that would be worth
-// avoiding a breaking change for.
+// songRequest is the full write shape. The song's youtube_* and release_year
+// are trigger-written copies and must never appear here.
 type songRequest struct {
 	Title      string             `json:"title"`
 	AltTitle   *string            `json:"alt_title"`
@@ -67,13 +57,8 @@ type songRequest struct {
 }
 
 // songPatchRequest is the PATCH shape for a song: every field is optional, and
-// an absent one means "leave it alone".
-//
-// Without this the route decoded the same full songRequest that POST uses, so
-// `PATCH {"title": "Fixed typo"}` blanked the lyrics, dropped every credit and
-// genre, and reset the language to its default. Nothing failed and nothing
-// warned — the response was a 200 carrying the emptied song. It only stayed
-// invisible because the one client always sends the whole record.
+// an absent one means "leave it alone". Decoding songRequest instead would
+// silently blank every omitted field.
 type songPatchRequest struct {
 	Title    *string          `json:"title"`
 	AltTitle optionalString   `json:"alt_title"`
@@ -82,20 +67,16 @@ type songPatchRequest struct {
 	Notes    optionalString   `json:"notes"`
 	Credits  *[]creditRequest `json:"credits"`
 	GenreIDs *[]uuid.UUID     `json:"genre_ids"`
-	// Recordings follows the collection idiom rather than the optional* one: a
-	// nil pointer is an absent key, and an explicit `[]` removes them all.
+	// nil is an absent key; an explicit `[]` removes them all.
 	Recordings *[]recordingRequest `json:"recordings"`
 }
 
-// merge overlays the patch onto the stored song, producing the full payload
-// toInput already knows how to validate. Doing it this way keeps one validation
-// path for create and update rather than a second copy that can drift.
+// merge overlays the patch onto the stored song, so create and update share
+// toInput's validation.
 //
-// `existing` must come from a single-song read: a listing projects the body
-// away, and a PATCH that leaves lyrics alone would then write back the blank it
-// found. The deref is deliberately unguarded — the caller reads GetSong, and a
-// nil there is a wiring mistake worth a stack trace rather than a song quietly
-// emptied of its lyrics.
+// `existing` must come from a single-song read (listings omit lyrics). The
+// Lyrics deref is unguarded on purpose: nil is a wiring bug, better a panic
+// than a song emptied of its lyrics.
 func (p songPatchRequest) merge(existing *store.Song) songRequest {
 	req := songRequest{
 		Title:      existing.Title,
@@ -117,16 +98,13 @@ func (p songPatchRequest) merge(existing *store.Song) songRequest {
 	if p.Language != nil {
 		req.Language = *p.Language
 	}
-	// The optional* fields carry their own "was it present" flag, which is what
-	// separates "leave alone" from an explicit null meaning "clear it".
 	if p.AltTitle.Set {
 		req.AltTitle = p.AltTitle.Value
 	}
 	if p.Notes.Set {
 		req.Notes = p.Notes.Value
 	}
-	// A nil slice pointer is an absent key; an explicit `[]` is "remove them
-	// all", which a plain []T could not tell apart.
+	// A nil slice pointer is an absent key; an explicit `[]` removes them all.
 	if p.Credits != nil {
 		req.Credits = *p.Credits
 	}
@@ -151,13 +129,8 @@ func creditRequestsFor(credits []store.Credit) []creditRequest {
 }
 
 // recordingRequestsFor restates stored recordings in request form, performers
-// by person ID like the credits above.
-//
-// The YouTube link is restated exactly as stored — not canonicalized, not
-// re-parsed. That is what carries an unparseable imported link through a PATCH
-// that never meant to touch it: toInput recognizes the string as one already on
-// the song and lets it past. Rewriting it here in any way would break that
-// match and answer 422 naming a field the caller never sent.
+// by person ID. The YouTube link must stay verbatim: toInput exempts a stored
+// unparseable link by exact string match.
 func recordingRequestsFor(recordings []store.Recording) []recordingRequest {
 	out := make([]recordingRequest, len(recordings))
 	for i, r := range recordings {
@@ -187,16 +160,9 @@ func genreIDsFor(genres []store.Genre) []uuid.UUID {
 	return out
 }
 
-// storedRecordingURLs indexes the song's recordings by their stored YouTube
-// link, trimmed. A create has no song and so gets an empty map, which is what
-// keeps it from ever exempting anything.
-//
-// Keyed on the URL rather than on a recording id because ids do not survive a
-// write: replaceRelations replaces the recordings wholesale and mints new ones.
-// The string is the durable identity here, and it is exactly the right test —
-// "the caller sent back what was already stored" is the whole condition the
-// exemption turns on. Two recordings sharing one link is pathological but
-// harmless; the first wins and they carry the same value anyway.
+// storedRecordingLinks indexes the song's recordings by their stored YouTube
+// link, trimmed; a create gets an empty map and so never exempts anything.
+// Keyed on the URL because recording ids do not survive a write.
 func storedRecordingLinks(existing *store.Song) map[string]recordingLink {
 	stored := map[string]recordingLink{}
 	if existing == nil {
@@ -216,11 +182,8 @@ func storedRecordingLinks(existing *store.Song) map[string]recordingLink {
 }
 
 // toInput validates the payload and resolves credits and performers into store
-// rows, creating people named inline as it goes.
-//
-// `existing` is the song being updated, or nil on create. It is consulted for
-// one thing only — see the recordings block — and every other field is
-// validated the same way on both paths.
+// rows, creating people named inline. `existing` (nil on create) is consulted
+// only for the stored-link exemption.
 func (s *Server) toInput(r *http.Request, req songRequest, existing *store.Song) (store.SongInput, error) {
 	problems := validationErrors{}
 
@@ -255,9 +218,7 @@ func (s *Server) toInput(r *http.Request, req songRequest, existing *store.Song)
 	checkCredits(req.Credits, problems)
 	checkRecordings(req.Recordings, problems)
 
-	// The recordings' links, canonicalized one by one. This runs before the
-	// early return so a bad link joins whatever else the payload got wrong,
-	// rather than costing the caller a second round trip to find out about.
+	// Before the early return, so a bad link is reported with the rest.
 	stored := storedRecordingLinks(existing)
 	links := make([]recordingLink, len(req.Recordings))
 	for i, rec := range req.Recordings {
@@ -269,27 +230,13 @@ func (s *Server) toInput(r *http.Request, req songRequest, existing *store.Song)
 		match, exempt := stored[*trimmed]
 		switch {
 		case ok:
-			// Store a canonical URL rather than whatever was pasted, so tracking
-			// parameters and shortened forms do not accumulate in the catalog.
+			// Canonical URL, so tracking parameters do not accumulate.
 			canonical := "https://www.youtube.com/watch?v=" + id
 			links[i] = recordingLink{url: &canonical, videoID: &id}
 
 		case exempt:
-			// A link this API refused is nonetheless already in the catalog: the
-			// importer stores youtube_url verbatim and sets the id only when it
-			// parses (cmd/import-songs/normalize.go), so the rows it left behind
-			// carry URLs no write path here would accept.
-			//
-			// merge fills every omitted field in from the stored song, and the
-			// editor sends the whole record hydrated the same way, so that URL
-			// arrives on a PATCH that never meant to touch it — and validating it
-			// answered 422 naming a field the contributor had not edited. Fixing a
-			// typo in the lyrics was then impossible without also clearing the
-			// link, which is the one thing the request was not asking for.
-			//
-			// Refusing it is only right for a value the caller chose. Unchanged
-			// from what is stored, both columns carry through exactly as they are
-			// — no canonicalization, since there is no id to build one from.
+			// An unparseable link the importer stored, sent back unchanged: carry
+			// it through as is rather than refuse a field the caller never edited.
 			links[i] = match
 
 		default:
@@ -301,11 +248,8 @@ func (s *Server) toInput(r *http.Request, req songRequest, existing *store.Song)
 		return store.SongInput{}, httpx.Validation("The song could not be saved.").WithDetails(problems)
 	}
 
-	// Resolved only once the whole payload has been accepted. resolveCredits
-	// creates a `people` row for every name typed inline, and those writes are
-	// committed outside the song's transaction — so doing them during
-	// validation left a permanent person behind on every request the server
-	// then rejected, with no way for a non-admin to remove it.
+	// Only after validation: inline people are committed outside the song's
+	// transaction, so a rejected request would leave them behind.
 	credits, creditProblems := s.resolveCredits(r, req.Credits)
 	if !creditProblems.empty() {
 		return store.SongInput{}, httpx.Validation("The song could not be saved.").WithDetails(creditProblems)
@@ -332,8 +276,8 @@ func (s *Server) toInput(r *http.Request, req songRequest, existing *store.Song)
 func creditField(i int) string { return "credits[" + strconv.Itoa(i) + "]" }
 
 // recordingField names a recording by its index, and performerField one of its
-// performers, for the field-level error map. The editor looks its per-row
-// messages up by exactly these keys.
+// performers, for the field-level error map. The editor looks messages up by
+// exactly these keys.
 func recordingField(i int) string { return "recordings[" + strconv.Itoa(i) + "]" }
 
 func performerField(i, j int) string {
@@ -373,11 +317,8 @@ func checkCredits(requested []creditRequest, problems validationErrors) {
 	}
 }
 
-// checkPersonRef validates the two ways a payload can name a person — an id, or
-// a name to create one from. Credits and a recording's performers both carry
-// that pair, and the field path is the only thing that differs between them:
-// resolvePerson is already the shared other half of this, so a second copy of
-// the check is how the two come to answer differently about the same name.
+// checkPersonRef validates the two ways a payload can name a person: an id, or
+// a name to create one from. Shared by credits and performers.
 func checkPersonRef(field string, personID *uuid.UUID, name string, problems validationErrors) {
 	if personID != nil {
 		return
@@ -392,8 +333,7 @@ func checkPersonRef(field string, personID *uuid.UUID, name string, problems val
 }
 
 // checkRecordings validates the shape of the recording list without touching
-// the database, for the same reason checkCredits does: a rejected payload must
-// not leave people behind it.
+// the database, like checkCredits.
 func checkRecordings(requested []recordingRequest, problems validationErrors) {
 	if len(requested) > maxRecordings {
 		problems.add("recordings", "Too many recordings.")
@@ -412,9 +352,7 @@ func checkRecordings(requested []recordingRequest, problems validationErrors) {
 		problems.add("recordings", "Too many performers.")
 		return
 	}
-	// The database refuses this too, as a unique violation on
-	// recordings_one_first_per_song, but a 409 naming an index is no use to a
-	// form. Caught here it is a 422 against the field the radio buttons write.
+	// The unique index is the backstop; this gives the form a 422 instead.
 	if firsts > 1 {
 		problems.add("recordings", "At most one recording can be marked as the first.")
 	}
@@ -512,16 +450,11 @@ func (s *Server) resolveRecordings(
 }
 
 func (s *Server) handleListSongs(w http.ResponseWriter, r *http.Request) error {
-	// Parsed once and passed down: url.URL.Query() re-parses RawQuery and
-	// allocates a fresh map on every call, and this handler reads a dozen
-	// parameters.
+	// Parsed once: Query() re-parses on every call.
 	q := r.URL.Query()
 	limit, offset := httpx.Pagination(q)
 
-	// Rejected rather than ignored: orderClause falls through to newest-first for
-	// anything it does not recognize, so a typo used to return a different
-	// ordering than the one asked for, with nothing to tell the client apart
-	// from a catalog that had changed.
+	// Rejected rather than ignored: orderClause silently falls back to newest.
 	sort := store.SongSort(strings.ToLower(strings.TrimSpace(q.Get("sort"))))
 	if !sort.Valid() {
 		return httpx.BadRequest("Sort must be relevance, title, newest, or oldest.")
@@ -540,11 +473,8 @@ func (s *Server) handleListSongs(w http.ResponseWriter, r *http.Request) error {
 	if filter.PersonID, err = queryUUID(q, "person"); err != nil {
 		return err
 	}
-	// `artist` and `performer` name the same filter. The honest name is the new
-	// one — since 000009 the role is gone and performing is what is being asked
-	// about — but links filtered by `artist` are bookmarked and shared, so the
-	// old spelling keeps working. Both at once is refused rather than silently
-	// resolved by precedence, which would answer a question neither asked.
+	// `artist` is a kept alias of `performer` for shared links; both at once is
+	// a 400 rather than an unstated precedence.
 	performer, err := queryUUID(q, "performer")
 	if err != nil {
 		return err
@@ -632,10 +562,8 @@ func (s *Server) handleCreateSong(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *Server) handleUpdateSong(w http.ResponseWriter, r *http.Request) error {
-	// The whole song is loaded rather than just its owner: the patch is overlaid
-	// on it, so every field the caller omitted keeps the value it already had.
-	// It is also what resolves the address — the write below goes by existing.ID,
-	// since a slug is not what the store updates by.
+	// The whole song: the patch is overlaid on it. The write goes by
+	// existing.ID, since the address may be a slug.
 	existing, err := s.songRef(r, "id")
 	if err != nil {
 		return err

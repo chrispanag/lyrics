@@ -7,10 +7,7 @@ import (
 )
 
 // MarkEmailVerified records a confirmed address, returning the updated user.
-//
-// The timestamp is only written once: re-running verification on an account
-// that is already verified must not move the date, which is the record of when
-// the address was actually proven.
+// The timestamp is written once; re-verifying does not move it.
 func (s *Store) MarkEmailVerified(ctx context.Context, userID uuid.UUID) (*User, error) {
 	var user User
 	if err := scanUser(s.pool.QueryRow(ctx, `

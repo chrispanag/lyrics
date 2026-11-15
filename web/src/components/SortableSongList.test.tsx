@@ -24,9 +24,7 @@ describe("SortableSongList", () => {
     }
   });
 
-  // Dragging with a pointer is not the only way in: the same list has to be
-  // reorderable from the keyboard, which is also the only way to drive dnd-kit
-  // in jsdom.
+  // The keyboard is also the only way to drive dnd-kit in jsdom.
   it("reorders from the keyboard and reports the new order", async () => {
     const user = userEvent.setup();
     const onReorder = vi.fn();

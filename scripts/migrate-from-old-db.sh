@@ -3,10 +3,8 @@
 # Migrate the song catalog from the old (TypeORM/DigitalOcean) database into
 # this one, in two stages: export to NDJSON, then load.
 #
-# The intermediate file is kept rather than piped straight through, because it
-# is the only artifact that survives if the load has to be re-run — and the old
-# database sits behind a trusted-sources firewall that may not be open next
-# time.
+# The NDJSON is kept because it survives a failed load, and the old database's
+# firewall may not be open on a second attempt.
 #
 # Usage:
 #   OLD_DATABASE_URL=postgres://... ./scripts/migrate-from-old-db.sh [--dry-run]
@@ -37,8 +35,6 @@ echo "    $(wc -l < "$OUT" | tr -d ' ') songs written to $OUT"
 
 echo "==> loading into the target database"
 cd backend
-# bash 3.2 — still the system bash on macOS — expands "${arr[@]}" on an *empty*
-# array to an unbound variable error under `set -u`. That would break exactly
-# the real-import path and leave the dry run working, so the ${arr[@]+...}
-# guard is load-bearing rather than decorative.
+# bash 3.2 (macOS) treats "${arr[@]}" on an empty array as unbound under
+# `set -u`, which would break the real import; the ${arr[@]+...} guard avoids it.
 go run ./cmd/import-songs -database-url "$DATABASE_URL" -file "$OUT" ${DRY_RUN[@]+"${DRY_RUN[@]}"}

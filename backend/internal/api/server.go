@@ -27,17 +27,9 @@ type Server struct {
 	authn   *auth.Authenticator
 
 	// registerLimiter throttles registration, keyed on the caller's address.
-	// Unauthenticated traffic carries no identity to key on, so the address is
-	// all there is — with the caveats clientIP documents.
 	registerLimiter *rateLimiter
-	// avatarLimiter throttles picture uploads, keyed on the user's id.
-	//
-	// The route is authenticated, so the id is available and is the better key
-	// in both directions: it is proven by the token, where an address is
-	// whatever the network says — an office behind one NAT shares a bucket, and
-	// the address is also the part of a request a determined caller can vary,
-	// which buys a fresh bucket per attempt. Keying on the account being
-	// charged for the work is exact.
+	// avatarLimiter throttles picture uploads, keyed on the user's id, which
+	// the token proves and a NAT does not share.
 	avatarLimiter *rateLimiter
 }
 
@@ -48,27 +40,15 @@ func NewServer(cfg config.Config, st *store.Store, pc prelude.Client, authn *aut
 		store:   st,
 		prelude: pc,
 		authn:   authn,
-		// Registration costs two upstream calls and creates permanent state: 5
-		// attempts per IP per minute is far above honest use and far below
-		// useful abuse.
+		// Registration costs two upstream calls and creates permanent state.
 		registerLimiter: newRateLimiter(5, time.Minute),
-		// An upload decodes an image and re-encodes a JPEG, which is the most
-		// CPU and allocation any single request in this API asks for, and a
-		// signed-in account can ask for it in a loop. 10 per minute leaves room
-		// for someone re-cropping a photo they are not happy with — honest use
-		// is a handful of pictures in the lifetime of an account — while
-		// bounding one account to ten decodes a minute, which is no use to
-		// anybody trying to spend the server's CPU. Spreading the attempt over
-		// more accounts runs into registerLimiter instead.
+		// An upload is the costliest request in the API (decode + re-encode).
 		avatarLimiter: newRateLimiter(10, time.Minute),
 	}
 }
 
-// Routes builds the router.
-//
-// Every route sits behind Optional auth, so handlers can always read a
-// principal when one exists; the stricter middlewares layer on top. Public read
-// endpoints are what make the catalog browsable by guests.
+// Routes builds the router. Every route sits behind Optional auth; stricter
+// middlewares layer on top.
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 
@@ -90,32 +70,19 @@ func (s *Server) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(s.authn.Optional)
 
-			// --- Public reads -------------------------------------------------
 			r.Get("/songs", httpx.Handler(s.handleListSongs))
 			r.Get("/songs/{id}", httpx.Handler(s.handleGetSong))
 			r.Get("/people", httpx.Handler(s.handleListPeople))
 			r.Get("/people/{id}", httpx.Handler(s.handleGetPerson))
 			r.Get("/genres", httpx.Handler(s.handleListGenres))
 			r.Get("/lists/{id}", httpx.Handler(s.handleGetList))
-			// Public, and it has to be: an <img> is not fetched by the API
-			// client and carries no Authorization header, so a route behind
-			// authentication would answer as a guest for the picture's own
-			// owner. Avatars are therefore public content keyed by an
-			// unguessable identifier, and a missing picture and an unknown user
-			// are the same 404.
+			// Public: an <img> carries no Authorization header.
 			r.Get("/users/{id}/avatar", httpx.Handler(s.handleGetUserAvatar))
 
-			// --- Registration -------------------------------------------------
 			r.Post("/auth/register", httpx.Handler(s.handleRegister))
 
-			// --- Signed in, address not yet confirmed -------------------------
-			//
-			// Everything an unverified account may do. The list is short on
-			// purpose: it is exactly what the verification screen needs — who
-			// am I, and record the challenge I just completed — and every other
-			// authenticated route sits behind RequireVerifiedEmail below.
-			// Sending and checking the code never reaches this API: that is
-			// between the browser and Prelude.
+			// Everything an unverified account may do. Every other authenticated
+			// route goes behind RequireVerifiedEmail.
 			r.Group(func(r chi.Router) {
 				r.Use(s.authn.Required)
 
@@ -123,14 +90,11 @@ func (s *Server) Routes() http.Handler {
 				r.Post("/auth/verify-email", httpx.Handler(s.handleVerifyEmail))
 			})
 
-			// --- Authenticated ------------------------------------------------
 			r.Group(func(r chi.Router) {
 				r.Use(s.authn.Required, auth.RequireVerifiedEmail)
 
 				r.Patch("/me", httpx.Handler(s.handleUpdateMe))
-				// Raw image bytes rather than a field on the PATCH above: that
-				// one is tri-state JSON, and mixing a body it cannot express
-				// into it would cost both of them their shape.
+				// Raw image bytes, not a field on the tri-state PATCH.
 				r.Post("/me/avatar", httpx.Handler(s.handleUploadAvatar))
 				r.Delete("/me/avatar", httpx.Handler(s.handleDeleteAvatar))
 
@@ -147,7 +111,6 @@ func (s *Server) Routes() http.Handler {
 				r.Get("/songs/{id}/lists", httpx.Handler(s.handleListsContainingSong))
 			})
 
-			// --- Contributor and above ----------------------------------------
 			r.Group(func(r chi.Router) {
 				r.Use(s.authn.Required, auth.RequireVerifiedEmail, auth.RequireRole(store.RoleContributor))
 
@@ -159,7 +122,6 @@ func (s *Server) Routes() http.Handler {
 				r.Post("/genres", httpx.Handler(s.handleCreateGenre))
 			})
 
-			// --- Admin only ---------------------------------------------------
 			r.Group(func(r chi.Router) {
 				r.Use(s.authn.Required, auth.RequireVerifiedEmail, auth.RequireRole(store.RoleAdmin))
 
@@ -203,18 +165,9 @@ func urlUUID(r *http.Request, name string) (uuid.UUID, error) {
 	return id, nil
 }
 
-// songRef loads the song a {id} path segment names, by slug or by UUID.
-//
-// A song is addressed by its slug now, and every link written before this
-// existed addresses it by its id — so both have to resolve, forever. The UUID
-// parse decides which lookup to make, and it is safe as the first question
-// because migration 000010's trigger refuses to mint a UUID-shaped slug: there
-// is no song whose address a well-formed id could shadow.
-//
-// Unlike urlUUID this cannot answer 400. Once a slug is a legal address, a path
-// segment that resolves to nothing means "no such song" rather than "that is not
-// an identifier", and the caller has no way to tell a typo'd slug from a deleted
-// one anyway.
+// songRef loads the song a {id} path segment names, by slug or by UUID. UUID
+// first is safe: the slug trigger never mints a UUID-shaped slug. Unknown is
+// 404, never 400. See CLAUDE.md "Song addresses".
 func (s *Server) songRef(r *http.Request, name string) (*store.Song, error) {
 	raw := chi.URLParam(r, name)
 	if id, err := uuid.Parse(raw); err == nil {
@@ -225,20 +178,9 @@ func (s *Server) songRef(r *http.Request, name string) (*store.Song, error) {
 	return song, storeError(err, "Song")
 }
 
-// songID is the same resolution for the handlers that want the identity behind
-// an address rather than the song at it.
-//
-// Every route whose path names a song has to take both forms, but most of them
-// only need the id: handleDeleteSong, handleListsContainingSong, and the two
-// ways a song moves in and out of a list. Reaching those through songRef costs
-// the whole row plus the four queries attachRelations runs, all to read `.ID` —
-// so they come through here instead, and a UUID segment costs no query at all.
-//
-// A well-formed UUID is returned unlooked-up on purpose, which is what keeps
-// these handlers answering exactly as they did before slugs existed: their own
-// store calls already map a missing row onto ErrNotFound, and asking first would
-// turn `GET /songs/{unknown-uuid}/lists` from the empty list it has always
-// answered into a 404.
+// songID resolves a {id} segment to the song's id only, without loading the
+// song. A well-formed UUID is returned unlooked-up, so callers keep their own
+// not-found behavior (GET /songs/{unknown-uuid}/lists stays an empty list).
 func (s *Server) songID(r *http.Request, name string) (uuid.UUID, error) {
 	raw := chi.URLParam(r, name)
 	if id, err := uuid.Parse(raw); err == nil {
@@ -276,8 +218,7 @@ func storeError(err error, subject string) error {
 	case store.IsInUse(err):
 		return httpx.Conflict("%s is still referenced by other records.", subject).WithCause(err)
 	case store.IsInvalid(err):
-		// The store's own message names the internal rule it enforced, so it
-		// stays on the cause rather than going to the caller.
+		// The store's message names internal rules, so it stays on the cause.
 		return httpx.Validation("%s is not valid.", subject).WithCause(err)
 	default:
 		var apiErr *httpx.APIError

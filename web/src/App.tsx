@@ -21,14 +21,11 @@ import { ListDetailPage, ListsPage } from "@/routes/ListsPages";
 import { ProfilePage } from "@/routes/ProfilePage";
 import { SongDetailPage } from "@/routes/SongDetailPage";
 
-// The editor and admin console are reachable by a small minority of visitors
-// and pull in form machinery nobody else needs, so they load on demand rather
-// than in the initial bundle every guest downloads.
+// The editor and admin console serve few visitors, so they load on demand.
 const SongEditorPage = lazy(() =>
   import("@/routes/SongEditorPage").then((m) => ({ default: m.SongEditorPage })),
 );
-// All three come from one module and so share one chunk, which is what makes
-// moving between the console's screens cost no second request.
+// All three share one module, so one chunk serves every console screen.
 const AdminConsole = lazy(() =>
   import("@/routes/AdminPages").then((m) => ({ default: m.AdminConsole })),
 );
@@ -39,12 +36,7 @@ const AdminGenresPage = lazy(() =>
   import("@/routes/AdminPages").then((m) => ({ default: m.AdminGenresPage })),
 );
 
-/**
- * Requires a session before rendering.
- *
- * This only controls what is displayed — every one of these routes is also
- * enforced server-side, because a route guard is trivially bypassed.
- */
+/** Requires a session before rendering. Display only; the server enforces. */
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const routerLocation = useLocation();
@@ -57,23 +49,10 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Requires an admin before rendering.
- *
- * Wraps the console's layout route rather than each screen inside it, so a
- * screen added there is admin-only by its position in the tree instead of by
- * someone remembering the wrapper. Kept out of the pages themselves for the
- * same reason it is not a check inside them: the console's chunk is then never
- * downloaded by anyone who cannot open it. The wait on `loading` is not
- * optional either — until the restore settles `user` is the snapshot of the last
- * session this browser had, so deciding then either turns a refresh on an admin
- * screen into a bounce to the catalog or opens the console on a role that
- * snapshot merely remembers. This gate blocks on the wait where
- * `VerificationGate` renders through it: a spinner in front of one section is
- * nothing like one in front of every visitor's first paint.
- *
- * A visitor who is not an admin is sent to the catalog rather than to sign in
- * the way `RequireAuth` does — being asked to sign in is an answer about what
- * exists here, and the server enforces every one of these routes regardless.
+ * Requires an admin before rendering. Wraps the console's layout route, so a
+ * screen added inside is admin-only by position. Must block on `loading`: until
+ * the restore settles, `user` is only the stored snapshot. See CLAUDE.md,
+ * "Frontend" (the admin console bullet).
  */
 function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -84,37 +63,16 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * The screens an unverified account is left on rather than redirected away from.
- *
- * The verification screen is the obvious one. Password reset is here because its
- * emailed code is a login: from the moment the code is accepted the visitor is a
- * signed-in user, and an unverified account would be bounced out of the flow one
- * step short of the new password — landing on a code form for a different
- * challenge, which is indistinguishable from the reset code not working.
+ * Screens an unverified account is not redirected away from. The reset is here
+ * because its code signs the visitor in; bounced mid-flow, the reset dead-ends.
  */
 const UNVERIFIED_ROUTES = new Set(["/verify-email", "/forgot-password"]);
 
 /**
- * A section of screens with no search box, given the app bar that carries a
- * phone's way into the navigation.
- *
- * The catalog and a song page are the two that go without, and they are the two
- * that render a search box: `SearchHeader` puts the hamburger in the row it
- * already has, which is what keeps the drawer from costing back the vertical
- * room the tab bar was removed to reclaim. Everything else sits inside this.
- *
- * A **section, not a wrapper around each screen** — the same shape and the same
- * reason as `RequireAdmin` above: a screen added inside it has the bar by
- * position, and the bar is not something the next screen can be written without.
- * Written per route, as it first was, the failure it exists to prevent is the
- * one its own shape invites — a route copied from one of the two exceptions
- * above ships a screen with no navigation at all on a phone, silently, working
- * perfectly at a desk and with no browser chrome to fall back on under
- * `display: standalone`. Per page is worse still, since a page has to carry it
- * in every state it can be in and `ListDetailPage` has three returns.
- *
- * The guards stay *inside* it, so the navigation is on screen while a session
- * is still being restored.
+ * Gives every screen without a search box the app bar carrying the phone's
+ * hamburger. A layout route, so a new screen gets it by position; a screen left
+ * out has no navigation on a phone. Guards stay inside it, so the bar shows
+ * while a session restores. See CLAUDE.md, "Frontend".
  */
 function MenuBarLayout() {
   return (
@@ -126,19 +84,9 @@ function MenuBarLayout() {
 }
 
 /**
- * Holds an unverified account on the verification screen.
- *
- * The server refuses everything else it asks for, so any other page would
- * render its own version of "something went wrong" — a list that will not load,
- * an editor that cannot save — instead of the one thing left to do.
- *
- * Guests are untouched, and nothing here delays a first paint: while the session
- * is being restored this renders whatever was asked for, exactly as it did when
- * `user` was null throughout that wait. It is `loading` that says so now, and it
- * has to be asked — `user` is seeded from the last session this browser had, and
- * a snapshot that predates a verification done on another device would bounce a
- * verified visitor to a code form and then, one round trip later, to the catalog
- * rather than the page they actually opened.
+ * Holds an unverified account on the verification screen; the server refuses
+ * it everything else. Renders through the session restore, but must not decide
+ * until `loading` clears: `user` starts as a possibly stale snapshot.
  */
 function VerificationGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -164,11 +112,7 @@ export function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        {/* Signed in, and still outside the shell: this flow's steps are state
-            rather than routes, so a navigation away is the flow lost part-way
-            through. Guarded here rather than inside the page, like every other
-            route that needs a session — a guest following the link is sent to
-            sign in and returned. */}
+        {/* Outside the shell: its steps are state, so navigating away loses the flow. */}
         <Route
           path="/change-password"
           element={
@@ -179,18 +123,14 @@ export function App() {
         />
 
         <Route element={<Layout />}>
-          {/* The two exceptions, and they are stated once: both render a search
-              box, so both carry the hamburger inside it. Everything else is in
-              the section below. */}
+          {/* Both render a search box, which carries the hamburger. */}
           <Route index element={<BrowsePage />} />
           <Route path="/songs/:id" element={<SongDetailPage />} />
 
           <Route element={<MenuBarLayout />}>
-            {/* A static segment under /songs/ has to be a slug no song can hold,
-                or the song holding it is unreachable and its address opens this
-                form instead. `new` is reserved in migration 000010, pinned by
-                TestASongIsNeverSluggedNew — add a sibling here and it needs the
-                same treatment, since nothing checks the two lists agree. */}
+            {/* A static segment under /songs/ must be a slug no song can hold.
+                `new` is reserved in migration 000010 (TestASongIsNeverSluggedNew);
+                a new sibling needs reserving there too. */}
             <Route path="/songs/new" element={<SongEditorPage />} />
             <Route path="/songs/:id/edit" element={<SongEditorPage />} />
             <Route
@@ -203,10 +143,7 @@ export function App() {
             />
             <Route path="/lists/:id" element={<ListDetailPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            {/* One guarded section, not two guarded screens. The navigation
-                carries a single entry and points at `/admin` itself, so that
-                entry stays lit on every screen inside — which is what the index
-                redirect is for, the section needing a screen to open on. */}
+            {/* The nav entry points at `/admin`, so the index redirect picks a screen. */}
             <Route
               path="/admin"
               element={
@@ -220,10 +157,7 @@ export function App() {
               <Route path="genres" element={<AdminGenresPage />} />
             </Route>
 
-            {/* The catch-all renders rather than redirecting, so it needs naming
-                like any other screen: without this a mistyped URL keeps whatever
-                title the previous page set, and the tab goes on claiming a song
-                that is not on screen. */}
+            {/* Named, or the tab keeps the previous page's title. */}
             <Route
               path="*"
               element={

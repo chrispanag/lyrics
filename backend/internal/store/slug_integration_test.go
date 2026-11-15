@@ -10,12 +10,9 @@ import (
 	"github.com/christos/lyrics/backend/internal/testutil"
 )
 
-// slugInputs is deliberately not a table of expected outputs.
-//
-// What has to hold is that two implementations agree, not that either produces a
-// particular string — so the assertion compares them against each other and the
-// list below only has to cover the ground where they could diverge. TestSlugify
-// next door is what pins the Go side to actual values.
+// slugInputs is not a table of expected outputs: the test compares the two
+// implementations, so it only covers where they could diverge. TestSlugify pins
+// the Go side to values.
 var slugInputs = []string{
 	"Rock",
 	"Classic Rock",
@@ -26,9 +23,8 @@ var slugInputs = []string{
 	"!!!",
 	"",
 
-	// Greek is where a naive SQL port goes wrong: stripping marks alone leaves
-	// a string with no ASCII in it at all, and the four letters with no
-	// single-character Latin form are the ones a translate() misses.
+	// Greek is where a naive SQL port goes wrong, especially the letters with
+	// multi-character Latin forms that a translate() misses.
 	"Έντεχνο",
 	"Λαϊκό Τραγούδι",
 	"Ρεμπέτικος",
@@ -43,17 +39,9 @@ var slugInputs = []string{
 	"τελος με ς και σ",
 }
 
-// The SQL slugifier in migration 000010 is a mirror of store.Slugify, for the
-// reason the migration states: the backfill has to run inside the migration, and
-// Greek titles slugify to nothing without transliteration.
-//
-// This is the test that keeps the mirror honest. It is the same arrangement
-// app_norm has with the app_simple configuration, and youtube.test.ts has with
-// parseYouTubeURL: a rule written twice, with something asserting the two copies
-// against each other rather than a comment asking the next reader to be careful.
+// app_slugify (migration 000010) mirrors store.Slugify; this keeps them in step.
 func TestSongSlugMatchesSlugify(t *testing.T) {
-	// Migrates the database as a side effect, which is what puts app_slugify
-	// there to be called.
+	// Migrates the database, which creates app_slugify.
 	st := testutil.NewStore(t)
 
 	for _, input := range slugInputs {
@@ -70,9 +58,7 @@ func TestSongSlugMatchesSlugify(t *testing.T) {
 	}
 }
 
-// Two songs may share a title — this catalog has seven such groups — so the slug
-// cannot simply be the title's, and the suffix is the ordinary case rather than
-// an edge one.
+// Titles are not unique, so a suffix is the ordinary case.
 func TestSongsSharingATitleGetDistinctSlugs(t *testing.T) {
 	st := testutil.NewStore(t)
 
@@ -90,10 +76,7 @@ func TestSongsSharingATitleGetDistinctSlugs(t *testing.T) {
 	}
 }
 
-// The address must survive a retitle, or every shared link to a song breaks the
-// first time somebody corrects its spelling. UpdateGenre keeps the same promise
-// for a genre's slug; here a BEFORE INSERT trigger is what keeps it, so no
-// writer in the store can break it by accident.
+// The address must survive a retitle, or shared links break.
 func TestRetitlingASongLeavesItsSlugAlone(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()
@@ -114,10 +97,8 @@ func TestRetitlingASongLeavesItsSlugAlone(t *testing.T) {
 	}
 }
 
-// A title of punctuation alone slugifies to nothing, and is still a title
-// somebody is allowed to save — so it gets an address rather than a refusal. The
-// genre path refuses instead, which is right there and would be wrong here: a
-// song's title space is the whole world's.
+// A title that slugifies to nothing still gets an address (unlike a genre,
+// which is refused).
 func TestASongWithNoSlugifiableTitleStillGetsAnAddress(t *testing.T) {
 	st := testutil.NewStore(t)
 
@@ -147,17 +128,8 @@ func TestASongIsNeverSluggedNew(t *testing.T) {
 	}
 }
 
-// GET /songs/{ref} parses a UUID before it tries a slug, and the schema's CHECK
-// accepts a UUID string as a well-formed slug — so a song titled like one would
-// be shadowed by whatever song holds that id. The trigger refuses to mint one,
-// which is what keeps the resolver's precedence unambiguous.
-//
-// Both spellings, because uuid.Parse takes both: the canonical dashed form and
-// the same 32 hex digits without them. The undashed one is what a reservation
-// written from the canonical form misses, and it is the one a title could
-// plausibly produce — it needs no punctuation at all to survive slugification.
-// Asserting the parse rather than a particular suffix is what makes this a
-// statement about the resolver instead of about the numbering.
+// The resolver parses a UUID before trying a slug, so a UUID-shaped slug would
+// be shadowed. Both spellings uuid.Parse accepts: dashed and bare 32 hex digits.
 func TestASongSlugIsNeverUUIDShaped(t *testing.T) {
 	for _, shaped := range []string{
 		"6f2a1c3e-9b04-4d21-8f77-1a2b3c4d5e6f",

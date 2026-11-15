@@ -23,8 +23,7 @@ describe("coverRect", () => {
     expect(coverRect(640, 640)).toEqual({ x: 0, y: 0, size: 640 });
   });
 
-  // Rounded rather than truncated, and pinned because an odd difference is the
-  // only case where the two differ — a half pixel of offset either way.
+  // Rounded, not truncated: only an odd difference tells them apart.
   it("rounds an odd offset", () => {
     expect(coverRect(101, 100)).toEqual({ x: 1, y: 0, size: 100 });
   });
@@ -33,10 +32,8 @@ describe("coverRect", () => {
 describe("toSquareJpeg", () => {
   const file = () => new File(["not really an image"], "photo.png", { type: "image/png" });
 
-  // Each spec installs its own stubs, and the last of them leaves behind a
-  // decoder that always rejects. Nothing in the vitest config restores globals,
-  // so without this the next spec appended below would fail for a reason it
-  // never mentions.
+  // Nothing in the vitest config restores globals, and a spec below leaves a
+  // decoder that always rejects.
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -47,9 +44,7 @@ describe("toSquareJpeg", () => {
 
     await toSquareJpeg(file());
 
-    // The one thing that cannot be seen in the result: EXIF is stripped by this
-    // re-encode, so a portrait photo from a phone is stored on its side unless
-    // the rotation is baked into the pixels here.
+    // EXIF is stripped by the re-encode, so the rotation must be baked in here.
     expect(stub.decoded).toEqual([{ imageOrientation: "from-image" }]);
   });
 
@@ -62,8 +57,6 @@ describe("toSquareJpeg", () => {
     expect(stub.draws).toEqual([[200, 0, 800, 800, 0, 0, AVATAR_SIZE, AVATAR_SIZE]]);
   });
 
-  // A small picture blown up to 512px is blurrier and costs more to store than
-  // the one that was chosen.
   it("never upscales a picture smaller than the target", async () => {
     const stub = stubImagePipeline({ width: 64, height: 64 });
 
@@ -78,10 +71,7 @@ describe("toSquareJpeg", () => {
     await expect(toSquareJpeg(file())).resolves.toBe(stub.output);
   });
 
-  // Both failures below reach a page that can only render a message it
-  // recognizes, so both have to arrive under the same name.
-  // Under its own name: "try a JPEG or PNG" is no help to someone who supplied
-  // a 25 MB JPEG, so the two failures cannot share one message.
+  // Each failure carries its own name, since the advice for each differs.
   it("refuses a file too large to decode, before decoding it", async () => {
     const stub = stubImagePipeline();
     const huge = file();

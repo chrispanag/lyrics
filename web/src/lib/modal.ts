@@ -1,23 +1,10 @@
 import { useEffect, type RefObject } from "react";
 
 /*
- * What a modal is, asked of the DOM rather than of a page — and, below, the
- * behavior that makes the answer true.
- *
- * Two gestures have to ask this — the arrow keys and the paging swipe — because
- * an open sheet owns the input over it, and paging the song out from under one
- * reads as a bug in the sheet. Asking the DOM is what makes the answer cover
- * every modal there will be: a list of a page's own modals is a list that the
- * next modal is not on.
- *
- * It lives here rather than beside `Sheet` because a component file exports only
- * components — see CLAUDE.md — and the pair of attributes below is the contract
- * between the two. There are two modals now, the sheet and the phone's
- * navigation drawer, and `useModal` is what keeps them from being two copies of
- * it: the marking is *returned* rather than written by each of them, so the
- * drawer — which stays mounted so it can slide — cannot forget that its own
- * marking has to come and go with it. A move to `<dialog>` and `showModal()` is
- * then a change to this module and nothing else.
+ * What a modal is, asked of the DOM so every modal is covered, and the hook that
+ * marks one. Page gestures stand down while one is open. Modals take their
+ * marking from `useModal` rather than writing it, so a move to `<dialog>` is a
+ * change to this module alone.
  */
 const OPEN_MODAL = '[role="dialog"][aria-modal="true"]';
 
@@ -33,26 +20,14 @@ export interface ModalMarking {
 }
 
 /**
- * Escape, the scroll lock, focus, and the marking above — everything a modal
- * owes the page behind it.
+ * Escape, the scroll lock, focus, and the marking above.
  *
- * Deliberately **two effects with different keys**, and that is the whole of
- * why this is a hook rather than one. Every call site passes `onClose` as an
- * inline closure, so the first effect re-runs on any parent render while the
- * modal is *open* — harmless for a listener and a style, and ruinous for a
- * focus restore, which would fire from that cleanup and pull focus out of the
- * dialog and onto the trigger behind the backdrop. Renders like that are
- * ordinary: the profile page reopens its sheet while an upload is in flight,
- * and `AddToListSheet` re-renders its page on every list it toggles.
+ * **Two effects with different keys**: `onClose` is an inline closure at every
+ * call site, so the first effect re-runs on any parent render, and a focus
+ * restore in its cleanup would pull focus out of the open dialog.
  *
- * `focus` is for a modal that stays mounted. One that unmounts takes focus with
- * it and needs nothing on the way up; one that does not has to be *sent* its
- * focus, or the reader is left outside a dialog they have to go looking for.
- * Focus is handed back to whatever opened it either way — an unmounted element
- * drops focus to `<body>`, which is no element at all, and a mounted one leaves
- * it inside a panel nobody can see any more. `focus` on an element that has
- * since left the document or gone disabled does nothing, which is right in both
- * cases.
+ * Focus returns to the opener on close either way; `focus` is only needed by a
+ * modal that stays mounted.
  */
 export function useModal({
   open,
@@ -90,8 +65,7 @@ export function useModal({
     return () => {
       if (opener instanceof HTMLElement) opener.focus();
     };
-    // `focus` is a ref, so it is the same object on every render and says
-    // nothing about when this should run. `open` alone is the key — see above.
+    // `open` alone is the key; `focus` is a stable ref.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 

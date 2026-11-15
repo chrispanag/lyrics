@@ -12,9 +12,7 @@ import { API } from "@/test/handlers";
 import { server } from "@/test/server";
 
 afterEach(() => {
-  // Both, every time. The registrations are module state, so a handler left
-  // behind by one test fires during another — and since only one test asserts
-  // on it, the leak would show up as a passing suite.
+  // Module state: a registration left behind leaks into the next test.
   setTokenProvider(async () => null);
   setUnauthorizedHandler(null);
 });
@@ -50,11 +48,7 @@ describe("apiFetch", () => {
     expect(seen).toBeNull();
   });
 
-  /*
-   * Access tokens are short-lived, so expiry mid-session is routine rather than
-   * exceptional. It has to be invisible: bouncing the user to a login screen
-   * because a token aged out would look like being randomly signed out.
-   */
+  // Short-lived tokens expire mid-session routinely; that must be invisible.
   it("refreshes once and retries after a 401", async () => {
     const tokenProvider = vi
       .fn<(force?: boolean) => Promise<string | null>>()
@@ -129,7 +123,6 @@ describe("apiFetch", () => {
     }).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ApiError);
-    // Narrowed rather than cast, so the assertions below are type-checked.
     if (!(error instanceof ApiError)) throw error;
 
     expect(error.status).toBe(422);

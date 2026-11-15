@@ -6,22 +6,14 @@ import type { Genre, ListResponse, Person, Recording, Song, SongList, User } fro
 export const API = "http://localhost:8080";
 
 /**
- * A song with no recordings, which is the state most of the catalog's songs are
- * in and the one a spec should have to opt out of rather than into. A spec that
- * needs a performer, a year on a recording or a video adds one with
- * makeRecording.
- *
- * `release_year` is still here because the server denormalizes the first
- * recording's onto the song, and the card and browse filters read it there.
+ * A song with no recordings, as most of the catalog is; add one with
+ * makeRecording. `release_year` is the server's copy of the first recording's.
  */
 export function makeSong(overrides: Partial<Song> = {}): Song {
   return {
     id: "song-1",
     title: "Θάλασσα Πλατιά",
-    // Deliberately not "song-1". A song has two identifiers and only one of them
-    // is its address; a fixture where they are the same string cannot tell the
-    // difference, so every spec would pass against code that confused them —
-    // which is exactly the mistake worth catching here.
+    // Differs from `id` so specs catch code that confuses the two.
     slug: "thalassa-platia",
     alt_title: null,
     lyrics: "Στης θάλασσας τα βάθη\nη αγάπη μου κοιμάται",
@@ -43,10 +35,7 @@ export function makeSong(overrides: Partial<Song> = {}): Song {
   };
 }
 
-/**
- * One recording, with a performer on it. `is_first` is true by default because
- * that is what the migration marked every recording it created.
- */
+/** One recording, with a performer on it, marked `is_first`. */
 export function makeRecording(overrides: Partial<Recording> = {}): Recording {
   return {
     id: "recording-1",
@@ -68,11 +57,8 @@ export function makeUser(overrides: Partial<User> = {}): User {
     email: "singer@example.com",
     display_name: null,
     role: "user",
-    // Verified by default: an unverified account is refused everywhere but the
-    // verification screen, so it is the exception a spec asks for explicitly.
+    // Verified by default; specs opt into the unverified case.
     email_verified_at: "2024-01-01T00:00:00Z",
-    // No picture by default, so a spec that wants one says so — and the
-    // initials fallback is what most screens are rendering.
     avatar_updated_at: null,
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
@@ -119,12 +105,8 @@ export function makeList(overrides: Partial<SongList> = {}): SongList {
 }
 
 /**
- * Wraps rows in the API's list envelope.
- *
- * Exported so specs do not hand-write `meta`, where `total` can silently
- * disagree with the number of rows actually returned. `meta` overrides exist
- * for the one case where they legitimately differ: a paginated response
- * returns a page of rows but a `total` counting all of them.
+ * Wraps rows in the API's list envelope, `total` defaulting to the row count.
+ * Override `meta` for a paginated page.
  */
 export function list<T>(
   data: T[],
@@ -135,12 +117,8 @@ export function list<T>(
 
 /**
  * Serves each of these lists by id, and a not-found envelope for any other.
- *
- * A handler rather than a `server.use` call, so this module stays free of the
- * server it is loaded into — `server.ts` imports these handlers, and importing it
- * back would close the circle. Each list is held by reference and serialized per
- * request, so a spec whose subject changes one edits it in place rather than
- * registering a second handler that would have to repeat the id matching.
+ * Returns a handler, since `server.ts` imports this module. Lists are serialized
+ * per request, so a spec may mutate one in place.
  */
 export function listById(...lists: SongList[]) {
   return http.get(`${API}/api/v1/lists/:id`, ({ params }) => {
@@ -150,16 +128,8 @@ export function listById(...lists: SongList[]) {
 }
 
 /**
- * The API's error envelope, which the specs had each written out by hand.
- *
- * `notFound` came first and is the common case by far; the general form exists
- * because the envelope is the same shape whatever the status, and a spec that
- * writes one out by hand is a spec that can get the shape wrong while appearing
- * to test a refusal. Every route spec goes through here.
- *
- * `client.test.ts` is the one deliberate exception and should stay one: the
- * shape of the envelope is what it is testing, so building it from the helper
- * that the code under test is checked against would assert nothing.
+ * The API's error envelope. Specs use this rather than writing it by hand,
+ * except `client.test.ts`, which tests the shape itself.
  */
 export function apiError(status: number, code: string, message: string) {
   return HttpResponse.json({ error: { code, message } }, { status });

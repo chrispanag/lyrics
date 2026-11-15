@@ -3,13 +3,7 @@ import { describe, expect, it } from "vitest";
 import { extractVideoId } from "./youtube";
 
 describe("extractVideoId", () => {
-  // The preview is the only confirmation that a pasted link was recognized, so
-  // what it recognizes has to be what the server recognizes — and the two
-  // disagreeing is silent both ways round. Every shape here is one
-  // `parseYouTubeURL` accepts, so a null would be the field refusing a link the
-  // save would have taken. The uppercased host is the one the server's own
-  // comment records arriving, and the two extra hosts are on its list while
-  // being the ones a host check is likeliest to drop.
+  // Every shape here is one `parseYouTubeURL` accepts; the preview must agree.
   it.each([
     { what: "a watch link", pasted: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
     { what: "an uppercased host", pasted: "https://WWW.YOUTUBE.COM/watch?v=dQw4w9WgXcQ" },
@@ -28,10 +22,7 @@ describe("extractVideoId", () => {
     expect(extractVideoId(pasted)).toBe("dQw4w9WgXcQ");
   });
 
-  // The other direction, and the one a pattern matched against the raw text got
-  // wrong: the id in the first two is real, so the preview was a working link to
-  // it — telling the contributor the field was happy while the save answers "Not
-  // a recognizable YouTube link." Which is why this reads the host as a host.
+  // Shapes the server refuses, including real ids behind a wrong host.
   it.each([
     {
       what: "a YouTube link carried inside another site's URL",
@@ -45,9 +36,7 @@ describe("extractVideoId", () => {
       what: "a playlist rather than a video",
       pasted: "https://www.youtube.com/playlist?list=PLdQw4w9WgXcQ",
     },
-    // `youtube.com//watch?v=…` already contains `//`, so no scheme is prefixed
-    // and `url.Parse` yields no host — the case the `//`-not-`://` test exists
-    // for, and the one a tightened test would light a preview for.
+    // Already contains `//`, so no scheme is prefixed and there is no host.
     { what: "a doubled slash where the scheme belongs", pasted: "youtube.com//watch?v=dQw4w9WgXcQ" },
     { what: "nothing at all", pasted: "   " },
   ])("refuses $what", ({ pasted }) => {

@@ -25,10 +25,8 @@ func TestBuildTSQuery(t *testing.T) {
 		// string be parsed as tsquery syntax, so it must be doubled.
 		{"single quote is escaped", "don't", `'don''t':*`},
 
-		// A backslash is tsquery's own escape character. Left alone, a term
-		// ending in one swallows the closing quote and makes to_tsquery raise
-		// a syntax error that nothing classifies — a 500 from the public
-		// /songs endpoint for a one-character query.
+		// tsquery's escape character: a trailing one would swallow the closing
+		// quote and make to_tsquery raise a 500.
 		{"trailing backslash is escaped", `a\`, `'a\\':*`},
 		{"embedded backslash is escaped", `AC\DC`, `'AC\\DC':*`},
 		{"backslash and quote together", `a\'b`, `'a\\''b':*`},
@@ -66,8 +64,7 @@ func TestSlugify(t *testing.T) {
 		{"punctuation collapses", "Rock & Roll!", "rock-roll"},
 		{"leading and trailing trimmed", "  --Rock--  ", "rock"},
 
-		// Without transliteration these would slugify to "", making it
-		// impossible to create a Greek-named genre at all.
+		// Without transliteration these would slugify to "".
 		{"greek transliterated", "Έντεχνο", "entechno"},
 		{"greek two words", "Λαϊκό Τραγούδι", "laiko-tragoydi"},
 		{"greek final sigma", "Ρεμπέτικος", "rempetikos"},

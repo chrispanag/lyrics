@@ -7,17 +7,8 @@ import (
 	"github.com/christos/lyrics/backend/internal/store"
 )
 
-// A song answers at two addresses and must keep doing so.
-//
-// The slug is what every link written from here on says; the UUID is what every
-// link written before it says, and those are shared, bookmarked and indexed. So
-// the id form is not a transition to be retired — it is the older half of a
-// permanent pair, and this is what says both halves reach the same row.
-//
-// The 404 is the other half of it. Before slugs, a path segment that was not a
-// UUID could only be a malformed identifier, so it answered 400. Now it is an
-// address that resolves to nothing, which is what 404 means — and a caller
-// cannot tell a mistyped slug from a deleted song anyway.
+// A song answers permanently at its slug and its UUID; an unknown address is
+// 404, not 400. See CLAUDE.md "Song addresses".
 func TestASongAnswersAtItsSlugAndItsID(t *testing.T) {
 	h := newHarness(t)
 	_, token := h.userAndToken("contrib@example.com", store.RoleContributor)
@@ -62,13 +53,8 @@ func TestASongAnswersAtItsSlugAndItsID(t *testing.T) {
 		}
 	})
 
-	// Every route whose path names a song has to take both forms, and these two
-	// are the ones that were missed the first time round: they kept urlUUID while
-	// the app started sending slugs, so saving a song to a list answered 400 on
-	// every address the app itself builds — and no spec saw it, because the
-	// frontend's own suite stubs these endpoints. Nothing structural prevents the
-	// next one from being missed either; there is no type separating a ref from
-	// an id, so this is what stands in for one.
+	// Every route naming a song must take both forms; no type enforces it, so
+	// this subtest stands in for one.
 	t.Run("a song moves in and out of a list at its slug", func(t *testing.T) {
 		list := h.seedList(token, map[string]any{"name": "Ρεμπέτικα"})
 		path := "/api/v1/lists/" + list.ID.String() + "/songs/" + created.Slug
@@ -93,9 +79,7 @@ func TestASongAnswersAtItsSlugAndItsID(t *testing.T) {
 		}
 	})
 
-	// The write handlers resolve the same way, and the slug is not something a
-	// write may move: it is derived on insert and frozen, so a PATCH that
-	// happens to change the title leaves every shared link intact.
+	// Writes resolve the same way, and a retitle leaves the slug frozen.
 	t.Run("a write reaches the song by its slug too", func(t *testing.T) {
 		resp := h.do("PATCH", "/api/v1/songs/"+created.Slug, token, map[string]any{
 			"title": "Θάλασσα Πλατειά",

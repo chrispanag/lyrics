@@ -1,14 +1,9 @@
 // Command import-songs loads songs into the catalog from the NDJSON
 // interchange format produced by scripts/export-old-db.sql.
 //
-// The whole load runs in one transaction. At this catalog's scale that costs
-// nothing and buys the property that matters for a migration: it either lands
-// completely or not at all, so a failure halfway through leaves nothing to
-// clean up before the next attempt.
-//
-// Re-running is safe. A song already present — matched on its normalized title
-// plus the set of people credited on it — is skipped rather than duplicated,
-// because the songs table has no unique constraint to lean on.
+// The load runs in one transaction, so a failure leaves nothing to clean up.
+// Re-running is safe: a song matching on normalized title plus credited people
+// is skipped, since songs has no unique constraint to lean on.
 //
 //	go run ./cmd/import-songs -file songs.ndjson -dry-run
 //	go run ./cmd/import-songs -file songs.ndjson
@@ -61,9 +56,8 @@ func run() error {
 		"attribute imported songs to this existing user (default: no attribution)")
 	flag.Parse()
 
-	// Reading and validating everything up front means a malformed file is
-	// reported in full before a single row is written, rather than aborting the
-	// transaction partway through and reporting only the first problem.
+	// Validate everything up front so a malformed file is reported in full
+	// before any row is written.
 	songs, w, err := load(opt.file)
 	if err != nil {
 		return err
@@ -199,9 +193,8 @@ func importAll(ctx context.Context, pool *pgxpool.Pool, songs []*song, opt optio
 	return nil
 }
 
-// importer holds the per-run caches. People and genres repeat heavily across a
-// catalog — 967 songs share 328 people here — so resolving each name once
-// turns thousands of round trips into a few hundred.
+// importer holds the per-run caches; people and genres repeat heavily, so each
+// name is resolved once.
 type importer struct {
 	tx       pgx.Tx
 	existing map[string]struct{}
@@ -212,12 +205,8 @@ type importer struct {
 
 // insert writes one song with its credits, genres and recordings.
 //
-// Five denormalized columns are left alone deliberately: credits_text and
-// genres_text, plus the song's copies of its first recording's link and year.
-// The triggers from migrations 000003 and 000009 maintain all of them, and the
-// generated search vector follows from the first two. Naming youtube_url or
-// release_year here would make this a second writer of a column the database
-// already owns.
+// The denormalized song columns (credits_text, genres_text, youtube_*,
+// release_year) are trigger-owned; writing them here would add a second writer.
 func (im *importer) insert(ctx context.Context, s *song) error {
 	var songID uuid.UUID
 	err := im.tx.QueryRow(ctx, `
@@ -334,13 +323,10 @@ func (im *importer) genre(ctx context.Context, name string) (uuid.UUID, error) {
 }
 
 // loadFingerprints reads the target catalog so already-imported songs can be
-// recognized. Names come back raw and are folded in Go, so both sides of the
-// comparison go through the identical function.
+// recognized. Names are folded in Go so both sides use the same function.
 //
-// Both ways of being attached to a song count, matching (*song).fingerprint.
-// Reading song_credits alone would leave every migrated performer out of the
-// stored fingerprint while the incoming one still had them, so no song would
-// match itself and a re-run would duplicate the entire catalog.
+// Credits and performers both count, matching (*song).fingerprint; omitting
+// performers makes no song match itself and a re-run duplicates the catalog.
 func loadFingerprints(ctx context.Context, tx pgx.Tx) (map[string]struct{}, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT s.title,
@@ -392,8 +378,7 @@ func resolveActor(ctx context.Context, tx pgx.Tx, email string) (*uuid.UUID, err
 }
 
 // warnings accumulates non-fatal adjustments, collapsing identical messages
-// into one line with a count. A systematic problem — every song missing a
-// language, say — should read as one finding with its scale, not 967 lines.
+// into one line with a count.
 type warnings struct {
 	counts map[string]int
 	order  []string
@@ -417,8 +402,7 @@ func (w *warnings) report(out io.Writer) {
 	msgs := append([]string(nil), w.order...)
 	sort.SliceStable(msgs, func(i, j int) bool { return w.counts[msgs[i]] > w.counts[msgs[j]] })
 
-	// Writes to a diagnostic stream: if the report itself cannot be written
-	// there is nowhere left to report that fact.
+	// Nowhere left to report a failed write to the diagnostic stream.
 	_, _ = fmt.Fprintf(out, "%d distinct warning(s):\n", len(msgs))
 	for _, m := range msgs {
 		if n := w.counts[m]; n > 1 {

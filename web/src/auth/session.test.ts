@@ -5,9 +5,8 @@ import { apiFetch, setTokenProvider } from "@/api/client";
 import { API } from "@/test/handlers";
 import { server } from "@/test/server";
 
-// The real client would reach for a live session domain on construction. The
-// stub answers `refresh()` the way a restored session does, which is all this
-// module needs from it.
+// The real client contacts a live session domain. The stub answers `refresh()`
+// like a restored session.
 vi.mock("@prelude.so/js-sdk/session", () => ({
   PrldSessionClient: class {
     invalidated = 0;
@@ -25,14 +24,8 @@ afterEach(() => {
 });
 
 describe("auth/session", () => {
-  /*
-   * The bug this pins: registering the token provider from an effect in
-   * AuthProvider is too late. React flushes child effects before parent ones,
-   * so a query mounted under the provider fetches first, gets the module
-   * default, and is answered as a guest — a private list 404ing to its owner,
-   * with no 401 for the client to retry. Importing the module has to be the
-   * whole registration, which is what this asserts: no React here at all.
-   */
+  // Registering from an effect is too late: child queries fetch first, as a
+  // guest. Importing the module must be the whole registration — no React here.
   it("registers the token provider at import time", async () => {
     const seen: (string | null)[] = [];
     server.use(
@@ -52,8 +45,7 @@ describe("auth/session", () => {
     expect(seen).toEqual([null, "Bearer token-0"]);
   });
 
-  // A 401 retry passes forceRefresh through, and it has to reach the SDK — a
-  // retry that resends the cached token asks the same dead question twice.
+  // A 401 retry's forceRefresh must reach the SDK, or it resends the dead token.
   it("drops the SDK's cached token before a forced refresh", async () => {
     const { getAccessToken } = await import("./session");
 

@@ -39,30 +39,13 @@ func (s *Store) GetUser(ctx context.Context, id uuid.UUID) (*User, error) {
 	return &u, nil
 }
 
-// ProvisionUser returns the local record for a Prelude principal, creating it if
-// absent, along with that user's default list.
+// ProvisionUser returns the local record for a Prelude principal, creating it
+// and its default list if absent. It runs for any unknown principal, so an
+// account present in Prelude but not here heals itself.
 //
-// This runs on every authenticated request whose principal is unknown, which
-// happens both at registration and whenever an account exists in Prelude but not
-// here — a user created directly in the Prelude dashboard, or a local database
-// restored from an older backup. Provisioning on demand means those cases heal
-// themselves instead of returning a confusing 403.
-//
-// The insert is idempotent on prelude_user_id, and on nothing else: two
-// concurrent first requests from the same new user would otherwise race, and one
-// would fail on that unique constraint. email is UNIQUE as well and is not the
-// declared target, so a row holding this address under a *different* Prelude id
-// raises a violation the upsert has no answer for — reported as ErrEmailTaken,
-// because the caller's move there is the opposite of the usual one. Nothing
-// about it heals: this function is what self-healing means here, so a caller
-// that leaves the repair to "the next request" leaves it forever, and
-// registration used to strand a fully created Prelude account behind that
-// promise.
-//
-// The row is not re-keyed onto the new id, and deliberately: the address would
-// then inherit whatever the old row holds — its lists, and its role. Handing
-// somebody an abandoned admin's row because they registered that admin's old
-// address is not a repair.
+// Idempotent on prelude_user_id only. A row holding this email under another
+// Prelude id is ErrEmailTaken, which never heals. That row is never re-keyed:
+// the address would inherit its lists and role.
 func (s *Store) ProvisionUser(ctx context.Context, preludeID, email string, role Role) (*User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if role == "" {
@@ -125,12 +108,8 @@ func (s *Store) UpdateProfile(ctx context.Context, id uuid.UUID, displayName *st
 	return &u, nil
 }
 
-// SetAvatar stores a user's profile picture, replacing any previous one.
-//
-// The picture and the timestamp that versions it are written together: that
-// timestamp is the only thing the client sees change, so a write that landed
-// one without the other would leave every reader holding a URL that still
-// points at the old image.
+// SetAvatar stores a user's profile picture, replacing any previous one. The
+// picture and avatar_updated_at, its only version, are written together.
 func (s *Store) SetAvatar(ctx context.Context, id uuid.UUID, contentType string, image []byte) (*User, error) {
 	var u User
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
@@ -152,11 +131,7 @@ func (s *Store) SetAvatar(ctx context.Context, id uuid.UUID, contentType string,
 	return &u, nil
 }
 
-// ClearAvatar removes a user's profile picture.
-//
-// Deliberately idempotent: the control that calls it is only rendered when a
-// picture exists, so a second press is a double tap rather than a mistake worth
-// an error.
+// ClearAvatar removes a user's profile picture. Idempotent.
 func (s *Store) ClearAvatar(ctx context.Context, id uuid.UUID) (*User, error) {
 	var u User
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
@@ -174,18 +149,12 @@ func (s *Store) ClearAvatar(ctx context.Context, id uuid.UUID) (*User, error) {
 	return &u, nil
 }
 
-// Avatar loads a user's profile picture.
-//
-// A user with no picture and a user that does not exist are the same
-// ErrNotFound, which is what keeps the endpoint in front of this from
-// confirming that an identifier belongs to an account.
+// Avatar loads a user's profile picture. No picture and no user are the same
+// ErrNotFound, so the endpoint cannot confirm an identifier is an account.
 func (s *Store) Avatar(ctx context.Context, id uuid.UUID) (*Avatar, error) {
 	var a Avatar
-	// Scanned as a pointer even though a row and a timestamp are always written
-	// together: nothing in the schema enforces that pairing, and scanning NULL
-	// into a time.Time is a driver error rather than a domain one — which would
-	// surface as a 500 from the one route whose every failure is meant to be an
-	// indistinguishable 404.
+	// A pointer: the schema does not enforce the pairing, and scanning NULL into
+	// a time.Time would be a 500 on a route meant to answer only 404.
 	var updatedAt *time.Time
 	err := s.pool.QueryRow(ctx, `
 		SELECT a.content_type, a.image, u.avatar_updated_at
@@ -238,9 +207,7 @@ func (s *Store) ListUsers(ctx context.Context, f UserFilter) ([]User, int, error
 	a := &args{}
 	conds := []string{"TRUE"}
 	if q := strings.TrimSpace(f.Query); q != "" {
-		// Escaped before the surrounding wildcards are added, so a literal `%`
-		// or `_` typed into the admin search filters instead of matching
-		// everything.
+		// Escaped before adding the wildcards, so a typed `%` or `_` is literal.
 		p := a.next("%" + escapeLike(strings.ToLower(q)) + "%")
 		conds = append(conds, fmt.Sprintf(
 			"(email LIKE %[1]s ESCAPE '%[2]s' OR lower(coalesce(display_name, '')) LIKE %[1]s ESCAPE '%[2]s')",
@@ -285,8 +252,6 @@ func IsInUse(err error) bool { return errors.Is(err, ErrInUse) }
 // IsInvalid reports whether an error is (or wraps) ErrInvalid.
 func IsInvalid(err error) bool { return errors.Is(err, ErrInvalid) }
 
-// IsEmailTaken reports whether an error is (or wraps) ErrEmailTaken. It sits
-// beside IsConflict rather than inside it: the two are asked separately on
-// purpose, and a caller that cannot tell them apart is the bug this sentinel
-// exists to prevent.
+// IsEmailTaken reports whether an error is (or wraps) ErrEmailTaken, which
+// callers must ask separately from IsConflict.
 func IsEmailTaken(err error) bool { return errors.Is(err, ErrEmailTaken) }

@@ -1,13 +1,6 @@
 /*
- * A controllable IntersectionObserver, since jsdom has none.
- *
- * A no-op stub would be enough to keep the song page from throwing on mount, but
- * the one thing worth pinning about the swipe's mark is that it waits until it is
- * really on screen before spending the single showing it gets. A spec therefore
- * needs a way to say that it is, which is `intersectAll()`.
- *
- * Nothing here measures anything: jsdom has no layout, so an entry is only ever
- * "visible" because a test said so.
+ * A controllable IntersectionObserver, since jsdom has none. An entry is only
+ * "visible" when a spec calls `intersectAll()`.
  */
 
 type Callback = (entries: IntersectionObserverEntry[], observer: IntersectionObserver) => void;
@@ -15,8 +8,7 @@ type Callback = (entries: IntersectionObserverEntry[], observer: IntersectionObs
 const live = new Set<StubIntersectionObserver>();
 
 class StubIntersectionObserver implements IntersectionObserver {
-  // The three the interface demands and nothing reads. A margin held here would
-  // be a number a spec could believe was being applied to something.
+  // Required by the interface; nothing reads them.
   readonly root = null;
   readonly rootMargin = "0px";
   readonly thresholds: readonly number[] = [0];
@@ -52,9 +44,7 @@ class StubIntersectionObserver implements IntersectionObserver {
   /** Reports every observed element as visible, the way scrolling to it would. */
   report(): void {
     const entries = [...this.targets].map(
-      // Only the two fields the app reads. Filling in a whole entry — bounds,
-      // ratios, a timestamp — would be inventing geometry that no test can act
-      // on, in an environment that has none.
+      // Only the two fields the app reads.
       (target) => ({ target, isIntersecting: true }) as IntersectionObserverEntry,
     );
     if (entries.length > 0) this.callback(entries, this);
@@ -65,26 +55,15 @@ export { StubIntersectionObserver };
 
 /**
  * Tells everything currently being observed that it has come into view.
- *
- * Everything, since one component observes: the day a second one does, this
- * takes the element to report on. Unmounting is what empties the set — the
- * hook's effect cleanup disconnects, and RTL's `cleanup()` runs first in the
- * shared teardown — so nothing has to be reset between specs.
+ * Unmounting disconnects, so nothing needs resetting between specs.
  */
 export function intersectAll(): void {
   for (const observer of [...live]) observer.report();
 }
 
 /**
- * Everything currently being watched, whichever observer is watching it.
- *
- * For the one rule about the swipe mark that only its markup can carry:
- * `md:hidden` has to sit on the box that is observed rather than on the pill
- * inside it, because a hidden element has no box and so never comes into view —
- * which is what keeps the single showing from being spent at a desk. Moved
- * inward the mark is still invisible there, but the box still has a box, and the
- * showing goes to a machine with no gesture to explain. jsdom applies no CSS, so
- * which element carries the class is the only readable form of that.
+ * Everything currently being watched, whichever observer is watching it. Lets a
+ * spec check `md:hidden` sits on the observed box itself (jsdom applies no CSS).
  */
 export function observedElements(): Element[] {
   return [...live].flatMap((observer) => observer.observed());

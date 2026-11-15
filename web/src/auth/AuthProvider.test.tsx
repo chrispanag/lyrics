@@ -8,10 +8,8 @@ import { useAuth } from "./useAuth";
 import { makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 
-// The real client reaches for a live session domain on construction, so the
-// module that owns it is replaced wholesale — which is also what puts the
-// restore under this spec's control: `getAccessToken` is the call every one of
-// these tests is timed against.
+// Replaced wholesale: the real client contacts a live session domain, and
+// `getAccessToken` is what each test times the restore against.
 const session = vi.hoisted(() => ({
   getAccessToken: vi.fn(async (): Promise<string | null> => null),
   logout: vi.fn(async () => {}),
@@ -26,11 +24,8 @@ vi.mock("./session", () => ({
   },
 }));
 
-// Back to the factory's answer — no session — so a test that wants another one
-// has to say so. `mockReset` restores the implementation `vi.fn` was given. The
-// braces are load-bearing: `mockReset` answers with the mock, and a `beforeEach`
-// returning a function has handed Vitest a teardown callback — which it then
-// calls, awaiting whatever the mock answers.
+// Back to no session. The braces matter: returning the mock from `beforeEach`
+// would hand Vitest a teardown callback.
 beforeEach(() => {
   session.getAccessToken.mockReset();
 });
@@ -48,10 +43,7 @@ function Probe() {
   );
 }
 
-// The real provider, nested inside the shared harness. `renderWithProviders`
-// stubs the auth context, and the provider under test shadows that stub for
-// everything below it — the same nesting `ProfilePage`'s spec uses where the
-// fixed stub cannot express what is being tested.
+// The real provider shadows `renderWithProviders`' stubbed auth context.
 function renderProvider() {
   return renderWithProviders(
     <AuthProvider>
@@ -61,13 +53,7 @@ function renderProvider() {
 }
 
 describe("AuthProvider", () => {
-  /*
-   * The bug this pins: restoring a session is two round trips, and until they
-   * landed the provider said "nobody is here" — so every refresh of a signed-in
-   * page painted the guest chrome first and replaced it a moment later. The
-   * assertion has to be made *before* the restore resolves, which is why the
-   * token is held here rather than resolved.
-   */
+  // No guest flash while restoring: asserted before the held token resolves.
   it("paints the last session's profile while the real one is on its way", async () => {
     storeUser(makeUser({ display_name: "Νίκος" }));
 
@@ -83,15 +69,12 @@ describe("AuthProvider", () => {
 
     landed("token");
 
-    // And the confirmed profile replaces the guess: the seeded name is not on
-    // the account `GET /me` answers with.
+    // The confirmed profile (no seeded name) replaces the guess.
     expect(await screen.findByText("singer@example.com")).toBeInTheDocument();
     expect(screen.getByText("settled")).toBeInTheDocument();
   });
 
-  // The snapshot is written by the provider rather than by whoever set a user,
-  // so it has to survive a plain restore — the only path with no call site of
-  // its own to have remembered.
+  // A plain restore has no call site of its own to write the snapshot.
   it("remembers a restored session for the next load", async () => {
     session.getAccessToken.mockResolvedValue("token");
 
@@ -101,8 +84,6 @@ describe("AuthProvider", () => {
     expect(storedUser()?.email).toBe("singer@example.com");
   });
 
-  // A snapshot outliving the session it describes is the one way this can show
-  // the wrong thing twice, so a restore that finds nothing has to forget.
   it("forgets a session that is gone", async () => {
     storeUser(makeUser({ display_name: "Νίκος" }));
     session.getAccessToken.mockResolvedValue(null);
@@ -127,8 +108,7 @@ describe("AuthProvider", () => {
 });
 
 describe("auth/storedUser", () => {
-  // A profile from before `email_verified_at` existed: why that field is one of
-  // the four checked is on `asUser`.
+  // A profile without `email_verified_at`; see `asUser`.
   it("refuses a profile from an older shape", () => {
     localStorage.setItem(
       "lyrics:last-user",

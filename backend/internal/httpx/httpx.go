@@ -105,7 +105,7 @@ func Internal(format string, args ...any) *APIError {
 	return newErr(http.StatusInternalServerError, CodeInternal, format, args...)
 }
 
-// envelope wraps error responses so clients always parse the same shape.
+// errorEnvelope wraps error responses so clients always parse the same shape.
 type errorEnvelope struct {
 	Error *APIError `json:"error"`
 }
@@ -193,10 +193,7 @@ const maxBodyBytes = 1 << 20
 // so that a typo in a client payload surfaces as an error instead of being
 // silently ignored.
 func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
-	// Parsed rather than string-compared: the header carries optional parameters
-	// and arbitrary spacing, so matching two exact spellings rejected the
-	// perfectly valid `application/json;charset=UTF-8` that several HTTP
-	// clients send by default.
+	// Parsed, not string-compared, so parameters like `;charset=UTF-8` pass.
 	if ct := r.Header.Get("Content-Type"); ct != "" {
 		mediaType, _, err := mime.ParseMediaType(ct)
 		if err != nil || mediaType != "application/json" {
@@ -241,12 +238,7 @@ const (
 )
 
 // Pagination reads limit/offset query parameters, clamping them to sane bounds
-// rather than erroring: a client asking for 10,000 rows gets the maximum page.
-//
-// It takes the already-parsed query rather than the request because
-// url.URL.Query() re-parses RawQuery and allocates a fresh map on every call;
-// a listing handler reads several parameters and would otherwise pay for the
-// same parse once per parameter.
+// rather than erroring. It takes the parsed query so callers parse it once.
 func Pagination(q url.Values) (limit, offset int) {
 	limit, offset = DefaultLimit, 0
 

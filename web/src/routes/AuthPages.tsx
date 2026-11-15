@@ -10,20 +10,13 @@ import { PageTitle } from "@/components/PageTitle";
 import { Button, ErrorMessage, Field, Input, Notice, Spinner } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
 
-/** Shell shared by the sign-in and sign-up screens. */
+/** Shell shared by every auth screen. */
 function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-5 py-10">
-      {/* Every auth screen names itself through this shell, so the steps of a
-          reset — code, new password, done — are distinguishable in history
-          rather than four entries all reading "Songfolio". They are state
-          rather than routes, so history is the only place they are told
-          apart. */}
+      {/* Titled per step, so a reset's steps (state, not routes) differ in history. */}
       <PageTitle name={title} />
       <div className="mb-8 text-center">
-        {/* The wordmark sits above the heading rather than in it: these screens
-            are often a visitor's first, and the heading is the step they are on
-            ("Welcome back"), not what they are signing in to. */}
         <Wordmark size="lg" />
         <h1 className="mt-4 text-2xl font-bold tracking-tight">{title}</h1>
         <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">{subtitle}</p>
@@ -46,11 +39,8 @@ export function LoginPage() {
   // Wherever they were headed before being asked to sign in.
   const destination = returnDestination(location.state);
 
-  // Only a confirmed session sends anybody away from here. `user` is seeded from
-  // the last session this browser had, and the one visitor that guess is wrong
-  // about is the one on this page: a session that has since expired would have
-  // them bounced to the catalog and left there as a guest, having asked to sign
-  // in. The form is what the wait already showed, so this costs nothing.
+  // Only a restored session redirects: `user` starts as a possibly expired
+  // snapshot, which would bounce someone who came to sign in.
   if (user && !loading) return <Navigate to={destination} replace />;
 
   const onSubmit = async (event: FormEvent) => {
@@ -62,8 +52,7 @@ export function LoginPage() {
       await login(email.trim(), password);
       navigate(destination, { replace: true });
     } catch (caught) {
-      // Credential errors are deliberately not distinguished from one another:
-      // saying "no such account" tells an attacker which emails are registered.
+      // Credential errors are not distinguished, so registered emails don't leak.
       setError(
         errorMessage(caught, "That email and password combination was not recognized."),
       );
@@ -128,27 +117,15 @@ export function LoginPage() {
 }
 
 /**
- * Prelude's verdict on a password, checked on blur.
- *
- * On blur rather than on every keystroke because the rules live in Prelude, so
- * each check is a network round trip. Shared by sign-up and password reset: both
- * ask for a new password, and a rule either screen judged by itself would be the
- * one the server then disagrees with.
+ * Prelude's verdict on a password, checked on blur since each check is a round
+ * trip. Shared by every screen that sets a password.
  */
 function usePasswordHints() {
   const { validatePassword } = useAuth();
   const [hints, setHints] = useState<string[]>([]);
-  // The last verdict *and* what it said. Clicking submit blurs the field, so a
-  // refused password is asked about twice within a second — once on the way out
-  // of the field and once because Prelude rejected it — and the second round trip
-  // can only reproduce an answer already given. Remembering the password without
-  // its reasons is worse than not remembering at all: the hints are cleared as
-  // soon as any other password is judged, so returning to a refused one would
-  // skip the check and show nothing, and the recovery on the refusal path would
-  // be skipped too — a password refused with no reasons, for as long as it stays
-  // in the field. Nothing is remembered from an empty verdict, because
-  // validatePassword swallows a failed fetch into "valid, nothing to report" and
-  // that must not be mistaken for a judgment.
+  // The last verdict and its reasons together, to skip the repeat check submit's
+  // blur causes; the password alone would skip it and show no reasons. Empty
+  // verdicts are not remembered: validatePassword reports a failed fetch as one.
   const judged = useRef<{ password: string; messages: string[] } | null>(null);
 
   const check = async (password: string) => {
@@ -163,8 +140,7 @@ function usePasswordHints() {
     setHints(messages);
   };
 
-  // Both screens abandon a password without leaving the field, and the hints
-  // under it would otherwise still be describing it when the form comes back.
+  // Clears hints for an abandoned password.
   const clear = () => {
     judged.current = null;
     setHints([]);
@@ -190,14 +166,8 @@ function PasswordHints({ hints }: { hints: string[] }) {
 const RESEND_COOLDOWN_SECONDS = 30;
 
 /**
- * The sentences more than one code form says.
- *
- * Owned here for the same reason the cooldown above is: a screen that says the
- * same thing as another screen has to keep saying it, and an edit made one
- * screen at a time is how that stops being true. Each of these was already
- * written out two to four times. Wording that is deliberately per-screen — the
- * reset's one uniform code failure, its expired grant against the change
- * screen's — stays with its screen.
+ * Sentences shared by several code forms. Deliberately per-screen wording stays
+ * with its screen.
  */
 const CODE_RESENT_NOTICE = "A new code is on its way. Use the one in the most recent email.";
 const CODE_NOT_SENT = "We could not send a new code. Please try again shortly.";
@@ -205,13 +175,7 @@ const CODE_UNSENDABLE = "We could not send a code just now. Try asking for anoth
 const PASSWORD_REJECTED = "That password does not meet the requirements.";
 const PASSWORD_UNSAVED = "That password could not be saved. Please try another.";
 
-/**
- * The rest between one emailed code and the next.
- *
- * Owned here rather than by each screen that sends codes, so the wait cannot
- * drift between them — and because a countdown is the same job wherever it is
- * shown.
- */
+/** The rest between one emailed code and the next, shared by every code screen. */
 function useResendCooldown() {
   const [cooldown, setCooldown] = useState(0);
 
@@ -263,9 +227,7 @@ export function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const passwordHints = usePasswordHints();
 
-  // Waits for the session for the reason the sign-in screen does: `user` may be
-  // last time's answer, and being wrong here means a visitor who came to make an
-  // account is put on the catalog instead.
+  // Waits for the session, as the sign-in screen does.
   if (user && !loading) return <Navigate to="/" replace />;
 
   const onSubmit = async (event: FormEvent) => {
@@ -276,9 +238,7 @@ export function RegisterPage() {
 
     try {
       await register({ email: email.trim(), password, displayName });
-      // Straight to the code screen rather than home: the account is signed in
-      // but unverified, so the gate would bounce it here anyway — one flash
-      // later, and from a page that cannot load anything it asks for.
+      // Straight to the code screen: the gate would send an unverified account there.
       navigate("/verify-email", { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, "Your account could not be created. Please try again."));
@@ -350,72 +310,46 @@ export function RegisterPage() {
 const CODE_LENGTH = 6;
 
 /**
- * Whether a thrown value is Prelude's "that code was wrong".
- *
- * Matched by name rather than by class so this page keeps no import from the
- * SDK — the session lives behind the auth context, which is what lets the tests
- * run without it.
+ * Whether a thrown value is Prelude's "that code was wrong". By name, so this
+ * page imports nothing from the SDK.
  */
 function isBadCode(caught: unknown): boolean {
   return caught instanceof Error && caught.name === "BadCheckCodeError";
 }
 
 /**
- * Whether a thrown value is "this build has no OTP login configuration".
- *
- * Matched the same way and for the same reason as a bad code: `errorMessage`
- * carries through only our API's own messages, so without this the one failure
- * an operator can actually fix would read as the authentication service being
- * down.
+ * Whether a thrown value is "this build has no OTP login configuration", so an
+ * operator-fixable failure does not read as an outage.
  */
 function isUnconfigured(caught: unknown): boolean {
   return caught instanceof Error && caught.name === RESET_UNCONFIGURED_ERROR;
 }
 
 /**
- * Whether Prelude rejected the password itself rather than the request.
- *
- * `changePassword` goes from the browser straight to Prelude, so nothing it
- * throws is one of our API's errors and `errorMessage` renders its fallback for
- * every case — the reason has to be recovered some other way.
+ * Whether Prelude rejected the password itself. `changePassword` bypasses our
+ * API, so `errorMessage` cannot name the reason.
  */
 function isInvalidPassword(caught: unknown): boolean {
   return caught instanceof Error && caught.name === "InvalidPasswordError";
 }
 
 /**
- * Whether the password-change screen was refused before it could ask anything.
- *
- * The one failure on that screen an operator can fix rather than a visitor
- * retry: the step-up grants `prld:pwd:write` outright, so no code was sent and
- * nothing re-proves the account. Named for the same reason an unconfigured reset
- * is — `errorMessage` carries through only our API's own messages, so this would
- * otherwise read as Prelude being down.
+ * Whether the change screen was refused because the step-up granted
+ * `prld:pwd:write` with no code. Operator-fixable; must not read as an outage.
  */
 function isChangeUnavailable(caught: unknown): boolean {
   return caught instanceof Error && caught.name === PASSWORD_CHANGE_UNAVAILABLE_ERROR;
 }
 
 /**
- * Whether the permission to write a password has run out.
- *
- * `prld:pwd:write` is granted for five minutes, so a visitor who takes longer
- * than that over the form is refused with nothing whatsoever wrong with the
- * password they chose. Unnamed, it reads as "try another" — advice that no
- * password can satisfy, offered indefinitely.
+ * Whether the `prld:pwd:write` grant expired. Named, or it reads as "try another
+ * password", which no password satisfies.
  */
 function isExpiredGrant(caught: unknown): boolean {
   return caught instanceof Error && caught.name === "ForbiddenError";
 }
 
-/**
- * The emailed-code field, shared by the two screens that ask for one.
- *
- * Both want the same numeric keypad, the same one-time-code autofill, the same
- * letter spacing and the same digit-stripping, and had drifted into verbatim
- * copies of all four. Only the label differs: the code means a different thing
- * on each screen.
- */
+/** The emailed-code field, shared by every screen that asks for one. */
 function CodeField({
   label,
   value,
@@ -431,17 +365,14 @@ function CodeField({
     <Field label={label} htmlFor="code" error={error}>
       <Input
         id="code"
-        // A numeric keypad on a phone, and the code offered from the
-        // notification the mail app just raised.
+        // Numeric keypad, and one-time-code autofill from the mail notification.
         inputMode="numeric"
         autoComplete="one-time-code"
         autoFocus
         required
         className="text-center text-lg tracking-[0.4em]"
         value={value}
-        // Anything that is not a digit cannot be part of a code, and stripping
-        // it here means a pasted "Code: 123456" still works — which is also why
-        // no caller trims what this produces.
+        // Non-digits are stripped, so a pasted "Code: 123456" works.
         onChange={(event) =>
           onChange(event.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))
         }
@@ -451,15 +382,7 @@ function CodeField({
   );
 }
 
-/**
- * The new-password field, shared by the two screens that ask for one.
- *
- * Same field, same autofill, same on-blur compliancy check, same hints below it
- * — the reset and the change screen had it written out twice, which is how the
- * four attributes `CodeField` exists to keep in step drift apart one screen at a
- * time. The label does not vary the way `CodeField`'s does: a new password is a
- * new password whichever screen asks.
- */
+/** The new-password field, shared by the reset and change screens. */
 function NewPasswordField({
   value,
   hints,
@@ -492,13 +415,8 @@ function NewPasswordField({
 }
 
 /**
- * What to say when the code that permits a password write is refused.
- *
- * Both screens that ask for that code are past the point where anything can be
- * given away — the change screen is reached only by a signed-in account looking
- * at its own profile, and the reset's second code only after a correct first one
- * — so both may name a mistyped digit, and both must name it the same way. The
- * reset's *first* code step is the one that may not, and it does not use this.
+ * What to say when the code permitting a password write is refused. Naming a
+ * wrong digit leaks nothing here; the reset's first code step must not use this.
  */
 function writeCodeMessage(caught: unknown): string {
   return isBadCode(caught)
@@ -507,14 +425,8 @@ function writeCodeMessage(caught: unknown): string {
 }
 
 /**
- * What to say when Prelude refused a new password, and whether the field's own
- * hints are worth refreshing.
- *
- * Both screens map the same three cases and only the expired sentence differs:
- * the reset's grant and the change screen's confirmation are the same 300
- * seconds, but there is a different thing to do about each. Returning the
- * hint decision rather than leaving the caller to re-test the error is what
- * keeps the reasons under the field in step with the message above it.
+ * What to say when Prelude refused a new password, and whether to refresh the
+ * field's hints. Only the expired sentence differs per screen.
  */
 function passwordSaveFailure(
   caught: unknown,
@@ -526,13 +438,8 @@ function passwordSaveFailure(
 }
 
 /**
- * Offers to end the sessions that were open before the password changed.
- *
- * Both screens that change a password offer this, identically, and afterwards
- * rather than as a checkbox before: this is the point where the choice can be
- * acted on and its outcome reported, and a failure here must not read as a
- * password that did not save — it did, which is what makes this panel's own
- * error the right place for one.
+ * Offers, after a password change, to end the other sessions. Its failures are
+ * its own, so they cannot read as the password not saving.
  */
 function SignOutOthersPanel() {
   const { signOutOtherDevices } = useAuth();
@@ -579,25 +486,14 @@ function SignOutOthersPanel() {
 }
 
 /**
- * Which of the reset's steps is on screen.
- *
- * `confirm` is the second code: the step-up that permits the password write asks
- * for one, because the same configuration serves the signed-in change-password
- * screen and has to be strict there. Whether that step is visited at all is
- * Prelude's answer to `confirmPasswordResetCode` rather than this screen's
- * choice, so both routes through have to work.
+ * Which of the reset's steps is on screen. `confirm` is the step-up's second
+ * code; whether it is visited is Prelude's answer, so both routes must work.
  */
 type ResetStep = "email" | "code" | "confirm" | "password" | "done";
 
 /**
- * Resets a forgotten password.
- *
- * The emailed code is a *login*, not a token this screen checks: Prelude opens
- * step-up challenges only on sessions that already exist, so proving the mailbox
- * is what produces the session, and a step-up on that session is what permits
- * the password write. The visitor is therefore signed in from the moment the
- * code is accepted, which is the trap this page has to be read with in mind —
- * see the note above the render.
+ * Resets a forgotten password. The emailed code is a login, so the visitor is
+ * signed in from the code step on. See CLAUDE.md, "Password reset".
  */
 export function ForgotPasswordPage() {
   const {
@@ -612,9 +508,7 @@ export function ForgotPasswordPage() {
   const [step, setStep] = useState<ResetStep>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  // The second code gets its own state rather than reusing the first field's:
-  // they answer different challenges, and sharing would carry a spent code into
-  // the form for the next one — where it reads as a code that stopped working.
+  // Separate from the first code, which would otherwise carry over spent.
   const [confirmCode, setConfirmCode] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -624,25 +518,20 @@ export function ForgotPasswordPage() {
   const passwordHints = usePasswordHints();
   const { cooldown, startCooldown } = useResendCooldown();
 
-  // Clears what the previous attempt said, so a second submission is not judged
-  // against the first one's error.
+  // Clears the previous attempt's messages.
   const resetFeedback = () => {
     setError("");
     setNotice("");
   };
 
-  // Back to the first step with nothing carried over but the address, which is
-  // the one thing worth retyping less. Reachable from both middle steps: the
-  // code expires, and so does the permission the code buys, so either can go
-  // stale while the visitor is looking at it — and the steps are state rather
-  // than routes, so the browser's back button is not an exit from them.
+  // Back to the first step, keeping only the address. The code and the grant
+  // both expire, and the steps are state, so Back is no exit.
   const startOver = () => {
     resetFeedback();
     setCode("");
     setConfirmCode("");
     setPassword("");
-    // Hints for the password being abandoned, which would otherwise still be
-    // under the field on the way back through.
+    // Drop hints for the abandoned password.
     passwordHints.clear();
     setStep("email");
   };
@@ -654,11 +543,8 @@ export function ForgotPasswordPage() {
 
     try {
       await startPasswordReset(email.trim());
-      // On to the code form whatever the address was. Prelude answers a dispatch
-      // for an address it does not know with the same silent success, and
-      // branching on anything here — a message, a different screen, a delay —
-      // would answer the one question this flow must not: which addresses have
-      // accounts. The code simply never arrives for the others.
+      // On to the code form whatever the address: branching here would reveal
+      // which addresses have accounts.
       setStep("code");
     } catch (caught) {
       setError(
@@ -678,34 +564,15 @@ export function ForgotPasswordPage() {
 
     try {
       const { secondCodeSent } = await confirmPasswordResetCode(code);
-      // Prelude decides which of these the visitor sees. A second code means the
-      // step-up asked to prove the mailbox again — the price of one
-      // configuration serving the signed-in change-password screen too — and a
-      // grant with no code means the one just entered was proof enough.
+      // Prelude decides: a second code, or a grant with none.
       if (secondCodeSent) {
-        // That code was sent a moment ago, so the next step's rest starts here.
-        // The cooldown is one countdown for the whole screen, and without this
-        // the second step inherits whatever is left of the first step's — a
-        // "Send another" resting for reasons that belong to a different code, or
-        // available for a code that has only just gone out.
+        // A code just went out, so the shared cooldown restarts for it.
         startCooldown();
       }
       setStep(secondCodeSent ? "confirm" : "password");
     } catch (caught) {
-      // One message for every failure, deliberately — the same choice the
-      // sign-in screen makes about credentials, and for the same reason. An
-      // address with no account gets a code form and no code, so this step is
-      // where its attempt fails; distinguishing "wrong code" from anything else
-      // here would answer whether the address is registered, having taken care
-      // not to a step earlier. Uniform by construction rather than by matching
-      // Prelude's error names, which would leak the moment one of them differed
-      // for an unknown account.
-      //
-      // The cost is that a real fault — a step-up configuration that no longer
-      // grants outright, a Prelude outage — also reads as a wrong code, so the
-      // cause goes to the console for whoever has to find it. Nothing here is
-      // recoverable by the visitor beyond asking for another code, which the
-      // screen already offers.
+      // One message for every failure, or this step reveals which addresses are
+      // registered. The cause goes to the console.
       console.error("Password reset code could not be checked:", caught);
       setError("That code is not correct, or it has expired. Ask for another and try again.");
     } finally {
@@ -713,13 +580,8 @@ export function ForgotPasswordPage() {
     }
   };
 
-  // Uniform in both directions, exactly like the code step and for the same
-  // reason: only an address with an account has a dispatch to retry, so an error
-  // here — or a cooldown that did not start, or a field that was not cleared —
-  // would answer the question the email step took care not to. Every observable
-  // is therefore the same whichever way this goes, and the cause goes to the
-  // console. The cost is the same one the code step pays: a genuine fault reads
-  // as a code on its way that never arrives.
+  // Every observable is identical whether the retry succeeds or fails, or it
+  // reveals which addresses are registered. The cause goes to the console.
   const onResend = async () => {
     resetFeedback();
     setResending(true);
@@ -745,10 +607,7 @@ export function ForgotPasswordPage() {
       await confirmPasswordWriteCode(confirmCode);
       setStep("password");
     } catch (caught) {
-      // Nothing to keep uniform here, unlike the step before it: only an address
-      // with an account could have reached this form, so naming the common
-      // mistake gives nothing away and saves a visitor guessing at which of
-      // their two codes is being refused.
+      // Only a real account reaches this step, so a wrong code can be named.
       console.error("The password confirmation code could not be checked:", caught);
       setError(writeCodeMessage(caught));
     } finally {
@@ -781,11 +640,8 @@ export function ForgotPasswordPage() {
       await changePassword(password);
       setStep("done");
     } catch (caught) {
-      // Nothing here arrives from our API, so errorMessage would render its
-      // fallback for every case — and by this step the visitor is signed in, so
-      // naming a cause gives nothing away. The expired grant is the one case
-      // worth wording per screen: nothing is wrong with the password, and no
-      // password will do, so what it says is where to go instead.
+      // Prelude's errors bypass errorMessage, and the visitor is signed in, so
+      // causes can be named.
       console.error("The new password could not be saved:", caught);
       const failure = passwordSaveFailure(
         caught,
@@ -798,11 +654,8 @@ export function ForgotPasswordPage() {
     }
   };
 
-  // Deliberately no redirect for a signed-in visitor, unlike the sign-in and
-  // sign-up screens. The accepted code *is* a login, so from the password step
-  // onwards this page is being used by a signed-in user: sending them home on
-  // that basis would eject them one step short of the new password, leaving the
-  // account on the old one with a session opened by an emailed code.
+  // No redirect for a signed-in visitor: the accepted code is a login, so a
+  // redirect would eject them one step short of the new password.
 
   if (step === "email") {
     return (
@@ -888,8 +741,7 @@ export function ForgotPasswordPage() {
           {error && <ErrorMessage>{error}</ErrorMessage>}
           {notice && <Notice>{notice}</Notice>}
 
-          {/* Said out loud, because a second code for the same mailbox otherwise
-              reads as the first one having quietly failed. */}
+          {/* Explains the second code, which otherwise reads as the first failing. */}
           <p className="text-sm text-stone-500 dark:text-stone-400">
             Setting a new password needs one more check of your email. This is the
             last step before you choose it.
@@ -964,8 +816,7 @@ export function ForgotPasswordPage() {
       <div className="space-y-4">
         <SignOutOthersPanel />
 
-        {/* A Link borrowing the button chrome, not a Button inside a Link: an
-            anchor wrapping a button is invalid and loses keyboard handling. */}
+        {/* A styled Link: a button inside an anchor is invalid. */}
         <Link to="/" className={buttonClasses("primary", "lg", "w-full")}>
           Continue to Songfolio
         </Link>
@@ -975,12 +826,8 @@ export function ForgotPasswordPage() {
 }
 
 /**
- * Confirms a new account's email address.
- *
- * Every signed-in but unverified visitor is routed here, whatever they asked
- * for, because the API answers them with a 403 everywhere else. Sign-out is on
- * the page for the one case that has no other exit: an address typed wrong,
- * whose code can never arrive.
+ * Confirms a new account's email address; every unverified visitor is held
+ * here. Sign-out is the exit for a mistyped address.
  */
 export function VerifyEmailPage() {
   const { user, loading, startEmailVerification, verifyEmail, resendVerificationCode, logout } =
@@ -997,39 +844,22 @@ export function VerifyEmailPage() {
   const started = useRef(false);
   const { cooldown, startCooldown } = useResendCooldown();
 
-  // The code is sent when this screen opens, not at registration: the challenge
-  // belongs to the browser's session with Prelude, so there is nobody to open
-  // it before the user gets here. The ref guards the double invocation React
-  // makes in development, which would otherwise open a second challenge and
-  // retire the code from the first.
+  // Sent on open: the challenge belongs to the browser's Prelude session. The
+  // ref stops StrictMode's double run from retiring the first code.
   useEffect(() => {
-    // Hooks run before the redirects below are rendered, so without this guard
-    // a visitor who is already verified — or not signed in at all — would open
-    // a challenge and be emailed a code on their way somewhere else. `loading`
-    // guards the same thing one step earlier: `user` is seeded from the last
-    // session this browser had, so until the restore settles it can be a
-    // verified account's stale unverified copy — and a step-up asked for on a
-    // session Prelude has not restored yet fails, reporting a code that could
-    // not be sent while nothing whatsoever is wrong.
+    // Hooks run before the redirects below, so a verified or signed-out visitor
+    // must not open a challenge here; nor may anyone before the restore settles.
     if (loading || !user || user.email_verified_at) return;
     if (started.current) return;
     started.current = true;
 
-    // No cancellation flag, deliberately, and this is the one place the ref above
-    // makes one dangerous. React runs this effect, its cleanup, and the effect
-    // again on a single mounted component — the double invocation the ref is here
-    // to survive — so a flag set by that cleanup would discard the result of the
-    // run that actually opened the challenge, while the second run reuses it and
-    // returns early. Nothing would then clear "Sending code…" or report a
-    // failure: a button spinning for good, in development only. Landing the
-    // state instead costs nothing, a state update after a real unmount being a
-    // no-op in React 18 and later.
+    // No cancellation flag: under StrictMode the cleanup would discard the run
+    // that opened the challenge, leaving "Sending code…" forever.
     (async () => {
       try {
         await startEmailVerification();
       } catch (caught) {
-        // Let it be attempted again: the error below tells the user to ask for
-        // another code, and without this the guard would refuse to open one.
+        // Lets a resend open a challenge again.
         started.current = false;
         setError(errorMessage(caught, CODE_UNSENDABLE));
       } finally {
@@ -1038,10 +868,8 @@ export function VerifyEmailPage() {
     })();
   }, [loading, startEmailVerification, user]);
 
-  // Unlike the other two screens, this one is reached by redirect and kept in
-  // the address bar, so a refresh lands here while the session is still being
-  // restored. Waiting for that is what stops a reload from reading as signed
-  // out and bouncing to the login page.
+  // Reached by redirect, so a reload lands here mid-restore; wait, or it bounces
+  // to sign-in.
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.email_verified_at) return <Navigate to="/" replace />;
@@ -1057,10 +885,7 @@ export function VerifyEmailPage() {
       await verifyEmail(code);
       navigate("/", { replace: true });
     } catch (caught) {
-      // Prelude checks the code, so a wrong one arrives as one of its typed SDK
-      // errors rather than as a response from our API. Naming that case is what
-      // keeps the common mistake — a mistyped digit — from being reported as
-      // something the user cannot act on.
+      // A wrong code is a Prelude SDK error, named so a typo reads as one.
       setError(
         isBadCode(caught)
           ? "That code is not correct. Check it and try again."
@@ -1115,10 +940,7 @@ export function VerifyEmailPage() {
       </form>
 
       <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
-        {/* `sending` counts as resending: the code this screen sends on open is
-            still in flight, and a click here would find no challenge open yet
-            and start a second step-up — retiring the challenge the first one is
-            about to report, so that two codes are emailed and neither works. */}
+        {/* Held while the opening code is in flight, or a second step-up retires it. */}
         <ResendCodeLink
           resending={resending || sending}
           cooldown={cooldown}
@@ -1139,31 +961,13 @@ export function VerifyEmailPage() {
   );
 }
 
-/**
- * Which of the change-password steps is on screen.
- *
- * `unavailable` is a step rather than a flag beside one: as a boolean its branch
- * silently outranked every step below it, which is precedence a reader has to
- * notice instead of read.
- */
+/** Which of the change-password steps is on screen, `unavailable` included. */
 type ChangeStep = "code" | "password" | "done" | "unavailable";
 
 /**
- * Changes the password of a signed-in user.
- *
- * The proof is an emailed code, and it is the only proof there could be. Prelude
- * grants `prld:pwd:write` on a step-up, and this screen has nothing to step up
- * *with* except the session that asked — which is exactly what a stolen session
- * is. A "current password" field would not close that: nothing in the browser
- * can check one, and Prelude's password step-up has no step that does, so the
- * field would be a gate an attacker skips by calling the SDK directly. The
- * scope's configuration is what enforces this, which is why the screen refuses
- * outright when Prelude answers with no challenge to run.
- *
- * Reached only from the profile, and deliberately outside the app's shell: the
- * steps are state rather than routes, so navigating away is the flow lost
- * part-way through, and there is no reason to offer that beside it. Both exits
- * are therefore explicit.
+ * Changes a signed-in user's password. The emailed code is the only proof, so
+ * there is no "current password" field and a no-code grant is refused. See
+ * CLAUDE.md, "Changing a password while signed in".
  */
 export function ChangePasswordPage() {
   const {
@@ -1191,33 +995,22 @@ export function ChangePasswordPage() {
     setNotice("");
   };
 
-  // The code is sent when this screen opens, like the verification screen and
-  // for the same reason: the challenge belongs to the browser's session with
-  // Prelude, so there is nobody to open it before the visitor gets here. The ref
-  // guards the double invocation React makes in development, which would
-  // otherwise open a second challenge and retire the code from the first.
+  // Sent on open, as on the verification screen; the ref survives StrictMode.
   useEffect(() => {
-    // Hooks run before the redirect below them is rendered, so without this a
-    // visitor whose session has ended opens a challenge on their way to the
-    // sign-in screen — and is emailed a code for a flow they cannot be in.
+    // Hooks run before the redirect below; a signed-out visitor opens nothing.
     if (!user) return;
     if (started.current) return;
     started.current = true;
 
-    // No cancellation flag, for the reason spelled out on the verification
-    // screen's copy of this effect: the cleanup React runs between the two
-    // invocations would otherwise throw away the result of the run that opened
-    // the challenge, and leave this screen sending a code for ever.
+    // No cancellation flag, as on the verification screen.
     (async () => {
       try {
         await startPasswordChange();
       } catch (caught) {
-        // Let it be attempted again: the message tells the visitor to ask for
-        // another code, and the guard above would otherwise refuse to open one.
+        // Lets a resend open a challenge again.
         started.current = false;
         if (isChangeUnavailable(caught)) {
-          // Not a fault to retry, and not one the visitor can fix. Saying so
-          // beats a code form waiting for a code that is never coming.
+          // Not retryable by the visitor; say so rather than wait for no code.
           console.error("The password change step-up asked for nothing:", caught);
           setStep("unavailable");
           return;
@@ -1229,9 +1022,7 @@ export function ChangePasswordPage() {
     })();
   }, [startPasswordChange, user]);
 
-  // Reached from the profile, which RequireAuth has gated already — this covers
-  // the session ending while the screen is open, which would otherwise leave a
-  // password form behind that can only fail.
+  // Covers the session ending while the screen is open.
   if (!user) return <Navigate to="/login" replace />;
 
   const onSubmitCode = async (event: FormEvent) => {
@@ -1243,9 +1034,7 @@ export function ChangePasswordPage() {
       await confirmPasswordWriteCode(code);
       setStep("password");
     } catch (caught) {
-      // The visitor is signed in to the account they are changing, so there is
-      // nothing to keep uniform the way the reset's code step has to: naming a
-      // mistyped digit is simply the useful thing to say.
+      // Signed in to their own account, so a wrong code can be named.
       console.error("The password change code could not be checked:", caught);
       setError(writeCodeMessage(caught));
     } finally {
@@ -1263,11 +1052,8 @@ export function ChangePasswordPage() {
       setCode("");
       setNotice(CODE_RESENT_NOTICE);
     } catch (caught) {
-      // The same refusal the screen can open with, reachable here because a
-      // fresh challenge is what this asks for when the last one cannot be
-      // retried — so the configuration is read again, and can have changed.
-      // Reported as a failed send it would send whoever reads it hunting an
-      // outage.
+      // A fresh challenge rereads the configuration, so the no-code refusal can
+      // surface here too.
       if (isChangeUnavailable(caught)) {
         console.error("The password change step-up asked for nothing:", caught);
         setStep("unavailable");
@@ -1279,15 +1065,11 @@ export function ChangePasswordPage() {
     }
   };
 
-  // The permission a code buys lasts five minutes and the password form can
-  // outlive it, so there has to be a way back to a fresh one — the steps are
-  // state, not routes, so the back button is not that way. The challenge that
-  // got here is spent, which is why this asks for another code rather than
-  // returning to a form that nothing would satisfy.
+  // The grant can expire under the password form, so this asks for a new code;
+  // the spent challenge cannot be reused.
   const startAgain = async () => {
     setPassword("");
-    // The hints are about the password being abandoned; left alone they are
-    // still under the field when this form comes back.
+    // Drop hints for the abandoned password.
     passwordHints.clear();
     setStep("code");
     await onResend();
@@ -1302,9 +1084,7 @@ export function ChangePasswordPage() {
       await changePassword(password);
       setStep("done");
     } catch (caught) {
-      // Same three cases as the reset's password step, and the same reasoning
-      // behind naming them; only the expired sentence is this screen's own,
-      // because the way back to a code is not the same one.
+      // As on the reset; only the expired sentence differs.
       console.error("The new password could not be saved:", caught);
       const failure = passwordSaveFailure(
         caught,
@@ -1327,8 +1107,7 @@ export function ChangePasswordPage() {
           <ErrorMessage>
             This deployment is not set up to confirm a password change by email.
           </ErrorMessage>
-          {/* A genuine way through rather than a consolation: the reset proves
-              the same mailbox this screen wanted proven, by the same code. */}
+          {/* The reset proves the same mailbox by the same kind of code. */}
           <p className="text-sm text-stone-500 dark:text-stone-400">
             You can still set a new password by resetting it, which emails you a
             code to confirm it is you.
@@ -1365,9 +1144,7 @@ export function ChangePasswordPage() {
         </form>
 
         <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
-          {/* Held while the first code is still in flight, for the reason given
-              on the verification screen: a click then opens a second step-up and
-              retires the challenge the first one is about to report. */}
+          {/* Held while the first code is in flight, as on the verification screen. */}
           <ResendCodeLink
             resending={resending || sending}
             cooldown={cooldown}
@@ -1405,10 +1182,7 @@ export function ChangePasswordPage() {
         </form>
 
         <p className="mt-6 text-center text-sm text-stone-500 dark:text-stone-400">
-          {/* Disabled while it works, because it asks for a code without a
-              cooldown to hide behind: a second press before the first returns is
-              a second code, and the rest that stops a stuck visitor mailing
-              themselves has not started yet. */}
+          {/* Disabled while working: no cooldown has started to stop a second code. */}
           <button
             type="button"
             onClick={startAgain}

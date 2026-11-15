@@ -1,16 +1,8 @@
 import { vi } from "vitest";
 
 /*
- * The image pipeline a browser has and jsdom does not.
- *
- * jsdom implements neither `createImageBitmap` nor a canvas, so preparing a
- * picture cannot run under test at all without standing in for both. These
- * stubs answer back rather than staying silent, because the two things worth
- * pinning about that step are invisible in the result: which orientation option
- * the bitmap was decoded with, and how large a square the canvas was asked for.
- *
- * Nothing here scales anything. jsdom has no pixels, so the recorded numbers are
- * the arguments the code chose, not a measurement of what they did.
+ * Stubs for `createImageBitmap` and canvas, which jsdom lacks. They record the
+ * decode options and canvas sizes the code chose; nothing is actually drawn.
  */
 
 export interface ImagePipelineStub {
@@ -52,8 +44,7 @@ export function stubImagePipeline(
     drawImage: (_image: unknown, ...rest: number[]) => stub.draws.push(rest),
   } as unknown as CanvasRenderingContext2D;
 
-  // Not an arrow function: the canvas whose size is being recorded is the
-  // receiver, and its dimensions are set before the context is asked for.
+  // Not an arrow function: the canvas being recorded is `this`.
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (
     this: HTMLCanvasElement,
   ) {

@@ -1,13 +1,8 @@
 import { fireEvent } from "@testing-library/react";
 
 /*
- * Scrolling, for the one component that reads it.
- *
- * jsdom lays nothing out and its `scrollY` has no setter, so the property is
- * redefined rather than assigned and the event is dispatched by hand. Shared for
- * the usual reason: `StickyHeader`'s own spec and the song page's both drive
- * this, and the offsets below are chosen against the header's thresholds — two
- * copies would drift under the next change to them.
+ * Scrolling for `StickyHeader`'s specs. jsdom's `scrollY` has no setter, so it
+ * is redefined and the event dispatched by hand.
  */
 
 /** Puts the window at an offset without dispatching anything. */
@@ -16,14 +11,9 @@ export function setScrollY(y: number): void {
 }
 
 /**
- * Scrolls down far enough for the header to react: past its 80px floor and well
- * past the 8px it ignores as momentum jitter.
- *
- * Every spec that uses this must start from a known offset — `setScrollY(0)` in a
- * `beforeEach` — because the property outlives the render. Left where the last
- * spec put it, the next header mounts with that as its starting point and a
- * scroll to the same place is no movement at all, which passes an assertion about
- * a header staying put without having tested anything.
+ * Scrolls down past the header's 80px floor and 8px jitter threshold. Callers
+ * must `setScrollY(0)` in a `beforeEach`: the property outlives the render, and
+ * a stale offset makes this no movement at all.
  */
 export function scrollDown(): void {
   setScrollY(200);

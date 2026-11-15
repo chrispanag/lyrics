@@ -1,10 +1,6 @@
-// Package prelude is a minimal client for the Prelude Auth Management API.
-//
-// It exists because the official Go SDK (github.com/prelude-so/go-sdk) covers
-// only the verification and messaging products — it has no session/auth
-// namespace — while user creation is Management-API-only: the browser SDK can
-// log a user in but cannot sign one up. Registration therefore has to happen
-// server-side, with the Management API key that must never reach a browser.
+// Package prelude is a minimal client for the Prelude Auth Management API,
+// which registration needs server-side: the browser SDK cannot create users,
+// and the official Go SDK has no session/auth namespace.
 package prelude
 
 import (
@@ -30,11 +26,8 @@ var (
 	ErrUpstream = errors.New("prelude api error")
 )
 
-// Client talks to the Prelude Management API.
-//
-// Email verification is deliberately absent from this interface: it runs as a
-// step-up challenge between the browser and Prelude, and reaches this
-// application only as a scope on a signed access token.
+// Client talks to the Prelude Management API. Email verification is absent: it
+// arrives only as a scope on a signed access token.
 type Client interface {
 	CreateUser(ctx context.Context, email string, profile *Profile) (userID string, err error)
 	SetPassword(ctx context.Context, userID, password string) error
@@ -62,8 +55,7 @@ func New(baseURL, appID, apiKey string) *HTTPClient {
 		appID:   appID,
 		apiKey:  apiKey,
 		http: &http.Client{
-			// Registration blocks a user-facing request, so this must fail fast
-			// rather than hold the handler open for the default (infinite) wait.
+			// Registration blocks a user-facing request, so fail fast.
 			Timeout: 10 * time.Second,
 		},
 	}
@@ -175,13 +167,9 @@ func (c *HTTPClient) do(ctx context.Context, method, path string, in, out any) e
 	return nil
 }
 
-// Error is a classified failure from the Prelude API.
-//
-// Kind is one of the sentinels above, so errors.Is keeps working for callers
-// that only need to know which condition occurred. Detail carries the upstream
-// message as its own field, which is what lets a handler render it without
-// cutting it back out of a formatted string — a coupling to this package's
-// exact wrapping format that no compiler or test would have caught breaking.
+// Error is a classified failure from the Prelude API. Kind is one of the
+// sentinels above, for errors.Is; Detail is the upstream message, kept separate
+// so handlers can render it without parsing Error().
 type Error struct {
 	Kind   error
 	Detail string
@@ -197,23 +185,16 @@ func (e *Error) Error() string {
 
 func (e *Error) Unwrap() error { return e.Kind }
 
-// classify maps an error response onto a sentinel the handler can act on.
-//
-// A duplicate email must surface as a 409 rather than a generic upstream
-// failure, because it is the single most common registration outcome and the
-// only one the user can fix themselves.
+// classify maps an error response onto a sentinel the handler can act on; a
+// duplicate email must surface as a 409, not a generic upstream failure.
 func (c *HTTPClient) classify(resp *http.Response) error {
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 
 	var body apiError
 	_ = json.Unmarshal(raw, &body)
 
-	// Detail is rendered to the end user by the registration handler, so it only
-	// ever carries a field Prelude meant as a message. The unparsed body stays
-	// out of it: when Prelude (or a proxy in front of it) answers with an HTML
-	// error page or a debug payload, echoing it would hand an anonymous caller
-	// up to 8 KB of upstream internals. The raw body still reaches the logs
-	// through the wrapped error below.
+	// Detail is shown to the end user, so it carries only Prelude's message
+	// fields, never the raw body (which reaches only the logs).
 	detail := body.Message
 	if detail == "" {
 		detail = body.Detail
@@ -223,10 +204,8 @@ func (c *HTTPClient) classify(resp *http.Response) error {
 	case http.StatusConflict:
 		return &Error{Kind: ErrDuplicateIdentifier, Detail: detail, Status: resp.StatusCode}
 	case http.StatusBadRequest, http.StatusUnprocessableEntity:
-		// Prelude reports both "this email already exists" and "this password is
-		// too weak" as 400s on some endpoints, distinguished only by the body.
-		// Classification reads the whole body, including the part never shown to
-		// the caller, so an unparsed error page still routes to the right branch.
+		// Prelude reports both duplicate email and weak password as 400s on some
+		// endpoints, distinguished only by the body, so match the raw body too.
 		if containsAny(detail+body.Code+string(raw), "already", "duplicate", "exists", "taken") {
 			return &Error{Kind: ErrDuplicateIdentifier, Detail: detail, Status: resp.StatusCode}
 		}

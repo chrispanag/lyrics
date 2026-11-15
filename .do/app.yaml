@@ -1,33 +1,24 @@
 # DigitalOcean App Platform specification for the lyrics catalog.
 #
-# One app, one origin: the built frontend is served at `/`, and `/api` is routed
-# to the Go service. Same-origin is what lets the browser bundle use relative
-# URLs, so a domain change never requires rebuilding it — and it means the API's
-# CORS configuration is a formality rather than the thing standing between the
-# app and its own data.
+# One origin: the frontend at `/`, the Go service at `/api`, so the bundle uses
+# relative URLs and survives a domain change without a rebuild.
 #
-# Apply it with `./scripts/deploy-do.sh`, which fills the placeholder values
-# below from `.env`. Secrets are deliberately absent here: this file is tracked.
+# Apply with `./scripts/deploy-do.sh`, which fills the placeholders from `.env`.
+# This file is tracked, so it holds no secrets.
 
 name: lyrics
 region: fra
 
-# A development database: single node, no automated failover, backups limited to
-# the last day. That matches what this catalog is — a few thousand rows that can
-# be rebuilt from `songs.ndjson` — and it is the same tier the previous
-# incarnation of the site ran on. `production: true` plus a `cluster_name` moves
-# it onto a managed cluster later without touching anything else here.
+# Development tier (single node, one day of backups): the catalog can be rebuilt
+# from `songs.ndjson`. `production: true` plus a `cluster_name` upgrades it.
 databases:
   - name: db
     engine: PG
     version: "17"
     production: false
 
-# The schema is applied by a pre-deploy job rather than at API startup. The
-# ordering is the point: this runs to completion before any new container is
-# allowed to serve traffic, so a request never arrives at code whose migration
-# has not landed. It shares the API's image, so the schema and the code that
-# expects it are always built from the same commit.
+# Migrations run as a pre-deploy job, which completes before any new container
+# serves traffic. It shares the API's image, so schema and code match.
 jobs:
   - name: migrate
     kind: PRE_DEPLOY
@@ -75,9 +66,7 @@ services:
         scope: RUN_TIME
         value: ${db.DATABASE_URL}
 
-      # Resolves to the primary domain once one is attached, and to the
-      # ondigitalocean.app hostname until then — so the allowed origin follows
-      # the app rather than being pinned to whatever it was called on day one.
+      # Follows the app's primary domain (or its ondigitalocean.app host).
       - key: CORS_ORIGINS
         scope: RUN_TIME
         value: ${APP_URL}
@@ -88,12 +77,10 @@ services:
       - key: LOG_LEVEL
         scope: RUN_TIME
         value: info
-      # Every request arrives through App Platform's ingress, so the peer address
-      # is the ingress and registration's rate limit counted the whole world in
-      # one bucket. This is the header the platform documents as carrying the
-      # caller's address; X-Forwarded-For here is the ingress's own, which is the
-      # value that made the limit global in the first place. Unset locally, where
-      # the peer address is already the caller's.
+      # The peer address here is the ingress, so without this the registration
+      # rate limit is one global bucket. Not X-Forwarded-For: on App Platform it
+      # carries the ingress's address. Leave unset locally. See CLAUDE.md,
+      # "Deployment".
       - key: CLIENT_IP_HEADER
         scope: RUN_TIME
         value: DO-Connecting-IP
@@ -102,10 +89,8 @@ services:
       - key: PRELUDE_APP_ID
         scope: RUN_TIME
         value: SET_BY_DEPLOY_SCRIPT
-      # The host the browser authenticates against, and therefore the issuer this
-      # service expects. It must match the static site's build-time copy below —
-      # Prelude's issuer is per-host, so two different hosts means every token is
-      # rejected. Both are filled from the one PRELUDE_SESSION_DOMAIN in .env.
+      # Must match the web component's NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN below:
+      # Prelude's issuer is per-host, so a mismatch rejects every token.
       - key: PRELUDE_SESSION_DOMAIN
         scope: RUN_TIME
         value: SET_BY_DEPLOY_SCRIPT
@@ -119,14 +104,9 @@ services:
         scope: RUN_TIME
         value: SET_BY_DEPLOY_SCRIPT
 
-  # The frontend, which is a *service* and no longer a static site: Next serves
-  # every document from a running Node process, so there is no directory of
-  # assets to hand to a CDN and no `catchall_document` to declare — the optional
-  # catch-all route in src/app is what answers every path the router owns. It is
-  # a service today rather than at the point server rendering arrives, so this
-  # change and that one cannot fail together. Both stacks now run the same two
-  # commands and read the same next.config.ts; web/Dockerfile says what became
-  # of nginx.
+  # A service, not a static site: Next serves every document from a Node
+  # process, and the optional catch-all route in src/app answers the router's
+  # paths.
   - name: web
     github:
       repo: chrispanag/lyrics
@@ -141,9 +121,7 @@ services:
     instance_size_slug: apps-s-1vcpu-0.5gb
     instance_count: 1
 
-    # Nothing but the shell has to render for this to pass, which is the point:
-    # it says the Node process is up and serving, and the app's own data path is
-    # the API's health check above.
+    # Only checks that the Node process serves; the data path is the API's check.
     health_check:
       http_path: /
       initial_delay_seconds: 15
@@ -153,62 +131,37 @@ services:
       failure_threshold: 3
 
     envs:
-      # Where the Node process itself reaches the API, for the fetches a server
-      # render makes — a song's metadata and the sitemap, neither of which has a
-      # page origin to be relative to. RUN_TIME rather than BUILD_TIME, and with
-      # no NEXT_PUBLIC_ prefix, so nothing about it is inlined into the bundle a
-      # browser downloads.
-      #
-      # ${APP_URL} sends those fetches back out through the public ingress, which
-      # then routes /api to the api component beside this one. There is no
-      # private service-to-service address configured on App Platform today, so
-      # that is a known cost rather than an oversight: a server render pays a
-      # round trip out and back for a request that never leaves the platform.
-      #
-      # Not filled by scripts/deploy-do.sh, unlike everything below it — this is
-      # a platform value rather than one from .env, which is why it is the one
-      # mapping that does not exist in four places. api/client.ts's own default
-      # covers `make web`, `make mobile` and the test suite.
+      # Where the Node process reaches the API for server-render fetches.
+      # RUN_TIME and not NEXT_PUBLIC_, so it is never inlined into the bundle.
+      # A platform value, not filled by scripts/deploy-do.sh; see CLAUDE.md,
+      # "Environment". ${APP_URL} round-trips through the public ingress.
       - key: API_ORIGIN
         scope: RUN_TIME
         value: ${APP_URL}
 
-      # NEXT_PUBLIC_API_BASE_URL is deliberately unset: Next inlines these at
-      # build time, and a production build with no override targets its own
-      # origin, which is exactly the routing below. Setting it here would bake a
-      # hostname into the bundle for no gain.
+      # Leave NEXT_PUBLIC_API_BASE_URL unset: Next inlines it at build time, and
+      # unset means the bundle calls its own origin.
       #
-      # Both values are publishable client identifiers — unlike PRELUDE_API_KEY,
-      # they are meant to reach the browser. They are still filled from .env
-      # rather than written here, so there is one place to change them.
+      # Publishable client identifiers, unlike PRELUDE_API_KEY.
       - key: NEXT_PUBLIC_PRELUDE_APP_ID
         scope: BUILD_TIME
         value: SET_BY_DEPLOY_SCRIPT
       - key: NEXT_PUBLIC_PRELUDE_SDK_KEY
         scope: BUILD_TIME
         value: SET_BY_DEPLOY_SCRIPT
-      # Same value as the API's PRELUDE_SESSION_DOMAIN, and BUILD_TIME because
-      # Next inlines it: leave it out and the bundle keeps calling the default
-      # `<app_id>.session.prelude.dev` host, whose cookies are third-party.
+      # Must equal the API's PRELUDE_SESSION_DOMAIN. BUILD_TIME: Next inlines it.
       - key: NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN
         scope: BUILD_TIME
         value: SET_BY_DEPLOY_SCRIPT
-      # Which login configuration password reset mails its code through. Also an
-      # identifier rather than a secret, and required rather than optional: the
-      # deploy fails without it, because a build that silently lacks it ships a
-      # reset screen that can only apologize.
+      # The login configuration password reset mails its code through. Required:
+      # the deploy script refuses to run without it.
       - key: NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID
         scope: BUILD_TIME
         value: SET_BY_DEPLOY_SCRIPT
 
-# Longest prefix wins, so /api reaches the Go service and everything else the
-# frontend. preserve_path_prefix is load-bearing: the router mounts at /api/v1,
-# and without it App Platform strips /api and every route 404s.
-#
-# Note what the first rule costs the frontend: /api belongs to the Go service
-# for the whole app, so a Next route handler under app/api/ is unreachable here
-# and would work perfectly in `next dev`. Anything server-side the frontend
-# needs must be mounted somewhere else.
+# Longest prefix wins. preserve_path_prefix is load-bearing: the router mounts at
+# /api/v1, and without it App Platform strips /api and every route 404s.
+# A Next route handler under app/api/ is unreachable in production.
 ingress:
   rules:
     - match:

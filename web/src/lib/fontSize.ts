@@ -1,13 +1,7 @@
 /*
- * The size a reader chose to read lyrics at, and where it is kept.
- *
- * Apart from the page that draws it for the same reason `lib/theme.ts` is apart
- * from the switch that sets it: this is a `localStorage` read, and a
- * `localStorage` read is the one thing in a render body that cannot be run
- * anywhere but a browser. Kept here, it is a module a server-side render can
- * import and call without a DOM behind it, which is what `serverRender.test.tsx`
- * asks of it — where the same read left inline in `SongDetailPage.tsx` could
- * only be pinned by rendering that whole page.
+ * The reader's chosen lyrics size, and where it is kept. Its own module so
+ * `serverRender.test.tsx` can call it without a DOM; see "The Next.js shell" in
+ * CLAUDE.md.
  */
 
 /** Reader font sizes, persisted so the choice survives navigation. */
@@ -20,20 +14,12 @@ const FONT_SIZE_KEY = "lyrics:font-size";
 /**
  * The stored size, or the default when there is nothing usable stored.
  *
- * Wrapped like `auth/storedUser`'s read and the theme boot script's, and for
- * both of the reasons they are: a browser can refuse to hand its storage over,
- * and there may one day be no storage to ask. It is not what makes the choice
- * safe to render — that is the layout effect at the call site, since a value
- * only the browser has cannot be part of a first render the server also
- * performed — but it is what makes this module safe to *import* and call from
- * one.
+ * The try makes this safe to call on a server, not to render with: the call
+ * site reads it in a layout effect.
  */
 export function storedFontSize(): number {
   try {
-    // The absent-key case has to be caught before Number(): localStorage returns
-    // null, Number(null) is 0, and 0 is a perfectly valid index — so the
-    // intended default of text-lg was unreachable and every first-time reader
-    // silently got the smallest size.
+    // Check null before Number(): Number(null) is 0, a valid index.
     const raw = localStorage.getItem(FONT_SIZE_KEY);
     if (raw === null) return DEFAULT_FONT_SIZE;
     const stored = Number(raw);

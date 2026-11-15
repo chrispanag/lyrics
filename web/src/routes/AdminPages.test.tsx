@@ -18,28 +18,22 @@ function serveGenres(...genres: Genre[]) {
 }
 
 describe("admin console routing", () => {
-  // The guard sits in App.tsx rather than in the pages, so it is the routes
-  // that have to be exercised — and every one of them, which is why this walks
-  // the list rather than naming the screen the change happened to add. A route
-  // left unwrapped renders for everybody, and the only thing that would say so
-  // is the server refusing the writes made from it.
+  // The guard is in App.tsx, so every console route is walked: one left
+  // unwrapped renders for everybody, silently.
   it.each([
     ["/admin/genres", "Genres"],
     ["/admin/users", "Users"],
   ])("sends a contributor away from %s", async (route, heading) => {
     renderWithProviders(<App />, { user: makeUser({ role: "contributor" }), route });
 
-    // Landed on the catalog, which is the redirect's target.
+    // Landed on the catalog.
     expect(await screen.findByRole("searchbox")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 1, name: heading })).not.toBeInTheDocument();
   });
 
-  // The console is a section, so `/admin` itself is not a screen: the nav entry
-  // points there to stay lit across both, and the index redirect is what gives
-  // it something to open. Without it the entry leads to an empty layout.
+  // `/admin` is not a screen; without the index redirect it is an empty layout.
   it("opens the console on its first screen", async () => {
-    // The only spec that renders the users screen, so it is the only one that
-    // needs its rows: there is no default handler for the admin routes.
+    // No default handler covers the admin routes.
     server.use(http.get(`${API}/api/v1/admin/users`, () => HttpResponse.json(list([]))));
 
     renderWithProviders(<App />, { user: admin, route: "/admin" });
@@ -47,11 +41,8 @@ describe("admin console routing", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Users" })).toBeInTheDocument();
   });
 
-  // While the Prelude session is being restored the app holds the snapshot of
-  // the last session this browser had, or nothing — which is indistinguishable
-  // from a guest. Deciding then would make a reload of an admin screen bounce
-  // its own admin to the catalog, or open the console on a role that snapshot
-  // merely remembers.
+  // Until the session restores, `user` is a snapshot or null; deciding then
+  // bounces an admin on reload or trusts a remembered role.
   it("waits for the session before deciding", async () => {
     renderWithProviders(<App />, { user: null, auth: { loading: true }, route: "/admin/genres" });
 
@@ -59,9 +50,7 @@ describe("admin console routing", () => {
     expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
   });
 
-  // The navigation carries one entry for the whole console, so it points at
-  // `/admin` and relies on NavLink's prefix match. Pointed at a screen instead,
-  // it goes dark the moment an admin opens the other one.
+  // The nav entry points at `/admin`; pointed at a screen it goes dark on the other.
   it("keeps the console lit on a screen the entry does not name", async () => {
     renderWithProviders(<App />, { user: admin, route: "/admin/genres" });
 
@@ -84,9 +73,7 @@ describe("AdminGenresPage", () => {
     expect(screen.getByText(/12 songs/)).toBeInTheDocument();
   });
 
-  // A failed fetch has no rows, so the empty state would stand in for it — and
-  // the advice it gives is to add the genres that already exist, each of which
-  // is then refused as a duplicate slug for reasons the screen cannot explain.
+  // An empty state here would advise re-adding genres that already exist.
   it("says a failed fetch failed rather than showing an empty catalog", async () => {
     server.use(
       http.get(`${API}/api/v1/genres`, () =>
@@ -100,9 +87,6 @@ describe("AdminGenresPage", () => {
     expect(screen.queryByText("No genres yet")).not.toBeInTheDocument();
   });
 
-  // The reason this screen exists: the song editor offers only the genres that
-  // already exist, so without a way to add one the catalog is stuck with the
-  // set the seed and the import happened to create.
   it("adds a genre and shows it without a reload", async () => {
     const posted: string[] = [];
     let genres: Genre[] = [];
@@ -123,15 +107,12 @@ describe("AdminGenresPage", () => {
     await userEvent.type(screen.getByLabelText("Name"), "  Έντεχνο  ");
     await userEvent.click(screen.getByRole("button", { name: "Add genre" }));
 
-    // Trimmed on the way out, so a stray space cannot produce a second genre
-    // that reads as the one already there.
+    // Trimmed, so a stray space cannot make a lookalike second genre.
     await waitFor(() => expect(posted).toEqual(["Έντεχνο"]));
     expect(await screen.findByText("Έντεχνο")).toBeInTheDocument();
   });
 
-  // A name the catalog already has is an ordinary outcome, and the server's own
-  // sentence says so — the sheet stays up with the name still in it, rather
-  // than closing on a genre that was never created.
+  // The sheet stays up with the name still in it and the server's reason.
   it("reports a refusal without closing the sheet", async () => {
     server.use(
       http.post(`${API}/api/v1/genres`, () =>
@@ -163,7 +144,7 @@ describe("AdminGenresPage", () => {
     renderWithProviders(<AdminGenresPage />, { user: admin });
 
     await userEvent.click(await screen.findByRole("button", { name: "Rename Ροκ" }));
-    // Prefilled, which is what makes this a correction rather than a retype.
+    // Prefilled with the current name.
     const field = screen.getByLabelText("Name");
     expect(field).toHaveValue("Ροκ");
 
@@ -174,15 +155,8 @@ describe("AdminGenresPage", () => {
     await waitFor(() => expect(sent).toEqual({ id: "genre-9", name: "Rock" }));
   });
 
-  // A rename changes a name that rides inside other payloads: a song, a song
-  // row, and — two hops down, in `songs[].genres` — a list. Nothing on this
-  // screen reads those caches, so dropping one of the keys leaves every spec
-  // green while a renamed genre keeps its old label wherever a reader had
-  // already been.
-  //
-  // Asserted on the keys rather than on the cache itself: the test client sets
-  // `gcTime: 0`, so an entry seeded here with nothing observing it is collected
-  // before the rename lands and every state reads back undefined.
+  // A genre name rides inside song and list payloads; see CLAUDE.md, "Genres".
+  // Asserted on the keys: with `gcTime: 0` an unobserved seeded cache is collected.
   it("unsettles the caches a genre name rides inside", async () => {
     serveGenres(makeGenre({ id: "genre-9", name: "Ροκ" }));
     server.use(
@@ -207,9 +181,7 @@ describe("AdminGenresPage", () => {
     });
   });
 
-  // The delete sheet is the one place a refusal has nowhere else to go: it is a
-  // confirmation rather than a form, so a message that closed with it would
-  // leave an admin believing a genre they can still see was deleted.
+  // Closing on a refusal would read as a successful delete.
   it("keeps the delete confirmation open on a refusal", async () => {
     serveGenres(makeGenre({ id: "genre-9", name: "Ροκ", song_count: 2 }));
     server.use(
@@ -229,9 +201,7 @@ describe("AdminGenresPage", () => {
     expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
-  // Deleting a genre takes it off every song that carries it — `song_genres`
-  // cascades — and the count is the only place that is ever said. Without it
-  // the confirmation reads as though one label were being tidied away.
+  // `song_genres` cascades; the count is the only place that is said.
   it("says how many songs lose the label before deleting one", async () => {
     serveGenres(makeGenre({ id: "genre-9", name: "Ροκ", song_count: 12 }));
     let deleted = "";

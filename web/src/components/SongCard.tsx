@@ -14,22 +14,13 @@ const genreChip =
   "rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600 dark:bg-stone-800 dark:text-stone-400";
 
 /**
- * Memoized because the browse page re-renders on every keystroke of the search
- * box, and each card otherwise re-runs songByline (copy + sort + Set) and
- * parseSegments (a full scan of the snippet) for a `song` that has not changed.
- * Song objects come from the query cache, so their identity is stable.
+ * Memoized: browse re-renders on every keystroke, and song objects from the
+ * query cache have stable identity.
  *
- * `listId` is passed by the rows of a list and by nothing else: it is what keeps
- * a reader inside the list they opened the song from, rather than dropping them
- * onto a song with no way on to the next one.
+ * `listId` (passed by list rows only) keeps `?list=` on the song's address.
  *
- * Two of the card's slots are reserved when the song leaves them empty — the
- * subtitle and the genre row — because a card shorter than its neighbors puts
- * every row under it out of step, and an empty slot can keep its box: it is the
- * same box with nothing in it. The snippet is the one that is not reserved. It
- * is two lines, or one, or (for a song whose lyrics are empty) none at all, so
- * there is no single box to hold open; cards in a search result are uneven by
- * that much, and only there. Each reservation below says how it is made.
+ * The subtitle and genre row keep their box when empty so cards stay level; the
+ * snippet varies in height and is not reserved.
  */
 export const SongCard = memo(function SongCard({
   song,
@@ -54,10 +45,7 @@ export const SongCard = memo(function SongCard({
           <h3 className="truncate font-semibold text-stone-900 dark:text-stone-100">
             {song.title}
           </h3>
-          {/* Always rendered, since an empty <p> has no line box of its own.
-              `min-h-lh` is that line height read off the element rather than
-              restated from text-sm — on an engine without the unit it is
-              dropped, and the card is merely uneven again. */}
+          {/* Always rendered; `min-h-lh` gives an empty <p> its line box. */}
           <p className="mt-0.5 min-h-lh truncate text-sm text-stone-500 dark:text-stone-400">
             {credits}
           </p>
@@ -74,14 +62,9 @@ export const SongCard = memo(function SongCard({
         />
       )}
 
-      {/* Always rendered too, held open when empty by a chip made invisible
-          rather than by a height measured off one: a chip is 1rem of line and
-          0.25rem of padding, three coinciding values across two utilities, and
-          a number standing in for them drifts from any of them in silence. The
-          box reserved is a chip's own box, in the same words. The space inside
-          it is load-bearing — a flex item with no content is its padding and
-          nothing more. Chips that wrap to a second row still move the card,
-          which is the snippet's case above rather than this one. */}
+      {/* Held open when empty by an invisible chip rather than a measured
+          height. Its non-breaking space is load-bearing: an empty flex item is
+          only its padding. */}
       <div className="mt-3 flex flex-wrap gap-1.5">
         {song.genres.length > 0 ? (
           song.genres.map((genre) => (

@@ -27,14 +27,10 @@ import type { Song } from "@/lib/types";
 /**
  * A list's songs, reorderable and removable by its owner.
  *
- * Loaded on demand (see ListDetailPage) so that everyone who cannot reorder —
- * every guest, every reader of a shared list — is not made to download a drag
- * library to read one.
+ * Loaded on demand (see ListDetailPage) so readers never download dnd-kit.
  *
- * `onRemove` is required rather than optional because only an owner is ever
- * shown this list, and an owner always gets both affordances: made optional, a
- * call site that forgets it renders rows that cannot be removed and says
- * nothing about it. `SongRow`, which serves readers too, has to ask.
+ * `onRemove` is required: only owners see this list, and a forgotten one would
+ * silently render rows that cannot be removed.
  */
 export function SortableSongList({
   songs,
@@ -52,12 +48,9 @@ export function SortableSongList({
   pendingRemoval?: string;
 }) {
   const sensors = useSensors(
-    // A few pixels of movement before a drag begins, so pressing the handle and
-    // releasing still reads as a click rather than a zero-distance drag.
+    // So a press and release on the handle stays a click.
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    // Touch needs a hold instead: an immediate drag would swallow the flick
-    // that scrolls the page. The tolerance lets a finger wobble during the hold
-    // without canceling it.
+    // Touch needs a hold, or a drag would swallow the flick that scrolls.
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
@@ -69,9 +62,7 @@ export function SortableSongList({
     const ids = songs.map((song) => song.id);
     const from = ids.indexOf(String(active.id));
     const to = ids.indexOf(String(over.id));
-    // A refetch landing between the lift and the drop can take a row out from
-    // under the drag. arrayMove reads the resulting -1 as "the last one" and
-    // would save an order nobody asked for, so nothing is saved instead.
+    // A refetch mid-drag can remove a row; arrayMove would read -1 as "last".
     if (from < 0 || to < 0) return;
 
     onReorder(arrayMove(ids, from, to));
@@ -127,11 +118,8 @@ function SortableRow({
         onRemove={onRemove}
         pendingRemoval={pendingRemoval}
         handle={
-          /* The handle is the only thing that starts a drag. Were the whole row
-             draggable, a phone would have no gesture left for scrolling the
-             page — and `touch-none` is what hands this element's gestures to
-             the drag library instead of the browser's scrolling, without which
-             dragging on touch silently does nothing at all. */
+          /* The only drag activator, so the row still scrolls on a phone;
+             without `touch-none`, touch dragging silently does nothing. */
           <button
             type="button"
             ref={setActivatorNodeRef}

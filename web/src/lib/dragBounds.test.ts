@@ -3,9 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { verticalWithinList } from "./dragBounds";
 
-// dnd-kit declares its modifier argument inline, so the only name for it is the
-// one derived from the function type. Each case supplies the fields it cares
-// about and casts the rest away.
+// dnd-kit declares the modifier argument inline; each case casts the rest away.
 type ModifierArgs = Parameters<Modifier>[0];
 
 /** A rect in the shape dnd-kit measures, positioned by its top edge. */
@@ -47,8 +45,6 @@ describe("verticalWithinList", () => {
     expect(drag(400).y).toBe(100);
   });
 
-  // Modifiers run before the first measurement too, and a dropped rect must not
-  // take the axis constraint down with it.
   it("still pins the axis when nothing has been measured", () => {
     const unmeasured = verticalWithinList({
       transform: { x: 80, y: 40, scaleX: 1, scaleY: 1 },

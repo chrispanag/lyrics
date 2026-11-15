@@ -32,25 +32,16 @@ export const keys = {
 };
 
 /**
- * A page of songs.
- *
- * `enabled` is one boolean rather than an options bag, like `useLists` and
- * `useSongLists` below: what the quick search above a song needs is a way to ask
- * for nothing while its box is empty — an absent `q` is not an empty result but
- * the whole catalog, so that panel would otherwise open on the newest songs and
- * present them as matches. A `Partial<UseQueryOptions>` would buy that one knob
- * at the price of letting any call site quietly override the `queryKey` this
- * hook's key factory owns, or the `placeholderData` the comment below explains,
- * which is the shape of the bug that comment records.
+ * A page of songs. `enabled` lets the quick search ask for nothing while empty
+ * (an absent `q` means the whole catalog); it is a boolean, not an options bag,
+ * so no caller can override `queryKey` or `placeholderData`.
  */
 export function useSongs(filters: SongFilters, enabled = true) {
   return useQuery({
     queryKey: keys.songs(filters),
     queryFn: () =>
       apiFetch<ListResponse<Song>>(`/api/v1/songs${toQuery({ ...filters })}`),
-    // Backspacing to a previous query should be instant, so results stay fresh
-    // for the global 60s window rather than the 30s this used to ask for — which
-    // was half the default it overrode, achieving the opposite.
+    // Keeps the previous page on screen while the next query loads.
     placeholderData: (previous) => previous,
     enabled,
   });
@@ -87,7 +78,6 @@ export function useGenres() {
   return useQuery({
     queryKey: keys.genres(),
     queryFn: () => apiFetch<ListResponse<Genre>>("/api/v1/genres"),
-    // Genres change rarely and are needed on nearly every screen.
     staleTime: 5 * 60_000,
   });
 }
@@ -98,24 +88,10 @@ function invalidateGenreList(queryClient: QueryClient): Promise<void> {
 }
 
 /**
- * Unsettles everything a genre's *name* is visible through.
- *
- * A rename or a delete does not only change the chip list: a song carries its
- * genres embedded in its own payload, and `SongCard` renders them, so every
- * cached song row, song page and list page still holds the old name — or a
- * label the genre no longer has. All four keys are needed; the list is the one
- * easily forgotten, since a genre is nowhere named on a list and is two hops
- * down inside one, in `songs[].genres`.
- *
- * Creating needs none of this — a brand new genre is on no songs — which is why
- * that path invalidates the chips alone. The asymmetry is stated here rather
- * than per hook because that is how one half of it comes to be forgotten.
- *
- * The promise is returned, and every caller returns it from `onSuccess`, so a
- * mutation settles when the caches do. Voided in one place and returned in
- * another, the same action closes its sheet at two different moments — before
- * the screen has caught up on one path and after it on the other, for no reason
- * a reader of either could see.
+ * Unsettles everything a genre's name is visible through, for rename and delete.
+ * `["list"]` is the easy one to forget: the genre sits in `songs[].genres`.
+ * Creating needs only `invalidateGenreList`. Callers return the promise so the
+ * mutation settles when the caches do.
  */
 function invalidateGenres(queryClient: QueryClient): Promise<unknown> {
   return Promise.all([
@@ -161,14 +137,8 @@ export function useLists(enabled: boolean) {
 }
 
 /**
- * A single list, once the caller's identity is settled.
- *
- * `ready` is required rather than defaulted, because the default anyone would
- * reach for is the broken one: a private list answers 404 to whoever is not its
- * owner, so a request issued before the session has been restored carries no
- * token, reads as a guest, and tells an owner their own list does not exist.
- * Nothing recovers from it either — `apiFetch` retries a 401 with a fresh
- * token, and this is deliberately not a 401.
+ * A single list, once the caller's identity is settled. `ready` is required: a
+ * guest request gets 404 on a private list, which no retry recovers from.
  */
 export function useList(id: string | undefined, ready: boolean) {
   return useQuery({
@@ -188,18 +158,9 @@ export function useSongLists(songId: string | undefined, enabled: boolean) {
 }
 
 /**
- * Unsettles everything an edited song is visible through.
- *
- * The listings are the obvious half. The other is `["list"]`: a list caches the
- * songs on it, so what `SongRow` renders is a copy two hops down in
- * `songs[].songs` — and the line under a title is now built from
- * `recordings[0].performers`, so editing a recording changes a row on every
- * cached list holding that song. This is the same shape as the genre-rename
- * case `invalidateGenres` documents, arrived at from the other direction.
- *
- * Creating needs none of it: a song that has just been added is on no list. The
- * asymmetry is stated here rather than per hook because that is how one half of
- * it comes to be forgotten.
+ * Unsettles everything an edited song is visible through, including `["list"]`,
+ * whose cached `songs[].recordings` feed each row's byline. Creating needs only
+ * `["songs"]`: a new song is on no list.
  */
 function invalidateSongs(queryClient: QueryClient): Promise<unknown> {
   return Promise.all([
@@ -223,11 +184,7 @@ export function useUpdateSong(id: string) {
     mutationFn: (input: SongInput) =>
       apiFetch<Song>(`/api/v1/songs/${id}`, { method: "PATCH", body: input }),
     onSuccess: (song) => {
-      // Keyed on the ref the URL held, which is what `useSong` keyed on — a song
-      // answers at two addresses, but only one of them is ever the one this page
-      // asked under, and nothing navigates between the two forms in-app. Writing
-      // the other as well would leave a second entry holding a whole song, lyrics
-      // included, that nothing ever reads.
+      // Only under the ref the URL held; nothing reads the other address's key.
       queryClient.setQueryData(keys.song(id), song);
       return invalidateSongs(queryClient);
     },
@@ -238,9 +195,7 @@ export function useDeleteSong() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiFetch<void>(`/api/v1/songs/${id}`, { method: "DELETE" }),
-    // `["lists"]` is deliberately left out: a delete does stale the item counts
-    // shown there, which is a gap that predates recordings and is worth closing
-    // on its own rather than as a side effect of this.
+    // Known gap: `["lists"]` item counts go stale on delete.
     onSuccess: () => invalidateSongs(queryClient),
   });
 }
@@ -255,12 +210,8 @@ export function useCreateList() {
 }
 
 /**
- * Copies a list the caller can read into one they own.
- *
- * The name is optional — omitted, the server keeps the original's, which
- * collides only when the caller already has a list by that name and answers 409.
- * The body is still sent as `{}` rather than left off: the API rejects an empty
- * request body outright.
+ * Copies a list the caller can read into one they own. Omitting the name keeps
+ * the original's. The body is `{}`, never absent: the API rejects an empty body.
  */
 export function useCopyList() {
   const queryClient = useQueryClient();
@@ -287,29 +238,16 @@ export function useUpdateList(id: string) {
 }
 
 /**
- * Saves a new order for a list's songs.
- *
- * The reorder is applied to the cache before the request goes out: a drag that
- * snapped back until the server answered would be unusable on a phone. A
- * failure restores the order that was there and refetches, so the list on
- * screen is never a guess the server disagreed with.
- *
- * What the server sends back is deliberately *not* written to the cache. Two
- * quick drags produce two requests whose responses can land in either order,
- * and the older one landing last would reinstate the order the user already
- * moved on from. Since the client sends the complete order it wants, a success
- * carries no information the optimistic write does not already hold.
+ * Saves a new order for a list's songs, optimistically; a failure rolls back
+ * and refetches. The response is not written to the cache: an older reply
+ * landing last would reinstate a superseded order.
  */
 export function useReorderList(id: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    // One list's saves run in series. Unscoped mutations go out in parallel, so
-    // two quick drags race at the *server* as well as in the cache — and the
-    // first request committing last leaves the database holding the order the
-    // user already moved on from, silently, because the reply is discarded and
-    // nothing refetches. A scope defers only the request: onMutate still runs
-    // immediately, so the optimistic write stays instant.
+    // Serializes one list's saves so two drags cannot race at the server.
+    // onMutate still runs immediately.
     scope: { id: `reorder-${id}` },
     mutationFn: (songIds: string[]) =>
       apiFetch<SongList>(`/api/v1/lists/${id}/reorder`, {
@@ -324,11 +262,8 @@ export function useReorderList(id: string) {
       if (previous?.songs) {
         const bySongId = new Map(previous.songs.map((song) => [song.id, song]));
         const reordered = songIds.flatMap((songId) => bySongId.get(songId) ?? []);
-        // Applied only when the payload is a permutation of what is cached. An
-        // id that does not resolve, or a cached song the payload leaves out,
-        // would disappear from the list on screen while the server keeps it —
-        // it pushes anything omitted to the end — and nothing rewrites the
-        // cache on success to put it back.
+        // Only for an exact permutation of the cache; otherwise a song would
+        // vanish on screen while the server keeps it.
         if (reordered.length === songIds.length && reordered.length === previous.songs.length) {
           queryClient.setQueryData<SongList>(keys.list(id), { ...previous, songs: reordered });
         }
@@ -336,10 +271,7 @@ export function useReorderList(id: string) {
       return { previous };
     },
     onError: (_error, _songIds, context) => {
-      // The snapshot is the order from before *this* drag, which a later drag
-      // may already have superseded — so the refetch is what settles the list,
-      // and the rollback only keeps it from sitting on a rejected order in the
-      // meantime.
+      // A later drag may have superseded the snapshot; the refetch settles it.
       if (context?.previous) queryClient.setQueryData(keys.list(id), context.previous);
       void queryClient.invalidateQueries({ queryKey: keys.list(id) });
     },
@@ -355,16 +287,8 @@ export function useDeleteList() {
 }
 
 /**
- * Marks everything that a song's membership of a list is visible through.
- *
- * Both mutations below write the same fact and so must unsettle the same
- * readers of it — the toggle on a song page, the counts on the lists index, and
- * the songs on the list's own page. Shared rather than stated twice, which is
- * how two copies of a rule come to disagree without anything failing: whichever
- * screen was forgotten simply goes stale.
- *
- * Nothing is patched in place. A cache written by hand in two shapes is the
- * drift this avoids; a refetch settles the rows and the counts together.
+ * Unsettles everything a song's membership of a list is visible through. Shared
+ * by every mutation that changes membership, so none goes stale.
  */
 function invalidateMembership(queryClient: QueryClient, listId: string, songId: string): void {
   void queryClient.invalidateQueries({ queryKey: keys.songLists(songId) });
@@ -385,17 +309,8 @@ export function useToggleSongInList(songId: string) {
 }
 
 /**
- * Takes a song out of one list, from that list's own page.
- *
- * The same DELETE as `useToggleSongInList`, keyed the other way round: that one
- * belongs to a song and is handed a list, this one belongs to a list and is
- * handed a song. That is what lets the page hold a single mutation and pass one
- * callback to every row — and what makes `variables` name the row whose removal
- * is in flight, which a hook per row could not.
- *
- * `useReorderList` next door is optimistic because a drag that snaps back until
- * the server replies is unusable on a phone; a row that lingers for one round
- * trip is not, so this one waits for the answer.
+ * Takes a song out of one list, from that list's own page. Keyed by list, so
+ * one mutation serves every row and `variables` names the row in flight.
  */
 export function useRemoveSongFromList(listId: string) {
   const queryClient = useQueryClient();
@@ -411,8 +326,7 @@ export function useUsers(query: string, role: string) {
     queryKey: keys.users(query, role),
     queryFn: () =>
       apiFetch<ListResponse<User>>(`/api/v1/admin/users${toQuery({ q: query, role, limit: 50 })}`),
-    // Without this every debounced keystroke tears the table down to skeletons
-    // and rebuilds it, which useSongs already avoids.
+    // Keeps rows on screen between debounced keystrokes.
     placeholderData: (previous) => previous,
   });
 }
@@ -434,19 +348,9 @@ export function useUpdateProfile() {
 }
 
 /**
- * Stores a profile picture, replacing any previous one.
- *
- * The image goes up as its own bytes rather than as a field on the PATCH above,
- * and both of these answer with the updated user — so, like the display name,
- * the response goes straight into the auth context instead of costing a second
- * request for a record already in hand.
- *
- * The admin listing is unsettled as well, because it caches its own copy of
- * every row's `avatar_updated_at` and `Avatar` decides from that field. Left
- * alone, an admin who removes their picture and then opens the console finds
- * their own row still rendering an image — the old one out of cache on their
- * machine, an empty circle on anybody else's — instead of the initials the
- * removal was supposed to leave behind.
+ * Stores a profile picture, replacing any previous one. Answers with the
+ * updated user. Unsettles `["users"]`, whose cached `avatar_updated_at` is
+ * what `Avatar` decides from.
  */
 export function useUploadAvatar() {
   const queryClient = useQueryClient();

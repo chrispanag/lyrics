@@ -6,15 +6,7 @@ import { SITE_NAME } from "@/lib/site";
 /**
  * The product name beside its mark.
  *
- * Shared so a rename cannot reach one screen and miss the other — that failure
- * is silent, since a sidebar still renders perfectly well carrying last year's
- * name. The mark and the name travel together for the same reason: the auth
- * screens showed the disc alone for a while, which told a new visitor nothing
- * about what they were signing up to.
- *
- * `size` selects a whole class rather than merging over a default: `cn()` is a
- * plain join, so an override would leave both size classes in the list and let
- * CSS source order pick the winner.
+ * `size` selects a whole class: `cn()` is a plain join and cannot override.
  */
 const markSizes = {
   /** Sidebar, where it heads a column of nav labels. */
@@ -24,8 +16,7 @@ const markSizes = {
 };
 
 export function Wordmark({ size = "md" }: { size?: keyof typeof markSizes }) {
-  // inline-flex rather than flex so a `text-center` parent centers it — the
-  // auth screens rely on that, and it costs the sidebar nothing.
+  // inline-flex so a `text-center` parent (the auth screens) centers it.
   return (
     <span className="inline-flex items-center gap-2">
       <Disc3 aria-hidden className={cn(markSizes[size], "text-brand-600")} />

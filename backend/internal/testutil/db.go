@@ -22,9 +22,6 @@ import (
 )
 
 // defaultTestDatabaseURL points at the Compose database on its published port.
-// Integration tests run against a real PostgreSQL because everything they cover
-// — the generated search vector, the denormalization triggers, ts_headline,
-// trigram ranking — lives in the database and cannot be exercised by a fake.
 const defaultTestDatabaseURL = "postgres://lyrics:lyrics@localhost:5433/lyrics?sslmode=disable"
 
 var (
@@ -41,13 +38,8 @@ func baseDatabaseURL() string {
 }
 
 // TestDatabaseURL returns a connection string pointing at a database private to
-// this test binary.
-//
-// `go test ./...` runs packages in parallel, so a single shared database means
-// one package's TRUNCATE deletes another package's fixtures mid-test — which
-// surfaces as deadlocks and missing rows rather than an obvious conflict. The
-// name is derived from the test binary, so it is stable across runs (letting
-// the schema be reused) and distinct across packages.
+// this test binary, since packages run in parallel and TRUNCATE each other's
+// fixtures otherwise. The name is stable across runs.
 func TestDatabaseURL() string {
 	base := baseDatabaseURL()
 
@@ -94,9 +86,8 @@ func ensureDatabase() error {
 		return nil
 	}
 
-	// CREATE DATABASE cannot be parameterized or run inside a transaction. The
-	// name is derived from our own binary path and sanitized to [a-z0-9_], so
-	// interpolating it here is safe.
+	// CREATE DATABASE cannot be parameterized; the name is sanitized to
+	// [a-z0-9_], so interpolating it is safe.
 	if _, err := admin.Exec(`CREATE DATABASE ` + name); err != nil {
 		// A parallel test binary may have won the race; that is fine.
 		if strings.Contains(err.Error(), "already exists") {
@@ -108,10 +99,7 @@ func ensureDatabase() error {
 }
 
 // NewStore returns a store connected to a freshly migrated, empty database.
-//
-// Tests are skipped rather than failed when no database is reachable, so that
-// `go test ./...` stays useful on a machine without Docker running. CI and
-// `make test` both start one first.
+// Tests skip, not fail, when no database is reachable; CI and `make test` start one.
 func NewStore(t *testing.T) *store.Store {
 	t.Helper()
 
@@ -158,11 +146,9 @@ func requireDatabase() error {
 
 // runMigrations brings the test database up to the latest schema.
 //
-// A plain database/sql handle rather than a pgxpool: golang-migrate keeps a
-// dedicated connection for its advisory lock until the instance is closed, and
-// draining a pgxpool while that connection is still checked out blocks forever.
-// The return value is named so the deferred Close below can actually report a
-// failure — assigning to a local `err` in a defer would be discarded.
+// Not a pgxpool: golang-migrate holds a connection for its advisory lock until
+// Close, and draining a pool around that blocks forever. The named return lets
+// the deferred Close report a failure.
 func runMigrations(databaseURL string) (err error) {
 	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
@@ -179,8 +165,7 @@ func runMigrations(databaseURL string) (err error) {
 	if err != nil {
 		return err
 	}
-	// Releases the advisory-lock connection. Both returned errors are reported
-	// so a failure here is not silently swallowed.
+	// Releases the advisory-lock connection.
 	defer func() {
 		if srcErr, dbErr := m.Close(); srcErr != nil || dbErr != nil {
 			err = errors.Join(err, srcErr, dbErr)
@@ -200,12 +185,8 @@ func migrationsDir() string {
 	return filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations")
 }
 
-// truncate empties every table between tests.
-//
-// TRUNCATE ... CASCADE rather than dropping and recreating the schema: the
-// schema includes a text search configuration and an IMMUTABLE function that
-// are comparatively expensive to rebuild, and rebuilding them per test would
-// dominate the runtime.
+// truncate empties every table between tests; cheaper than rebuilding the
+// schema.
 func truncate(t *testing.T, st *store.Store) {
 	t.Helper()
 

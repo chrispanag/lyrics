@@ -89,11 +89,8 @@ describe("BrowsePage", () => {
 });
 
 /*
- * Paging writes `page` into the URL, but the debounced-search effect runs on
- * every param write and clears `page` — so without its guard the two fight and
- * the list snaps straight back to the first page. That failure is silent: the
- * button is enabled, the click is handled, and the same twenty songs come back.
- * Nothing else in the suite renders a second page.
+ * The debounced-search effect re-runs on every param write; without its guard
+ * it clears `page` and the list silently snaps back to the first page.
  */
 describe("BrowsePage pagination", () => {
   it("advances to the next page and stays there", async () => {
@@ -115,9 +112,7 @@ describe("BrowsePage pagination", () => {
     expect(await screen.findByText("Page 2 of 3")).toBeInTheDocument();
     await waitFor(() => expect(offsets.at(-1)).toBe("20"));
 
-    // The regression only shows up once the search effect re-runs off the back
-    // of that param write, so the offset has to survive past the 250ms debounce
-    // rather than merely be correct on the first render after the click.
+    // The offset has to survive past the debounce, not just the first render.
     await act(() => new Promise((resolve) => setTimeout(resolve, 500)));
     expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
     expect(offsets.at(-1)).toBe("20");
@@ -125,14 +120,8 @@ describe("BrowsePage pagination", () => {
 });
 
 /*
- * The picker names the ordering that is actually in effect, which is why it
- * derives its value from the same expression the request does.
- *
- * An absent `sort` is not "unsorted": the listing falls back to relevance with
- * a query and to newest without one. While the picker carried a placeholder
- * option for that fallback, the no-query case offered "Newest first" twice —
- * once as the placeholder, once as itself — and picking either did the same
- * thing. Nothing failed; the menu just read as though it were broken.
+ * The picker names the ordering in effect: an absent `sort` falls back to
+ * relevance with a query and newest without, and each is offered once.
  */
 describe("BrowsePage sort picker", () => {
   const openSortPicker = async () => {
@@ -168,9 +157,7 @@ describe("BrowsePage sort picker", () => {
     expect(sort.value).toBe("relevance");
   });
 
-  // A shared link can outlive the search it was sorted by. Relevance without a
-  // query orders by newest either way, so the picker has to say newest rather
-  // than leave a label the listing no longer honors.
+  // Relevance without a query orders by newest, so the picker says newest.
   it("falls back to newest when a cleared search leaves sort=relevance behind", async () => {
     let requestedSort: string | null = null;
 
@@ -191,10 +178,8 @@ describe("BrowsePage sort picker", () => {
 });
 
 /*
- * Song pages link every credit to `/?person=<id>`. If browse does not read
- * that parameter the click still "works" — it lands on the unfiltered catalog
- * with no error and no chip, which reads as though the artist appears on every
- * song. Nothing else in the suite covers the wire between the two pages.
+ * Song pages link every credit to `/?person=<id>`; unread, the click silently
+ * lands on the unfiltered catalog.
  */
 describe("BrowsePage artist filter", () => {
   it("passes the person parameter through to the API", async () => {
@@ -229,13 +214,8 @@ describe("BrowsePage artist filter", () => {
 });
 
 /*
- * The filter button shares its row with the search field, so its width is the
- * field's width. Written as text beside the icon, the count made the button
- * wider and the field narrower — so applying a filter resized the search box in
- * place, which is the same movement opening a song used to cause. The count is
- * a badge over a square button now, and the size is a `ButtonSize` rather than
- * a `px-*` a caller passes in, since `cn` is a plain join and the winner of two
- * paddings is whichever Tailwind emitted last.
+ * The filter button's width is taken from the search field, so a filter count
+ * must not change it: the count is a badge on a square `size="icon"` button.
  */
 describe("BrowsePage filter button", () => {
   it("keeps its size, and its count, while a filter is active", async () => {
@@ -243,21 +223,15 @@ describe("BrowsePage filter button", () => {
 
     const button = await screen.findByRole("button", { name: /filters/i });
 
-    // `size="icon"` is unconditional, so one direction is enough to say the
-    // count is no longer part of the button's width.
+    // `size="icon"` is unconditional, so one direction is enough.
     expect(button).toHaveClass("size-11");
-    // An aria-label replaces the content it labels, so the badge inside the
-    // button is announced by nobody unless the name carries the number.
+    // `aria-label` hides the badge, so the name must carry the number.
     expect(button).toHaveAccessibleName("Filters (2 active)");
   });
 });
 
-// A genre can be deleted from the admin console while a reader holds a link
-// filtered by it. The songs request still answers — with nothing, since the
-// filter is an EXISTS on a slug that now matches nothing — so a chip rendered
-// only when the genre resolves leaves that reader on an empty catalog with a lit
-// filter button and no way to clear it. Reverting to `activeGenre &&` reads as a
-// null-safety tidy-up, which is why this is pinned from the outside.
+// A link can name a deleted genre; the chip must still render so the filter can
+// be cleared. Do not gate it on `activeGenre &&`.
 describe("BrowsePage filter chips", () => {
   it("can clear a filter whose genre no longer exists", async () => {
     // The catalog knows nothing of `rok`: the genre behind it is gone.
