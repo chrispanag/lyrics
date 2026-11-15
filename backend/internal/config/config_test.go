@@ -107,6 +107,11 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.AdminEmails != nil {
 		t.Errorf("AdminEmails = %q, want none", cfg.AdminEmails)
 	}
+	// Unset locally means rate limits key on the peer address; see CLAUDE.md,
+	// Deployment.
+	if cfg.ClientIPHeader != "" {
+		t.Errorf("ClientIPHeader = %q, want empty", cfg.ClientIPHeader)
+	}
 }
 
 func TestLoadParsesTheEnvironment(t *testing.T) {

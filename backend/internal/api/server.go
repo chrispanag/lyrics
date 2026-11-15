@@ -207,10 +207,16 @@ func queryUUID(q url.Values, name string) (*uuid.UUID, error) {
 }
 
 // storeError maps a data layer error onto an HTTP response.
+//
+// An *httpx.APIError is checked first: it unwraps to its cause, so one carrying
+// a store error would otherwise have the handler's chosen response replaced.
 func storeError(err error, subject string) error {
+	var apiErr *httpx.APIError
 	switch {
 	case err == nil:
 		return nil
+	case errors.As(err, &apiErr):
+		return err
 	case store.IsNotFound(err):
 		return httpx.NotFound("%s was not found.", subject).WithCause(err)
 	case store.IsConflict(err):
@@ -221,10 +227,6 @@ func storeError(err error, subject string) error {
 		// The store's message names internal rules, so it stays on the cause.
 		return httpx.Validation("%s is not valid.", subject).WithCause(err)
 	default:
-		var apiErr *httpx.APIError
-		if errors.As(err, &apiErr) {
-			return err
-		}
 		return httpx.Internal("Unable to complete the request.").WithCause(err)
 	}
 }

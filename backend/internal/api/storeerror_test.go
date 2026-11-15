@@ -73,4 +73,19 @@ func TestStoreError(t *testing.T) {
 			t.Errorf("storeError = %v, want the handler's own error", got)
 		}
 	})
+
+	// An APIError unwraps to its cause, so one carrying a store error must not
+	// be remapped by that cause. errors.Is cannot tell: the replacement would
+	// wrap the original, so the status is what has to be asserted.
+	t.Run("an APIError with a store cause keeps its own status", func(t *testing.T) {
+		chosen := httpx.Forbidden("Not yours.").WithCause(store.ErrNotFound)
+
+		var apiErr *httpx.APIError
+		if !errors.As(storeError(chosen, "Song"), &apiErr) {
+			t.Fatal("storeError did not return an *httpx.APIError")
+		}
+		if apiErr.Status != http.StatusForbidden || apiErr.Message != "Not yours." {
+			t.Errorf("got %d %q, want the handler's 403", apiErr.Status, apiErr.Message)
+		}
+	})
 }

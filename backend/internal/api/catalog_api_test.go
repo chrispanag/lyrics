@@ -190,6 +190,17 @@ func TestDeleteList(t *testing.T) {
 	if resp := h.do("GET", path, ownerTok, nil); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("read after delete = %d, want 404", resp.StatusCode)
 	}
+
+	// A public list is readable by a stranger, which is exactly why being able
+	// to read it must not be mistaken for being allowed to delete it.
+	public := h.seedList(ownerTok, map[string]any{"name": "Shared", "is_public": true})
+	publicPath := "/api/v1/lists/" + public.ID.String()
+	if resp := h.do("DELETE", publicPath, strangerTok, nil); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("stranger delete of a public list = %d, want 404", resp.StatusCode)
+	}
+	if resp := h.do("GET", publicPath, strangerTok, nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("public list after a stranger's delete = %d, want it still readable", resp.StatusCode)
+	}
 }
 
 func TestAdminDeletesUser(t *testing.T) {

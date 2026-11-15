@@ -54,6 +54,10 @@ func TestImportWritesSongWithRelations(t *testing.T) {
 		t.Fatalf("import: %v", err)
 	}
 
+	// QueryRow alone would silently pick one of several rows.
+	if n := count(t, st, `SELECT count(*) FROM songs`); n != 1 {
+		t.Fatalf("songs = %d, want 1", n)
+	}
 	var id uuid.UUID
 	if err := st.Pool().QueryRow(context.Background(), `SELECT id FROM songs`).Scan(&id); err != nil {
 		t.Fatalf("read the one imported song: %v", err)
@@ -165,18 +169,31 @@ func TestImportConvergesPeopleAndKeepsCuratedGenres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateGenre: %v", err)
 	}
+	// The accented spelling exists only in the database. Were it also in the
+	// input, the second spelling would converge in the importer's own cache
+	// (foldKey) and never reach the ON CONFLICT (normalized_name) path.
+	composer, err := st.UpsertPerson(ctx, "Μάνος Χατζιδάκις")
+	if err != nil {
+		t.Fatalf("UpsertPerson: %v", err)
+	}
 
-	// The same composer with and without accents, and the genre in capitals:
-	// both fold onto the existing rows.
+	// The composer without accents and in capitals, and the genre in capitals:
+	// each folds onto the existing row.
 	if err := importLines(t, st, options{},
-		`{"title":"One","credits":[{"name":"Μάνος Χατζιδάκις","role":"composer"}],"genres":["ΕΝΤΕΧΝΟ"]}`,
-		`{"title":"Two","credits":[{"name":"Μανος Χατζιδακις","role":"composer"}],"genres":["Έντεχνο"]}`,
+		`{"title":"One","credits":[{"name":"Μανος Χατζιδακις","role":"composer"}],"genres":["ΕΝΤΕΧΝΟ"]}`,
+		`{"title":"Two","credits":[{"name":"ΜΑΝΟΣ ΧΑΤΖΙΔΑΚΙΣ","role":"composer"}],"genres":["Έντεχνο"]}`,
 	); err != nil {
 		t.Fatalf("import: %v", err)
 	}
 
 	if n := count(t, st, `SELECT count(*) FROM people`); n != 1 {
 		t.Errorf("people = %d, want 1", n)
+	}
+	if n := count(t, st, `SELECT count(*) FROM song_credits WHERE person_id = $1`, composer.ID); n != 2 {
+		t.Errorf("songs credited to the existing composer = %d, want 2", n)
+	}
+	if got, err := st.GetPerson(ctx, composer.ID); err != nil || got.Name != composer.Name {
+		t.Errorf("composer = %+v (%v), want the stored spelling %q kept", got, err, composer.Name)
 	}
 	genres, err := st.ListGenres(ctx)
 	if err != nil {
