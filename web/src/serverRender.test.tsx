@@ -2,10 +2,16 @@
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { App } from "./App";
+import { keys } from "@/api/hooks";
+import { AuthProvider } from "@/auth/AuthProvider";
+import { getAccessToken } from "@/auth/session";
 import { ListSongSwipe } from "@/components/ListSongNav";
 import { DEFAULT_FONT_SIZE, storeFontSize, storedFontSize } from "@/lib/fontSize";
 import type { ListPosition } from "@/lib/listContext";
 import { storeTheme, storedTheme } from "@/lib/theme";
+import { makeSong, makeUser } from "@/test/handlers";
+import { testQueryClient } from "@/test/providers";
 import { TestProviders } from "@/test/TestProviders";
 
 /*
@@ -15,8 +21,23 @@ import { TestProviders } from "@/test/TestProviders";
  *
  * The theme and font-size cases only pin that those modules are safe to call on
  * a server; the swipe case, with its spy, is the one that constrains a render.
- * Named sites only; a hydration check would catch the rest.
+ * Named sites only; `hydration.test.tsx` compares a server render against the
+ * browser's for the rest. The screens below only have to render here at all.
  */
+
+// The SDK's own guard, made strict: whether a real build trips it on
+// construction or only on first use varies, and a server must do neither.
+const sdk = vi.hoisted(() => ({ built: 0 }));
+vi.mock("@prelude.so/js-sdk/session", () => ({
+  PrldSessionClient: class {
+    constructor() {
+      sdk.built += 1;
+      if (typeof window === "undefined") {
+        throw new Error("@prelude.so/js-sdk must be used in a browser-like environment");
+      }
+    }
+  },
+}));
 
 const POSITION: ListPosition = {
   listName: "Rebetika favourites",
@@ -66,5 +87,44 @@ describe("rendering without a browser", () => {
 
     expect(html).toBe("");
     expect(getItem).not.toHaveBeenCalled();
+  });
+
+  // Importing it is the whole registration, so a server imports it too.
+  it("imports the session without building the SDK, and answers as a guest", async () => {
+    expect(await getAccessToken()).toBeNull();
+    expect(sdk.built).toBe(0);
+  });
+
+  const song = makeSong();
+
+  it.each([
+    { screen: "the catalog and its shell", route: "/" },
+    { screen: "a song page", route: `/songs/${song.slug}` },
+    { screen: "the profile", route: "/profile" },
+  ])("renders $screen", ({ route }) => {
+    const client = testQueryClient();
+    client.setQueryData(keys.song(song.slug), song);
+
+    const html = renderToString(
+      <TestProviders queryClient={client} route={route} user={makeUser()}>
+        <App />
+      </TestProviders>,
+    );
+
+    expect(html).toContain("Open menu");
+  });
+
+  // A server knows no session: guest chrome, whatever a browser remembers.
+  it("renders the real auth provider as a guest", () => {
+    const html = renderToString(
+      <TestProviders route="/">
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </TestProviders>,
+    );
+
+    expect(html).toContain("Sign in");
+    expect(sdk.built).toBe(0);
   });
 });

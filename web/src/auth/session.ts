@@ -21,11 +21,24 @@ export const OTP_LOGIN_CONFIG_ID = (
   process.env.NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID ?? ""
 ).trim();
 
-/** The Prelude session client. A singleton: a second instance would disagree about the session. */
-export const sessionClient = new PrldSessionClient({
-  domain: SESSION_DOMAIN,
-  ...(SDK_KEY ? { sdkKey: SDK_KEY } : {}),
-});
+let client: PrldSessionClient | undefined;
+
+/**
+ * The Prelude session client, built on first use. A singleton: a second
+ * instance would disagree about the session. Lazy so this module imports on a
+ * server, where it refuses by name rather than leaving the SDK to fail at
+ * some later call.
+ */
+export function sessionClient(): PrldSessionClient {
+  if (typeof window === "undefined") {
+    throw new Error("The Prelude session client is browser-only; a server render is a guest.");
+  }
+  client ??= new PrldSessionClient({
+    domain: SESSION_DOMAIN,
+    ...(SDK_KEY ? { sdkKey: SDK_KEY } : {}),
+  });
+  return client;
+}
 
 /**
  * Returns the current access token, or null when signed out. `refresh()` is
@@ -35,17 +48,19 @@ export const sessionClient = new PrldSessionClient({
 export async function getAccessToken(forceRefresh?: boolean): Promise<string | null> {
   try {
     if (forceRefresh) {
-      await sessionClient.invalidateCache();
+      await sessionClient().invalidateCache();
     }
-    const { user: session } = await sessionClient.refresh();
+    const { user: session } = await sessionClient().refresh();
     return session?.accessToken ?? null;
   } catch {
-    // No session, or the refresh token has been revoked.
+    // No session, the refresh token has been revoked, or this is a server,
+    // where `sessionClient` refuses: a server render is a guest.
     return null;
   }
 }
 
 // At import time, never from an effect: child queries fetch before the
 // provider's effects run, and would go out as a guest (a private list 404s to
-// its owner, with no 401 to retry).
+// its owner, with no 401 to retry). Registered on a server too, where it
+// answers null without touching the SDK.
 setTokenProvider(getAccessToken);

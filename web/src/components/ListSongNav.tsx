@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { ChevronLeft, ChevronRight, ListMusic } from "lucide-react";
 
 import { cardChrome } from "./cardStyles";
@@ -7,6 +7,7 @@ import type { ListPosition } from "@/lib/listContext";
 import { FIELDS, modalIsOpen } from "@/lib/modal";
 import { startsClearOfEdges, swipeDirection } from "@/lib/swipe";
 import { Link, useRouter } from "@/lib/navigation";
+import { useStoredState } from "@/lib/useStoredState";
 
 /*
  * Moving through a list without leaving it: the bar's arrows (links, so a
@@ -268,14 +269,9 @@ function spendHint(): void {
  * spent, and after the fade.
  */
 function useSwipeHint(): [boolean | null, (element: HTMLElement | null) => void] {
-  // Starts spent and reads storage in a layout effect: this decides markup, so
-  // reading it during render would mismatch a server render. Read once, not
-  // subscribed to: spending the hint must not unmount the mark mid-fade.
-  const [unspent, setUnspent] = useState(false);
-  useLayoutEffect(() => {
-    // biome-ignore lint/nursery/useReactCompiler: read once before paint, for the reason above.
-    setUnspent(hintUnspent());
-  }, []);
+  // Starts spent: this decides markup, so a server must answer the same. Read
+  // once, not subscribed to: spending the hint must not unmount the mark mid-fade.
+  const [unspent] = useStoredState(false, hintUnspent);
   const [hinting, setHinting] = useState(false);
   const [over, setOver] = useState(false);
   // State, not a ref: the mark can mount after the first render (a list gaining

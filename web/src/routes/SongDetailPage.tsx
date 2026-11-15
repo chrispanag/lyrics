@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
@@ -31,6 +31,7 @@ import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { recordingCount, songCount } from "@/lib/format";
 import { Link, useParams, useRouter, useSearchParams } from "@/lib/navigation";
+import { useStoredState } from "@/lib/useStoredState";
 import { RecordingsSheet } from "@/components/RecordingsSheet";
 
 /**
@@ -73,15 +74,9 @@ function SongArticle() {
   const [listSheetOpen, setListSheetOpen] = useState(false);
   const [recordingsOpen, setRecordingsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // Starts at the default and reads storage in a layout effect, before paint:
-  // reading it while rendering would mismatch a server render. See CLAUDE.md,
-  // "The Next.js shell". State rather than a store, since the size is also the
-  // reader's own state and a store would need a writer of its own.
-  const [fontSizeIndex, setFontSizeIndex] = useState(DEFAULT_FONT_SIZE);
-  useLayoutEffect(() => {
-    // biome-ignore lint/nursery/useReactCompiler: read once before paint, for the reason above.
-    setFontSizeIndex(storedFontSize());
-  }, []);
+  // State rather than a store, since the size is also the reader's own state
+  // and a store would need a writer of its own.
+  const [fontSizeIndex, setFontSizeIndex] = useStoredState(DEFAULT_FONT_SIZE, storedFontSize);
 
   const setFontSize = (index: number) => {
     const clamped = Math.max(0, Math.min(FONT_SIZES.length - 1, index));

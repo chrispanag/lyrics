@@ -468,8 +468,9 @@ Everything below follows from that one fact, and none of it announces itself.
   hunting a Prelude outage. The provider throws with
   `RESET_UNCONFIGURED_ERROR` as its `name` and the page matches on it, the way it
   already matches `BadCheckCodeError`. The constant lives in `auth/context.ts`
-  because the page must not import `auth/session` — that module builds the SDK
-  client at import time, which is what keeps the auth screens testable.
+  because the page must not import `auth/session` — that module registers the
+  token provider at import time and its SDK client reaches Prelude, which is what
+  keeps the auth screens testable.
 
 Never confirmed end to end: a correct code through to a written password. It
 needs a mailbox someone can read, exactly like email verification.
@@ -705,22 +706,14 @@ no application code — but while it stands, these are the parts holding it up.
 - **`AppRoot` is imported through `dynamic(..., { ssr: false })`, and that is
   what makes every rule below the shell keep applying unchanged.** The providers,
   `BrowserRouter`, the module-scope `QueryClient` and every route run in the
-  browser and only there, exactly as they did under Vite — so the module-scope
-  `localStorage` reads, the import-time `setTokenProvider` and the `useState`
-  initializers that read storage are still safe. Remove the `ssr: false` and
-  they are not; that is the first work any server-rendering change has to do,
-  and the render *bodies* are now most of the way there rather than all of it.
-  Three reads no longer decide a server's markup — the reader's font size and the
-  swipe hint's unspent flag, taken in layout effects, and
-  `window.location.origin` on a list page, read through `useSyncExternalStore`
-  with an empty server snapshot. Two are
-  knowingly left: `ProfilePage`'s `useState(storedTheme)`, which is wrapped
-  rather than moved, and `AuthProvider`'s `useState(storedUser)`, which is the
-  larger of the two and the one to do first — a server renders guest chrome
-  while the client's first render paints the remembered profile, which is a
-  mismatch on every signed-in load rather than on one screen. The layout-effect
-  shape below costs that snapshot nothing, since it runs before paint. Do not
-  read this list as an inventory; grep for the reads. `ssr: false` is legal only inside a client component,
+  browser and only there, exactly as they did under Vite. What is left between
+  the app and taking that flag off is no longer in the render bodies or the
+  import graph — every stored value is read after a server-shaped first render,
+  `auth/session` imports on a server, and `src/hydration.test.tsx` holds a
+  server render against the browser's — but in the shell itself: `AppRoot`'s
+  module-scope `QueryClient`, which on a server would be one cache shared by
+  every request, and `BrowserRouter`, which reads `window` to build its
+  history. Both belong to the switch-over, not to a screen. `ssr: false` is legal only inside a client component,
   which is why `app/client.tsx` exists between a page and `AppRoot` rather than
   the page importing it directly. It sits beside the route folders rather than
   inside one because three pages render it now: the catch-all, `/songs/[id]` and
@@ -733,27 +726,26 @@ no application code — but while it stands, these are the parts holding it up.
   produce and takes the stored answer in a `useLayoutEffect` — before the
   browser paints, so on the client-only routes these are today nothing changes
   visually at all. The reader's font size (`lib/fontSize.ts`, extracted from
-  `SongDetailPage` so a spec can call it without the page's import graph) and
-  `useSwipeHint`'s `unspent` are the two, and the second is the one that
-  genuinely decides markup: `ListSongSwipe` returns null outright while the hook
+  `SongDetailPage` so a spec can call it without the page's import graph),
+  `useSwipeHint`'s `unspent`, the profile's theme switch and `AuthProvider`'s
+  remembered user are the four, and the hint is the one that decides markup
+  most abruptly: `ListSongSwipe` returns null outright while the hook
   answers null, so the observed box either exists or does not, and starting
   spent is what makes both sides agree. Nothing is lost by that — the mark waits
   for an IntersectionObserver before it shows anything, and `md:hidden` still
   denies the box any geometry at a desk, so the single showing cannot be spent
-  there. Both layout effects carry a `useReactCompiler` suppression saying why,
-  and are the only two storage reads that should: the shape suits a value the
-  reader also writes, or one read exactly once. (The rule reaches further than
+  there. The shape is `lib/useStoredState.ts`, so its compiler suppression and
+  its reason are written once; `AuthProvider` alone writes it out inline,
+  because the compiler lint cannot see a custom hook's setter as stable and
+  every one of the provider's callbacks calls it. These are the only storage
+  reads that should take it: the shape suits a value the reader also writes, or
+  one read exactly once. (The rule reaches further than
   this shape, so a grep also finds `BrowsePage`'s URL sync and `AuthProvider`'s
   `logout`, each with its own reason.) `storedTheme`/`storeTheme` and
-  `ListsPages`'s share URL are the other two. The first needed only the wrap;
-  the second is a `useSyncExternalStore` read whose server snapshot is `""`, the
-  form for a browser value with no writer at all. Nothing renders on a
-  server while `ssr: false` stands, so both are fixed for the module graph
-  rather than for a path anything is on yet. What the wrap does *not* finish is
-  `ProfilePage`'s `useState(storedTheme)`, which is still a stored value read
-  while rendering and wants the same layout-effect shape — it answers "system"
-  there rather than throwing, so it is the mismatch and not the crash, and the
-  theme radio group is the markup that disagrees. The catch-all has no per-route
+  `ListsPages`'s share URL are the other two. The first needed only the wrap,
+  since only the theme switch draws it and that reads it in a layout effect; the
+  second is a `useSyncExternalStore` read whose server snapshot is `""`, the
+  form for a browser value with no writer at all. The catch-all has no per-route
   opt-out, so "that screen is client-only" lasts exactly as long as
   `ssr: false` does. `src/serverRender.test.tsx` is what
   says so, and it has to be `// @vitest-environment node` — the first spec here
@@ -763,7 +755,7 @@ no application code — but while it stands, these are the parts holding it up.
   passes the whole suite and fails only when the `ssr: false` comes off. Which
   is also why `vitest.setup.ts` guards its stubs on `typeof window`: the setup
   file runs for that spec too. **It names its sites rather than catching them**,
-  and its four cases are not equally strong: every one of these reads is
+  and its storage cases are not equally strong: every one of these reads is
   wrapped now, so none of them can throw there, and asserting `storedTheme` and
   `storedFontSize` answer their defaults pins that the modules are safe to
   *call* on a server rather than that nothing calls them mid-render. The one
@@ -773,10 +765,28 @@ no application code — but while it stands, these are the parts holding it up.
   call is the only thing left that a `catch` cannot hide. Both directions are
   pinned — the mark's box appears if the read moves back into the render body,
   and the spy fires even when it does not, which is the case with the hint
-  already spent. What would catch the sites nobody named is a hydration check — render,
-  seed the storage, `hydrateRoot`, assert React recovered from nothing — and it
-  belongs with the work that drops `ssr: false`, since the two reads it would
-  newly find are the two left above.
+  already spent. The same spec renders the catalog, a song page, the profile and
+  the real `AuthProvider` through the route table, which is what pins that
+  importing `auth/session` builds no SDK client: its stub of the SDK throws
+  without a `window`, stricter than the real one, which constructs under Node
+  and fails only on first use — so the strict stub stands for whichever build
+  trips it earlier.
+- **`src/hydration.test.tsx` is the check for the sites nobody named.** It
+  renders a screen to a string the way a server would — under jsdom, but with
+  every `localStorage.getItem` refusing, which each wrapped read answers with its
+  default — then seeds storage and `hydrateRoot`s the same tree, failing on
+  anything React says: `onRecoverableError` for a text or structure mismatch,
+  which discards the server's HTML, and `console.error` for an *attribute* one,
+  which React 19 only warns about in development and never patches — the theme
+  switch's `aria-checked` was that kind, and listening for recoverable errors
+  alone passes it. The data comes from mounting the screen once against MSW and
+  dehydrating the cache, the shape `dehydratedState` already reaches `AppRoot`
+  in, so the comparison is of content rather than of two loading skeletons. The
+  font size, the swipe hint, the theme and the remembered user each fail it when
+  read back into a render body; the stubbed catalog case has no fix behind it
+  and is there for the next one. jsdom is what lets one spec do both halves, and
+  is also why it cannot see a read of `window` throwing — `serverRender.test.tsx`
+  is the other half.
 - **The theme is applied by an inline script in `app/layout.tsx`, which is a
   hand-written copy of `applyTheme(storedTheme())` and of the `lyrics:theme`
   key.** Nothing bundled runs early enough: the script has to execute while the
@@ -1201,7 +1211,11 @@ implement, which is why the parts below look the way they do.
   visible case — a private list returning **404 to its own owner** on every page
   load, and nothing recovers, because `apiFetch` retries a 401 with a fresh
   token and this is deliberately not a 401. `session.test.ts` pins it by
-  importing the module with no React in sight. The unauthorized *handler* stays
+  importing the module with no React in sight. What is registered is not the
+  SDK client: that is built on first use, because the SDK refuses to run without
+  a browser and a server imports this module too, where the provider answers
+  `null` without touching it — a server render is a guest by construction. The
+  same spec pins that importing builds nothing. The unauthorized *handler* stays
   in an effect on purpose: it needs React state, and no response can 401 before
   the first effects have flushed.
 - **`AuthProvider` opens on the last session this browser had, read from
@@ -1215,6 +1229,19 @@ implement, which is why the parts below look the way they do.
   and it is safe for the same reason `hasRole` is: the server is the authority,
   so a stale role costs one paint of chrome whose every action is refused. No
   token is ever kept there; the SDK owns those, and `auth/session` says so.
+  It is read in a `useLayoutEffect` rather than a `useState` initializer, which
+  is the server-rendering rule below under "The Next.js shell" applied to the
+  largest case of it: a server has no snapshot, so read while rendering it
+  mismatches every signed-in load. Before paint, so the browser still never
+  shows a guest. What a server-rendered document carries is guest chrome until
+  hydration — Sign in, no Lists, no Add song — which is what a reader with
+  JavaScript off or slow to arrive sees, and what a crawler indexes; that is the
+  right answer for both, and the cost is only that the HTML is not the page a
+  signed-in reader ends up on. The first commit is a guest too, so the `[user]`
+  write below erases the snapshot for a beat after it has been read, and the
+  next commit writes it back. Gating that write on `loading` looks like the
+  tidy fix and is not: a 401 during the restore then leaves a dead session
+  remembered on the machine until a later load repairs it.
   What the snapshot must not do is move anybody, which is why **`loading` keeps
   its exact meaning and every redirect reads it first**: `VerificationGate`, the
   sign-in and sign-up screens' "already signed in" redirects, and
