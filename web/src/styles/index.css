@@ -215,10 +215,16 @@
        a box that cannot scroll that way whatever `overscroll-behavior` says —
        on the dim, or on the sheet outside its own scroller. A scroll container
        resets `touch-action` for what is inside it, so the sheet's list still
-       scrolls (see `MobileNavDrawer`). */
-    touch-action: pan-x;
+       scrolls (see `MobileNavDrawer`). `pinch-zoom` for the reason
+       `[data-dialog-dismiss]` keeps it: a reader who needs to zoom must still
+       be able to. */
+    touch-action: pan-x pinch-zoom;
     scrollbar-width: none;
     scroll-snap-type: x mandatory;
+  }
+  /* WebKit before `scrollbar-width`, as for `dialog-viewport`. */
+  .nav-drawer::-webkit-scrollbar {
+    display: none;
   }
   /* Only while open: a `display` on the class would beat the UA's
      `display: none` for a closed dialog. */

@@ -1235,8 +1235,9 @@ each of them is written down.
   sliding in. **iOS Safari must not scroll the page behind it** — the sheet's
   problem below, met the same way: the dialog is a scroller that always
   scrolls, sideways here, so `overscroll-behavior: none` holds. Safari ignores
-  it on a box that cannot scroll the way a swipe goes, so the dialog is `touch-action: pan-x`
-  (vertical swipes on the dim and the sheet's padding are no pan at all), and
+  it on a box that cannot scroll the way a swipe goes, so the dialog is `touch-action: pan-x pinch-zoom`
+  (vertical swipes on the dim and the sheet's padding are no pan at all, while
+  a pinch still zooms, as on a sheet's dismiss layer), and
   the sheet's list is a scroller that always overflows by a pixel with
   `overscroll-behavior-y: contain` — `-y` only, so a sideways swipe still
   chains out to the drawer. A scroll container resets `touch-action` for what is

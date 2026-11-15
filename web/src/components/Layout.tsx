@@ -192,11 +192,6 @@ function DesktopSidebar() {
   );
 }
 
-/**
- * Scrolls the drawer to its closed stop. `auto` defers to the stylesheet:
- * smooth unless motion is reduced. Marks it leaving, so a slide in still
- * waiting on its frames stands down.
- */
 /** The drawer's vertical scrolling keys: which way, and by a line or a page. */
 const VERTICAL_KEYS: Record<string, [direction: 1 | -1, page: boolean]> = {
   ArrowDown: [1, false],
@@ -206,9 +201,24 @@ const VERTICAL_KEYS: Record<string, [direction: 1 | -1, page: boolean]> = {
   " ": [1, true],
 };
 
-function slideOutOf(track: HTMLElement | null, leaving: RefObject<boolean>) {
+/**
+ * Scrolls the drawer to its closed stop. `auto` defers to the stylesheet:
+ * smooth unless motion is reduced. Marks it leaving, so a slide in still
+ * waiting on its frames stands down.
+ *
+ * A sheet that has not reached the screen yet is closed at once instead: the
+ * observer only closes on the way *off* the screen, so a scroll that never
+ * brought it on would leave an invisible modal over the page.
+ */
+function slideOutOf(
+  track: HTMLDialogElement | null,
+  leaving: RefObject<boolean>,
+  shown: RefObject<boolean>,
+) {
+  if (!track?.open) return;
   leaving.current = true;
-  track?.scrollTo({ left: track.offsetWidth, behavior: "auto" });
+  if (shown.current) track.scrollTo({ left: track.offsetWidth, behavior: "auto" });
+  else track.close();
 }
 
 /**
@@ -254,7 +264,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
-  const slideOut = () => slideOutOf(dialog.current, leaving);
+  const slideOut = () => slideOutOf(dialog.current, leaving, shown);
 
   // An open dialog is closed before it is unmounted, so `close()` can still
   // hand focus back. A layout cleanup, since that runs before React removes it.
@@ -305,10 +315,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
 
     if (!open) {
       // A navigation or the breakpoint rather than the drawer's own dismissal.
-      // A sheet that never reached the screen has nothing to slide.
-      if (!element.open) return;
-      if (shown.current) slideOutOf(element, leaving);
-      else element.close();
+      slideOutOf(element, leaving, shown);
       return;
     }
 

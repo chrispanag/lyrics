@@ -167,8 +167,12 @@ describe("Mobile navigation drawer", () => {
     for (const key of keys) expect(taken(key)).toBe(false);
 
     await openDrawer(user);
+    const scrolls = vi.mocked(Element.prototype.scrollBy);
+    scrolls.mockClear();
 
     for (const key of keys) expect(taken(key)).toBe(true);
+    // Home and End go through `useHomeEndInside`; the other four scroll the list.
+    expect(scrolls).toHaveBeenCalledTimes(4);
   });
 
   // Where it starts, before the slide in, is off-screen too.
@@ -180,6 +184,19 @@ describe("Mobile navigation drawer", () => {
     slidOut();
 
     expect(modalIsOpen()).toBe(true);
+  });
+
+  // The observer only closes on the way off the screen, so a dismissal before
+  // the sheet arrived would otherwise leave an invisible modal over the page.
+  it("closes at once when dismissed before the sheet has slid in", async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    await user.click(trigger());
+    await user.keyboard("{Escape}");
+
+    expect(modalIsOpen()).toBe(false);
+    await waitFor(() => expect(trigger()).toHaveAttribute("aria-expanded", "false"));
   });
 
   // Browse is the current screen, so the pathname does not change.
