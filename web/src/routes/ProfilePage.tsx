@@ -258,8 +258,8 @@ function PictureButton({
 }
 
 /**
- * Change or remove the picture. A `Sheet`, so it gets Escape, scroll lock and
- * the modal marking. Both actions close it as they start, so failures show on
+ * Change or remove the picture. A `Sheet`, so it gets Escape and an inert page
+ * behind it. Both actions close it as they start, so failures show on
  * the page; while busy it disables its own controls, since the trigger does not.
  */
 function PictureMenu({

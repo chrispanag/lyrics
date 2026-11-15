@@ -111,6 +111,57 @@
   }
 }
 
+/* What keeps the page still under a modal `<dialog>`, in every engine, with no
+   lock on `<body>`. `inert` stops presses, not scrolling: a wheel, drag or key
+   over the page's side of a modal still scrolls the page.
+
+   The containment the platform offers for that — `overscroll-behavior` on the
+   dialog and on a `::backdrop` given `overflow: hidden` — only holds in Safari
+   on a container that *really* scrolls, so these three make one that always
+   does. The dialog covers the viewport, transparent, and is the scroll
+   container; its track is a pixel taller than it, so it can always scroll and
+   `overscroll-behavior: none` always applies, and nothing a gesture starts
+   inside the dialog reaches the page. The `::backdrop` is still what draws the
+   dimming, but it is behind the dialog now and never touched. The panel is the
+   caller's, inside the track and positioned (so it stacks above the dismiss
+   layer); `sticky bottom-0` keeps a bottom sheet on the viewport's edge rather
+   than the track's, a pixel below it.
+
+   `[data-dialog-dismiss]` is the dimmed area as an element: a pan that starts
+   on it is not a scroll at all (`touch-action`, which still allows a pinch),
+   and a press and release on it is light dismiss, which `useDialog` reads off
+   the attribute. */
+@utility dialog-viewport {
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  background: transparent;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+@utility dialog-track {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100% + 1px);
+}
+@layer base {
+  [data-dialog-dismiss] {
+    position: absolute;
+    inset: 0;
+    /* Not `none`: a reader who needs to zoom must still be able to. */
+    touch-action: pinch-zoom;
+  }
+}
+
 /* For a search field that draws its own clear button — see `SearchField`.
    WebKit and Chromium put a cancel button inside `type="search"` themselves,
    landing right where the component renders its own: two crosses side by side,

@@ -5,8 +5,7 @@
  * handed back to the opener, Escape as a `cancel` then a `close`, and that
  * `close` event arriving a task later.
  *
- * Not modeled: the inert page, the top layer, and `closedby` — the pointer
- * fallback in lib/modal.ts is what runs here.
+ * Not modeled: the inert page and the top layer.
  */
 
 const FOCUSABLE =

@@ -1,6 +1,5 @@
 import {
   type MouseEvent,
-  type PointerEvent,
   type RefObject,
   type SyntheticEvent,
   useEffect,
@@ -32,8 +31,8 @@ export function modalIsOpen(): boolean {
 }
 
 /**
- * The `overflow: hidden` scroll lock on `<body>`, which a modal `<dialog>` does
- * not provide.
+ * The `overflow: hidden` scroll lock on `<body>`, for the drawer only. A modal
+ * `<dialog>` is held still by `.dialog-viewport` in `index.css` instead.
  */
 function useScrollLock(open: boolean) {
   useEffect(() => {
@@ -96,32 +95,50 @@ export function useModal({
   return open ? { role: "dialog", "aria-modal": true } : {};
 }
 
+/**
+ * Fields, which own their own keys: arrows move a caret, and Home and End pick
+ * a `<select>`'s first and last option as well as moving one.
+ */
+export const FIELDS = "input, textarea, select, [contenteditable]";
+
 /** Props for the `<dialog>` that `useDialog` drives. */
 interface DialogProps {
   ref: RefObject<HTMLDialogElement | null>;
-  closedby: "any";
   onClose: (event: SyntheticEvent<HTMLDialogElement>) => void;
-  onPointerDown: (event: PointerEvent<HTMLDialogElement>) => void;
   onClick: (event: MouseEvent<HTMLDialogElement>) => void;
 }
 
-const lightDismissIsNative =
-  typeof HTMLDialogElement !== "undefined" && "closedBy" in HTMLDialogElement.prototype;
+function scrollsY(el: Element): el is HTMLElement {
+  if (!(el instanceof HTMLElement)) return false;
+  const { overflowY } = getComputedStyle(el);
+  return (overflowY === "auto" || overflowY === "scroll") && el.scrollHeight > el.clientHeight;
+}
 
-function outside(event: MouseEvent<HTMLDialogElement>): boolean {
-  const r = event.currentTarget.getBoundingClientRect();
-  return (
-    event.clientX < r.left ||
-    event.clientX > r.right ||
-    event.clientY < r.top ||
-    event.clientY > r.bottom
-  );
+/**
+ * The scroller Home or End was meant for: the nearest one around `target`, or
+ * else the dialog's first — focus on Close in the header, or on `<body>` after
+ * a press on plain text, is in no scroller at all. Never the dialog itself,
+ * whose single pixel of travel is only there to hold the page still.
+ */
+function scrollerFor(target: EventTarget | null, dialog: HTMLDialogElement): HTMLElement | null {
+  if (target instanceof Element && dialog.contains(target)) {
+    for (let el: Element | null = target; el && el !== dialog; el = el.parentElement) {
+      if (scrollsY(el)) return el;
+    }
+  }
+  for (const el of dialog.querySelectorAll("*")) {
+    if (scrollsY(el)) return el;
+  }
+  return null;
 }
 
 /**
  * Opens a `<dialog>` with `showModal()` while `open` holds, and reports every
- * close the browser makes on its own — Escape, the back gesture, the backdrop —
- * through `onClose`, so the prop stays the one authority.
+ * close the browser makes on its own — Escape, the back gesture, a press on the
+ * dimmed area — through `onClose`, so the prop stays the one authority. The
+ * element is a `.dialog-viewport` around a `.dialog-track` holding a
+ * `[data-dialog-dismiss]` layer and the panel (`index.css`), which is what
+ * keeps the page behind it from scrolling.
  *
  * The dialog has to be mounted while closed for `close()` to be what ends it:
  * that is what hands focus back to the opener. Unmounting an open dialog
@@ -145,9 +162,6 @@ export function useDialog({
   // Whether the prop still wants the dialog open: a `close` event after the
   // prop has already said so is the echo of our own `close()`, not news.
   const wanted = useRef(false);
-  const pressedOutside = useRef(false);
-
-  useScrollLock(open);
 
   useLayoutEffect(() => {
     const dialog = ref.current;
@@ -164,26 +178,44 @@ export function useDialog({
     };
   }, [open]);
 
+  // WebKit sends Home and End to the document wherever focus is, so the page
+  // behind jumps to an end; taken here and given to the scroller they were
+  // meant for. On the document rather than the dialog, because a press on plain
+  // text leaves focus on `<body>`, where a key never passes through the dialog.
+  // A field keeps them: a caret, or a `<select>`'s first and last option.
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!open || !dialog) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Home" && event.key !== "End") return;
+      // Shift extends a selection, which is the reader's, not a scroll.
+      if (event.defaultPrevented || event.shiftKey) return;
+      if (event.target instanceof Element && event.target.closest(FIELDS)) return;
+      event.preventDefault();
+      const scroller = scrollerFor(event.target, dialog);
+      scroller?.scrollTo({ top: event.key === "Home" ? 0 : scroller.scrollHeight });
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   const props: DialogProps = {
     ref,
-    // Light dismiss where supported; Safari gets the pointer fallback below.
-    closedby: "any",
     // The event is a queued task, so it can also land after a reopen — Strict
     // Mode closes and reopens on mount — and an open dialog is not news either.
     onClose: (event) => {
       if (wanted.current && !event.currentTarget.open) onClose();
     },
-    // By position, not `event.target`: the dialog is also the target of its own
-    // padding. Press *and* release outside, so a selection drag ending on the
-    // backdrop does not dismiss. Closed on the `click`, not on `pointerup`: iOS
-    // hit-tests the tap's click after the pointer is released, so a dialog gone
-    // by then lets that click land on whatever the backdrop was covering.
-    onPointerDown: (event) => {
-      pressedOutside.current = !lightDismissIsNative && outside(event);
-    },
+    // Light dismiss. The dialog covers the viewport (`.dialog-viewport`), so
+    // the browser never sees a press outside it; the dimmed area is the
+    // `[data-dialog-dismiss]` element instead. A click's target is where press
+    // and release have in common, so a selection drag that ends there does not
+    // count. Closed on the `click`, not `pointerup`: iOS hit-tests the tap's
+    // click after release, so a dialog gone by then lets it through to the page.
     onClick: (event) => {
-      if (pressedOutside.current && outside(event)) event.currentTarget.close();
-      pressedOutside.current = false;
+      if (event.target instanceof Element && event.target.hasAttribute("data-dialog-dismiss")) {
+        event.currentTarget.close();
+      }
     },
   };
   return [props, open && shown];

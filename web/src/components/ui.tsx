@@ -291,35 +291,41 @@ export function Sheet({
     <dialog
       {...dialog}
       aria-labelledby={titleId}
-      className={cn(
-        // The UA's modal box reset to the sheet's: full width and pinned to the
-        // bottom, centered from `sm`. The margins are stated because preflight
-        // zeroes the UA's `auto`, which is what places a modal dialog at all.
-        // `display` only while open, or it would override the closed state.
-        "m-auto mb-0 max-h-[85dvh] w-full max-w-full flex-col border-0 p-0 text-inherit open:flex",
-        "rounded-t-3xl bg-white shadow-2xl",
-        "sm:mb-auto sm:max-w-lg sm:rounded-3xl",
-        "dark:bg-stone-900",
-        "backdrop:bg-black/40 backdrop:backdrop-blur-sm",
-      )}
+      // A transparent `.dialog-viewport` over the whole screen, so the page
+      // behind cannot scroll (see index.css); the dimming is still `::backdrop`.
+      className="dialog-viewport border-0 p-0 text-inherit backdrop:bg-black/40 backdrop:backdrop-blur-sm"
     >
-      <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4 dark:border-stone-800">
-        <h2 id={titleId} className="text-base font-semibold">
-          {title}
-        </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="rounded-full p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"
+      <div className="dialog-track">
+        <div data-dialog-dismiss aria-hidden />
+        <div
+          className={cn(
+            // Pinned to the bottom, centered from `sm`. Sticky to the viewport's
+            // edge, since the track is a pixel taller than it.
+            "sticky bottom-0 mt-auto flex max-h-[85dvh] w-full flex-col",
+            "rounded-t-3xl bg-white shadow-2xl",
+            "sm:mx-auto sm:my-auto sm:max-w-lg sm:rounded-3xl",
+            "dark:bg-stone-900",
+          )}
         >
-          <X aria-hidden className="size-5" />
-        </button>
-      </div>
-      {/* Not `py-4 pb-safe`: as utilities, the later `pb-safe` wins and is 0
-          wherever there is no inset, leaving the body no bottom padding. */}
-      <div className="flex-1 overflow-y-auto overscroll-contain px-5 pt-4 pb-[max(--spacing(4),env(safe-area-inset-bottom))]">
-        {shown && children}
+          <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4 dark:border-stone-800">
+            <h2 id={titleId} className="text-base font-semibold">
+              {title}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="rounded-full p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"
+            >
+              <X aria-hidden className="size-5" />
+            </button>
+          </div>
+          {/* Not `py-4 pb-safe`: as utilities, the later `pb-safe` wins and is 0
+              wherever there is no inset, leaving the body no bottom padding. */}
+          <div className="flex-1 overflow-y-auto overscroll-contain px-5 pt-4 pb-[max(--spacing(4),env(safe-area-inset-bottom))]">
+            {shown && children}
+          </div>
+        </div>
       </div>
     </dialog>
   );

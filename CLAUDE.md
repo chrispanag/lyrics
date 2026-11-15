@@ -1270,12 +1270,35 @@ each of them is written down.
   actually closed** — the event is a queued task, so without the first check
   every close the prop asked for echoes back as a second request, and without
   the second Strict Mode's close-and-reopen on mount closes every sheet that
-  mounts open, in development only. Click-outside is
-  `closedby="any"` where supported and a press-and-release position check in
-  Safari; the `overflow: hidden` scroll lock is still the hook's, since a modal
-  dialog does not stop the page scrolling. jsdom has no `showModal()` or
-  working `:modal`, so `src/test/dialog.ts` stubs the part the specs lean on,
-  and `modalIsOpen()` asks `matches(":modal")` per element for that reason.
+  mounts open, in development only.
+- **The page behind an open sheet must not scroll, on an iPhone above all, and
+  `inert` does not stop scrolling.** A `<body>` lock is what the platform
+  guidance says not to do, and the guidance's own fix — `overscroll-behavior`
+  on `dialog:modal` and on a `::backdrop` given `overflow: hidden` — is not
+  honored by Safari on a container with nothing to scroll, which is every
+  backdrop and every short sheet. So the dialog is made into a container that
+  always scrolls: **`.dialog-viewport` covers the screen, transparent, and its
+  `.dialog-track` is a pixel taller than it**, so `overscroll-behavior: none`
+  always applies and no gesture begun in the dialog chains to the page. The
+  panel is sticky to the bottom so that pixel never shows, and the dimming is
+  still `::backdrop`, drawn behind a dialog nothing can now reach. Two things
+  follow. Light dismiss is a click on the **`[data-dialog-dismiss]`** layer,
+  read by `useDialog` off the click's target — the browser never sees a press
+  outside a dialog that covers the viewport, so `closedby` would do nothing; the
+  layer is also `touch-action: pinch-zoom`, so a pan on the dimming is not a
+  scroll at all while a pinch still zooms. And **Home and End are taken by
+  `useDialog`**, on the document, since WebKit sends them there wherever focus
+  is — including `<body>`, after a press on plain text. Measured with Playwright against `next dev` in
+  WebKit and Chromium, desktop and phone-sized: wheel, keys and (Chromium only)
+  touch over the dimming, the header and short and long content all leave
+  `scrollY` alone, and the panels sit where they did. **Playwright cannot drag a
+  finger in WebKit**, so iOS touch is the one path not observed — `touch-action`
+  and `overscroll-behavior` on a real scroller are both long supported there, but
+  it wants a real iPhone. The `<body>` lock stays only in `useModal`, for the
+  drawer, which is not a `<dialog>`; a drawer that becomes one should take these
+  three pieces rather than the lock. jsdom has no `showModal()` or working
+  `:modal`, so `src/test/dialog.ts` stubs the part the specs lean on, and
+  `modalIsOpen()` asks `matches(":modal")` per element for that reason.
 - **The hamburger is rendered by the app bars, and a screen gets its bar by
   position.** The shell has no row of its own on a phone, and giving it one
   would hand back the vertical space the tab bar was removed to reclaim — so the
