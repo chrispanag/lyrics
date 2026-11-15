@@ -1,5 +1,6 @@
 import { act, waitFor, within } from "@testing-library/react";
 import { type DehydratedState, QueryClient, dehydrate, hydrate } from "@tanstack/react-query";
+import { HttpResponse, http } from "msw";
 import type { ReactElement } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
@@ -10,9 +11,11 @@ import { storeUser } from "@/auth/storedUser";
 import { storeFontSize } from "@/lib/fontSize";
 import type { User } from "@/lib/types";
 import { storeTheme } from "@/lib/theme";
-import { catalogList, catalogSongs } from "@/test/catalog";
-import { listById, makeUser } from "@/test/handlers";
+import CatalogPage from "@/app/(shell)/page";
+import { catalogGenres, catalogList, catalogSongs } from "@/test/catalog";
+import { API, list, listById, makePerson, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
+import { handover } from "@/test/serverTree";
 import { server } from "@/test/server";
 import { TestProviders } from "@/test/TestProviders";
 import { TestApp } from "@/test/app";
@@ -134,6 +137,25 @@ describe("hydrating over a server render", () => {
     expect(problems).toEqual([]);
     // The premise: the catalog rendered rows, not its loading state.
     expect(container).toHaveTextContent(catalogSongs[0]?.title ?? "");
+  });
+
+  // The route's own reads rather than the screen's: hydrating from them shows
+  // the server's keys are the ones the browser's first render looks under.
+  it("agrees about a person's songs, from what the catalog route read", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list(catalogSongs))),
+      http.get(`${API}/api/v1/genres`, () => HttpResponse.json(list(catalogGenres))),
+    );
+    const person = makePerson({ id: "a5ec6a45-541c-4b8f-b3a0-c8ac8aa57e81" });
+    const route = `/?person=${person.id}`;
+    const tree = await CatalogPage({ searchParams: Promise.resolve({ person: person.id }) });
+    const state = handover(tree)?.props.state ?? { queries: [], mutations: [] };
+
+    const { problems, container } = await hydrationProblems(stubbed(route, null), { state });
+
+    expect(problems).toEqual([]);
+    expect(container).toHaveTextContent(catalogSongs[4]?.title ?? "");
+    expect(document.title).toBe(`Songs by ${person.name} — Songfolio`);
   });
 
   // The font size and the swipe mark are both stored per device and both

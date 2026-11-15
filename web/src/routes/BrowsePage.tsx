@@ -13,22 +13,10 @@ import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
 import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Skeletons } from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
-import { LANGUAGE_LABELS, hasRole, type SongFilters } from "@/lib/types";
+import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
+import { PAGE_SIZE, catalogName, catalogView, viewGenre } from "@/lib/browse";
 import { songCount } from "@/lib/format";
 import { Link, useSearchParams, useSetSearchParams } from "@/lib/navigation";
-
-const PAGE_SIZE = 20;
-
-const SORTS = ["relevance", "title", "newest", "oldest"] as const;
-
-/**
- * Reads the page number from the URL, treating anything unusable as page one.
- * NaN would pass every comparison as false and break pagination.
- */
-function pageNumber(raw: string | null): number {
-  const parsed = Number(raw ?? "0");
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
-}
 
 /** Browse and search. Filter state lives in the URL, so it is shareable. */
 export function BrowsePage() {
@@ -37,7 +25,11 @@ export function BrowsePage() {
   const { user } = useAuth();
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const query = params.get("q") ?? "";
+  // Derived as the server route derives it (`app/(shell)/page.tsx`), so the
+  // query it read ahead is the query asked for here. Not memoized:
+  // react-query hashes query keys structurally.
+  const view = catalogView(params);
+  const { query, page, genreSlug, language, personId, activeSort, filters } = view;
   const [draft, setDraft] = useState(query);
 
   // Re-synced to the URL during render, not in an effect: an effect leaves the
@@ -70,34 +62,6 @@ export function BrowsePage() {
     );
   }, [debounced, draft, query, setParams]);
 
-  const page = pageNumber(params.get("page"));
-  const genreSlug = params.get("genre_slug") ?? "";
-  const language = params.get("language") ?? "";
-  // Validated rather than cast: the API rejects an unknown sort.
-  const sortParam = params.get("sort") ?? "";
-  const sort = (SORTS as readonly string[]).includes(sortParam)
-    ? (sortParam as SongFilters["sort"])
-    : undefined;
-  // Song pages link every credit to `/?person=<id>`; unread, an artist link
-  // silently lands on the unfiltered catalog.
-  const personId = params.get("person") ?? "";
-
-  // The ordering in effect, which the sort picker shows; an absent `sort` is
-  // the default, named. Relevance without a query folds back to the default.
-  const requested = sort === "relevance" && !query ? undefined : sort;
-  const activeSort = requested ?? (query ? "relevance" : "newest");
-
-  // Not memoized: react-query hashes query keys structurally.
-  const filters: SongFilters = {
-    q: query || undefined,
-    person: personId || undefined,
-    genre_slug: genreSlug || undefined,
-    language: language || undefined,
-    sort: activeSort,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
-  };
-
   const { data, isLoading, isError, error } = useSongs(filters);
   const { data: genres } = useGenres();
 
@@ -129,7 +93,7 @@ export function BrowsePage() {
     );
   };
 
-  const activeGenre = genres?.data.find((g) => g.slug === genreSlug);
+  const activeGenre = viewGenre(view, genres?.data);
   // Fetched by id so the chip can show a name rather than a UUID.
   const { data: activePerson } = usePerson(personId);
   // The one list of what counts as a filter; the button and badge both read it.
@@ -138,13 +102,16 @@ export function BrowsePage() {
   const total = data?.meta.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
+  // Named by the query or the landing filter, since each is a history entry
+  // and a bookmark; `generateMetadata`'s `og:title` is the same name.
+  const name = catalogName(view, { person: activePerson, genre: activeGenre }) ?? "Browse";
+
   return (
     <>
-      {/* Named by the query, since a search is a history entry and a bookmark. */}
-      <PageTitle name={query ? `Search: ${query}` : "Browse"} />
+      <PageTitle name={name} />
       {/* Hidden: the search box is the page's visible heading in all but name.
           What it holds is the outline's root, which each card's h2 sits under. */}
-      <h1 className="sr-only">{query ? `Search: ${query}` : "Browse"}</h1>
+      <h1 className="sr-only">{name}</h1>
       <SearchHeader
         trailing={
           <Button

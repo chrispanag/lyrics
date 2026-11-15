@@ -41,6 +41,15 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Whether the API itself said there is no such record. A bare 404 from whatever
+ * sits in front of the API, or the router's `no_route` when an ingress drops
+ * the /api prefix, is an outage, and an outage must not 404 or deindex a page.
+ */
+export function isNotFound(caught: unknown): boolean {
+  return caught instanceof ApiError && caught.status === 404 && caught.code === "not_found";
+}
+
 /** Supplies a bearer token, or null when signed out. Registered by the auth layer. */
 type TokenProvider = (forceRefresh?: boolean) => Promise<string | null>;
 

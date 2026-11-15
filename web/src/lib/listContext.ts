@@ -62,7 +62,17 @@ export function songMatchesRef(song: Pick<Song, "id" | "slug">, ref: string): bo
  * `urn:uuid:` forms cannot survive slugification, so they are not matched.
  */
 export function songRefIsId(ref: string): boolean {
-  return CANONICAL_UUID.test(ref) || COMPACT_UUID.test(ref);
+  return isUuid(ref);
+}
+
+/**
+ * Whether this is an id in either spelling Go's `uuid.Parse` takes that a
+ * link would carry: canonical and undashed, in either case. The parser's
+ * braced and `urn:uuid:` forms are deliberately not ids here, so a person
+ * filter spelled that way is treated as naming nobody rather than asked about.
+ */
+export function isUuid(value: string): boolean {
+  return CANONICAL_UUID.test(value) || COMPACT_UUID.test(value);
 }
 
 const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -76,19 +86,27 @@ const COMPACT_UUID = /^[0-9a-f]{32}$/i;
  * Not `toQuery` (api/client.ts): that collapses repeated parameters and drops
  * empty ones, which would rewrite a shared link.
  */
-export function songCanonicalHref(
-  slug: string,
-  params: Record<string, string | string[] | undefined>,
-): string {
+export function songCanonicalHref(slug: string, params: NextSearchParams): string {
+  const search = searchFrom(params).toString();
+  const path = songHref({ slug });
+  return search ? `${path}?${search}` : path;
+}
+
+/** A route's awaited `searchParams`, as Next hands them over. */
+export type NextSearchParams = Record<string, string | string[] | undefined>;
+
+/**
+ * Next's `searchParams` as the address held them: every value of a repeated
+ * key appended, so `?a=1&a=2` does not collapse, and `get` takes the first as
+ * the seam's `useSearchParams` does. Every server route reads them through here.
+ */
+export function searchFrom(params: NextSearchParams): URLSearchParams {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined) continue;
-    // Append each, so `?a=1&a=2` does not collapse.
     for (const single of Array.isArray(value) ? value : [value]) query.append(key, single);
   }
-  const search = query.toString();
-  const path = songHref({ slug });
-  return search ? `${path}?${search}` : path;
+  return query;
 }
 
 /** Where a song sits in a list, and the addresses on either side of it. */
