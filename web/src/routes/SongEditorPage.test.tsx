@@ -445,8 +445,15 @@ describe("SongEditorPage", () => {
     const sent = captureSave(makeSong({ genres: [makeGenre({ id: "genre-1" })] }));
     renderEditor({ route: "/songs/song-1/edit" });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Ρεμπέτικο" }));
-    await userEvent.click(screen.getByRole("button", { name: "Έντεχνο" }));
+    const rempetiko = await screen.findByRole("button", { name: "Ρεμπέτικο" });
+    const entechno = screen.getByRole("button", { name: "Έντεχνο" });
+    expect(rempetiko).toHaveAttribute("aria-pressed", "true");
+    expect(entechno).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(rempetiko);
+    await userEvent.click(entechno);
+    expect(rempetiko).toHaveAttribute("aria-pressed", "false");
+    expect(entechno).toHaveAttribute("aria-pressed", "true");
 
     await save();
 
@@ -518,6 +525,11 @@ describe("SongEditorPage", () => {
       http.patch(`${API}/api/v1/songs/song-1`, () =>
         apiError(422, "validation_failed", "The song could not be saved.", {
           title: "Title is required.",
+          language: "Language is not supported.",
+          lyrics: "Lyrics are too long.",
+          notes: "Song notes are too long.",
+          credits: "Too many credits.",
+          genre_ids: "Too many genres.",
           recordings: "Only one recording may be the first.",
           "recordings[0].label": "Label is too long.",
           "recordings[0].release_year": "Year is out of range.",
@@ -532,6 +544,15 @@ describe("SongEditorPage", () => {
     expect(await screen.findByText("The song could not be saved.")).toBeInTheDocument();
     expect(screen.getByText("Only one recording may be the first.")).toBeInTheDocument();
     expect(screen.getByLabelText("Title")).toHaveAccessibleDescription("Title is required.");
+    expect(screen.getByLabelText("Language")).toHaveAccessibleDescription(
+      "Language is not supported.",
+    );
+    expect(screen.getByLabelText("Lyrics")).toHaveAccessibleDescription("Lyrics are too long.");
+    expect(screen.getByLabelText("Notes", { selector: "#notes" })).toHaveAccessibleDescription(
+      "Song notes are too long.",
+    );
+    expect(screen.getByText("Too many credits.")).toBeInTheDocument();
+    expect(screen.getByText("Too many genres.")).toBeInTheDocument();
     expect(screen.getByLabelText("Label")).toHaveAccessibleDescription("Label is too long.");
     expect(screen.getByLabelText("Year")).toHaveAccessibleDescription("Year is out of range.");
     expect(

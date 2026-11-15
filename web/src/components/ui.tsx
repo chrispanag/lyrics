@@ -144,10 +144,10 @@ export function Chip({
   );
 
   // A real button when clickable; not always, since a chip with onRemove
-  // already contains one and buttons cannot nest.
+  // already contains one and buttons cannot nest. A clickable chip is a toggle.
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className={classes}>
+      <button type="button" onClick={onClick} aria-pressed={Boolean(active)} className={classes}>
         {children}
       </button>
     );
