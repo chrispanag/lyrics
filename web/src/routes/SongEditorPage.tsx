@@ -326,6 +326,7 @@ export function SongEditorPage() {
             className="w-full"
             value={language}
             onChange={(event) => track(setLanguage)(event.target.value)}
+            aria-describedby={fieldErrors.language ? "language-error" : undefined}
           >
             {Object.entries(LANGUAGE_LABELS).map(([code, label]) => (
               <option key={code} value={code}>
@@ -649,6 +650,7 @@ export function SongEditorPage() {
             rows={16}
             value={lyrics}
             onChange={(event) => track(setLyrics)(event.target.value)}
+            aria-describedby={fieldErrors.lyrics ? "lyrics-error" : undefined}
             placeholder="One line per line. Blank lines separate verses."
             // Monospace keeps hand-aligned verses looking the way they were typed.
             className="font-mono text-sm leading-relaxed"

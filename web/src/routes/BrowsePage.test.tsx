@@ -333,11 +333,17 @@ describe("BrowsePage filter sheet", () => {
     renderWithProviders(<BrowsePage />, { route: "/?page=2" });
     const sheet = await openFilters(user);
 
-    await user.click(await within(sheet).findByRole("button", { name: /Ρεμπέτικο/ }));
+    const genre = await within(sheet).findByRole("button", { name: /Ρεμπέτικο/ });
+    expect(genre).toHaveAttribute("aria-pressed", "false");
+    await user.click(genre);
 
     await waitFor(() => expect(requests.at(-1)?.get("genre_slug")).toBe("rempetiko"));
     expect(requests.at(-1)?.get("offset")).toBe("0");
     expect(screen.getByRole("button", { name: "Filters (1 active)" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: /Ρεμπέτικο/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
 
     await user.click(within(sheet).getByRole("button", { name: /Ρεμπέτικο/ }));
 
