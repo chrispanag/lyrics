@@ -1,14 +1,19 @@
 import { HttpResponse, delay, http } from "msw";
 import { vi } from "vitest";
 
+import { READ_BUDGET_MS } from "@/api/client";
+
 /**
- * Shortens every `AbortSignal.timeout` to 20ms, so a spec can watch
- * `guestRead`'s 3s budget run out without waiting for it. `client.test.ts`
- * pins the real budget; a route spec only needs to see that its read gives up.
+ * Shortens `guestRead`'s 3s budget to 20ms, so a spec can watch it run out
+ * without waiting for it; `client.test.ts` pins the real budget. Any other
+ * clock is left alone, so a route reading on a budget of its own hangs and
+ * fails its spec instead of passing on a borrowed one.
  */
 export function shortenReadBudget(): void {
   const realTimeout = AbortSignal.timeout.bind(AbortSignal);
-  vi.spyOn(AbortSignal, "timeout").mockImplementation(() => realTimeout(20));
+  vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) =>
+    realTimeout(ms === READ_BUDGET_MS ? 20 : ms),
+  );
 }
 
 /** A GET handler that never answers: an API that hangs rather than fails. */

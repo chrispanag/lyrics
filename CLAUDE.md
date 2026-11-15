@@ -1096,7 +1096,12 @@ scraper rather than by anyone inside the app, which is why each is written down.
   The throw is in the `catch` block, where nothing catches it again; moved into
   the `try`, it would be swallowed with the failures it sits beside. An outage
   renders the page with nothing handed over, and the browser asks again and
-  says so in its own words — and so does a read past `guestRead`'s budget. Any other unmatched address renders
+  says so in its own words — and so does a read past `guestRead`'s budget.
+  What the budget costs is the data cache: an aborted read writes no entry, so
+  an API that takes longer than 3s on every song never fills it, and every song
+  page (a list neighbor's prefetch included) is served without its song until
+  the API speeds up. A stale entry is unaffected, since Next refreshes it in the
+  background without the signal. Any other unmatched address renders
   `app/not-found.tsx` — server-rendered, 404, inside the group layouts it mounts
   itself, since the root's not-found sits outside the route groups.
 - **A list page's HTML carries the list only when a guest may read it, and a

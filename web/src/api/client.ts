@@ -58,7 +58,7 @@ export function isNotFound(caught: unknown): boolean {
  * as a 404: the page is served, nothing is handed over, and the browser asks
  * for itself.
  */
-const READ_BUDGET_MS = 3000;
+export const READ_BUDGET_MS = 3000;
 
 /** A server render's read: a guest by construction, on a fresh `READ_BUDGET_MS` clock. */
 export function guestRead() {

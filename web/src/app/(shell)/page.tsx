@@ -58,9 +58,10 @@ async function viewOf(searchParams: Promise<NextSearchParams>): Promise<CatalogV
  * is not asked about.
  */
 const readNamed = cache(async (client: QueryClient, personId: string) => {
-  const genres = queries.genres(guestRead());
-  const person = queries.person(personId, guestRead());
   const askPerson = isUuid(personId);
+  const genres = queries.genres(guestRead());
+  // Only a read that is made starts a clock; the key is the same either way.
+  const person = queries.person(personId, askPerson ? guestRead() : undefined);
   await Promise.all([
     client.prefetchQuery(genres),
     askPerson ? client.prefetchQuery(person) : undefined,
