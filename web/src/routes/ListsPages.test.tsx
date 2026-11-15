@@ -49,11 +49,11 @@ describe("ListsPage", () => {
 
     const shared = await screen.findByRole("link", { name: /Ρεμπέτικα/ });
     expect(shared).toHaveAttribute("href", "/lists/list-1");
-    expect(within(shared).getByLabelText("Public")).toBeInTheDocument();
+    expect(within(shared).getByText("Public")).toBeInTheDocument();
     expect(within(shared).getByText("3 songs")).toBeInTheDocument();
 
     const own = screen.getByRole("link", { name: /Έντεχνα/ });
-    expect(within(own).getByLabelText("Private")).toBeInTheDocument();
+    expect(within(own).getByText("Private")).toBeInTheDocument();
     expect(within(own).getByText("1 song")).toBeInTheDocument();
   });
 

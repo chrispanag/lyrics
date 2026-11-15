@@ -1,7 +1,17 @@
 "use client";
 
 import { lazy, Suspense, useState, useSyncExternalStore, type SubmitEvent } from "react";
-import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash } from "lucide-react";
+import {
+  ChevronRight,
+  Copy,
+  Globe,
+  Link2,
+  ListMusic,
+  Lock,
+  Plus,
+  Share2,
+  Trash,
+} from "lucide-react";
 
 import { ApiError, errorMessage } from "@/api/client";
 import {
@@ -16,7 +26,7 @@ import {
 } from "@/api/hooks";
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
-import { cardChrome, cardHover } from "@/components/cardStyles";
+import { cardChrome, cardHover, tagChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
 import { SongRow } from "@/components/SongRow";
 import {
@@ -73,6 +83,17 @@ function StaticSongList({
   );
 }
 
+/** Whether anyone but the owner can read a list, said in words and not only an icon. */
+function VisibilityTag({ isPublic }: { isPublic: boolean }) {
+  const Icon = isPublic ? Globe : Lock;
+  return (
+    <span className={cn(tagChrome, "inline-flex shrink-0 items-center gap-1")}>
+      <Icon aria-hidden className="size-3" />
+      {isPublic ? "Public" : "Private"}
+    </span>
+  );
+}
+
 export function ListsPage() {
   const { data, isLoading, isError, error: loadError } = useLists(true);
   const createList = useCreateList();
@@ -94,7 +115,7 @@ export function ListsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
+    <div className="mx-auto max-w-3xl px-4 py-6">
       <PageTitle name="Your lists" />
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Your lists</h1>
@@ -124,23 +145,23 @@ export function ListsPage() {
           <li key={list.id}>
             <Link
               href={listHref(list.id)}
-              className={cn(
-                cardChrome,
-                cardHover,
-                "flex items-center justify-between gap-3 bg-surface p-4",
-              )}
+              className={cn(cardChrome, cardHover, "flex items-center gap-3 bg-surface p-4")}
             >
-              <div className="min-w-0">
-                <h2 className="flex items-center gap-2 truncate font-semibold">
-                  {list.name}
-                  {list.is_public ? (
-                    <Globe aria-label="Public" className="size-3.5 shrink-0 text-fg-subtle" />
-                  ) : (
-                    <Lock aria-label="Private" className="size-3.5 shrink-0 text-fg-subtle" />
-                  )}
-                </h2>
-                <p className="mt-0.5 text-sm text-fg-muted">{songCount(list.item_count)}</p>
+              <span
+                aria-hidden
+                className="flex size-11 shrink-0 items-center justify-center rounded-control bg-accent-subtle text-fg-accent-subtle"
+              >
+                <ListMusic className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate font-semibold">{list.name}</h2>
+                <p className="mt-0.5 truncate text-sm text-fg-muted">
+                  <span>{songCount(list.item_count)}</span>
+                  {list.description && <span> · {list.description}</span>}
+                </p>
               </div>
+              <VisibilityTag isPublic={list.is_public} />
+              <ChevronRight aria-hidden className="size-4 shrink-0 text-fg-subtle" />
             </Link>
           </li>
         ))}
@@ -208,18 +229,19 @@ export function ListDetailPage() {
   // wait only exists so a private list is asked for with its owner's token.
   if (!list && (sessionLoading || isLoading)) {
     return (
-      <div className="mx-auto max-w-2xl space-y-3 px-4 py-6">
+      <div className="mx-auto max-w-3xl space-y-3 px-4 py-6">
         {/* Nameless while in flight, rather than "undefined — Songfolio". */}
         <PageTitle />
-        <Skeleton className="h-8 w-1/2" />
-        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-9 w-20" />
+        <Skeleton className="h-9 w-1/2" />
+        <Skeleton className="h-28 w-full" />
       </div>
     );
   }
 
   if (isError || !list) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-6">
+      <div className="mx-auto max-w-3xl px-4 py-6">
         <PageTitle name="List not available" />
         <ErrorMessage>This list is not available.</ErrorMessage>
         <Link href="/lists" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
@@ -274,77 +296,91 @@ export function ListDetailPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-4">
+    <div className="mx-auto max-w-3xl px-4 py-4">
       <PageTitle name={list.name} />
-      <BackButton className="mb-4" />
-
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold tracking-tight">{list.name}</h1>
-        {list.description && <p className="mt-1 text-sm text-fg-muted">{list.description}</p>}
-        <p className="mt-1 text-sm text-fg-muted">{songCount(list.item_count)}</p>
+      {/* The song page's bar: the way back, and what the viewer may do here.
+          Every action is labeled, since its visible text is dropped on small
+          screens. */}
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <BackButton />
 
         {/* A non-owner only reaches a public list; guests are sent to sign in.
             Inert until the session is known: a server-rendered list is on screen
             before then, and `!user` would send a signed-in reader to sign in. */}
         {!isOwner && (
-          <div className="mt-4">
-            <Button
-              size="sm"
-              onClick={onSave}
-              loading={copyList.isPending}
-              disabled={sessionLoading}
-            >
-              <Copy aria-hidden className="size-4" />
-              Save to my lists
-            </Button>
-            {copyError && !naming && (
-              <div className="mt-3">
-                <ErrorMessage>{copyError}</ErrorMessage>
-              </div>
-            )}
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Save to my lists"
+            onClick={onSave}
+            loading={copyList.isPending}
+            disabled={sessionLoading}
+          >
+            <Copy aria-hidden className="size-4" />
+            <span className="hidden sm:inline">Save to my lists</span>
+          </Button>
         )}
 
         {isOwner && (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1">
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
+              aria-label="Share"
               onClick={() => {
                 setLinkState("idle");
                 setSharing(true);
               }}
             >
               <Share2 aria-hidden className="size-4" />
-              Share
+              <span className="hidden sm:inline">Share</span>
             </Button>
 
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
+              aria-label={list.is_public ? "Make private" : "Make public"}
               onClick={() => updateList.mutate({ is_public: !list.is_public })}
               loading={updateList.isPending}
             >
               {list.is_public ? (
-                <>
-                  <Lock aria-hidden className="size-4" />
-                  Make private
-                </>
+                <Lock aria-hidden className="size-4" />
               ) : (
-                <>
-                  <Globe aria-hidden className="size-4" />
-                  Make public
-                </>
+                <Globe aria-hidden className="size-4" />
               )}
+              <span className="hidden sm:inline">
+                {list.is_public ? "Make private" : "Make public"}
+              </span>
             </Button>
 
             {/* The default list cannot be deleted (the server 403s). */}
             {!list.is_default && (
-              <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Delete list"
+                onClick={() => setConfirmDelete(true)}
+              >
                 <Trash aria-hidden className="size-4 text-fg-danger" />
-                Delete list
               </Button>
             )}
+          </div>
+        )}
+      </div>
+
+      <header className="mb-6">
+        <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">
+          {list.name}
+        </h1>
+        {list.description && <p className="mt-1 text-lg text-fg-muted">{list.description}</p>}
+        <div className="mt-3 flex items-center gap-2">
+          <p className="text-sm text-fg-muted">{songCount(list.item_count)}</p>
+          <VisibilityTag isPublic={list.is_public} />
+        </div>
+
+        {copyError && !naming && (
+          <div className="mt-4">
+            <ErrorMessage>{copyError}</ErrorMessage>
           </div>
         )}
       </header>

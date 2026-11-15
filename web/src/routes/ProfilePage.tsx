@@ -8,7 +8,7 @@ import { useRemoveAvatar, useUpdateProfile, useUploadAvatar } from "@/api/hooks"
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { Button, ErrorMessage, Field, Input, Sheet } from "@/components/ui";
-import { buttonClasses } from "@/components/buttonStyles";
+import { buttonClasses, segmentClasses, segmentedTrack } from "@/components/buttonStyles";
 import { panelChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
 import { Waiting } from "@/routes/guards";
@@ -362,17 +362,11 @@ function ThemeToggle({
   return (
     <div className={className}>
       <SectionHeading id={`${id}-heading`}>Appearance</SectionHeading>
-      <fieldset
-        aria-labelledby={`${id}-heading`}
-        className="flex gap-1 rounded-control bg-muted p-1"
-      >
+      <fieldset aria-labelledby={`${id}-heading`} className={segmentedTrack}>
         {THEME_OPTIONS.map((option) => (
           <label
             key={option.value}
-            className={cn(
-              "flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-compact text-sm font-medium transition-colors",
-              theme === option.value ? "bg-canvas text-fg shadow-raised" : "text-fg-tertiary",
-            )}
+            className={segmentClasses(theme === option.value, "flex-1 cursor-pointer")}
           >
             <input
               type="radio"
