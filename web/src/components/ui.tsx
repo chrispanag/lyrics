@@ -349,9 +349,13 @@ export function Sheet({
             "sm:mx-auto sm:my-auto sm:max-w-lg sm:rounded-sheet",
             // On opening it rises from the bottom edge, or from `sm` grows into
             // place. `@starting-style` applies on every `showModal()`, because
-            // the panel has no style while the dialog is `display: none`.
+            // the panel has no style while the dialog is `display: none`. The
+            // offsets are literal `translate`, not `translate-y-*`: WebKit
+            // ignores that utility's `--tw-translate-*` variables in a
+            // starting style.
             "transition-[translate,scale,opacity] duration-250 ease-out",
-            "starting:translate-y-full sm:starting:translate-y-2 sm:starting:scale-95 sm:starting:opacity-0",
+            "starting:[translate:0_100%] sm:starting:[translate:0_--spacing(2)]",
+            "sm:starting:scale-95 sm:starting:opacity-0",
           )}
         >
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
