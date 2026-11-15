@@ -25,6 +25,7 @@ const (
 	CodeUnauthorized ErrorCode = "unauthorized"
 	CodeForbidden    ErrorCode = "forbidden"
 	CodeNotFound     ErrorCode = "not_found"
+	CodeNoRoute      ErrorCode = "no_route"
 	CodeConflict     ErrorCode = "conflict"
 	CodeRateLimited  ErrorCode = "rate_limited"
 	CodeUpstream     ErrorCode = "upstream_error"
@@ -90,9 +91,17 @@ func Forbidden(format string, args ...any) *APIError {
 	return newErr(http.StatusForbidden, CodeForbidden, format, args...)
 }
 
-// NotFound is a 404.
+// NotFound is a 404: the route exists and the record it names does not.
 func NotFound(format string, args ...any) *APIError {
 	return newErr(http.StatusNotFound, CodeNotFound, format, args...)
+}
+
+// NoRoute is a 404 for a path no route matches. Its own code, so a client can
+// tell "no such record" from a request that never reached a handler: the web
+// app 404s a song page on `not_found`, and a misrouted ingress (one dropping
+// the /api prefix) must not read as the whole catalog being missing.
+func NoRoute(format string, args ...any) *APIError {
+	return newErr(http.StatusNotFound, CodeNoRoute, format, args...)
 }
 
 // Conflict is a 409: the write collides with existing state.

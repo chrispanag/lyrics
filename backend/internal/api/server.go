@@ -138,7 +138,7 @@ func (s *Server) Routes() http.Handler {
 	})
 
 	r.NotFound(httpx.Handler(func(http.ResponseWriter, *http.Request) error {
-		return httpx.NotFound("No such endpoint.")
+		return httpx.NoRoute("No such endpoint.")
 	}))
 	r.MethodNotAllowed(httpx.Handler(func(http.ResponseWriter, *http.Request) error {
 		return httpx.BadRequest("Method not allowed for this endpoint.")

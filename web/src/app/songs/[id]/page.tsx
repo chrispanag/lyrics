@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
+import { QueryClient, dehydrate, type DehydratedState } from "@tanstack/react-query";
 import { cache } from "react";
 
 import { ApiError, apiFetch } from "@/api/client";
+import { keys } from "@/api/hooks";
 import { ClientOnly } from "@/app/client";
 import { UntilAppMounts } from "@/app/UntilAppMounts";
 import { songByline } from "@/lib/credits";
@@ -26,22 +28,22 @@ import { SongPreview } from "./SongPreview";
  */
 const CACHE_SECONDS = 300;
 
-/** The API said, in its own words, that no song has this address. */
-const MISSING = "missing";
-
 /**
- * The song at an address, `MISSING`, or null if it could not be read.
+ * The song at an address, or null if it could not be read. Throws `notFound()`
+ * when the API says no song has the address.
  *
- * `cache` shares one request between `generateMetadata` and the render. Only
- * the API's own `not_found` is `MISSING`: anything else, a bare 404 from
- * whatever sits in front of the API included, is null, since an outage must
- * not 404 a real song. A server render is always a guest, hence `anonymous`.
+ * `cache` shares one request, and that throw, between `generateMetadata` and
+ * the render. Only the API's own `not_found` 404s: a bare 404 from whatever
+ * sits in front of the API, or the router's `no_route` when an ingress drops
+ * the /api prefix, is an outage, and an outage must not 404 a real song.
+ * `app/not-found.tsx` still serves the app, which says so in its own
+ * words. A server render is always a guest, hence `anonymous`.
  *
  * A song with no `slug` (an API older than migration 000010) is also null:
  * otherwise `songHref` builds `/songs/undefined` for the 308, the canonical and
  * the JSON-LD.
  */
-const loadSong = cache(async (ref: string): Promise<Song | typeof MISSING | null> => {
+const loadSong = cache(async (ref: string): Promise<Song | null> => {
   try {
     const song = await apiFetch<Song>(`/api/v1/songs/${encodeURIComponent(ref)}`, {
       anonymous: true,
@@ -49,11 +51,26 @@ const loadSong = cache(async (ref: string): Promise<Song | typeof MISSING | null
     });
     return song.slug ? song : null;
   } catch (caught) {
-    return caught instanceof ApiError && caught.status === 404 && caught.code === "not_found"
-      ? MISSING
-      : null;
+    if (caught instanceof ApiError && caught.status === 404 && caught.code === "not_found") {
+      notFound();
+    }
+    return null;
   }
 });
+
+/**
+ * The song as the app's query cache holds it, for `AppRoot` to hydrate.
+ *
+ * Stamped as old as possible: the read may be minutes stale (Next's data
+ * cache), so the app draws it and refetches at once. Fresh, a reader who
+ * reloads after an edit would see the version before it. Keyed by the address,
+ * as `useSong` keys it.
+ */
+function cacheEntry(ref: string, song: Song): DehydratedState {
+  const client = new QueryClient();
+  client.setQueryData(keys.song(ref), song, { updatedAt: 0 });
+  return dehydrate(client);
+}
 
 /**
  * What a crawler and a link preview are told about the song.
@@ -69,9 +86,8 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const song = await loadSong(id);
-  // No song: the layout's description and card stand. A missing one gets its
-  // 404 (and Next's `noindex`) from the page.
-  if (!song || song === MISSING) return {};
+  // No song: the layout's description and card stand.
+  if (!song) return {};
 
   const byline = songByline(song);
   const description = byline
@@ -104,10 +120,6 @@ export default async function SongPage({
   const { id } = await params;
   const song = await loadSong(id);
 
-  // `app/not-found.tsx` still serves the app, which says so in its own words.
-  // Throws like the redirect below, so it too must stay outside any `try`.
-  if (song === MISSING) notFound();
-
   // The id form redirects to the slug. `songMatchesRef` must still accept both
   // forms, since this needs the API to be up.
   //
@@ -134,7 +146,7 @@ export default async function SongPage({
         </UntilAppMounts>
       )}
       {/* The server's copy, so the app renders the song without fetching it first. */}
-      <ClientOnly seeded={song ? { ref: id, song } : undefined} />
+      <ClientOnly dehydratedState={song ? cacheEntry(id, song) : undefined} />
     </>
   );
 }

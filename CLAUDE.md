@@ -865,24 +865,40 @@ them is written down.
   sidebar's `w-60`, the search header's height, the back-button row, the
   recordings line, the lyrics heading's `h-8` — so the text does not jump at the
   swap; measured to within a pixel at a desk and on a phone. Change `SongHeader`
-  and `SongPreview` together, and measure again.
-- **The app starts from the server's copy of the song, stamped stale.**
-  `ClientOnly` is handed `seeded`, which `AppRoot` writes under `keys.song(ref)`
-  before its first render, so the page draws the song with no second round trip.
-  The key is the *address* the page was asked under, as `useSong` keys it — the
-  id form never gets this far, being redirected first. It is written with
+  and `SongPreview` together, and measure again. Two jumps are left, knowingly:
+  a reader who chose a non-default lyrics size sees the lyrics reflow (the
+  server cannot read the stored size, and an inline boot script like the
+  theme's is a decision of its own), and an address carrying `?list=` sees the
+  list bar push the song down when it arrives (the bar needs the list, which
+  the server does not fetch).
+- **The app starts from the server's copy of the song, stamped stale.** The page
+  builds it as a React Query cache entry and hands `ClientOnly` the dehydrated
+  state, which `AppRoot` hydrates through `HydrationBoundary` during its first
+  render, so the page draws the song with no second round trip. `AppRoot` knows
+  nothing about songs: the next
+  page to render on the server hands over its own entries the same way. The key
+  is the *address* the page was asked under, as `useSong` keys it — the id form
+  never gets this far, being redirected first. The entry carries
   `updatedAt: 0` so it is refetched at once: the server read may be up to
   `CACHE_SECONDS` old from Next's data cache, and fresh it would show a reader
-  who reloads after an edit the version before it. `AppRoot.test.tsx` holds the
-  API's answer back forever to prove the first paint came from the seed.
-- **A song the API says does not exist is a real 404**, through `notFound()` and
-  `app/not-found.tsx`, which still serves the app so it shows its own "not
-  available" — and Next adds `noindex`. Only the API's *own* `not_found` code
-  counts: a bare 404 from whatever sits in front of it (a misrouted ingress, a
-  wrong `API_ORIGIN`) is an outage, and answering every song 404 for one would
-  deindex the catalog. Like the redirect, `notFound` throws, so it stays outside
-  the `try`. Unknown paths outside `/songs/` still answer 200; nothing on the
-  server knows react-router's table.
+  who reloads after an edit the version before it. `page.test.tsx` pins the key
+  and the stamp; `AppRoot.test.tsx` holds the API's answer back forever to prove
+  the first paint came from the handed-over entry.
+- **A song the API says does not exist is a real 404**, thrown by `loadSong`
+  itself, so `generateMetadata` and the page share it through `cache` — and
+  rendered by `app/not-found.tsx`, which still serves the app so it shows its
+  own "not available". Next adds `noindex`. Only the API's *own* `not_found`
+  code counts: a bare 404 from whatever sits in front of it (a misrouted
+  ingress, a wrong `API_ORIGIN`) is an outage, and answering every song 404 for
+  one would deindex the catalog. **Which is why the Go router's fallback answers
+  `no_route`, not `not_found`**: an ingress that loses `preserve_path_prefix`
+  (see Deployment) sends `/v1/songs/<slug>` to a router mounted at `/api/v1`,
+  and with one shared code every song page would 404. `not_found` means a route
+  matched and its record is missing, and nothing else may answer it —
+  `TestUnmatchedPathIsNotAMissingRecord` pins both sides. The throw is in the `catch` block, where nothing
+  catches it again; moved into the `try`, it would be swallowed with the
+  failures it sits beside. Unknown paths outside `/songs/` still answer 200;
+  nothing on the server knows react-router's table.
 
 - **A server render needs an origin, and `""` is not one.** `API_BASE` in
   `api/client.ts` is two branches now: the browser's, unchanged, and the Node
@@ -925,8 +941,9 @@ them is written down.
   the one `PageTitle` hoists, wins `document.title` — and then never changes
   again, because react-router does every in-app navigation and Next's router
   never runs. Paging through a list would leave the tab naming the first song
-  forever. `og:title` is a different property and is what the card reads. Verified
-  against `next start`: a song page's server HTML carries no `<title>` at all.
+  forever. `og:title` is a different property and is what the card reads. The
+  one `<title>` in a song page's server HTML is `SongPreview`'s `PageTitle`,
+  which goes when the app mounts (see the first bullet of this section).
 - **A route's `openGraph` *replaces* the layout's rather than merging into it.**
   Next merges metadata shallowly, so a block naming only `og:type` and `og:title`
   silently drops the card image and the site name with it. `lib/site.ts` holds
@@ -1681,13 +1698,13 @@ them is written down.
   written again when the streamed metadata boundary resolves after hydration.
   The specs cannot catch it, because jsdom has no competing title to lose to.
   What is given up is a title in the server HTML for a reader running no
-  JavaScript, which today is a reader getting no content either; `og:title`
-  still carries the name to link previews. Both directions verified in a real
-  browser, including against the deployed Vite build. **The rule reaches the
-  routes that server-render, not just this layout**: `/songs/[id]`'s
-  `generateMetadata` returns no `title` for exactly the same mechanism one level
-  down, so a song page's server HTML still carries no `<title>` at all — verified
-  against `next start`.
+  JavaScript on every route but a song page; `og:title` still carries the name
+  to link previews. Both directions verified in a real browser, including
+  against the deployed Vite build. **The rule reaches the routes that
+  server-render, not just this layout**: `/songs/[id]`'s `generateMetadata`
+  returns no `title` for exactly the same mechanism one level down. A song
+  page's server `<title>` comes from `SongPreview`'s `PageTitle` instead, which
+  unmounts with the preview when the app arrives.
 - **The rasters come from `icons/icon-square.svg`, not from
   `public/favicon.svg`.** The favicon has `rx="7"` and is transparent outside
   that radius; iOS composites its own mask over an opaque square, so

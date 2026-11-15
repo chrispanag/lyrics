@@ -17,6 +17,7 @@ import (
 	"github.com/christos/lyrics/backend/internal/api"
 	"github.com/christos/lyrics/backend/internal/auth"
 	"github.com/christos/lyrics/backend/internal/config"
+	"github.com/christos/lyrics/backend/internal/httpx"
 	"github.com/christos/lyrics/backend/internal/prelude"
 	"github.com/christos/lyrics/backend/internal/store"
 	"github.com/christos/lyrics/backend/internal/testutil"
@@ -358,6 +359,34 @@ func TestInvalidTokenRejectedOnPublicRoute(t *testing.T) {
 	// The same route with no header at all must succeed as a guest.
 	if resp := h.do("GET", "/api/v1/songs", "", nil); resp.StatusCode != http.StatusOK {
 		t.Errorf("guest status = %d, want 200", resp.StatusCode)
+	}
+}
+
+// A path no route matches answers `no_route`, never `not_found`: the web app
+// 404s a song page on `not_found`, so an ingress that drops the /api prefix
+// would otherwise read as every song being missing, and deindex the catalog.
+func TestUnmatchedPathIsNotAMissingRecord(t *testing.T) {
+	h := newHarness(t)
+
+	for _, tt := range []struct {
+		path string
+		want httpx.ErrorCode
+	}{
+		{"/v1/songs/some-song", httpx.CodeNoRoute},
+		{"/api/v1/no-such-thing", httpx.CodeNoRoute},
+		{"/api/v1/songs/no-such-song", httpx.CodeNotFound},
+	} {
+		resp := h.do("GET", tt.path, "", nil)
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("GET %s status = %d, want 404", tt.path, resp.StatusCode)
+			continue
+		}
+		body := decode[struct {
+			Error struct{ Code httpx.ErrorCode } `json:"error"`
+		}](t, resp)
+		if body.Error.Code != tt.want {
+			t.Errorf("GET %s code = %q, want %q", tt.path, body.Error.Code, tt.want)
+		}
 	}
 }
 
