@@ -23,6 +23,14 @@ export const OTP_LOGIN_CONFIG_ID = (
 
 let client: Promise<PrldSessionClient> | undefined;
 
+const loadSdk = () => import("@prelude.so/js-sdk/session");
+
+// Started at import, not at the first query, so the download overlaps
+// hydration. Only the module: the client is still built on first use.
+if (typeof window !== "undefined") {
+  loadSdk().catch(() => {});
+}
+
 /**
  * The Prelude session client, built on first use. A singleton: a second
  * instance would disagree about the session. Lazy so this module imports on a
@@ -30,8 +38,10 @@ let client: Promise<PrldSessionClient> | undefined;
  * some later call.
  *
  * The SDK is a dynamic import: it inlines its WASM core as base64, about
- * 330 kB that would otherwise sit in the first chunk of every page. A failed
- * chunk load is not kept, so the next call tries again.
+ * 330 kB that would otherwise sit in the first chunk of every page. Every
+ * page still downloads it, since the first query asks for a token, but beside
+ * hydration rather than ahead of it. A failed chunk load is not kept, so the
+ * next call tries again.
  */
 export function sessionClient(): Promise<PrldSessionClient> {
   if (typeof window === "undefined") {
@@ -39,7 +49,7 @@ export function sessionClient(): Promise<PrldSessionClient> {
       new Error("The Prelude session client is browser-only; a server render is a guest."),
     );
   }
-  client ??= import("@prelude.so/js-sdk/session").then(
+  client ??= loadSdk().then(
     ({ PrldSessionClient }) =>
       new PrldSessionClient({
         domain: SESSION_DOMAIN,
@@ -60,10 +70,11 @@ export function sessionClient(): Promise<PrldSessionClient> {
  */
 export async function getAccessToken(forceRefresh?: boolean): Promise<string | null> {
   try {
+    const sdk = await sessionClient();
     if (forceRefresh) {
-      await (await sessionClient()).invalidateCache();
+      await sdk.invalidateCache();
     }
-    const { user: session } = await (await sessionClient()).refresh();
+    const { user: session } = await sdk.refresh();
     return session?.accessToken ?? null;
   } catch {
     // No session, the refresh token has been revoked, or this is a server,

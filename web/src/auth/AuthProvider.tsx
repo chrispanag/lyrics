@@ -209,7 +209,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // assigned only in a callback as `never`.
     const opened: { id: string | null } = { id: null };
 
-    const { status } = await (await sessionClient()).requestStepUp({
+    const sdk = await sessionClient();
+    const { status } = await sdk.requestStepUp({
       scope,
       onChallenge: (info) => {
         opened.id = info.challengeId;
@@ -229,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     challenges.current[scope] = opened.id;
-    await (await sessionClient()).startOTP({ challengeId: opened.id });
+    await sdk.startOTP({ challengeId: opened.id });
     return status;
   }, []);
 
@@ -321,8 +322,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const confirmPasswordResetCode = useCallback(
     async (code: string) => {
+      const sdk = await sessionClient();
       // A wrong code throws here as a typed SDK error.
-      await (await sessionClient()).checkOTP({ code });
+      await sdk.checkOTP({ code });
 
       // From here the visitor is signed in and the code is spent, so any
       // failure below ends the session; the recovery is "Start over".
@@ -337,7 +339,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Granted outright refreshes nothing; canChangePassword forces the
         // refresh, or the write 403s with nothing wrong with the password.
-        if (!(await (await sessionClient()).canChangePassword())) {
+        if (!(await sdk.canChangePassword())) {
           throw new Error("The session did not receive permission to change the password.");
         }
         return { secondCodeSent: false };
@@ -374,13 +376,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error("No password change is in progress.");
     }
 
+    const sdk = await sessionClient();
     // Cleared after the check: a wrong code leaves the challenge open to retry.
-    await (await sessionClient()).checkOTP({ code, challengeId });
+    await sdk.checkOTP({ code, challengeId });
     challenges.current[PASSWORD_WRITE_SCOPE] = null;
 
     // Checked on a fresh token so a missing grant fails here, nameably, rather
     // than as a rejected password a step later.
-    if (!(await (await sessionClient()).canChangePassword())) {
+    if (!(await sdk.canChangePassword())) {
       throw new Error("The session did not receive permission to change the password.");
     }
   }, []);
