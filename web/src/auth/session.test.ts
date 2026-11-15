@@ -56,7 +56,7 @@ describe("auth/session", () => {
   it("builds one SDK client however often it is asked for", async () => {
     const { sessionClient } = await import("./session");
 
-    expect(sessionClient()).toBe(sessionClient());
+    expect(await sessionClient()).toBe(await sessionClient());
   });
 
   // A 401 retry's forceRefresh must reach the SDK, or it resends the dead token.
@@ -69,7 +69,7 @@ describe("auth/session", () => {
 
   it("reports no token rather than throwing when there is no session", async () => {
     const { getAccessToken, sessionClient } = await import("./session");
-    vi.spyOn(sessionClient(), "refresh").mockRejectedValueOnce(new Error("no session"));
+    vi.spyOn(await sessionClient(), "refresh").mockRejectedValueOnce(new Error("no session"));
 
     expect(await getAccessToken()).toBeNull();
   });

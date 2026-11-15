@@ -1,4 +1,4 @@
-import { PrldSessionClient } from "@prelude.so/js-sdk/session";
+import type { PrldSessionClient } from "@prelude.so/js-sdk/session";
 
 import { setTokenProvider } from "@/api/client";
 
@@ -21,22 +21,35 @@ export const OTP_LOGIN_CONFIG_ID = (
   process.env.NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID ?? ""
 ).trim();
 
-let client: PrldSessionClient | undefined;
+let client: Promise<PrldSessionClient> | undefined;
 
 /**
  * The Prelude session client, built on first use. A singleton: a second
  * instance would disagree about the session. Lazy so this module imports on a
  * server, where it refuses by name rather than leaving the SDK to fail at
  * some later call.
+ *
+ * The SDK is a dynamic import: it inlines its WASM core as base64, about
+ * 330 kB that would otherwise sit in the first chunk of every page. A failed
+ * chunk load is not kept, so the next call tries again.
  */
-export function sessionClient(): PrldSessionClient {
+export function sessionClient(): Promise<PrldSessionClient> {
   if (typeof window === "undefined") {
-    throw new Error("The Prelude session client is browser-only; a server render is a guest.");
+    return Promise.reject(
+      new Error("The Prelude session client is browser-only; a server render is a guest."),
+    );
   }
-  client ??= new PrldSessionClient({
-    domain: SESSION_DOMAIN,
-    ...(SDK_KEY ? { sdkKey: SDK_KEY } : {}),
-  });
+  client ??= import("@prelude.so/js-sdk/session").then(
+    ({ PrldSessionClient }) =>
+      new PrldSessionClient({
+        domain: SESSION_DOMAIN,
+        ...(SDK_KEY ? { sdkKey: SDK_KEY } : {}),
+      }),
+    (error: unknown) => {
+      client = undefined;
+      throw error;
+    },
+  );
   return client;
 }
 
@@ -48,9 +61,9 @@ export function sessionClient(): PrldSessionClient {
 export async function getAccessToken(forceRefresh?: boolean): Promise<string | null> {
   try {
     if (forceRefresh) {
-      await sessionClient().invalidateCache();
+      await (await sessionClient()).invalidateCache();
     }
-    const { user: session } = await sessionClient().refresh();
+    const { user: session } = await (await sessionClient()).refresh();
     return session?.accessToken ?? null;
   } catch {
     // No session, the refresh token has been revoked, or this is a server,

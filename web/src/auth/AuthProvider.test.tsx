@@ -57,7 +57,7 @@ vi.mock("./session", () => ({
     return session.otpConfigId;
   },
   getAccessToken: session.getAccessToken,
-  sessionClient: () => ({
+  sessionClient: async () => ({
     logout: session.logout,
     invalidateCache: session.invalidateCache,
     loginWithPassword: session.loginWithPassword,
