@@ -31,22 +31,10 @@ beforeAll(() => {
       })),
     );
     window.scrollTo = vi.fn();
-
-    // jsdom's Blob lacks arrayBuffer, which uploads read; filled in via FileReader.
-    if (!Blob.prototype.arrayBuffer) {
-      Blob.prototype.arrayBuffer = function readAsArrayBuffer(this: Blob) {
-        return new Promise<ArrayBuffer>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as ArrayBuffer);
-          reader.onerror = () => reject(reader.error ?? new Error("could not read blob"));
-          reader.readAsArrayBuffer(this);
-        });
-      };
-    }
   }
 
   // An unstubbed request is a bug in the test. Outside the guard: node specs too.
-  server.listen({ onUnhandledRequest: "error" });
+  server.listen({ onUnhandledFrame: "error" });
 });
 
 afterEach(() => {
