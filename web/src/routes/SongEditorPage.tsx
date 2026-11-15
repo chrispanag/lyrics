@@ -212,7 +212,8 @@ export function SongEditorPage() {
    * row owns no error.
    */
   const recordingError = (index: number, field: string): string | undefined => {
-    if (isBlankRecording(recordings[index]!)) return undefined;
+    const recording = recordings[index];
+    if (!recording || isBlankRecording(recording)) return undefined;
     const sent = recordings.slice(0, index).filter((r) => !isBlankRecording(r)).length;
     return fieldErrors[`recordings[${sent}].${field}`];
   };

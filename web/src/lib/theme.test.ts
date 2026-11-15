@@ -8,9 +8,8 @@ import { THEME_BOOT_SCRIPT, applyTheme, storedTheme } from "./theme";
  *
  * Indirect eval, so the script runs in global scope like a real `<script>`.
  */
-// biome-ignore lint/complexity/noCommaOperator: `(0, eval)` is what makes the eval indirect.
 // biome-ignore lint/security/noGlobalEval: runs our own constant, and global scope is the point.
-const runBootScript = () => (0, eval)(THEME_BOOT_SCRIPT);
+const runBootScript = () => globalThis.eval(THEME_BOOT_SCRIPT);
 
 const prefersDark = (matches: boolean) =>
   vi.stubGlobal(

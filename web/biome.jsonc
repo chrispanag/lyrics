@@ -8,15 +8,7 @@
   },
   "formatter": {
     "indentStyle": "space",
-    "indentWidth": 2,
     "lineWidth": 100
-  },
-  "javascript": {
-    "formatter": {
-      "quoteStyle": "double",
-      "semicolons": "always",
-      "trailingCommas": "all"
-    }
   },
   "css": {
     "parser": { "tailwindDirectives": true }
@@ -28,14 +20,13 @@
   },
   "linter": {
     "rules": {
+      // Stated, not left to the React domain: without these lines neither fires
+      // here (the suppressions they need go unused).
       "correctness": {
         "useExhaustiveDependencies": "error",
         "useHookAtTopLevel": "error"
       },
       "style": {
-        // `noUncheckedIndexedAccess` makes `!` the deliberate way to say an
-        // index is known to be there.
-        "noNonNullAssertion": "off",
         // What keeps component files exporting only components, which fast
         // refresh needs and the style modules in CLAUDE.md exist for.
         "useComponentExportOnlyModules": {
@@ -48,7 +39,8 @@
   "overrides": [
     {
       // The App Router's own export vocabulary, in the one directory that has
-      // route files, so the rule still holds everywhere else.
+      // route files. Restated in full: an override's options replace the base
+      // rule's rather than merging with them.
       "includes": ["src/app/**"],
       "linter": {
         "rules": {
@@ -65,10 +57,17 @@
       }
     },
     {
-      // Specs define throwaway components and are never fast-refreshed.
-      "includes": ["**/*.test.tsx"],
+      // Specs define throwaway components and are never fast-refreshed, and
+      // index into fixtures they built themselves, which `noUncheckedIndexedAccess`
+      // then makes them assert.
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "e2e/**"],
       "linter": {
-        "rules": { "style": { "useComponentExportOnlyModules": "off" } }
+        "rules": {
+          "style": {
+            "useComponentExportOnlyModules": "off",
+            "noNonNullAssertion": "off"
+          }
+        }
       }
     }
   ]

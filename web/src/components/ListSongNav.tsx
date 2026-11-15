@@ -274,7 +274,8 @@ function spendHint(): void {
  */
 function useSwipeHint(): [boolean | null, (element: HTMLElement | null) => void] {
   // Starts spent and reads storage in a layout effect: this decides markup, so
-  // reading it during render would mismatch a server render.
+  // reading it during render would mismatch a server render. Read once, not
+  // subscribed to: spending the hint must not unmount the mark mid-fade.
   const [unspent, setUnspent] = useState(false);
   useLayoutEffect(() => {
     setUnspent(hintUnspent());

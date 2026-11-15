@@ -56,7 +56,7 @@ export function useModal({
     };
   }, [open, onClose]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `open` alone is the key; `focus` is a stable ref.
+  // `focus` is a ref, so `open` is what actually re-runs this.
   useEffect(() => {
     if (!open) return;
 
@@ -66,7 +66,7 @@ export function useModal({
     return () => {
       if (opener instanceof HTMLElement) opener.focus();
     };
-  }, [open]);
+  }, [open, focus]);
 
   return open ? { role: "dialog", "aria-modal": true } : {};
 }

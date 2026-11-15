@@ -33,8 +33,9 @@ Keep `make check` clean. Backend must be `gofmt`-clean with zero `golangci-lint`
 findings; frontend must have zero `tsc` errors and zero Biome findings, which
 covers formatting as well as lint (warnings included — the fast-refresh rule is
 why styles live in their own modules, see Conventions). `make format` fixes the
-formatting half. Biome is pinned to an exact version on purpose, since its
-formatter's output can change between releases.
+formatting half, and applies Biome's safe lint fixes with it. Biome is pinned
+to an exact version on purpose, since its formatter's output can change between
+releases.
 
 ---
 

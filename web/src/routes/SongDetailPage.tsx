@@ -72,7 +72,8 @@ function SongArticle() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Starts at the default and reads storage in a layout effect, before paint:
   // reading it while rendering would mismatch a server render. See CLAUDE.md,
-  // "The Next.js shell".
+  // "The Next.js shell". State rather than a store, since the size is also the
+  // reader's own state and a store would need a writer of its own.
   const [fontSizeIndex, setFontSizeIndex] = useState(DEFAULT_FONT_SIZE);
   useLayoutEffect(() => {
     setFontSizeIndex(storedFontSize());
