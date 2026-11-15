@@ -6,18 +6,32 @@
 # this stack would otherwise drift from both with nothing failing.
 ARG NODE_VERSION=26
 
-# --- build -------------------------------------------------------------------
-FROM node:${NODE_VERSION}-alpine AS build
+# --- base --------------------------------------------------------------------
+# The manifests and pnpm, shared by both installs below. pnpm-workspace.yaml
+# carries the build-script policy, without which an install refuses to finish.
+# Node 26 ships no corepack, so pnpm is installed with npm at the version
+# `packageManager` pins, read rather than repeated.
+FROM node:${NODE_VERSION}-alpine AS base
 
 WORKDIR /app
 
-# Lockfile-only install layer, reused whenever dependencies are unchanged.
-# pnpm-workspace.yaml carries the build-script policy, without which the
-# install refuses to finish. Node 26 ships no corepack, so pnpm is installed
-# with npm at the version `packageManager` pins, read rather than repeated.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN npm install -g "$(node -p 'require("./package.json").packageManager')" \
-    && pnpm install --frozen-lockfile
+RUN npm install -g "$(node -p 'require("./package.json").packageManager')"
+
+# --- production dependencies -------------------------------------------------
+# `next start` needs `next` itself and nothing that built the app, and it reads
+# next.config.ts with its own bundled toolchain, so typescript does not have to
+# be here for a .ts config. Installed here rather than in the runtime stage so
+# that the image carries no package manager.
+FROM base AS prod-deps
+
+RUN pnpm install --frozen-lockfile --prod
+
+# --- build -------------------------------------------------------------------
+FROM base AS build
+
+# Lockfile-only install layer, reused whenever dependencies are unchanged.
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 
@@ -61,13 +75,8 @@ FROM node:${NODE_VERSION}-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Production dependencies only. `next start` needs `next` itself and nothing
-# that built the app, and it reads next.config.ts with its own bundled
-# toolchain, so typescript does not have to be here for a .ts config.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN npm install -g "$(node -p 'require("./package.json").packageManager')" \
-    && pnpm install --frozen-lockfile --prod
-
+COPY package.json ./
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
 COPY --from=build /app/next.config.ts ./next.config.ts
@@ -79,5 +88,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
 
 # CMD rather than ENTRYPOINT, for the reason .do/app.yaml gives about the API
 # image: `run_command` replaces a component's command, and with an ENTRYPOINT in
-# place it may be appended to it as arguments instead.
-CMD ["pnpm", "start"]
+# place it may be appended to it as arguments instead. `node --run` runs the
+# package.json script with no package manager installed, so the port stays
+# written in one place.
+CMD ["node", "--run", "start"]
