@@ -1,5 +1,4 @@
 import { StrictMode, useLayoutEffect } from "react";
-import { BrowserRouter } from "react-router-dom";
 import {
   type DehydratedState,
   HydrationBoundary,
@@ -11,6 +10,7 @@ import { App } from "./App";
 import { shouldRetry } from "./api/client";
 import { AuthProvider } from "./auth/AuthProvider";
 import { markAppMounted } from "./lib/appMounted";
+import { AppRouter } from "./lib/navigation";
 
 // Only reached through `dynamic(..., { ssr: false })`, so this runs in the
 // browser alone and the query client can be a module singleton. The theme is
@@ -45,12 +45,12 @@ export default function AppRoot({
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <HydrationBoundary state={dehydratedState}>
-          <BrowserRouter>
+          <AppRouter>
             {/* Inside the query client: it invalidates caches on sign-in/out. */}
             <AuthProvider>
               <App />
             </AuthProvider>
-          </BrowserRouter>
+          </AppRouter>
         </HydrationBoundary>
       </QueryClientProvider>
     </StrictMode>

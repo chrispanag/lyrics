@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, type SubmitEvent } from "react";
-import { Link, Navigate, useLocation } from "react-router-dom";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import { PASSWORD_CHANGE_UNAVAILABLE_ERROR, RESET_UNCONFIGURED_ERROR } from "@/auth/context";
@@ -9,7 +8,7 @@ import { buttonClasses } from "@/components/buttonStyles";
 import { PageTitle } from "@/components/PageTitle";
 import { Button, ErrorMessage, Field, Input, Notice, Spinner } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
-import { useNavigate } from "@/lib/navigation";
+import { Link, Redirect, useRouter, useSearchParams } from "@/lib/navigation";
 
 /** Shell shared by every auth screen. */
 function AuthShell({
@@ -37,8 +36,7 @@ function AuthShell({
 
 export function LoginPage() {
   const { user, loading, login } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,11 +44,11 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Wherever they were headed before being asked to sign in.
-  const destination = returnDestination(location.state);
+  const destination = returnDestination(useSearchParams());
 
   // Only a restored session redirects: `user` starts as a possibly expired
   // snapshot, which would bounce someone who came to sign in.
-  if (user && !loading) return <Navigate to={destination} replace />;
+  if (user && !loading) return <Redirect href={destination} />;
 
   const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -59,7 +57,7 @@ export function LoginPage() {
 
     try {
       await login(email.trim(), password);
-      navigate(destination, { replace: true });
+      router.replace(destination);
     } catch (caught) {
       // Credential errors are not distinguished, so registered emails don't leak.
       setError(errorMessage(caught, "That email and password combination was not recognized."));
@@ -103,19 +101,19 @@ export function LoginPage() {
       </form>
 
       <p className="mt-4 text-center text-sm">
-        <Link to="/forgot-password" className="text-fg-muted hover:underline">
+        <Link href="/forgot-password" className="text-fg-muted hover:underline">
           Forgot your password?
         </Link>
       </p>
 
       <p className="mt-6 text-center text-sm text-fg-muted">
         No account?{" "}
-        <Link to="/register" className="font-medium text-fg-accent hover:underline">
+        <Link href="/register" className="font-medium text-fg-accent hover:underline">
           Create one
         </Link>
       </p>
       <p className="mt-2 text-center text-sm">
-        <Link to="/" className="text-fg-muted hover:underline">
+        <Link href="/" className="text-fg-muted hover:underline">
           Continue as guest
         </Link>
       </p>
@@ -224,7 +222,7 @@ function ResendCodeLink({
 
 export function RegisterPage() {
   const { user, loading, register } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -235,7 +233,7 @@ export function RegisterPage() {
   const passwordHints = usePasswordHints();
 
   // Waits for the session, as the sign-in screen does.
-  if (user && !loading) return <Navigate to="/" replace />;
+  if (user && !loading) return <Redirect href="/" />;
 
   const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -246,7 +244,7 @@ export function RegisterPage() {
     try {
       await register({ email: email.trim(), password, displayName });
       // Straight to the code screen: the gate would send an unverified account there.
-      navigate("/verify-email", { replace: true });
+      router.replace("/verify-email");
     } catch (caught) {
       setError(errorMessage(caught, "Your account could not be created. Please try again."));
       setFieldErrors(errorDetails(caught));
@@ -303,7 +301,7 @@ export function RegisterPage() {
 
       <p className="mt-6 text-center text-sm text-fg-muted">
         Already have an account?{" "}
-        <Link to="/login" className="font-medium text-fg-accent hover:underline">
+        <Link href="/login" className="font-medium text-fg-accent hover:underline">
           Sign in
         </Link>
       </p>
@@ -688,7 +686,7 @@ export function ForgotPasswordPage() {
         </form>
 
         <p className="mt-6 text-center text-sm">
-          <Link to="/login" className="text-fg-muted hover:underline">
+          <Link href="/login" className="text-fg-muted hover:underline">
             Back to sign in
           </Link>
         </p>
@@ -819,7 +817,7 @@ export function ForgotPasswordPage() {
         <SignOutOthersPanel />
 
         {/* A styled Link: a button inside an anchor is invalid. */}
-        <Link to="/" className={buttonClasses("primary", "lg", "w-full")}>
+        <Link href="/" className={buttonClasses("primary", "lg", "w-full")}>
           Continue to Songfolio
         </Link>
       </div>
@@ -834,7 +832,7 @@ export function ForgotPasswordPage() {
 export function VerifyEmailPage() {
   const { user, loading, startEmailVerification, verifyEmail, resendVerificationCode, logout } =
     useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -873,8 +871,8 @@ export function VerifyEmailPage() {
   // Reached by redirect, so a reload lands here mid-restore; wait, or it bounces
   // to sign-in.
   if (loading) return <Spinner />;
-  if (!user) return <Navigate to="/login" replace />;
-  if (user.email_verified_at) return <Navigate to="/" replace />;
+  if (!user) return <Redirect href="/login" />;
+  if (user.email_verified_at) return <Redirect href="/" />;
 
   const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -885,7 +883,7 @@ export function VerifyEmailPage() {
 
     try {
       await verifyEmail(code);
-      navigate("/", { replace: true });
+      router.replace("/");
     } catch (caught) {
       // A wrong code is a Prelude SDK error, named so a typo reads as one.
       setError(
@@ -1024,7 +1022,7 @@ export function ChangePasswordPage() {
   }, [startPasswordChange, user]);
 
   // Covers the session ending while the screen is open.
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Redirect href="/login" />;
 
   const onSubmitCode = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1113,10 +1111,10 @@ export function ChangePasswordPage() {
             You can still set a new password by resetting it, which emails you a code to confirm it
             is you.
           </p>
-          <Link to="/forgot-password" className={buttonClasses("primary", "lg", "w-full")}>
+          <Link href="/forgot-password" className={buttonClasses("primary", "lg", "w-full")}>
             Reset my password instead
           </Link>
-          <Link to="/profile" className={buttonClasses("secondary", "lg", "w-full")}>
+          <Link href="/profile" className={buttonClasses("secondary", "lg", "w-full")}>
             Back to profile
           </Link>
         </div>
@@ -1152,7 +1150,7 @@ export function ChangePasswordPage() {
             onResend={onResend}
           />
           <p>
-            <Link to="/profile" className="font-medium text-fg-muted hover:underline">
+            <Link href="/profile" className="font-medium text-fg-muted hover:underline">
               Back to profile
             </Link>
           </p>
@@ -1199,7 +1197,7 @@ export function ChangePasswordPage() {
       <div className="space-y-4">
         <SignOutOthersPanel />
 
-        <Link to="/profile" className={buttonClasses("primary", "lg", "w-full")}>
+        <Link href="/profile" className={buttonClasses("primary", "lg", "w-full")}>
           Back to profile
         </Link>
       </div>

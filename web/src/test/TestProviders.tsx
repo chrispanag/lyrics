@@ -1,14 +1,16 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
 import { type ReactNode, useMemo, useState } from "react";
 
 import { stubAuth, testQueryClient } from "./providers";
 import { AuthContext, type AuthContextValue } from "@/auth/context";
+import { TestRouter } from "@/lib/navigation";
 import type { User } from "@/lib/types";
 
 /**
  * The query client, router and auth stub a component reaches for outside
  * `AppRoot`, nested once for `renderWithProviders` and the Storybook preview.
+ * The router is the seam's `TestRouter`, so moving routers changes nothing
+ * here; `./routes.tsx` is the one harness file that names react-router.
  * Pass `queryClient` to keep a handle on it; otherwise each mount makes its own.
  */
 export function TestProviders({
@@ -31,9 +33,9 @@ export function TestProviders({
 
   return (
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={Array.isArray(route) ? route : [route]}>
+      <TestRouter entries={Array.isArray(route) ? route : [route]}>
         <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>
   );
 }

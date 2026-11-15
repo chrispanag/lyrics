@@ -2,29 +2,24 @@ import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
-import { createPath, useLocation } from "react-router-dom";
 
 import { SongSearch } from "./SongSearch";
 import { API, apiError, list, makeSong } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
-import { useNavigate } from "@/lib/navigation";
+import { useRouter } from "@/lib/navigation";
+import { CurrentAddress } from "@/test/routes";
 import type { Song } from "@/lib/types";
 
-/** The current address, serialized by `createPath` so nothing is dropped. */
-function Address() {
-  return <p>Now at {createPath(useLocation())}</p>;
-}
-
 /**
- * The box, with the address beside it. No `<Routes>`: the box stays mounted
+ * The box, with the address beside it. No `TestRoutes`: the box stays mounted
  * across a jump, as on the real page, so the reset on navigation is observable.
  */
 function renderSearch(route: string | string[] = "/songs/song-1") {
   return renderWithProviders(
     <>
       <SongSearch />
-      <Address />
+      <CurrentAddress />
       {/* Somewhere for focus to go that is not the box. */}
       <button type="button">Elsewhere</button>
       <Back />
@@ -35,9 +30,9 @@ function renderSearch(route: string | string[] = "/songs/song-1") {
 
 /** The back gesture, as a press: what the reader's next Back would actually do. */
 function Back() {
-  const navigate = useNavigate();
+  const router = useRouter();
   return (
-    <button type="button" onClick={() => navigate(-1)}>
+    <button type="button" onClick={() => router.back()}>
       Back
     </button>
   );

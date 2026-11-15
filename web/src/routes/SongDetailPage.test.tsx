@@ -2,12 +2,12 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-libra
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Route, Routes, useLocation } from "react-router-dom";
 
 import { SongDetailPage } from "./SongDetailPage";
 import { keys } from "@/api/hooks";
 import { returnDestination } from "@/auth/returnTo";
 import { BackButton } from "@/components/BackButton";
+import { useSearchParams } from "@/lib/navigation";
 import { deferred } from "@/test/deferred";
 import {
   API,
@@ -24,6 +24,7 @@ import { intersectAll, observedElements } from "@/test/intersection";
 import { songMatchesRef } from "@/lib/listContext";
 import type { Recording } from "@/lib/types";
 import { renderWithProviders } from "@/test/render";
+import { TestRoutes } from "@/test/routes";
 import { scrollDown, setScrollY } from "@/test/scroll";
 import { server } from "@/test/server";
 
@@ -32,11 +33,11 @@ import { server } from "@/test/server";
  * read with the real screen's `returnDestination`.
  */
 function SignInStub() {
-  const { state } = useLocation();
+  const params = useSearchParams();
   return (
     <div>
       <h1>Sign in</h1>
-      <p>Return to {returnDestination(state)}</p>
+      <p>Return to {returnDestination(params)}</p>
     </div>
   );
 }
@@ -47,23 +48,22 @@ beforeEach(() => setScrollY(0));
 
 function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
   return renderWithProviders(
-    <Routes>
-      <Route path="/songs/:id" element={<SongDetailPage />} />
-      <Route path="/login" element={<SignInStub />} />
-      {/* The list page Back has to reach again, with the real `BackButton`:
-          push versus replace is only visible by pressing Back. */}
-      <Route
-        path="/lists/:id"
-        element={
+    <TestRoutes
+      routes={{
+        "/songs/:id": <SongDetailPage />,
+        "/login": <SignInStub />,
+        // The list page Back has to reach again, with the real `BackButton`:
+        // push versus replace is only visible by pressing Back.
+        "/lists/:id": (
           <div>
             <h1>List page</h1>
             <BackButton />
           </div>
-        }
-      />
-      {/* Where a deleted song leaves the reader. */}
-      <Route path="/" element={<h1>Catalog</h1>} />
-    </Routes>,
+        ),
+        // Where a deleted song leaves the reader.
+        "/": <h1>Catalog</h1>,
+      }}
+    />,
     { route: "/songs/song-1", ...options },
   );
 }

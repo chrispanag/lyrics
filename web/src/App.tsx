@@ -1,12 +1,13 @@
 import { lazy } from "react";
-import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import { Outlet, Route, Routes } from "react-router-dom";
 
-import { returnTo } from "@/auth/returnTo";
+import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { Layout } from "@/components/Layout";
 import { MenuHeader } from "@/components/SearchHeader";
 import { PageTitle } from "@/components/PageTitle";
 import { EmptyState, Spinner } from "@/components/ui";
+import { Redirect, usePathname } from "@/lib/navigation";
 import { hasRole } from "@/lib/types";
 import {
   ChangePasswordPage,
@@ -39,12 +40,10 @@ const AdminGenresPage = lazy(() =>
 /** Requires a session before rendering. Display only; the server enforces. */
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const routerLocation = useLocation();
+  const signIn = useSignInHref();
 
   if (loading) return <Spinner />;
-  if (!user) {
-    return <Navigate to="/login" replace state={returnTo(routerLocation)} />;
-  }
+  if (!user) return <Redirect href={signIn} />;
   return <>{children}</>;
 }
 
@@ -58,7 +57,7 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
 
   if (loading) return <Spinner />;
-  if (!hasRole(user?.role, "admin")) return <Navigate to="/" replace />;
+  if (!hasRole(user?.role, "admin")) return <Redirect href="/" />;
   return <>{children}</>;
 }
 
@@ -90,15 +89,10 @@ function MenuBarLayout() {
  */
 function VerificationGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const routerLocation = useLocation();
+  const pathname = usePathname();
 
-  if (
-    !loading &&
-    user &&
-    !user.email_verified_at &&
-    !UNVERIFIED_ROUTES.has(routerLocation.pathname)
-  ) {
-    return <Navigate to="/verify-email" replace />;
+  if (!loading && user && !user.email_verified_at && !UNVERIFIED_ROUTES.has(pathname)) {
+    return <Redirect href="/verify-email" />;
   }
   return <>{children}</>;
 }
@@ -122,7 +116,13 @@ export function App() {
           }
         />
 
-        <Route element={<Layout />}>
+        <Route
+          element={
+            <Layout>
+              <Outlet />
+            </Layout>
+          }
+        >
           {/* Both render a search box, which carries the hamburger. */}
           <Route index element={<BrowsePage />} />
           <Route path="/songs/:id" element={<SongDetailPage />} />
@@ -148,11 +148,13 @@ export function App() {
               path="/admin"
               element={
                 <RequireAdmin>
-                  <AdminConsole />
+                  <AdminConsole>
+                    <Outlet />
+                  </AdminConsole>
                 </RequireAdmin>
               }
             >
-              <Route index element={<Navigate to={ADMIN_TABS[0].to} replace />} />
+              <Route index element={<Redirect href={ADMIN_TABS[0].to} />} />
               <Route path="users" element={<AdminUsersPage />} />
               <Route path="genres" element={<AdminGenresPage />} />
             </Route>

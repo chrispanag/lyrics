@@ -1,5 +1,4 @@
-import { useState, type SubmitEvent } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useState, type ReactNode, type SubmitEvent } from "react";
 import { Pencil, Plus, Tags, Trash } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
@@ -29,6 +28,7 @@ import {
 import { ADMIN_TABS } from "@/routes/adminTabs";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
+import { NavLink, pathMatches, usePathname } from "@/lib/navigation";
 import { useDebounced } from "@/lib/useDebounced";
 import { ROLES, type Genre, type Role } from "@/lib/types";
 
@@ -50,17 +50,15 @@ function RowSkeletons() {
 }
 
 /**
- * The console's shell: the `/admin` layout route's element, wrapped once by
- * `RequireAdmin`. The heading and title come from the tab matching the address,
- * and the tabs are the only way between screens: the app nav has one `/admin`
- * entry so its prefix match stays lit on both.
+ * The console's shell: what the `/admin` layout route renders around its
+ * screens, wrapped once by `RequireAdmin`. The heading and title come from the
+ * tab matching the address, and the tabs are the only way between screens: the
+ * app nav has one `/admin` entry so its prefix match stays lit on both.
  */
-export function AdminConsole() {
-  const { pathname } = useLocation();
-  // By segment, like NavLink: a bare `startsWith` would match `/admin/users-x`.
-  const current = ADMIN_TABS.find(
-    (tab) => pathname === tab.to || pathname.startsWith(`${tab.to}/`),
-  );
+export function AdminConsole({ children }: { children: ReactNode }) {
+  // The tabs' own rule, so the heading names the tab that is lit.
+  const pathname = usePathname();
+  const current = ADMIN_TABS.find((tab) => pathMatches(pathname, tab.to));
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
@@ -71,7 +69,7 @@ export function AdminConsole() {
         {ADMIN_TABS.map((tab) => (
           <NavLink
             key={tab.to}
-            to={tab.to}
+            href={tab.to}
             className={({ isActive }) => buttonClasses(isActive ? "primary" : "ghost", "md")}
           >
             {tab.label}
@@ -79,7 +77,7 @@ export function AdminConsole() {
         ))}
       </nav>
 
-      <Outlet />
+      {children}
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
-import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ListMusic } from "lucide-react";
 
 import { cardChrome } from "./cardStyles";
@@ -7,7 +6,7 @@ import { cn } from "@/lib/cn";
 import type { ListPosition } from "@/lib/listContext";
 import { FIELDS, modalIsOpen } from "@/lib/modal";
 import { startsClearOfEdges, swipeDirection } from "@/lib/swipe";
-import { useNavigate } from "@/lib/navigation";
+import { Link, useRouter } from "@/lib/navigation";
 
 /*
  * Moving through a list without leaving it: the bar's arrows (links, so a
@@ -38,7 +37,7 @@ export function ListSongNavBar({ position }: { position: ListPosition }) {
       className={cn(cardChrome, "mb-5 flex items-center gap-2 bg-surface px-3 py-1.5")}
     >
       <Link
-        to={position.listHref}
+        href={position.listHref}
         className="flex min-w-0 items-center gap-2 text-sm text-fg-tertiary transition-colors hover:text-fg-accent"
       >
         <ListMusic aria-hidden className="size-4 shrink-0" />
@@ -73,7 +72,7 @@ function StepArrow({ href, back }: { href?: string | undefined; back?: boolean |
 
   return (
     <Link
-      to={href}
+      href={href}
       replace
       aria-label={back ? "Previous song" : "Next song"}
       className={stepChrome}
@@ -149,7 +148,7 @@ export function ListSongSwipe({
  * changed selection are checked on move and end.
  */
 function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement | null>): void {
-  const navigate = useNavigate();
+  const router = useRouter();
   // The strings, not `position`, which is a new object every render and would
   // rebuild the listeners each time.
   const { previousHref, nextHref } = position;
@@ -217,7 +216,7 @@ function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement |
       const href = direction === "next" ? nextHref : previousHref;
       if (!href) return;
 
-      navigate(href, { replace: true });
+      router.replace(href);
     };
 
     element.addEventListener("touchstart", onStart, { passive: true });
@@ -231,7 +230,7 @@ function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement |
       element.removeEventListener("touchend", onEnd);
       element.removeEventListener("touchcancel", forget);
     };
-  }, [navigate, nextHref, previousHref, surface]);
+  }, [router, nextHref, previousHref, surface]);
 }
 
 /** What is selected on the page, as text. Nothing selected is "". */
@@ -316,7 +315,7 @@ function useSwipeHint(): [boolean | null, (element: HTMLElement | null) => void]
  * focused fields and open modals are left alone.
  */
 function useArrowKeyPaging(position: ListPosition): void {
-  const navigate = useNavigate();
+  const router = useRouter();
   // The strings, not `position`; see `useSwipePaging`.
   const { previousHref, nextHref } = position;
 
@@ -334,10 +333,10 @@ function useArrowKeyPaging(position: ListPosition): void {
 
       // Otherwise overflowing lyrics also scroll sideways on the same press.
       event.preventDefault();
-      navigate(href, { replace: true });
+      router.replace(href);
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate, nextHref, previousHref]);
+  }, [router, nextHref, previousHref]);
 }

@@ -1042,6 +1042,89 @@ them is written down.
   generating. Its `Sitemap:` line therefore names a path with no file behind it,
   which is fine and is worth knowing before someone goes looking for one.
 
+### The routing seam
+
+Every screen is still a react-router route, and the plan is to move them onto
+App Router pages backed by `next/navigation`. `lib/navigation.tsx` is what makes
+that switch one module: it is the only file that may import react-router outside
+the route table (`App.tsx`) and the harness's `test/routes.tsx`, and Biome's
+`noRestrictedImports` refuses it anywhere else. It mounts the router too —
+`AppRouter` for `AppRoot`, `TestRouter` for `TestProviders` — so neither names
+a router. What it offers is shaped by what Next can also
+implement, which is why the parts below look the way they do.
+
+- **The vocabulary is Next's.** `useRouter()` returns `push`, `replace` and
+  `back`; `Link` and `NavLink` take an `href` string and `replace`; `usePathname`,
+  `useSearchParams` (read-only) and `useParams` read the address;
+  `useSetSearchParams` writes the search string from what it holds now; and
+  `<Redirect>` always replaces, since every guard did. A `push` to the address
+  already showing is a replace, as react-router's `Link` already made one: two
+  identical entries in a row are a Back press that appears to do nothing. An
+  address is a string — never react-router's object `To`, which Next's `href` object is not the same
+  shape as — and there is no hash in `useCurrentHref`, because no Next hook
+  exposes one. `NavLink` is written here over `usePathname` rather than wrapped,
+  and its `pathMatches` is also what `AdminConsole` names its heading by, so the
+  tab that is lit and the heading cannot disagree. It mirrors react-router's
+  rule, including the one that surprises: a link to `/` is lit on `/` alone —
+  which is why there is no `end` prop to say it a second time.
+  `Layout` and `AdminConsole` take `children`; the `<Outlet/>` stays in the
+  route table, which is the part a layout file replaces.
+- **Sign-in's destination travels as `?next=`, not router state.** Router state
+  is react-router's alone, and the address also survives a reload of the
+  sign-in screen. `auth/returnTo.ts` writes it (`signInHref`) and reads it
+  (`returnDestination`), and the reader is where the cost lands: anyone can
+  write the parameter, so only a path on this site is accepted. Writers call
+  `useSignInHref()`, which reads the current address *with* its search string;
+  one built by hand from `usePathname` drops a filter on the way back. The check is a
+  `URL` resolved against a stand-in origin, not a prefix test, because the
+  parser is what turns `/\host` and a tab inside `//host` into another host —
+  exactly as a browser would, and exactly what a `startsWith("//")` misses.
+  `returnTo.test.ts` walks those spellings.
+- **"Is anything of ours behind this entry" is `router.canGoBack()`, and it
+  replaced `location.key === "default"`**, which Next has no equivalent of. It
+  is whether this document has pushed an entry or moved through history since
+  it loaded: the in-app trail and nothing else, kept in memory. Two browser
+  answers were rejected for counting more than that trail.
+  `window.history.length` counts other sites' entries, so a link opened from
+  search results reads as having something behind it. The Navigation API's
+  `navigation.canGoBack` counts earlier *page loads* of this site, so an editor
+  address pasted into a tab already on a song pops to that other song after
+  saving — it was the first version here, and review caught it. What memory
+  costs is the reload: a reloaded editor reads as a fresh tab and replaces
+  itself with its own song instead of popping, which leaves one duplicate
+  entry behind. That is the safe way to be wrong, since the other way lands
+  somewhere unrelated; it is also the one case `location.key` got right, because
+  react-router keeps the key in `history.state`. Persisting a mark of our own
+  there would recover it, at the price of depending on what each router does to
+  `history.state`. The flag lives in a provider that `AppRouter` and
+  `TestRouter` mount and nothing else can, so no tree has a router without it;
+  `TestRouter` reads the history behind the first screen (`route: [...]`) off
+  its entries, which is how the editor's specs keep both sides pinned.
+- **`useNavigationKey` replaced `location.key` as "a navigation happened".** The
+  drawer closes on it and the song page's search box empties on it, and both
+  need a link to the address already showing to count — which changes neither
+  the pathname nor the search string, under either router. The key is the
+  address plus a count of navigations whose destination *was* the address
+  showing, which the seam can see because every `Link` press and every
+  `push`/`replace` goes through it. Counting only those is deliberate: a
+  navigation that moves the address changes the key by moving the address, on
+  the same render that draws the new screen, where a counter bumped at the click
+  would reset the old screen a render early. A modified click opens another tab
+  and counts for nothing. What it misses is Back between two entries with the
+  same address, which nothing in the app creates.
+- **`useSetSearchParams` is not referentially stable**, exactly as react-router's
+  setter is not, so `BrowsePage`'s debounced-search guard is still what keeps
+  pagination advancing. Making it stable here would be a promise the Next
+  implementation then has to keep too.
+- **The seam is one `.tsx` file exporting components beside hooks**, which
+  `useComponentExportOnlyModules` forbids everywhere else. It is turned off for
+  that file alone in `biome.jsonc`: being one module is the point, and the cost
+  is a full reload instead of a fast refresh when it is edited.
+- **Specs say which screen answers which address through `test/routes.tsx`**
+  (`TestRoutes`, and `CurrentAddress` for asserting a destination), never by
+  naming `<Routes>`. That file is the whole of the harness a router change has
+  to touch.
+
 ### Frontend
 
 - **`BrowsePage`'s debounced-search effect needs its guard.** `setParams` is not
@@ -1310,11 +1393,11 @@ them is written down.
   Space. Measured in WebKit with focus on the dialog and on a link. Chromium's
   touch emulation confirms vertical drags leave `scrollY` alone; mobile WebKit
   in Playwright cannot drag at all, so on an iPhone this is unconfirmed beyond
-  the computed styles. And it closes on **the location, not the pathname**: a
-  link to the screen the reader is already on pushes a new entry with the same
-  path, so a drawer watching the path alone is left standing open with nothing
-  having happened. That close is a reset made while rendering, keyed apart from
-  the scroll-to-top effect beside it, whose `pathname` key is deliberate — a
+  the computed styles. And it closes on **`useNavigationKey`, not the
+  pathname**: a link to the screen the reader is already on changes no part of
+  the address, so a drawer watching the address alone is left standing open
+  with nothing having happened. That close is a reset made while rendering,
+  keyed apart from the scroll-to-top effect beside it, whose `pathname` key is deliberate — a
   filter written into the catalog's query string must not scroll that page back
   to the top. **A window that grows past `md` closes it too**, which is a
   `matchMedia` subscription in a codebase that otherwise leaves every breakpoint
@@ -1413,7 +1496,8 @@ them is written down.
   and throwing there would make `Layout` something each of them has to mount.
 - **The admin console is a guarded section, not a pair of guarded screens.**
   `RequireAdmin` wraps the `/admin` layout route, whose element is the console's
-  own chrome around an `<Outlet/>`, so a screen added below it is admin-only by
+  own chrome around the route table's `<Outlet/>` (the console takes it as
+  `children`, like `Layout`), so a screen added below it is admin-only by
   position — the wrapper is not something the next screen can be written
   without. Written per route instead, as it first was, a forgotten wrapper
   renders that screen for everybody and the server refusing its writes is all
@@ -1671,12 +1755,12 @@ them is written down.
   `?list=` on the way out — the Edit link drops it, and any destination built
   here would drop it too. Two things do navigate instead, for two unrelated
   reasons, and folding them together is the way to lose one: an editor address
-  opened in a fresh tab has nothing behind it, which `location.key ===
-  "default"` is what identifies; and adding a song has to land the reader on
-  what they created rather than on the catalog they opened the form from, which
-  is the `isEdit` branch and nothing to do with the key — an in-app `/songs/new`
-  has a perfectly ordinary key and a page behind it, which is why *canceling*
-  there does pop. Both navigate with `replace`, so Back cannot return to a form
+  opened in a fresh tab has nothing behind it, which `router.canGoBack()` is
+  what identifies (see "The routing seam" for how, and why a reload can read as
+  a fresh tab); and adding a song has to land the reader on what they created
+  rather than on the catalog they opened the form from, which is the `isEdit`
+  branch and nothing to do with history — an in-app `/songs/new` has a page
+  behind it, which is why *canceling* there does pop. Both navigate with `replace`, so Back cannot return to a form
   already saved. Pinned from both sides, address *and* trail, in
   `SongEditorPage.test.tsx`: a fix that kept `?list=` while still duplicating
   the entry passes that spec's every assertion about the address.
