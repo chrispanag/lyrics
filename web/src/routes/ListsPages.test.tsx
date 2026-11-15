@@ -2,10 +2,10 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, delay, http } from "msw";
 import { Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { ListDetailPage } from "./ListsPages";
-import { API, apiError, listById, makeList, makeSong, makeUser } from "@/test/handlers";
+import { ListDetailPage, ListsPage } from "./ListsPages";
+import { API, apiError, list, listById, makeList, makeSong, makeUser } from "@/test/handlers";
 import { stubRowRects } from "@/test/rects";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
@@ -29,7 +29,98 @@ function renderDetail(route: string, options: Parameters<typeof renderWithProvid
   );
 }
 
+describe("ListsPage", () => {
+  it("lists the reader's lists, each marked public or private, with its song count", async () => {
+    server.use(
+      http.get(`${API}/api/v1/lists`, () =>
+        HttpResponse.json(
+          list([
+            makeList({ id: "list-1", name: "Ρεμπέτικα", is_public: true, item_count: 3 }),
+            makeList({ id: "list-2", name: "Έντεχνα", is_public: false, item_count: 1 }),
+          ]),
+        ),
+      ),
+    );
+
+    renderWithProviders(<ListsPage />, { user: makeUser() });
+
+    const shared = await screen.findByRole("link", { name: /Ρεμπέτικα/ });
+    expect(shared).toHaveAttribute("href", "/lists/list-1");
+    expect(within(shared).getByLabelText("Public")).toBeInTheDocument();
+    expect(within(shared).getByText("3 songs")).toBeInTheDocument();
+
+    const own = screen.getByRole("link", { name: /Έντεχνα/ });
+    expect(within(own).getByLabelText("Private")).toBeInTheDocument();
+    expect(within(own).getByText("1 song")).toBeInTheDocument();
+  });
+
+  it("says there are no lists yet rather than showing nothing", async () => {
+    renderWithProviders(<ListsPage />, { user: makeUser() });
+
+    expect(await screen.findByText("No lists yet")).toBeInTheDocument();
+  });
+
+  it("creates a list under the trimmed name and shows it once created", async () => {
+    const user = userEvent.setup();
+    const created: ReturnType<typeof makeList>[] = [];
+    let sentName: unknown;
+    server.use(
+      http.get(`${API}/api/v1/lists`, () => HttpResponse.json(list(created))),
+      http.post(`${API}/api/v1/lists`, async ({ request }) => {
+        sentName = ((await request.json()) as { name: string }).name;
+        const made = makeList({ id: "list-9", name: String(sentName) });
+        created.push(made);
+        return HttpResponse.json(made, { status: 201 });
+      }),
+    );
+
+    renderWithProviders(<ListsPage />, { user: makeUser() });
+
+    await user.click(await screen.findByRole("button", { name: /new list/i }));
+    await user.type(screen.getByLabelText("Name"), "  Καντάδες  ");
+    await user.click(screen.getByRole("button", { name: "Create list" }));
+
+    await waitFor(() => expect(sentName).toBe("Καντάδες"));
+    // The sheet closes and the list, refetched, is on the page.
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await screen.findByRole("link", { name: /Καντάδες/ })).toBeInTheDocument();
+  });
+
+  // Names are unique per owner; the refusal must not close the sheet on the
+  // name the reader typed.
+  it("keeps the sheet open and says why when a list cannot be created", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.post(`${API}/api/v1/lists`, () =>
+        apiError(409, "conflict", "You already have a list with that name."),
+      ),
+    );
+
+    renderWithProviders(<ListsPage />, { user: makeUser() });
+
+    await user.click(await screen.findByRole("button", { name: /new list/i }));
+    await user.type(screen.getByLabelText("Name"), "Ρεμπέτικα");
+    await user.click(screen.getByRole("button", { name: "Create list" }));
+
+    const dialog = screen.getByRole("dialog", { name: "New list" });
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "You already have a list with that name.",
+    );
+    expect(screen.getByLabelText("Name")).toHaveValue("Ρεμπέτικα");
+  });
+});
+
 describe("ListDetailPage", () => {
+  // A stranger asking for a private list gets the same 404 as a deleted one.
+  it("says a list it cannot read is not available, with a way back", async () => {
+    serveLists();
+
+    renderDetail("/lists/missing", { user: makeUser({ id: "user-1" }) });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("This list is not available.");
+    expect(screen.getByRole("link", { name: "Back to lists" })).toHaveAttribute("href", "/lists");
+  });
+
   // A tokenless request makes a private list 404 to its owner, and apiFetch
   // retries only 401s. See CLAUDE.md, "Frontend".
   it("does not ask for a list until the session is known", async () => {
@@ -267,6 +358,137 @@ describe("ListDetailPage sharing", () => {
     await user.click(screen.getByRole("button", { name: /publish and get a link/i }));
 
     await waitFor(() => expect(published).toBe(true));
+  });
+
+  it("copies the share link and says it did", async () => {
+    // `setup` installs user-event's clipboard on `navigator`.
+    const user = userEvent.setup();
+    serveLists(makeList({ id: "list-1", owner_id: "user-1", is_public: true }));
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    await user.click(await screen.findByRole("button", { name: /^share$/i }));
+    await user.click(screen.getByRole("button", { name: "Copy link" }));
+
+    expect(await screen.findByRole("button", { name: "Link copied" })).toBeInTheDocument();
+    await expect(navigator.clipboard.readText()).resolves.toBe(
+      `${window.location.origin}/lists/list-1`,
+    );
+  });
+
+  // Clipboard access can be refused; the link is still on screen to copy by hand.
+  it("asks for a manual copy when the clipboard refuses the link", async () => {
+    const user = userEvent.setup();
+    const refused = vi
+      .spyOn(navigator.clipboard, "writeText")
+      .mockRejectedValue(new DOMException("Denied", "NotAllowedError"));
+    serveLists(makeList({ id: "list-1", owner_id: "user-1", is_public: true }));
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    await user.click(await screen.findByRole("button", { name: /^share$/i }));
+    await user.click(screen.getByRole("button", { name: "Copy link" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/select the link above/i);
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeInTheDocument();
+    refused.mockRestore();
+  });
+
+  it("lets the owner take a public list private again", async () => {
+    const user = userEvent.setup();
+    serveLists(makeList({ id: "list-1", owner_id: "user-1", is_public: true }));
+
+    let sent: unknown;
+    server.use(
+      http.patch(`${API}/api/v1/lists/:id`, async ({ request }) => {
+        sent = ((await request.json()) as { is_public?: boolean }).is_public;
+        return HttpResponse.json(makeList({ id: "list-1", owner_id: "user-1", is_public: false }));
+      }),
+    );
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    await user.click(await screen.findByRole("button", { name: /make private/i }));
+
+    await waitFor(() => expect(sent).toBe(false));
+  });
+
+  // Only a name conflict has a remedy the reader can supply.
+  it("reports any other copy failure without asking for a new name", async () => {
+    const user = userEvent.setup();
+    serveLists(makeList({ id: "list-1", owner_id: "someone-else" }));
+    server.use(
+      http.post(`${API}/api/v1/lists/:id/copy`, () =>
+        apiError(500, "internal", "Something went wrong."),
+      ),
+    );
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    await user.click(await screen.findByRole("button", { name: /save to my lists/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong.");
+    expect(screen.queryByRole("dialog", { name: /name your copy/i })).not.toBeInTheDocument();
+  });
+
+  // The conflict is about a name the reader has stopped choosing; left behind,
+  // it would sit under the button describing nothing they are doing.
+  it("drops the name conflict when the rename is abandoned", async () => {
+    const user = userEvent.setup();
+    serveLists(makeList({ id: "list-1", owner_id: "someone-else" }));
+    server.use(
+      http.post(`${API}/api/v1/lists/:id/copy`, () =>
+        apiError(409, "conflict", "You already have a list with that name."),
+      ),
+    );
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    await user.click(await screen.findByRole("button", { name: /save to my lists/i }));
+    const dialog = await screen.findByRole("dialog", { name: /name your copy/i });
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.queryByText(/already have a list with that name/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("ListDetailPage default list", () => {
+  // The server refuses to delete it; the page must not offer what will fail.
+  it("does not offer to delete the owner's default list", async () => {
+    serveLists(makeList({ id: "list-1", owner_id: "user-1", is_default: true }));
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    expect(await screen.findByRole("button", { name: /^share$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /delete list/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("ListDetailPage reorder failure", () => {
+  it("says so when the new order cannot be saved", async () => {
+    const user = userEvent.setup();
+    const songs = [
+      makeSong({ id: "song-1", title: "First" }),
+      makeSong({ id: "song-2", title: "Second" }),
+    ];
+    serveLists(makeList({ id: "list-1", owner_id: "user-1", item_count: 2, songs }));
+    server.use(
+      http.post(`${API}/api/v1/lists/:id/reorder`, () =>
+        apiError(500, "internal", "Something went wrong."),
+      ),
+    );
+
+    const { container } = renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    const handle = await screen.findByRole("button", { name: "Reorder First" });
+    stubRowRects(container);
+    handle.focus();
+    await user.keyboard("{ }");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{ }");
+
+    expect(await screen.findByText("The new order could not be saved.")).toBeInTheDocument();
   });
 });
 

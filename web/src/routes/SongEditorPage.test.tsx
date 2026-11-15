@@ -7,7 +7,7 @@ import { Route, Routes, createPath, useLocation } from "react-router-dom";
 import { SongEditorPage } from "./SongEditorPage";
 import { BackButton } from "@/components/BackButton";
 import type { SongInput } from "@/lib/types";
-import { API, makeRecording, makeSong, makeUser } from "@/test/handlers";
+import { API, apiError, list, makeGenre, makeRecording, makeSong, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
@@ -343,5 +343,359 @@ describe("SongEditorPage", () => {
     const message = await screen.findByText("Not a recognizable YouTube link.");
     expect(links[1]!).toHaveAttribute("aria-describedby", message.id);
     expect(links[0]!).not.toHaveAttribute("aria-describedby", message.id);
+  });
+
+  // Every save sends the whole song, so a field that fails to hydrate is blanked
+  // by the next save of anything else.
+  it("resends an untouched song exactly as it was stored", async () => {
+    let body: SongInput | undefined;
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(
+          makeSong({
+            alt_title: "Thalassa Platia",
+            notes: "Από το «Μικρές Κυκλάδες».",
+            credits: [
+              { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
+              { person_id: "person-3", name: "Οδυσσέας Ελύτης", role: "lyricist", position: 1 },
+            ],
+            genres: [makeGenre({ id: "genre-1" })],
+            // A recording with no year is the common case.
+            recordings: [makeRecording({ release_year: null, label: "Live", notes: "Ηρώδειο" })],
+          }),
+        ),
+      ),
+      http.get(`${API}/api/v1/genres`, () => HttpResponse.json(list([makeGenre()]))),
+      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
+        body = (await request.json()) as SongInput;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+    renderEditor({ route: "/songs/song-1/edit" });
+
+    await save();
+
+    await vi.waitFor(() => expect(body).toBeDefined());
+    expect(body).toEqual({
+      title: "Θάλασσα Πλατιά",
+      alt_title: "Thalassa Platia",
+      lyrics: "Στης θάλασσας τα βάθη\nη αγάπη μου κοιμάται",
+      language: "el",
+      notes: "Από το «Μικρές Κυκλάδες».",
+      credits: [
+        { person_id: "person-1", role: "composer", position: 0 },
+        { person_id: "person-3", role: "lyricist", position: 1 },
+      ],
+      genre_ids: ["genre-1"],
+      recordings: [
+        {
+          label: "Live",
+          youtube_url: null,
+          release_year: null,
+          notes: "Ηρώδειο",
+          is_first: true,
+          position: 0,
+          performers: [{ person_id: "person-2", position: 0 }],
+        },
+      ],
+    });
+  });
+
+  it("sends the song's own fields as edited, blanks as null", async () => {
+    let body: SongInput | undefined;
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(makeSong({ alt_title: "Old", notes: "Old notes" })),
+      ),
+      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
+        body = (await request.json()) as SongInput;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+    renderEditor({ route: "/songs/song-1/edit" });
+
+    const title = await screen.findByLabelText("Title");
+    await userEvent.clear(title);
+    await userEvent.type(title, "  Sea  ");
+    // Whitespace alone is no alternative title, and no notes.
+    await userEvent.clear(screen.getByLabelText("Alternative title"));
+    await userEvent.type(screen.getByLabelText("Alternative title"), "   ");
+    await userEvent.clear(screen.getByLabelText("Notes"));
+    await userEvent.selectOptions(screen.getByLabelText("Language"), "en");
+    const lyrics = screen.getByLabelText("Lyrics");
+    await userEvent.clear(lyrics);
+    await userEvent.type(lyrics, "  Line one");
+
+    await save();
+
+    await vi.waitFor(() => expect(body).toBeDefined());
+    expect(body).toMatchObject({
+      title: "Sea",
+      alt_title: null,
+      notes: null,
+      language: "en",
+      // Lyrics are sent verbatim: leading spaces can be hand-aligned verse.
+      lyrics: "  Line one",
+    });
+  });
+
+  // Positions come from the array, so removing a row renumbers what follows.
+  it("sends credits as edited: role changed, row removed, row added, blank dropped", async () => {
+    let body: SongInput | undefined;
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(
+          makeSong({
+            credits: [
+              { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
+              { person_id: "person-3", name: "Οδυσσέας Ελύτης", role: "composer", position: 1 },
+            ],
+          }),
+        ),
+      ),
+      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
+        body = (await request.json()) as SongInput;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+    renderEditor({ route: "/songs/song-1/edit" });
+
+    await userEvent.selectOptions(await screen.findByLabelText("Role for credit 2"), "lyricist");
+    await userEvent.click(screen.getByRole("button", { name: "Remove credit 1" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add credit" }));
+    await userEvent.type(screen.getAllByPlaceholderText("Name")[1]!, "  Νίκος Γκάτσος ");
+    // An abandoned add.
+    await userEvent.click(screen.getByRole("button", { name: "Add credit" }));
+
+    await save();
+
+    await vi.waitFor(() => expect(body).toBeDefined());
+    expect(body!.credits).toEqual([
+      { person_id: "person-3", role: "lyricist", position: 0 },
+      { name: "Νίκος Γκάτσος", role: "composer", position: 1 },
+    ]);
+  });
+
+  it("toggles genres on and off", async () => {
+    let body: SongInput | undefined;
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(makeSong({ genres: [makeGenre({ id: "genre-1" })] })),
+      ),
+      http.get(`${API}/api/v1/genres`, () =>
+        HttpResponse.json(
+          list([
+            makeGenre({ id: "genre-1", name: "Ρεμπέτικο" }),
+            makeGenre({ id: "genre-2", name: "Έντεχνο", slug: "entechno" }),
+          ]),
+        ),
+      ),
+      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
+        body = (await request.json()) as SongInput;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+    renderEditor({ route: "/songs/song-1/edit" });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Ρεμπέτικο" }));
+    await userEvent.click(screen.getByRole("button", { name: "Έντεχνο" }));
+
+    await save();
+
+    await vi.waitFor(() => expect(body).toBeDefined());
+    expect(body!.genre_ids).toEqual(["genre-2"]);
+  });
+
+  it("says so when no genres exist rather than showing an empty row", async () => {
+    renderEditor({ route: "/songs/new" });
+
+    expect(await screen.findByText("No genres exist yet.")).toBeInTheDocument();
+  });
+
+  // Removing the marked recording needs no rule about who inherits the mark.
+  it("drops a removed recording and a removed performer from the save", async () => {
+    let body: SongInput | undefined;
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(
+          makeSong({
+            recordings: [
+              makeRecording({ id: "recording-1", release_year: 1964 }),
+              makeRecording({
+                id: "recording-2",
+                release_year: 1988,
+                is_first: false,
+                performers: [
+                  { person_id: "person-2", name: "Γιώργος Νταλάρας", position: 0 },
+                  { person_id: "person-4", name: "Μαρία Φαραντούρη", position: 1 },
+                ],
+              }),
+            ],
+          }),
+        ),
+      ),
+      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
+        body = (await request.json()) as SongInput;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+    renderEditor({ route: "/songs/song-1/edit" });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Remove recording 1" }));
+    // What was Recording 2 is Recording 1 now.
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove performer 1 from recording 1" }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Notes", { selector: "#recording-0-notes" }),
+      "Ζωντανά",
+    );
+
+    expect(screen.getByLabelText("No recording marked as first")).toBeChecked();
+
+    await save();
+
+    await vi.waitFor(() => expect(body).toBeDefined());
+    expect(body!.recordings).toEqual([
+      {
+        label: null,
+        youtube_url: null,
+        release_year: 1988,
+        notes: "Ζωντανά",
+        is_first: false,
+        position: 0,
+        performers: [{ person_id: "person-4", position: 0 }],
+      },
+    ]);
+  });
+
+  // Each message is asserted through the control it describes: a message that
+  // renders but is not wired up is invisible to a screen reader.
+  it("puts the server's field errors beside the fields they name", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(makeSong({ recordings: [makeRecording()] })),
+      ),
+      http.patch(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(
+          {
+            error: {
+              code: "validation_failed",
+              message: "The song could not be saved.",
+              details: {
+                title: "Title is required.",
+                recordings: "Only one recording may be the first.",
+                "recordings[0].label": "Label is too long.",
+                "recordings[0].release_year": "Year is out of range.",
+                "recordings[0].notes": "Notes are too long.",
+              },
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderEditor({ route: "/songs/song-1/edit" });
+
+    await save();
+
+    expect(await screen.findByText("The song could not be saved.")).toBeInTheDocument();
+    expect(screen.getByText("Only one recording may be the first.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Title")).toHaveAccessibleDescription("Title is required.");
+    expect(screen.getByLabelText("Label")).toHaveAccessibleDescription("Label is too long.");
+    expect(screen.getByLabelText("Year")).toHaveAccessibleDescription("Year is out of range.");
+    expect(
+      screen.getByLabelText("Notes", { selector: "#recording-0-notes" }),
+    ).toHaveAccessibleDescription("Notes are too long.");
+  });
+
+  // A failed load must not fall through to an empty form: saving it would blank
+  // the song.
+  it("offers no form for a song that could not be loaded", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        apiError(500, "internal", "Something went wrong."),
+      ),
+    );
+    renderEditor({ route: "/songs/song-1/edit" });
+
+    expect(await screen.findByText(/could not be loaded/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+  });
+
+  // Deciding on the restoring session would bounce a contributor off on reload.
+  it("waits for the session before deciding who may edit", () => {
+    renderEditor({ route: "/songs/new", user: null, auth: { loading: true } });
+
+    expect(screen.getByRole("status")).toHaveTextContent("Loading");
+    expect(screen.queryByRole("heading", { name: "Catalog" })).not.toBeInTheDocument();
+  });
+
+  it("sends an account below contributor to the catalog", async () => {
+    renderEditor({ route: "/songs/new", user: makeUser({ role: "user" }) });
+
+    expect(await screen.findByRole("heading", { name: "Catalog" })).toBeInTheDocument();
+  });
+
+  // Contributors edit only their own songs; the server enforces it as well.
+  it("sends a contributor to the song when it is somebody else's", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(makeSong({ created_by: "someone-else" })),
+      ),
+    );
+    renderEditor({
+      route: "/songs/song-1/edit",
+      user: makeUser({ id: "user-1", role: "contributor" }),
+    });
+
+    expect(await screen.findByText("Address: /songs/thalassa-platia")).toBeInTheDocument();
+  });
+
+  it("lets a contributor edit their own song", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(makeSong({ created_by: "user-1" })),
+      ),
+    );
+    renderEditor({
+      route: "/songs/song-1/edit",
+      user: makeUser({ id: "user-1", role: "contributor" }),
+    });
+
+    expect(await screen.findByRole("heading", { name: "Edit song" })).toBeInTheDocument();
+  });
+
+  it("asks before a cancel discards unsaved changes, and stays if told no", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderEditor({ route: ["/songs/song-1", "/songs/song-1/edit"] });
+
+    await userEvent.type(await screen.findByLabelText("Title"), "!");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(confirm).toHaveBeenCalledWith("Discard your unsaved changes?");
+    expect(screen.getByRole("heading", { name: "Edit song" })).toBeInTheDocument();
+
+    confirm.mockReturnValue(true);
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(await screen.findByText("Address: /songs/song-1")).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
+  // A tab close is the one way out the Cancel button never sees.
+  it("guards a tab close only while there are unsaved changes", async () => {
+    renderEditor({ route: "/songs/song-1/edit" });
+    const unload = () => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+
+    const title = await screen.findByLabelText("Title");
+    expect(unload()).toBe(false);
+
+    await userEvent.type(title, "!");
+    expect(unload()).toBe(true);
   });
 });

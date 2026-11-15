@@ -1,6 +1,7 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ChangePasswordPage,
@@ -157,6 +158,47 @@ describe("VerifyEmailPage", () => {
     ).toBeInTheDocument();
   });
 
+  // A refusal our API pinned on the code goes beneath the field it is about.
+  it("puts the server's reason for a code under the field", async () => {
+    const verifyEmail = vi.fn().mockRejectedValue(
+      new ApiError(422, "validation_error", "Check the highlighted fields.", {
+        code: "The code must be six digits.",
+      }),
+    );
+    renderVerifyPage({ verifyEmail });
+
+    await userEvent.type(screen.getByLabelText("Verification code"), "123456");
+    await userEvent.click(screen.getByRole("button", { name: "Verify email" }));
+
+    expect(await screen.findByText("Check the highlighted fields.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Verification code")).toHaveAccessibleDescription(
+      "The code must be six digits.",
+    );
+  });
+
+  // Sign-out is the only exit for an address typed wrong at sign-up.
+  it("lets a mistyped address sign out", async () => {
+    const logout = vi.fn().mockResolvedValue(undefined);
+    renderVerifyPage({ logout });
+
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+
+    expect(logout).toHaveBeenCalled();
+  });
+
+  // The session can end with the screen open; there is nothing here to verify.
+  it("sends a signed-out visitor to sign in", () => {
+    renderWithProviders(
+      <Routes>
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/login" element={<p>Sign-in screen</p>} />
+      </Routes>,
+      { user: null, route: "/verify-email" },
+    );
+
+    expect(screen.getByText("Sign-in screen")).toBeInTheDocument();
+  });
+
   // Effects run before the redirect; a verified visitor must open no challenge.
   it("sends a verified account on its way without asking for a code", async () => {
     const startEmailVerification = vi.fn();
@@ -283,6 +325,54 @@ describe("ForgotPasswordPage", () => {
     } finally {
       logged.mockRestore();
     }
+  });
+
+  // The second code restarts the rest, then a resend is a real one: the visitor
+  // is signed in by now, so a failure can be named rather than hidden.
+  describe("the confirmation code's resend", () => {
+    // Fake time that still moves, so user-event's own waits keep working.
+    beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
+    afterEach(() => vi.useRealTimers());
+
+    /** Lets the resend's rest run out, one tick per render. */
+    function waitOutCooldown() {
+      for (let second = 0; second < 30; second++) {
+        act(() => vi.advanceTimersByTime(1000));
+      }
+    }
+
+    it("rests after the second code goes out, then sends another", async () => {
+      const resendPasswordWriteCode = vi.fn().mockResolvedValue(undefined);
+      await reachConfirmStep({ resendPasswordWriteCode });
+
+      // A code just went out, so the button rests rather than offering a second.
+      expect(screen.getByRole("button", { name: /Send another in \d+s/ })).toBeDisabled();
+
+      await userEvent.type(screen.getByLabelText("Confirmation code"), "123");
+      waitOutCooldown();
+      await userEvent.click(screen.getByRole("button", { name: "Send another" }));
+
+      await waitFor(() => expect(resendPasswordWriteCode).toHaveBeenCalled());
+      expect(await screen.findByRole("status")).toHaveTextContent(/most recent email/);
+      expect(screen.getByLabelText("Confirmation code")).toHaveValue("");
+    });
+
+    it("says a confirmation code could not be sent", async () => {
+      const resendPasswordWriteCode = vi
+        .fn()
+        .mockRejectedValue(
+          new ApiError(502, "upstream_error", "Verification emails cannot be sent right now."),
+        );
+      await reachConfirmStep({ resendPasswordWriteCode });
+
+      waitOutCooldown();
+      await userEvent.click(screen.getByRole("button", { name: "Send another" }));
+
+      expect(
+        await screen.findByText("Verification emails cannot be sent right now."),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
   });
 
   it("will not submit a partial code", async () => {
@@ -571,6 +661,25 @@ describe("ChangePasswordPage", () => {
     }
   });
 
+  // Anything but a wrong digit is not the visitor's typo, and must not read as one.
+  it("does not call a code that could not be checked wrong", async () => {
+    const confirmPasswordWriteCode = vi.fn().mockRejectedValue(new Error("network down"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      renderChangePage({ confirmPasswordWriteCode });
+
+      await userEvent.type(await screen.findByLabelText("Confirmation code"), "123456");
+      await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+      expect(
+        await screen.findByText("That code could not be checked. Ask for another and try again."),
+      ).toBeInTheDocument();
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
   it("saves the new password", async () => {
     const changePassword = vi.fn().mockResolvedValue(undefined);
     await reachPasswordStep({ changePassword });
@@ -580,6 +689,27 @@ describe("ChangePasswordPage", () => {
 
     await waitFor(() => expect(changePassword).toHaveBeenCalledWith("a-better-secret"));
     expect(await screen.findByText("Password changed")).toBeInTheDocument();
+  });
+
+  // Neither expired nor rejected: no hints are worth fetching, and the form stays.
+  it("reports an unexplained save failure on the password form", async () => {
+    const changePassword = vi.fn().mockRejectedValue(new Error("network down"));
+    const validatePassword = vi.fn().mockResolvedValue({ valid: true, messages: [] });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      await reachPasswordStep({ changePassword, validatePassword });
+
+      await userEvent.type(screen.getByLabelText("New password"), "a-better-secret");
+      await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
+
+      expect(
+        await screen.findByText("That password could not be saved. Please try another."),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText("New password")).toBeInTheDocument();
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   // A no-code grant is refused, pointing at the reset instead.
@@ -649,6 +779,49 @@ describe("ChangePasswordPage", () => {
     await waitFor(() => expect(resendPasswordWriteCode).toHaveBeenCalled());
     expect(await screen.findByRole("status")).toHaveTextContent(/most recent email/);
     expect(screen.getByRole("button", { name: /Send another in \d+s/ })).toBeDisabled();
+  });
+
+  it("says a code could not be sent", async () => {
+    const resendPasswordWriteCode = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(502, "upstream_error", "Verification emails cannot be sent right now."),
+      );
+    renderChangePage({ resendPasswordWriteCode });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Send another" }));
+
+    expect(
+      await screen.findByText("Verification emails cannot be sent right now."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Confirmation code")).toBeInTheDocument();
+  });
+
+  // A fresh challenge rereads Prelude's configuration, so a grant that stopped
+  // asking for a code can first show up on a resend, and is refused there too.
+  it("refuses on a resend that Prelude answers with no code", async () => {
+    const resendPasswordWriteCode = vi
+      .fn()
+      .mockRejectedValue(
+        namedError(PASSWORD_CHANGE_UNAVAILABLE_ERROR, "granted with no challenge"),
+      );
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      renderChangePage({ resendPasswordWriteCode });
+
+      await userEvent.click(await screen.findByRole("button", { name: "Send another" }));
+
+      expect(
+        await screen.findByText(
+          "This deployment is not set up to confirm a password change by email.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByLabelText("Confirmation code")).not.toBeInTheDocument();
+      expect(logged).toHaveBeenCalled();
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   // An expired grant is named, and the way out asks for a new code.
@@ -819,7 +992,120 @@ describe("sign-in and sign-up screens", () => {
 
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
   });
+
+  /** Arrives at sign-in the way a guard sends a visitor: with where they were headed. */
+  function SentToSignIn() {
+    return <Navigate to="/login" state={{ from: "/lists/list-1?sort=title" }} replace />;
+  }
+
+  // The guard recorded the address, search string included; losing it lands
+  // every visitor on the catalog after signing in.
+  it("signs in and returns to where the visitor was headed", async () => {
+    const login = vi.fn().mockResolvedValue(undefined);
+    renderWithProviders(
+      <Routes>
+        <Route path="/start" element={<SentToSignIn />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/lists/:id" element={<LocationProbe />} />
+      </Routes>,
+      { route: "/start", auth: { login } },
+    );
+
+    await userEvent.type(screen.getByLabelText("Email"), "  singer@example.com ");
+    await userEvent.type(screen.getByLabelText("Password"), "a-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => expect(login).toHaveBeenCalledWith("singer@example.com", "a-secret"));
+    expect(await screen.findByTestId("location")).toHaveTextContent("/lists/list-1?sort=title");
+  });
+
+  // Naming which half was wrong would say which addresses are registered.
+  it("does not say which half of a refused sign-in was wrong", async () => {
+    const login = vi.fn().mockRejectedValue(namedError("InvalidCredentialsError", "No such user"));
+    renderWithProviders(<LoginPage />, { route: "/login", auth: { login } });
+
+    await userEvent.type(screen.getByLabelText("Email"), "nobody@example.com");
+    await userEvent.type(screen.getByLabelText("Password"), "a-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(
+      await screen.findByText("That email and password combination was not recognized."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+  });
+
+  // An unverified account would be sent there by the gate anyway; going
+  // straight there saves a bounce through the catalog.
+  it("creates the account and goes straight to the code screen", async () => {
+    const register = vi.fn().mockResolvedValue(undefined);
+    renderWithProviders(
+      <Routes>
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify-email" element={<p>Code screen</p>} />
+      </Routes>,
+      { route: "/register", auth: { register } },
+    );
+
+    await userEvent.type(screen.getByLabelText("Name"), "Μαρίνα");
+    await userEvent.type(screen.getByLabelText("Email"), " new@example.com ");
+    await userEvent.type(screen.getByLabelText("Password"), "a-better-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+    await waitFor(() =>
+      expect(register).toHaveBeenCalledWith({
+        email: "new@example.com",
+        password: "a-better-secret",
+        displayName: "Μαρίνα",
+      }),
+    );
+    expect(await screen.findByText("Code screen")).toBeInTheDocument();
+  });
+
+  it("puts the server's reason for a field under that field", async () => {
+    const register = vi.fn().mockRejectedValue(
+      new ApiError(409, "conflict", "An account with that email already exists.", {
+        email: "This address is already registered.",
+      }),
+    );
+    renderWithProviders(<RegisterPage />, { route: "/register", auth: { register } });
+
+    await userEvent.type(screen.getByLabelText("Email"), "taken@example.com");
+    await userEvent.type(screen.getByLabelText("Password"), "a-better-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+    expect(
+      await screen.findByText("An account with that email already exists."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toHaveAccessibleDescription(
+      "This address is already registered.",
+    );
+  });
+
+  // The rules are Prelude's, so they are asked for rather than written here.
+  it("shows the password rules when the field is left", async () => {
+    const validatePassword = vi
+      .fn()
+      .mockResolvedValue({ valid: false, messages: ["Use at least 8 characters."] });
+    renderWithProviders(<RegisterPage />, { route: "/register", auth: { validatePassword } });
+
+    // Leaving it empty asks nothing: each check is a round trip.
+    await userEvent.click(screen.getByLabelText("Password"));
+    await userEvent.tab();
+    expect(validatePassword).not.toHaveBeenCalled();
+
+    await userEvent.type(screen.getByLabelText("Password"), "short");
+    await userEvent.tab();
+
+    expect(await screen.findByText("• Use at least 8 characters.")).toBeInTheDocument();
+    expect(validatePassword).toHaveBeenCalledWith("short");
+  });
 });
+
+/** Renders the address it is reached at, for specs that assert a destination. */
+function LocationProbe() {
+  const location = useLocation();
+  return <p data-testid="location">{location.pathname + location.search}</p>;
+}
 
 describe("verification gate", () => {
   // The API refuses an unverified account everything, so it is held on verification.
