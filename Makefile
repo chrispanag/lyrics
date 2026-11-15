@@ -98,7 +98,9 @@ test-backend: up ## Run backend tests with the race detector
 	cd backend && go test ./... -count=1 -race
 
 .PHONY: lint-backend
-lint-backend: ## Lint the backend
+lint-backend: ## Check formatting and lint the backend
+	@cd backend && unformatted=$$(gofmt -l .) && if [ -n "$$unformatted" ]; then \
+		echo "These files need gofmt:"; echo "$$unformatted"; exit 1; fi
 	cd backend && golangci-lint run ./... && go vet ./...
 
 # --- frontend ----------------------------------------------------------------
