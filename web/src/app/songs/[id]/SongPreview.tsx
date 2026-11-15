@@ -1,7 +1,9 @@
+import { CreditRow } from "@/components/CreditRow";
 import { PageTitle } from "@/components/PageTitle";
+import { genreLinkChrome } from "@/components/songStyles";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { browseHref } from "@/lib/browse";
-import { CREDIT_DISPLAY_LABELS, groupCredits } from "@/lib/credits";
+import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
 import { DEFAULT_FONT_SIZE, FONT_SIZES } from "@/lib/fontSize";
 import { recordingCount } from "@/lib/format";
 import type { Song } from "@/lib/types";
@@ -18,7 +20,7 @@ import type { Song } from "@/lib/types";
  * so the text does not jump when the app takes over. Change them together.
  */
 export function SongPreview({ song }: { song: Song }) {
-  const performers = song.recordings[0]?.performers ?? [];
+  const performers = songPerformers(song);
 
   return (
     <div className="md:pl-60">
@@ -39,16 +41,17 @@ export function SongPreview({ song }: { song: Song }) {
             {song.alt_title && <p className="mt-1 text-lg text-fg-muted">{song.alt_title}</p>}
 
             <dl className="mt-3 space-y-1 text-sm">
-              {performers.length > 0 && <Credit label="Performed by" people={performers} />}
-              {groupCredits(song.credits).map(([role, names]) => (
-                <Credit key={role} label={CREDIT_DISPLAY_LABELS[role]} people={names} />
-              ))}
-              {song.release_year && (
-                <div className="flex gap-2">
-                  <dt className="text-fg-muted">Year</dt>
-                  <dd className="font-medium">{song.release_year}</dd>
-                </div>
+              {performers.length > 0 && (
+                <CreditRow label="Performed by">
+                  <PlainPersonLinks people={performers} />
+                </CreditRow>
               )}
+              {groupCredits(song.credits).map(([role, names]) => (
+                <CreditRow key={role} label={CREDIT_DISPLAY_LABELS[role]}>
+                  <PlainPersonLinks people={names} />
+                </CreditRow>
+              ))}
+              {song.release_year && <CreditRow label="Year">{song.release_year}</CreditRow>}
             </dl>
 
             {/* The app's "Show all …" button, as text: it is a fact before it is a control. */}
@@ -62,10 +65,7 @@ export function SongPreview({ song }: { song: Song }) {
               <ul className="mt-3 flex flex-wrap gap-1.5">
                 {song.genres.map((genre) => (
                   <li key={genre.id}>
-                    <a
-                      href={browseHref({ genre_slug: genre.slug })}
-                      className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-fg-secondary"
-                    >
+                    <a href={browseHref({ genre_slug: genre.slug })} className={genreLinkChrome}>
                       {genre.name}
                     </a>
                   </li>
@@ -111,25 +111,15 @@ export function SongPreview({ song }: { song: Song }) {
   );
 }
 
-/** One credit row; each name links to the catalog filtered by that person. */
-function Credit({
-  label,
-  people,
-}: {
-  label: string;
-  people: { person_id: string; name: string }[];
-}) {
-  return (
-    <div className="flex gap-2">
-      <dt className="shrink-0 text-fg-muted">{label}</dt>
-      <dd className="font-medium">
-        {people.map((person, index) => (
-          <span key={person.person_id}>
-            {index > 0 && ", "}
-            <a href={browseHref({ person: person.person_id })}>{person.name}</a>
-          </span>
-        ))}
-      </dd>
-    </div>
-  );
+/**
+ * `PersonLinks` with plain anchors, there being no router here; each name links
+ * to the catalog filtered by that person.
+ */
+function PlainPersonLinks({ people }: { people: { person_id: string; name: string }[] }) {
+  return people.map((person, index) => (
+    <span key={person.person_id}>
+      {index > 0 && ", "}
+      <a href={browseHref({ person: person.person_id })}>{person.name}</a>
+    </span>
+  ));
 }
