@@ -1,10 +1,10 @@
-import type { ComponentProps, ReactNode } from "react";
+import { type ComponentProps, type ReactNode, useId } from "react";
 import { LoaderCircle, X } from "lucide-react";
 
 import { buttonClasses, type ButtonSize, type ButtonVariant } from "./buttonStyles";
 import { fieldChrome } from "@/components/fieldStyles";
 import { cn } from "@/lib/cn";
-import { useModal } from "@/lib/modal";
+import { useDialog } from "@/lib/modal";
 
 /* Shared primitives. Touch-target sizing lives in buttonStyles.ts. */
 
@@ -255,7 +255,14 @@ export function ErrorMessage({ children }: { children: ReactNode }) {
 
 /**
  * A bottom sheet on mobile (within thumb reach), a centered dialog on larger
- * screens.
+ * screens: a native `<dialog>` opened with `showModal()`, so the browser makes
+ * the page inert, moves focus in, closes on Escape and hands focus back to the
+ * opener. It stays mounted while closed, because `close()` is what does that
+ * last part; the content does not, so a sheet still opens fresh.
+ *
+ * The header is always there, so `showModal()` starts focus on Close; the
+ * content mounts once the dialog is open, so an `autoFocus` field in it then
+ * takes focus without being mistaken for the opener (`useDialog`).
  */
 export function Sheet({
   open,
@@ -268,46 +275,42 @@ export function Sheet({
   title: string;
   children: ReactNode;
 }) {
-  // No focus target: a sheet unmounts when closed, so focus is already inside.
-  const marking = useModal({ open, onClose });
-
-  if (!open) return null;
+  const [dialog, shown] = useDialog({ open, onClose });
+  const titleId = useId();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden
-      />
-      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: `useModal` spreads role="dialog" onto it. */}
-      <div
-        // role="dialog" + aria-modal from `useModal`; the page's swipe and arrow
-        // keys stand down while it is present.
-        {...marking}
-        aria-label={title}
-        className={cn(
-          "relative flex max-h-[85vh] w-full flex-col rounded-t-3xl bg-white shadow-2xl",
-          "sm:max-w-lg sm:rounded-3xl",
-          "dark:bg-stone-900",
-        )}
-      >
-        <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4 dark:border-stone-800">
-          <h2 className="text-base font-semibold">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-full p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"
-          >
-            <X aria-hidden className="size-5" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-safe">
-          {children}
-        </div>
+    <dialog
+      {...dialog}
+      aria-labelledby={titleId}
+      className={cn(
+        // The UA's modal box reset to the sheet's: full width and pinned to the
+        // bottom, centered from `sm`. The margins are stated because preflight
+        // zeroes the UA's `auto`, which is what places a modal dialog at all.
+        // `display` only while open, or it would override the closed state.
+        "m-auto mb-0 max-h-[85vh] w-full max-w-full flex-col border-0 p-0 text-inherit open:flex",
+        "rounded-t-3xl bg-white shadow-2xl",
+        "sm:mb-auto sm:max-w-lg sm:rounded-3xl",
+        "dark:bg-stone-900",
+        "backdrop:bg-black/40 backdrop:backdrop-blur-sm",
+      )}
+    >
+      <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4 dark:border-stone-800">
+        <h2 id={titleId} className="text-base font-semibold">
+          {title}
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="rounded-full p-2 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"
+        >
+          <X aria-hidden className="size-5" />
+        </button>
       </div>
-    </div>
+      <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-safe">
+        {shown && children}
+      </div>
+    </dialog>
   );
 }
 
