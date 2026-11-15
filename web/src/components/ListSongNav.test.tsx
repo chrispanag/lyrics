@@ -19,7 +19,7 @@ function recordingBackend() {
     push: () => {},
     replace: () => {},
     back: () => {},
-    currentHref: () => "/songs/b?list=l",
+    liveHref: () => "/songs/b?list=l",
     writeSearch: () => {},
     prefetch: vi.fn<(href: string) => void>(),
     Link: ({ href, replace: _replace, ...rest }) => <a href={href} {...rest} />,

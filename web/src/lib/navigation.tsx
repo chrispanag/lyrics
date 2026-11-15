@@ -46,11 +46,11 @@ export interface NavigationBackend {
   replace(href: string): void;
   back(): void;
   /**
-   * The address as it is now, path plus search string — read when asked, not
-   * at the last render. `pathname` and `searchParams` above are a render's
-   * snapshot, so two writes in one event would each start from the same one.
+   * The address as it is now, path plus search string: read when asked, unlike
+   * `pathname` and `searchParams`, which are the last render's. See
+   * `useSetSearchParams`.
    */
-  currentHref(): string;
+  liveHref(): string;
   /**
    * Writes a new search string for the path showing. Its own method because a
    * router may do it more cheaply than a navigation: Next's re-renders the
@@ -114,9 +114,9 @@ export function useSetSearchParams(): (
   edit: (next: URLSearchParams) => void,
   options?: { replace?: boolean },
 ) => void {
-  const { currentHref, writeSearch } = useBackend();
+  const { liveHref, writeSearch } = useBackend();
   return (edit, options = {}) => {
-    const { pathname, searchParams: next } = new URL(currentHref(), ORIGIN);
+    const { pathname, searchParams: next } = new URL(liveHref(), ORIGIN);
     edit(next);
     writeSearch(withSearch(pathname, next.toString()), { replace: Boolean(options.replace) });
   };
@@ -366,6 +366,11 @@ function resolve(href: string, current: URL | undefined): URL {
 
 const ORIGIN = "http://app.invalid";
 
+/** The entry a memory history is at. */
+function showing({ entries, index }: MemoryHistory): URL {
+  return entries[index] ?? new URL(ORIGIN);
+}
+
 /**
  * A router held in memory, for specs and stories: rendered at the last of
  * `entries`, with the rest behind it (oldest first) for a spec that goes Back.
@@ -380,7 +385,7 @@ export function TestRouter({ entries, children }: { entries: string[]; children:
   });
 
   // The history as of the last move, ahead of the render it schedules: what
-  // `currentHref` answers, as the browser's own location does on Next.
+  // `liveHref` answers, as the browser's own location does on Next.
   const live = useRef(history);
   const move = useCallback((change: (current: MemoryHistory) => MemoryHistory) => {
     live.current = change(live.current);
@@ -408,13 +413,12 @@ export function TestRouter({ entries, children }: { entries: string[]; children:
       move((current) => (current.index > 0 ? { ...current, index: current.index - 1 } : current)),
     [move],
   );
-  const currentHref = useCallback(() => {
-    const { pathname, search } = live.current.entries[live.current.index] ?? new URL(ORIGIN);
+  const liveHref = useCallback(() => {
+    const { pathname, search } = showing(live.current);
     return pathname + search;
   }, []);
 
-  const here = history.entries[history.index] ?? new URL(ORIGIN);
-  const { pathname, search } = here;
+  const { pathname, search } = showing(history);
   const backend = useMemo<NavigationBackend>(
     () => ({
       pathname,
@@ -423,13 +427,13 @@ export function TestRouter({ entries, children }: { entries: string[]; children:
       push,
       replace,
       back,
-      currentHref,
+      liveHref,
       writeSearch: (href, options) => (options.replace ? replace(href) : push(href)),
       // Nothing to load: every screen is already in memory.
       prefetch: () => {},
       Link: MemoryLink,
     }),
-    [pathname, search, push, replace, back, currentHref],
+    [pathname, search, push, replace, back, liveHref],
   );
 
   return (

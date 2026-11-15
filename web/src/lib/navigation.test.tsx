@@ -21,9 +21,13 @@ describe("pathMatches", () => {
   });
 });
 
-/** The navigation key and `canGoBack`, with a link to here and one elsewhere. */
+/**
+ * The navigation key and `canGoBack`, with a link to here and one elsewhere,
+ * and two search-string writes in one event, before anything re-renders.
+ */
 function Probe() {
   const router = useRouter();
+  const setParams = useSetSearchParams();
   return (
     <>
       <p data-testid="key">{useNavigationKey()}</p>
@@ -34,6 +38,15 @@ function Probe() {
       </button>
       <button type="button" onClick={() => router.push("/songs/a")}>
         Push here
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setParams((next) => next.set("q", "agapi"), { replace: true });
+          setParams((next) => next.set("genre", "laiko"));
+        }}
+      >
+        Write twice
       </button>
       <button type="button" onClick={() => router.back()}>
         Back
@@ -135,58 +148,30 @@ describe("canGoBack", () => {
   });
 });
 
-/** Two search-string writes in one event, before anything re-renders. */
-function SearchWriter() {
-  const setParams = useSetSearchParams();
-  const router = useRouter();
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => {
-          setParams((next) => next.set("q", "agapi"), { replace: true });
-          setParams((next) => next.set("genre", "laiko"));
-        }}
-      >
-        Both
-      </button>
-      <button type="button" onClick={() => router.back()}>
-        Back
-      </button>
-      <p data-testid="back">{String(router.canGoBack())}</p>
-      <CurrentAddress />
-    </>
-  );
-}
-
 describe("useSetSearchParams", () => {
-  // The catalog's debounced query and a filter can land in one render window:
-  // each write has to start from the address the one before it left, or the
-  // second puts back what the first took out.
   it("keeps both of two writes made before a re-render", async () => {
-    renderWithProviders(<SearchWriter />, { route: "/?page=2" });
+    renderWithProviders(<Probe />, { route: "/?page=2" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Both" }));
+    await userEvent.click(screen.getByRole("button", { name: "Write twice" }));
 
     expect(screen.getByTestId("location")).toHaveTextContent("/?page=2&q=agapi&genre=laiko");
   });
 
-  // Each write keeps its own history: the replace took the entry it was on,
-  // so Back from the push lands on it and not on the address before both.
+  // The replace took the entry it was on, so Back from the push lands on it
+  // and not on the address before both.
   it("keeps each write's own history", async () => {
-    renderWithProviders(<SearchWriter />, { route: ["/songs/a", "/?page=2"] });
+    renderWithProviders(<Probe />, { route: ["/songs/a", "/?page=2"] });
 
-    await userEvent.click(screen.getByRole("button", { name: "Both" }));
+    await userEvent.click(screen.getByRole("button", { name: "Write twice" }));
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
 
     expect(screen.getByTestId("location")).toHaveTextContent("/?page=2&q=agapi");
   });
 
-  // Not a navigation, so it leaves `canGoBack` where it was.
   it("is not counted as a navigation", async () => {
-    renderWithProviders(<SearchWriter />, { route: "/" });
+    renderWithProviders(<Probe />, { route: "/" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Both" }));
+    await userEvent.click(screen.getByRole("button", { name: "Write twice" }));
 
     expect(canGoBack()).toBe("false");
   });

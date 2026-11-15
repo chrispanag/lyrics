@@ -6,11 +6,9 @@ import { useSetSearchParams } from "./navigation";
 import { NextNavigation } from "./nextNavigation";
 
 /*
- * The seam's Next backend, against a stand-in for `next/navigation`. Every other
- * spec mounts `TestRouter`; this is the one place the production backend's own
- * `writeSearch` runs, so it is where the two are held to the same contract.
- * Next's `useSearchParams` is the address as of the last render, which is what
- * the stand-in hands out: a write that started from it would lose the one before.
+ * The seam's Next backend, against a stand-in for `next/navigation` whose
+ * `useSearchParams` is the last render's address, as Next's is. Every other spec
+ * mounts `TestRouter`; this one holds the production backend to the same contract.
  */
 
 const router = { push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() };
