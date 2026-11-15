@@ -1272,8 +1272,14 @@ each of them is written down.
   the second Strict Mode's close-and-reopen on mount closes every sheet that
   mounts open, in development only. Click-outside is
   `closedby="any"` where supported and a press-and-release position check in
-  Safari; the `overflow: hidden` scroll lock is still the hook's, since a modal
-  dialog does not stop the page scrolling. jsdom has no `showModal()` or
+  Safari. A modal dialog does not stop the page scrolling either, and **that is
+  CSS, not a `<body>` lock**: `overscroll-behavior: contain` on `dialog:modal`
+  and on a `::backdrop` given `overflow: hidden`, which is what makes it a scroll
+  container at all. Containment with nothing to scroll is Chromium 144 and
+  Firefox 150, not Safari, and is undetectable, so it is an enhancement — in
+  Safari a gesture over the backdrop moves the blurred, inert page behind it.
+  The `<body>` lock it replaced is what the platform guidance says not to do,
+  and stays only in `useModal` for the drawer, which is not a `<dialog>`. jsdom has no `showModal()` or
   working `:modal`, so `src/test/dialog.ts` stubs the part the specs lean on,
   and `modalIsOpen()` asks `matches(":modal")` per element for that reason.
 - **The hamburger is rendered by the app bars, and a screen gets its bar by

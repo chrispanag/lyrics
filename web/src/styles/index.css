@@ -101,6 +101,25 @@
     overscroll-behavior-y: none;
   }
 
+  /* What keeps the page still under a modal `<dialog>`, in place of an
+     `overflow: hidden` lock on `<body>`. `inert` stops presses, not scrolling:
+     a wheel or drag over the backdrop scrolls the page, and one inside the
+     dialog chains to it at the end. The backdrop needs `overflow: hidden` to be
+     a scroll container at all, or `overscroll-behavior` does nothing there.
+
+     Containment on a container with nothing to scroll is newer than the
+     property (Chromium 144, Firefox 150, not Safari) and cannot be detected —
+     `@supports` answers yes everywhere — so it is an enhancement: in Safari a
+     gesture over the backdrop still moves the page behind it, which is blurred,
+     inert and scrolled back to the opener when `close()` refocuses it. */
+  dialog:modal {
+    overscroll-behavior: contain;
+  }
+  dialog::backdrop {
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
+
   /* A visible focus ring is the only affordance keyboard users have. */
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-brand-500;

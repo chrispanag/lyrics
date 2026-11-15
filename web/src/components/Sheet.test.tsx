@@ -44,7 +44,8 @@ describe("Sheet", () => {
 
     expect(screen.getByRole("dialog", { name: "Example" })).toBeInTheDocument();
     expect(modalIsOpen()).toBe(true);
-    expect(document.body.style.overflow).toBe("hidden");
+    // CSS holds the page still under a dialog; a `<body>` lock is the drawer's.
+    expect(document.body.style.overflow).toBe("");
   });
 
   // `autoFocus` runs during the commit; mounted with `showModal()` rather than
@@ -61,7 +62,6 @@ describe("Sheet", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(opener).toHaveFocus();
     expect(modalIsOpen()).toBe(false);
-    expect(document.body.style.overflow).toBe("");
   });
 
   // Unmounting an open dialog would drop focus on <body>; the layout cleanup

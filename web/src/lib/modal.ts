@@ -32,8 +32,8 @@ export function modalIsOpen(): boolean {
 }
 
 /**
- * The `overflow: hidden` scroll lock on `<body>`, which a modal `<dialog>` does
- * not provide.
+ * The `overflow: hidden` scroll lock on `<body>`, for the drawer only. A modal
+ * `<dialog>` is held still by CSS instead (`dialog:modal` in `index.css`).
  */
 function useScrollLock(open: boolean) {
   useEffect(() => {
@@ -146,8 +146,6 @@ export function useDialog({
   // prop has already said so is the echo of our own `close()`, not news.
   const wanted = useRef(false);
   const pressedOutside = useRef(false);
-
-  useScrollLock(open);
 
   useLayoutEffect(() => {
     const dialog = ref.current;
