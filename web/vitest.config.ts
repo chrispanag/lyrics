@@ -66,7 +66,9 @@ export default defineConfig({
         "src/**/*.d.ts",
         // What runs only inside a Next build, where a spec under jsdom would
         // test its own mocks: the document, its providers, and the seam's Next
-        // backend. Specs mount the seam on `TestRouter` instead.
+        // backend. Specs mount the seam on `TestRouter` instead, save
+        // `nextNavigation.test.tsx`, which pins one contract of that backend
+        // against a stand-in for `next/navigation` and is not counted here.
         "src/app/layout.tsx",
         "src/app/Providers.tsx",
         "src/lib/nextNavigation.tsx",

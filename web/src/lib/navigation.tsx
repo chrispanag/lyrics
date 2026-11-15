@@ -46,6 +46,17 @@ export interface NavigationBackend {
   replace(href: string): void;
   back(): void;
   /**
+   * The address as it is now, path plus search string: read when asked, unlike
+   * `pathname` and `searchParams`, which are the last render's. See
+   * `useSetSearchParams`.
+   *
+   * Promised only to include every `writeSearch` already made. A `push`,
+   * `replace` or `back` may not show here until it lands: Next moves the
+   * address when the new route commits, and `back` waits for `popstate`, while
+   * `TestRouter` moves at once. Nothing may rely on either answer.
+   */
+  liveHref(): string;
+  /**
    * Writes a new search string for the path showing. Its own method because a
    * router may do it more cheaply than a navigation: Next's re-renders the
    * route on the server for a push, which the screen's own state never needs.
@@ -93,6 +104,12 @@ export function useParams<T extends Record<string, string>>(): Partial<T> {
  * Rewrites the search string from what it holds now. `replace` for state that
  * should not grow history, such as a query typed letter by letter.
  *
+ * `edit` is handed the address as it is at the moment of writing, never the
+ * one this component last rendered: two writes before a re-render — the
+ * catalog's debounced query and a filter pressed in the same moment — would
+ * otherwise both start from that render, and the second would put back what
+ * the first changed.
+ *
  * Not referentially stable, exactly as react-router's setter was not: an
  * effect that lists it re-runs after every write, so it needs a guard of its
  * own. A search-string write is not counted as a navigation (`useNavigationKey`,
@@ -102,9 +119,9 @@ export function useSetSearchParams(): (
   edit: (next: URLSearchParams) => void,
   options?: { replace?: boolean },
 ) => void {
-  const { pathname, searchParams, writeSearch } = useBackend();
+  const { liveHref, writeSearch } = useBackend();
   return (edit, options = {}) => {
-    const next = new URLSearchParams(searchParams.toString());
+    const { pathname, searchParams: next } = new URL(liveHref(), ORIGIN);
     edit(next);
     writeSearch(withSearch(pathname, next.toString()), { replace: Boolean(options.replace) });
   };
@@ -354,6 +371,11 @@ function resolve(href: string, current: URL | undefined): URL {
 
 const ORIGIN = "http://app.invalid";
 
+/** The entry a memory history is at. */
+function showing({ entries, index }: MemoryHistory): URL {
+  return entries[index] ?? new URL(ORIGIN);
+}
+
 /**
  * A router held in memory, for specs and stories: rendered at the last of
  * `entries`, with the rest behind it (oldest first) for a spec that goes Back.
@@ -367,26 +389,41 @@ export function TestRouter({ entries, children }: { entries: string[]; children:
     return { entries: urls, index: urls.length - 1 };
   });
 
-  const push = useCallback((href: string) => {
-    setHistory(({ entries: urls, index }) => ({
-      entries: [...urls.slice(0, index + 1), resolve(href, urls[index])],
-      index: index + 1,
-    }));
-  }, []);
-  const replace = useCallback((href: string) => {
-    setHistory(({ entries: urls, index }) => ({
-      entries: urls.map((url, at) => (at === index ? resolve(href, url) : url)),
-      index,
-    }));
-  }, []);
-  const back = useCallback(() => {
-    setHistory((current) =>
-      current.index > 0 ? { ...current, index: current.index - 1 } : current,
-    );
+  // The history as of the last move, ahead of the render it schedules: what
+  // `liveHref` answers, as the browser's own location does on Next.
+  const live = useRef(history);
+  const move = useCallback((change: (current: MemoryHistory) => MemoryHistory) => {
+    live.current = change(live.current);
+    setHistory(live.current);
   }, []);
 
-  const here = history.entries[history.index] ?? new URL(ORIGIN);
-  const { pathname, search } = here;
+  const push = useCallback(
+    (href: string) =>
+      move(({ entries: urls, index }) => ({
+        entries: [...urls.slice(0, index + 1), resolve(href, urls[index])],
+        index: index + 1,
+      })),
+    [move],
+  );
+  const replace = useCallback(
+    (href: string) =>
+      move(({ entries: urls, index }) => ({
+        entries: urls.map((url, at) => (at === index ? resolve(href, url) : url)),
+        index,
+      })),
+    [move],
+  );
+  const back = useCallback(
+    () =>
+      move((current) => (current.index > 0 ? { ...current, index: current.index - 1 } : current)),
+    [move],
+  );
+  const liveHref = useCallback(() => {
+    const { pathname, search } = showing(live.current);
+    return pathname + search;
+  }, []);
+
+  const { pathname, search } = showing(history);
   const backend = useMemo<NavigationBackend>(
     () => ({
       pathname,
@@ -395,12 +432,13 @@ export function TestRouter({ entries, children }: { entries: string[]; children:
       push,
       replace,
       back,
+      liveHref,
       writeSearch: (href, options) => (options.replace ? replace(href) : push(href)),
       // Nothing to load: every screen is already in memory.
       prefetch: () => {},
       Link: MemoryLink,
     }),
-    [pathname, search, push, replace, back],
+    [pathname, search, push, replace, back, liveHref],
   );
 
   return (

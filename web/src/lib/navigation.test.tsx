@@ -2,7 +2,7 @@ import { act, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Link, pathMatches, useNavigationKey, useRouter } from "./navigation";
+import { Link, pathMatches, useNavigationKey, useRouter, useSetSearchParams } from "./navigation";
 import { renderWithProviders } from "@/test/render";
 import { CurrentAddress } from "@/test/routes";
 
@@ -21,9 +21,13 @@ describe("pathMatches", () => {
   });
 });
 
-/** The navigation key and `canGoBack`, with a link to here and one elsewhere. */
+/**
+ * The navigation key and `canGoBack`, with a link to here and one elsewhere,
+ * and two search-string writes in one event, before anything re-renders.
+ */
 function Probe() {
   const router = useRouter();
+  const setParams = useSetSearchParams();
   return (
     <>
       <p data-testid="key">{useNavigationKey()}</p>
@@ -34,6 +38,15 @@ function Probe() {
       </button>
       <button type="button" onClick={() => router.push("/songs/a")}>
         Push here
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setParams((next) => next.set("q", "agapi"), { replace: true });
+          setParams((next) => next.set("genre", "laiko"));
+        }}
+      >
+        Write twice
       </button>
       <button type="button" onClick={() => router.back()}>
         Back
@@ -130,6 +143,35 @@ describe("canGoBack", () => {
   it("ignores the browser's own history from before the page loaded", () => {
     vi.stubGlobal("navigation", { canGoBack: true });
     renderWithProviders(<Probe />, { route: "/songs/a" });
+
+    expect(canGoBack()).toBe("false");
+  });
+});
+
+describe("useSetSearchParams", () => {
+  it("keeps both of two writes made before a re-render", async () => {
+    renderWithProviders(<Probe />, { route: "/?page=2" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Write twice" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/?page=2&q=agapi&genre=laiko");
+  });
+
+  // The replace took the entry it was on, so Back from the push lands on it
+  // and not on the address before both.
+  it("keeps each write's own history", async () => {
+    renderWithProviders(<Probe />, { route: ["/songs/a", "/?page=2"] });
+
+    await userEvent.click(screen.getByRole("button", { name: "Write twice" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/?page=2&q=agapi");
+  });
+
+  it("is not counted as a navigation", async () => {
+    renderWithProviders(<Probe />, { route: "/" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Write twice" }));
 
     expect(canGoBack()).toBe("false");
   });

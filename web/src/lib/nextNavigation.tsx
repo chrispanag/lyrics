@@ -45,6 +45,8 @@ export function NextNavigation({ children }: { children: ReactNode }) {
       push: (href: string) => router.push(href, { scroll: false }),
       replace: (href: string) => router.replace(href, { scroll: false }),
       back: () => router.back(),
+      // Moved at once by `writeSearch` below, where `useSearchParams` waits for a render.
+      liveHref: () => window.location.pathname + window.location.search,
       // The History API rather than the router: Next keeps `useSearchParams`
       // in step with it and asks the server for nothing, where `router.replace`
       // re-renders the route on the server for every keystroke typed into the
