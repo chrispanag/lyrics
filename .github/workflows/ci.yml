@@ -15,6 +15,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job sets `timeout-minutes`: each takes a minute or two warm, and the
+# default is six hours, which is what a hung test or a stuck service container
+# would otherwise hold a runner for. There is no workflow-level setting.
 jobs:
   # Decides which of the jobs below a pull request needs, so a change confined
   # to one stack does not wait on the other's suite. A skipped job reports as
@@ -66,9 +69,6 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.backend != 'false' }}
     runs-on: ubuntu-latest
-    # Every job here takes a minute or two warm; the default is six hours,
-    # which is what a hung test or a stuck service container would otherwise
-    # hold a runner for.
     timeout-minutes: 15
 
     services:
@@ -172,16 +172,22 @@ jobs:
       # in a real browser rather than jsdom. The browser is cached per
       # Playwright version, and `install` skips one it finds, so a cache hit
       # leaves only the system packages `--with-deps` adds, which live outside
-      # the cached directory.
+      # the cached directory. The key also names the runner image: Playwright
+      # downloads a build per distribution release but finds an installed one
+      # by revision alone, so a cache saved on the previous `ubuntu-latest`
+      # would be reused as is. The assignment is its own command so that a
+      # failed lookup fails the step instead of writing an empty version.
       - name: Read Playwright version
         id: playwright
         working-directory: web
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(pnpm exec playwright --version | awk '{print $2}')
+          echo "key=playwright-${ImageOS}-${RUNNER_ARCH}-${version}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+          key: ${{ steps.playwright.outputs.key }}
 
       - name: Install Chromium
         working-directory: web
@@ -192,13 +198,15 @@ jobs:
         run: pnpm run test:stories
 
       # Turbopack's build cache, on by default since Next 16.3, is only read
-      # if `.next/cache` survives between runs. An exact hit needs the same
-      # lockfile and sources; the prefix restores the latest build on the same
-      # lockfile, which is still mostly warm after a source change.
+      # if `.next/cache` survives between runs. Keyed on the commit, so every
+      # build saves its own; the prefix restores the latest build on the same
+      # lockfile. A key built from a list of source files instead skips the
+      # save on an exact hit, so a change to a file the list missed leaves the
+      # cache a build behind.
       - uses: actions/cache@v6
         with:
           path: web/.next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-${{ hashFiles('web/src/**', 'web/next.config.ts') }}
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
             nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-
 
