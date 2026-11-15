@@ -267,7 +267,8 @@
     }
     *,
     *::before,
-    *::after {
+    *::after,
+    *::backdrop {
       /* biome-ignore-start lint/complexity/noImportantStyles: a reduced-motion override has to beat every animation, whatever its specificity. */
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
@@ -336,6 +337,10 @@
   display: flex;
   flex-direction: column;
   min-height: calc(100% + 1px);
+  /* A panel translated below the viewport as it opens would otherwise add its
+     travel to the dialog's scroll height, and `showModal()` focusing Close
+     scrolls the dialog that far, so the sheet sits in place while it "rises". */
+  overflow-y: clip;
 }
 @layer base {
   [data-dialog-dismiss] {
