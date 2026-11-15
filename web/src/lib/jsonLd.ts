@@ -1,5 +1,6 @@
 import { groupCredits } from "./credits";
-import type { Recording, Song } from "./types";
+import { songHref } from "./listContext";
+import type { Recording, Song, SongList } from "./types";
 import { watchUrl } from "./youtube";
 
 /*
@@ -43,7 +44,39 @@ export function songJsonLd(song: Song, url: string): string {
     lyrics: song.lyrics ? { "@type": "CreativeWork", text: song.lyrics } : undefined,
   };
 
-  return JSON.stringify(composition).replace(TAG_OPENER, "\\u003c");
+  return scriptBody(composition);
+}
+
+/**
+ * A public list as schema.org `ItemList`, as the text of a script body: its
+ * songs in the list's order, each by its canonical address (no `?list=`, which
+ * is a reading position, not an address). Escaped like `songJsonLd`, since a
+ * list's name and description are typed by its owner.
+ *
+ * `origin` must be absolute; every song must carry a `slug`, or its address is
+ * `/songs/undefined` (the route refuses such a list before calling this).
+ */
+export function listJsonLd(list: SongList, origin: string): string {
+  const songs = list.songs ?? [];
+  return scriptBody({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: list.name,
+    description: list.description ?? undefined,
+    url: `${origin}/lists/${list.id}`,
+    numberOfItems: songs.length,
+    itemListElement: songs.map((song, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      url: `${origin}${songHref(song)}`,
+      name: song.title,
+    })),
+  });
+}
+
+/** JSON safe inside a raw `<script>`: every `<` becomes `\u003c`. */
+function scriptBody(value: unknown): string {
+  return JSON.stringify(value).replace(TAG_OPENER, "\\u003c");
 }
 
 /**

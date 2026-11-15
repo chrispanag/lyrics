@@ -202,8 +202,10 @@ export function ListDetailPage() {
   );
 
   // A disabled query is not `isLoading`, so the session wait is spelled out, or
-  // the page reports a list it has not asked for yet as unavailable.
-  if (sessionLoading || isLoading) {
+  // the page reports a list it has not asked for yet as unavailable. A list
+  // already in hand (the server's read of a public one) renders at once: the
+  // wait only exists so a private list is asked for with its owner's token.
+  if (!list && (sessionLoading || isLoading)) {
     return (
       <div className="mx-auto max-w-2xl space-y-3 px-4 py-6">
         {/* Nameless while in flight, rather than "undefined — Songfolio". */}

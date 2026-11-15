@@ -963,6 +963,33 @@ scraper rather than by anyone inside the app, which is why each is written down.
   says so in its own words. Any other unmatched address renders
   `app/not-found.tsx` — server-rendered, 404, inside the group layouts it mounts
   itself, since the root's not-found sits outside the route groups.
+- **A list page's HTML carries the list only when a guest may read it, and a
+  list the guest may not read is never a 404.** `app/(shell)/(menu)/lists/[id]/page.tsx`
+  reads the list anonymously, like every server fetch, and hands a public one to
+  `ListDetailPage` exactly as the song route hands over a song — so a shared
+  link's HTML has the name, the description, the rows, a `<title>` naming it,
+  a description and card for the preview, and an `ItemList` of the songs'
+  canonical addresses (`listJsonLd`, escaped like the song's). Everything about
+  privacy follows from the read being a guest's whoever asks: an owner's token
+  never reaches it, so a private list's server HTML is the waiting state and
+  the layout's metadata — no name, no songs, no description — plus `noindex`.
+  The page's spec pins that **at the request**, by offering a token and
+  asserting none went out, because an assertion about the HTML alone would pass
+  with a guest fixture whichever way the read was made. And private and deleted
+  answer the same `not_found`, so the server cannot tell them apart and must
+  not try: `notFound()` here would 404 an owner's own list on every load,
+  before the browser could restore a session to ask with — the private-list
+  404 under Frontend, moved one layer up and made permanent. So nothing is
+  handed over and the browser decides, waiting for the session and asking with
+  the reader's token as it always has. A malformed id (the API's 400) is the
+  same refusal; an outage claims nothing at all, not even `noindex`, which a
+  crawler could take as the list's own answer and drop it from an index. **The
+  read is never cached**, unlike the song's: making a list private has to stop
+  the server describing it now, not `CACHE_SECONDS` later. Which is also why the
+  entry is stamped fresh rather than `updatedAt: 0` — nothing made it stale, and
+  a shared link's every reader would otherwise ask for it twice. A list whose
+  songs carry no `slug` is treated as an outage, for the reason below. The API
+  exposes no owner name, so the description says the count instead.
 - **A server render needs an origin, and `""` is not one.** `API_BASE` in
   `api/client.ts` is two branches now: the browser's, unchanged, and the Node
   process's, which resolves `API_ORIGIN` and falls back to `:8080`. It is one
@@ -989,8 +1016,9 @@ scraper rather than by anyone inside the app, which is why each is written down.
 - **Metadata now follows the reader.** Next's router does every navigation, so
   `generateMetadata`'s description, canonical, `og:*` and the JSON-LD are those
   of the page on screen after a step through a list, not of the document the
-  tab first loaded — the gap the client-only app documented is closed. The
-  catalog, lists and the rest still carry only the layout's site-wide metadata.
+  tab first loaded — the gap the client-only app documented is closed. Songs
+  and public lists carry their own; the catalog and the rest still carry only
+  the layout's site-wide metadata.
 - **`generateMetadata` must never return a `title`.** Titles have one
   mechanism, `PageTitle`, and a metadata title is a second `<title>` racing it
   for `document.title` — see Head assets. `og:title` is a different property and
@@ -1013,7 +1041,8 @@ scraper rather than by anyone inside the app, which is why each is written down.
   arriving from the server. Every `<` becomes `<`, which is total rather than
   a filter — every sequence the parser reacts to in there starts with that one
   character. Pinned in `lib/jsonLd.test.ts` by asserting the body contains no `<`
-  whatsoever, and verified in the served document.
+  whatsoever, and verified in the served document. `listJsonLd` goes through
+  the same `scriptBody`, a list's name and description being owner-typed.
 - **The 308 from the id form to the slug carries the query string**, and dropping
   it is the dead end `lib/listContext.ts`'s header is about: an old link is very
   often `/songs/<uuid>?list=<id>`, and the next song then has nowhere to go with
@@ -1054,7 +1083,10 @@ scraper rather than by anyone inside the app, which is why each is written down.
   going unindexed would look exactly like success. `Promise.all` keeps that,
   one rejection being the whole walk's. `app/sitemap.test.ts` runs under
   `@vitest-environment node`, and its fourth case is what pins the
-  all-or-nothing half by failing every page but the first.
+  all-or-nothing half by failing every page but the first. **Public lists are
+  not in it, and should not be added.** No endpoint enumerates them — `GET
+  /lists` is the caller's own — and the share sheet promises a public list "is
+  not listed anywhere in the catalog": reachable by its link, not advertised.
 - **A payload with no `slug` is a failure, and both server readers treat it as
   one.** It is not corruption and not something `Song` can express: an API
   predating migration 000010 answers with the field simply *not there*, on every
@@ -1331,7 +1363,12 @@ screen changed for it.
   import time, because the request carries a token either way. What still bites
   is the trap next to it: a disabled query is not `isLoading`, so
   `ListDetailPage` has to hold its own skeleton while waiting, or it falls
-  through to "not available" and tells the owner their list is gone.
+  through to "not available" and tells the owner their list is gone. That
+  skeleton is for a list **not yet in hand** — `!list &&` is in front of the
+  wait. A public list the server handed over renders at once, on the server
+  and in the browser's first render alike; gate it on the session again and
+  the server's HTML is a skeleton with the list sitting unused in the cache,
+  which `hydration.test.tsx`'s public-list case is what notices.
 - **`SongDetailPage` renders its chrome while the song is in flight, so its
   failure branch reads the request rather than the absence — and reads
   `isLoading`, never `isError`.** `!song` is true for the whole of a load once
@@ -1379,7 +1416,7 @@ screen changed for it.
   written and then ignored, the gap the group's rather than the button's. `ListDetailPage` keeps the
   older shape on purpose: nobody pages through *lists* the way a reader pages
   through the songs in one, so the flicker this removes barely arises there, and
-  its early return also stands in for the session wait.
+  its early return also stands in for the session wait when no list is in hand.
 - **The verification gate wraps `<Routes>` and reads `user.email_verified_at`;
   `VerifyEmailPage` waits for `loading` before deciding, and its
   challenge-opening effect checks the same flag itself.** Three separate traps,

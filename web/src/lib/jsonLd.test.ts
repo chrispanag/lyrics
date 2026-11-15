@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { makeRecording, makeSong } from "@/test/handlers";
+import { makeList, makeRecording, makeSong } from "@/test/handlers";
 
-import { songJsonLd } from "./jsonLd";
+import { listJsonLd, songJsonLd } from "./jsonLd";
 
 /*
  * The first case is a stored-XSS test: a lyric must not close the script tag.
@@ -82,5 +82,43 @@ describe("songJsonLd", () => {
     expect(data).not.toHaveProperty("lyricist");
     expect(data).not.toHaveProperty("recordedAs");
     expect(data).not.toHaveProperty("lyrics");
+  });
+});
+
+describe("listJsonLd", () => {
+  const ORIGIN = "https://songfolio.live";
+
+  it("leaves no character in the script body that could close it", () => {
+    const list = makeList({
+      name: "</script><img src=x onerror=alert(1)>",
+      description: "<!-- owner text",
+      songs: [makeSong({ title: "</SCRIPT >" })],
+    });
+
+    const body = listJsonLd(list, ORIGIN);
+
+    expect(body).not.toContain("<");
+    // A JSON escape, not a mangling: the text round-trips.
+    expect(JSON.parse(body).name).toBe(list.name);
+    expect(JSON.parse(body).itemListElement[0].name).toBe("</SCRIPT >");
+  });
+
+  it("lists the songs in order, each by its canonical address", () => {
+    const list = makeList({
+      id: "list-9",
+      songs: [makeSong({ slug: "first", title: "A" }), makeSong({ slug: "second", title: "B" })],
+    });
+
+    expect(JSON.parse(listJsonLd(list, ORIGIN))).toEqual({
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: list.name,
+      url: `${ORIGIN}/lists/list-9`,
+      numberOfItems: 2,
+      itemListElement: [
+        { "@type": "ListItem", position: 1, url: `${ORIGIN}/songs/first`, name: "A" },
+        { "@type": "ListItem", position: 2, url: `${ORIGIN}/songs/second`, name: "B" },
+      ],
+    });
   });
 });
