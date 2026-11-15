@@ -1,5 +1,5 @@
-import { lazy, Suspense, useState, useSyncExternalStore, type FormEvent } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { lazy, Suspense, useState, useSyncExternalStore, type SubmitEvent } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash } from "lucide-react";
 
 import { ApiError, errorMessage } from "@/api/client";
@@ -27,11 +27,13 @@ import {
   Input,
   Sheet,
   Skeleton,
+  Skeletons,
 } from "@/components/ui";
 import { BackButton } from "@/components/BackButton";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
 import type { Song } from "@/lib/types";
+import { useNavigate } from "@/lib/navigation";
 
 // Only an owner can reorder, so the drag machinery loads on demand.
 const SortableSongList = lazy(() =>
@@ -77,7 +79,7 @@ export function ListsPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
 
-  const onCreate = async (event: FormEvent) => {
+  const onCreate = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     try {
@@ -100,13 +102,7 @@ export function ListsPage() {
         </Button>
       </div>
 
-      {isLoading && (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }, (_, index) => (
-            <Skeleton key={index} className="h-20 w-full" />
-          ))}
-        </div>
-      )}
+      {isLoading && <Skeletons count={3} className="h-20 w-full" />}
 
       {!isLoading && data?.data.length === 0 && (
         <EmptyState

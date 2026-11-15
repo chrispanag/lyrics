@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
@@ -28,6 +28,7 @@ import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { recordingCount, songCount } from "@/lib/format";
+import { useNavigate } from "@/lib/navigation";
 import { RecordingsSheet } from "@/components/RecordingsSheet";
 
 /**
@@ -76,6 +77,7 @@ function SongArticle() {
   // reader's own state and a store would need a writer of its own.
   const [fontSizeIndex, setFontSizeIndex] = useState(DEFAULT_FONT_SIZE);
   useLayoutEffect(() => {
+    // biome-ignore lint/nursery/useReactCompiler: read once before paint, for the reason above.
     setFontSizeIndex(storedFontSize());
   }, []);
 

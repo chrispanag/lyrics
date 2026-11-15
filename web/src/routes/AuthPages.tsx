@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState, type SubmitEvent } from "react";
+import { Link, Navigate, useLocation } from "react-router-dom";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import { PASSWORD_CHANGE_UNAVAILABLE_ERROR, RESET_UNCONFIGURED_ERROR } from "@/auth/context";
@@ -9,6 +9,7 @@ import { buttonClasses } from "@/components/buttonStyles";
 import { PageTitle } from "@/components/PageTitle";
 import { Button, ErrorMessage, Field, Input, Notice, Spinner } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
+import { useNavigate } from "@/lib/navigation";
 
 /** Shell shared by every auth screen. */
 function AuthShell({
@@ -51,7 +52,7 @@ export function LoginPage() {
   // snapshot, which would bounce someone who came to sign in.
   if (user && !loading) return <Navigate to={destination} replace />;
 
-  const onSubmit = async (event: FormEvent) => {
+  const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setSubmitting(true);
@@ -236,7 +237,7 @@ export function RegisterPage() {
   // Waits for the session, as the sign-in screen does.
   if (user && !loading) return <Navigate to="/" replace />;
 
-  const onSubmit = async (event: FormEvent) => {
+  const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setFieldErrors({});
@@ -543,7 +544,7 @@ export function ForgotPasswordPage() {
     setStep("email");
   };
 
-  const onSubmitEmail = async (event: FormEvent) => {
+  const onSubmitEmail = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);
@@ -564,7 +565,7 @@ export function ForgotPasswordPage() {
     }
   };
 
-  const onSubmitCode = async (event: FormEvent) => {
+  const onSubmitCode = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);
@@ -605,7 +606,7 @@ export function ForgotPasswordPage() {
     }
   };
 
-  const onSubmitConfirmCode = async (event: FormEvent) => {
+  const onSubmitConfirmCode = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);
@@ -638,7 +639,7 @@ export function ForgotPasswordPage() {
     }
   };
 
-  const onSubmitPassword = async (event: FormEvent) => {
+  const onSubmitPassword = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);
@@ -859,7 +860,7 @@ export function VerifyEmailPage() {
 
     // No cancellation flag: under StrictMode the cleanup would discard the run
     // that opened the challenge, leaving "Sending code…" forever.
-    (async () => {
+    void (async () => {
       try {
         await startEmailVerification();
       } catch (caught) {
@@ -878,7 +879,7 @@ export function VerifyEmailPage() {
   if (!user) return <Navigate to="/login" replace />;
   if (user.email_verified_at) return <Navigate to="/" replace />;
 
-  const onSubmit = async (event: FormEvent) => {
+  const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setFieldErrors({});
@@ -1006,7 +1007,7 @@ export function ChangePasswordPage() {
     started.current = true;
 
     // No cancellation flag, as on the verification screen.
-    (async () => {
+    void (async () => {
       try {
         await startPasswordChange();
       } catch (caught) {
@@ -1028,7 +1029,7 @@ export function ChangePasswordPage() {
   // Covers the session ending while the screen is open.
   if (!user) return <Navigate to="/login" replace />;
 
-  const onSubmitCode = async (event: FormEvent) => {
+  const onSubmitCode = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);
@@ -1078,7 +1079,7 @@ export function ChangePasswordPage() {
     await onResend();
   };
 
-  const onSubmitPassword = async (event: FormEvent) => {
+  const onSubmitPassword = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);

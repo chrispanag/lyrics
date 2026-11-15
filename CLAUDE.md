@@ -730,12 +730,14 @@ no application code — but while it stands, these are the parts holding it up.
   spent is what makes both sides agree. Nothing is lost by that — the mark waits
   for an IntersectionObserver before it shows anything, and `md:hidden` still
   denies the box any geometry at a desk, so the single showing cannot be spent
-  there. Both layout effects carry a `react-hooks/set-state-in-effect` disable
-  saying why, and are the only two that should: the shape suits a value the
-  reader also writes, or one read exactly once. `storedTheme`/`storeTheme` and
+  there. Both layout effects carry a `useReactCompiler` suppression saying why,
+  and are the only two storage reads that should: the shape suits a value the
+  reader also writes, or one read exactly once. (The rule reaches further than
+  this shape, so a grep also finds `BrowsePage`'s URL sync and `AuthProvider`'s
+  `logout`, each with its own reason.) `storedTheme`/`storeTheme` and
   `ListsPages`'s share URL are the other two. The first needed only the wrap;
-  the second is a `useSyncExternalStore` read whose server snapshot is `""`,
-  the form for a browser value with no writer at all. Nothing renders on a
+  the second is a `useSyncExternalStore` read whose server snapshot is `""`, the
+  form for a browser value with no writer at all. Nothing renders on a
   server while `ssr: false` stands, so both are fixed for the module graph
   rather than for a path anything is on yet. What the wrap does *not* finish is
   `ProfilePage`'s `useState(storedTheme)`, which is still a stored value read

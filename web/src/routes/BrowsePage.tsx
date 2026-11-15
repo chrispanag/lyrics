@@ -10,7 +10,7 @@ import { PageTitle } from "@/components/PageTitle";
 import { SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
-import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Skeleton } from "@/components/ui";
+import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Skeletons } from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
 import { LANGUAGE_LABELS, hasRole, type SongFilters } from "@/lib/types";
 import { songCount } from "@/lib/format";
@@ -56,6 +56,7 @@ export function BrowsePage() {
     if (debounced !== draft) return;
     if (debounced === query) return;
 
+    // biome-ignore lint/nursery/useReactCompiler: syncing the debounced input out to the URL is what this effect is for.
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
@@ -209,14 +210,8 @@ export function BrowsePage() {
           <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
         )}
 
-        {isLoading && (
-          <div className="space-y-3">
-            {/* `h-28` restates a song card's height; update it if cards change. */}
-            {Array.from({ length: 5 }, (_, index) => (
-              <Skeleton key={index} className="h-28 w-full" />
-            ))}
-          </div>
-        )}
+        {/* `h-28` restates a song card's height; update it if cards change. */}
+        {isLoading && <Skeletons count={5} className="h-28 w-full" />}
 
         {!isLoading && data?.data.length === 0 && (
           <EmptyState

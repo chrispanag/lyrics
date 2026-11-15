@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Pencil, Plus, Tags, Trash } from "lucide-react";
 
@@ -24,7 +24,7 @@ import {
   Input,
   Select,
   Sheet,
-  Skeleton,
+  Skeletons,
 } from "@/components/ui";
 import { ADMIN_TABS } from "@/routes/adminTabs";
 import { cn } from "@/lib/cn";
@@ -46,13 +46,7 @@ const adminRowChrome = cn(
 
 /** The wait both screens show: rows the height of the cards they become. */
 function RowSkeletons() {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: 5 }, (_, index) => (
-        <Skeleton key={index} className="h-16 w-full" />
-      ))}
-    </div>
-  );
+  return <Skeletons count={5} className="h-16 w-full" stackClassName="space-y-2" />;
 }
 
 /**
@@ -252,7 +246,7 @@ export function AdminGenresPage() {
     }
   };
 
-  const onSubmitName = (event: FormEvent) => {
+  const onSubmitName = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (sheet?.kind === "create") {
       void attempt(() => createGenre.mutateAsync(name.trim()), "The genre could not be created.");

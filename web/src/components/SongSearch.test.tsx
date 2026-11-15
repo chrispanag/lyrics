@@ -2,12 +2,13 @@ import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
-import { createPath, useLocation, useNavigate } from "react-router-dom";
+import { createPath, useLocation } from "react-router-dom";
 
 import { SongSearch } from "./SongSearch";
 import { API, apiError, list, makeSong } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
+import { useNavigate } from "@/lib/navigation";
 import type { Song } from "@/lib/types";
 
 /** The current address, serialized by `createPath` so nothing is dropped. */

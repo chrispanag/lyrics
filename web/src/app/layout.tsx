@@ -51,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body>
         {/* Must run before anything with a background color paints. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a constant written here, with no input in it. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         {children}
       </body>
