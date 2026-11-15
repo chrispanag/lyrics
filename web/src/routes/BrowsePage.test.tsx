@@ -340,12 +340,9 @@ describe("BrowsePage filter sheet", () => {
     await waitFor(() => expect(requests.at(-1)?.get("genre_slug")).toBe("rempetiko"));
     expect(requests.at(-1)?.get("offset")).toBe("0");
     expect(screen.getByRole("button", { name: "Filters (1 active)" })).toBeInTheDocument();
-    expect(within(sheet).getByRole("button", { name: /Ρεμπέτικο/ })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(genre).toHaveAttribute("aria-pressed", "true");
 
-    await user.click(within(sheet).getByRole("button", { name: /Ρεμπέτικο/ }));
+    await user.click(genre);
 
     await waitFor(() => expect(requests.at(-1)?.has("genre_slug")).toBe(false));
     expect(screen.getByRole("button", { name: "Filters" })).toBeInTheDocument();

@@ -445,7 +445,6 @@ describe("SongEditorPage", () => {
     const sent = captureSave(makeSong({ genres: [makeGenre({ id: "genre-1" })] }));
     renderEditor({ route: "/songs/song-1/edit" });
 
-    // The state a screen reader announces; the color says it to nobody else.
     const rempetiko = await screen.findByRole("button", { name: "Ρεμπέτικο" });
     const entechno = screen.getByRole("button", { name: "Έντεχνο" });
     expect(rempetiko).toHaveAttribute("aria-pressed", "true");
