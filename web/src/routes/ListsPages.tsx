@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
+import { lazy, Suspense, useState, useSyncExternalStore, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash2 } from "lucide-react";
 
@@ -171,6 +171,10 @@ export function ListsPage() {
   );
 }
 
+function subscribeToNothing() {
+  return () => {};
+}
+
 export function ListDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -192,17 +196,18 @@ export function ListDetailPage() {
   const [naming, setNaming] = useState(false);
   const [copyName, setCopyName] = useState("");
   const [copyError, setCopyError] = useState("");
-  // Where this app is being served from, asked for once it is running rather
-  // than while rendering: `window` is not there for a render a server
-  // performed, so the share link below was the page's one line that could not
-  // survive the `ssr: false` coming off. An ordinary effect rather than the
-  // layout one the song page's reads take, because there is no paint to be
-  // ahead of — the link is only ever read inside a sheet a reader has to open,
-  // and by a button they have to press.
-  const [origin, setOrigin] = useState("");
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
+  // Where this app is being served from. `window` is not there for a render a
+  // server performed, so the share link below was the page's one line that
+  // could not survive the `ssr: false` coming off. The server snapshot is what
+  // a server render and hydration both use, and the browser's answer follows
+  // — the hydration-safe form, with no effect and no second copy in state. The
+  // origin never changes under a running page, so there is nothing to
+  // subscribe to.
+  const origin = useSyncExternalStore(
+    subscribeToNothing,
+    () => window.location.origin,
+    () => "",
+  );
 
   // A disabled query is not "loading" as far as React Query is concerned, so the
   // wait for the session has to be spelled out here — otherwise the page falls

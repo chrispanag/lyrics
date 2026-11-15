@@ -80,6 +80,21 @@ export function SongSearch() {
   // header: see the `pinned` argument at the foot of this file.
   const [focused, setFocused] = useState(false);
 
+  // Whatever was on screen is gone by the time the next page is. Keyed on the
+  // history entry rather than on a click, because there are four ways out of the
+  // panel — a press, Enter, a middle click, the catalog row — and one of them
+  // would have been forgotten. Landing on a song with the box still full of the
+  // search that found it is the failure this avoids. Reset while rendering
+  // rather than in an effect, so the next page is never drawn with the old
+  // search still in the box.
+  const [searchedAt, setSearchedAt] = useState(location.key);
+  if (searchedAt !== location.key) {
+    setSearchedAt(location.key);
+    setDraft("");
+    setDismissed(false);
+    setActive(-1);
+  }
+
   const typed = draft.trim();
   // Left to `useDebounced`'s own default, which is the beat every other search
   // box in the app waits: restated here it would be a fourth copy of one number,
@@ -199,17 +214,6 @@ export function SongSearch() {
       return;
     }
   };
-
-  // Whatever was on screen is gone by the time the next page is. Keyed on the
-  // history entry rather than on a click, because there are four ways out of the
-  // panel — a press, Enter, a middle click, the catalog row — and one of them
-  // would have been forgotten. Landing on a song with the box still full of the
-  // search that found it is the failure this avoids.
-  useEffect(() => {
-    setDraft("");
-    setDismissed(false);
-    setActive(-1);
-  }, [location.key]);
 
   useEffect(() => {
     if (!open) return;

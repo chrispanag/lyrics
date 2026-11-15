@@ -89,12 +89,16 @@ export function Layout() {
   // Keyed on the location rather than on its pathname — the entry a link pushes
   // is a new location whether or not the path changed, and a reader who presses
   // the screen they are already on would otherwise be left looking at a drawer
-  // with nothing having happened. Its own effect rather than a line in the one
-  // above, whose `pathname` key is deliberate: a filter written into the
-  // catalog's query string must not scroll that page back to the top.
-  useEffect(() => {
+  // with nothing having happened. Not keyed with the effect above, whose
+  // `pathname` key is deliberate: a filter written into the catalog's query
+  // string must not scroll that page back to the top. Done while rendering
+  // rather than in an effect, so the new screen is never drawn with the drawer
+  // still open over it.
+  const [navLocation, setNavLocation] = useState(location);
+  if (navLocation !== location) {
+    setNavLocation(location);
     setNavOpen(false);
-  }, [location]);
+  }
 
   // A window too wide for the drawer closes it, and this is the one thing about
   // it that is not cosmetic. Both the panel and the hamburger are `md:hidden`,
