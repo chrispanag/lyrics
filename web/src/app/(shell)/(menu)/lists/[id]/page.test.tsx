@@ -3,14 +3,18 @@ import { type DehydratedState, HydrationBoundary } from "@tanstack/react-query";
 import { HttpResponse, http } from "msw";
 import type { ReactElement } from "react";
 import { renderToString } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
+import { setTokenProvider } from "@/api/client";
 import { keys } from "@/api/hooks";
 import { RouteParams } from "@/lib/navigation";
+import { ListDetailPage } from "@/routes/ListsPages";
 import { catalogList, catalogSongs } from "@/test/catalog";
 import { API, apiError, listById, makeUnaddressedSong } from "@/test/handlers";
 import { server } from "@/test/server";
 import { TestProviders } from "@/test/TestProviders";
+
+import ListPage, { generateMetadata } from "./page";
 
 /*
  * Pins the route's wiring: what a guest's read of a list hands the page and
@@ -22,18 +26,6 @@ import { TestProviders } from "@/test/TestProviders";
 const PUBLIC_ID = "5b2f1c0e-1d3a-4e7b-9c4d-2a1f0e3b4c5d";
 const PRIVATE_ID = "6c3a2d1f-2e4b-4f8c-8d5e-3b2a1f4c5d6e";
 const SECRET = "Μυστική λίστα";
-
-/** What `notFound` would throw, so a spec can say it was never called. */
-class NotFound extends Error {}
-
-vi.mock("next/navigation", () => ({
-  notFound: () => {
-    throw new NotFound();
-  },
-}));
-
-const { default: ListPage, generateMetadata } = await import("./page");
-const { ListDetailPage } = await import("@/routes/ListsPages");
 
 const publicList = catalogList(2, {
   id: PUBLIC_ID,
@@ -168,18 +160,17 @@ describe("a list a guest cannot read", () => {
           : apiError(404, "not_found", "List was not found.");
       }),
     );
-    const { setTokenProvider } = await import("@/api/client");
     setTokenProvider(async () => "owner-token");
 
     try {
       const tree = await ListPage(props(PRIVATE_ID));
       expect(boundary(tree)?.props.state).toBeUndefined();
-      expect(await generateMetadata(props(`${PRIVATE_ID}`))).toEqual({ robots: { index: false } });
+      expect(await generateMetadata(props(PRIVATE_ID))).toEqual({ robots: { index: false } });
     } finally {
       setTokenProvider(async () => null);
     }
-    expect(seen).not.toHaveLength(0);
-    expect(seen.every((header) => header === null)).toBe(true);
+    // One read each (`cache` dedupes only within a request), neither with a token.
+    expect(seen).toEqual([null, null]);
   });
 });
 

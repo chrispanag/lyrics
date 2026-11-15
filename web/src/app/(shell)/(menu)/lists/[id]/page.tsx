@@ -25,12 +25,12 @@ import { ListDetailPage } from "@/routes/ListsPages";
 /**
  * What a guest may know about the list at an address:
  *
- * - `list`: it is public, and this is it.
- * - `hidden`: the API refused to show it. Private and deleted answer alike, so
- *   this is never a 404: that would 404 an owner's own private list on every load.
- * - `unknown`: the API could not be asked. Nothing is claimed either way.
+ * - the list: it is public, and this is it.
+ * - `"hidden"`: the API refused to show it. Private and deleted answer alike,
+ *   so this is never a 404: that would 404 an owner's own private list on every load.
+ * - `null`: the API could not be asked. Nothing is claimed either way.
  */
-type ServerList = { list: SongList } | { list: null; hidden: boolean };
+type ServerList = SongList | "hidden" | null;
 
 /**
  * The list, read once per request for both `generateMetadata` and the render.
@@ -49,13 +49,12 @@ const loadList = cache(async (id: string): Promise<ServerList> => {
     const list = await apiFetch<SongList>(`/api/v1/lists/${encodeURIComponent(id)}`, {
       anonymous: true,
     });
-    if ((list.songs ?? []).some((song) => !song.slug)) return { list: null, hidden: false };
-    return { list };
+    return (list.songs ?? []).some((song) => !song.slug) ? null : list;
   } catch (caught) {
     // `bad_request` is a malformed id, which no list has: the same answer as 404.
     const refused =
       caught instanceof ApiError && (caught.code === "not_found" || caught.code === "bad_request");
-    return { list: null, hidden: refused };
+    return refused ? "hidden" : null;
   }
 });
 
@@ -82,10 +81,10 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const read = await loadList(id);
-  if (!read.list) return read.hidden ? { robots: { index: false } } : {};
+  const list = await loadList(id);
+  if (list === "hidden") return { robots: { index: false } };
+  if (!list) return {};
 
-  const { list } = read;
   // The API exposes no owner name, so the count is the only other fact.
   const description = list.description
     ? `${list.description} — a list of ${songCount(list.item_count)}.`
@@ -107,7 +106,8 @@ export async function generateMetadata({
 
 export default async function ListPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { list } = await loadList(id);
+  const read = await loadList(id);
+  const list = read === "hidden" ? null : read;
 
   return (
     <>
