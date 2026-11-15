@@ -1771,7 +1771,7 @@ each of them is written down.
   `httptest` (`testutil.TokenIssuer`) — the only way to produce expired,
   wrong-issuer, foreign-key and `alg: none` tokens on demand. `PRELUDE_JWKS_URL`
   and `PRELUDE_ISSUER` point the app at it.
-- Frontend uses vitest + RTL + MSW, with `onUnhandledRequest: "error"` — an
+- Frontend uses vitest + RTL + MSW, with `onUnhandledFrame: "error"` — an
   unstubbed request is a bug in the test, not something to pass through.
 - `renderWithProviders` stubs the auth context rather than mounting the real
   provider, so tests never touch the Prelude SDK.

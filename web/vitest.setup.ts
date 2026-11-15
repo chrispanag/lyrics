@@ -46,7 +46,7 @@ beforeAll(() => {
   }
 
   // An unstubbed request is a bug in the test. Outside the guard: node specs too.
-  server.listen({ onUnhandledRequest: "error" });
+  server.listen({ onUnhandledFrame: "error" });
 });
 
 afterEach(() => {

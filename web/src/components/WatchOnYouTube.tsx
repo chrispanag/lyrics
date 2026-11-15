@@ -19,9 +19,10 @@ export function WatchOnYouTube({ videoId, className }: { videoId: string; classN
       className={buttonClasses("secondary", "sm", className)}
     >
       <Youtube aria-hidden className="size-4" />
-      Watch on YouTube
-      {/* A reader who cannot see the new tab appear needs telling. */}
-      <span className="sr-only"> (opens in a new tab)</span>
+      Watch on YouTube{" "}
+      {/* A reader who cannot see the new tab appear needs telling. The space
+          stays outside the span, since a name computation may trim it. */}
+      <span className="sr-only">(opens in a new tab)</span>
     </a>
   );
 }
