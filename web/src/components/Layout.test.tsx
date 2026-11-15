@@ -156,6 +156,21 @@ describe("Mobile navigation drawer", () => {
     await waitFor(() => expect(trigger()).toHaveAttribute("aria-expanded", "false"));
   });
 
+  // WebKit gives them to the page behind: Home and End from anywhere, the
+  // rest from a link in the list, since the dialog scrolls only sideways.
+  it("keeps the vertical scrolling keys from the page while open, and only then", async () => {
+    const user = userEvent.setup();
+    renderShell();
+    const taken = (key: string) => !fireEvent.keyDown(document.body, { key });
+    const keys = ["End", "Home", "PageDown", "PageUp", "ArrowDown", " "];
+
+    for (const key of keys) expect(taken(key)).toBe(false);
+
+    await openDrawer(user);
+
+    for (const key of keys) expect(taken(key)).toBe(true);
+  });
+
   // Where it starts, before the slide in, is off-screen too.
   it("does not mistake the sheet's starting position for a dismissal", async () => {
     const user = userEvent.setup();

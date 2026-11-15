@@ -16,7 +16,7 @@ import { buttonClasses } from "@/components/buttonStyles";
 import { Button, Spinner } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
-import { useHomeEndInside } from "@/lib/modal";
+import { FIELDS, useHomeEndInside } from "@/lib/modal";
 import { NAV_DRAWER_ID, NavDrawerContext, useNavDrawer } from "@/lib/navDrawer";
 import { hasRole } from "@/lib/types";
 
@@ -197,6 +197,15 @@ function DesktopSidebar() {
  * smooth unless motion is reduced. Marks it leaving, so a slide in still
  * waiting on its frames stands down.
  */
+/** The drawer's vertical scrolling keys: which way, and by a line or a page. */
+const VERTICAL_KEYS: Record<string, [direction: 1 | -1, page: boolean]> = {
+  ArrowDown: [1, false],
+  ArrowUp: [-1, false],
+  PageDown: [1, true],
+  PageUp: [-1, true],
+  " ": [1, true],
+};
+
 function slideOutOf(track: HTMLElement | null, leaving: RefObject<boolean>) {
   leaving.current = true;
   track?.scrollTo({ left: track.offsetWidth, behavior: "auto" });
@@ -220,8 +229,31 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
   // being off-screen is where it starts, not a dismissal.
   const shown = useRef(false);
   const leaving = useRef(false);
+  const list = useRef<HTMLDivElement>(null);
   // WebKit would otherwise send Home and End to the page behind.
   useHomeEndInside(open, dialog);
+  // And the other vertical keys too, from a link in the list: it scrolls the
+  // page under the drawer rather than the list the link is in, since the
+  // dialog itself scrolls only sideways. Taken here and given to the list.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const key = VERTICAL_KEYS[event.key];
+      const target = list.current;
+      if (!key || !target || event.defaultPrevented) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      // Space presses a button; a field keeps every key.
+      const from = event.target instanceof Element ? event.target : null;
+      if (from?.closest(FIELDS) || (event.key === " " && from?.closest("button"))) return;
+      event.preventDefault();
+      const [direction, page] = key;
+      // Shift+Space is a page up.
+      const sign = event.key === " " && event.shiftKey ? -direction : direction;
+      target.scrollBy({ top: sign * (page ? target.clientHeight * 0.9 : 40) });
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
   const slideOut = () => slideOutOf(dialog.current, leaving);
 
   // An open dialog is closed before it is unmounted, so `close()` can still
@@ -340,7 +372,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
             only on a box that actually scrolls, and a vertical swipe here
             would otherwise scroll the page behind. `-y` only, so a sideways
             swipe still reaches the drawer. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-6">
+        <div ref={list} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-6">
           <div className="flex min-h-[calc(100%+1px)] flex-col">
             <NavPanel />
           </div>

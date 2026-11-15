@@ -1232,14 +1232,21 @@ each of them is written down.
   listener writes the same property (the `@supports` gate stops the keyframes
   pinning the dim on), and without `scroll-initial-target` (everything but
   Chromium) opening jumps to the closed stop and waits two frames before
-  sliding in. **iOS Safari must not scroll the page behind it**, and nothing
-  else stops it now the body lock is gone: Safari ignores `overscroll-behavior`
-  on a box that cannot scroll that way, so the dialog is `touch-action: pan-x`
+  sliding in. **iOS Safari must not scroll the page behind it** — the sheet's
+  problem below, met the same way: the dialog is a scroller that always
+  scrolls, sideways here, so `overscroll-behavior: none` holds. Safari ignores
+  it on a box that cannot scroll the way a swipe goes, so the dialog is `touch-action: pan-x`
   (vertical swipes on the dim and the sheet's padding are no pan at all), and
   the sheet's list is a scroller that always overflows by a pixel with
   `overscroll-behavior-y: contain` — `-y` only, so a sideways swipe still
   chains out to the drawer. A scroll container resets `touch-action` for what is
-  inside it, which is why `pan-x` above does not freeze the list. Chromium's
+  inside it, which is why `pan-x` above does not freeze the list. Keys are the
+  other way through: WebKit hands Home and End to the document, and Page
+  Up/Down, Space and the vertical arrows from a link in the list to the page
+  behind, since the dialog scrolls only sideways. So the drawer calls
+  `useHomeEndInside` like `useDialog` does, and takes the rest itself on the
+  document and scrolls the list — a field keeps every key, a button keeps
+  Space. Measured in WebKit with focus on the dialog and on a link. Chromium's
   touch emulation confirms vertical drags leave `scrollY` alone; mobile WebKit
   in Playwright cannot drag at all, so on an iPhone this is unconfirmed beyond
   the computed styles. And it closes on **the location, not the pathname**: a
@@ -1296,16 +1303,16 @@ each of them is written down.
   outside a dialog that covers the viewport, so `closedby` would do nothing; the
   layer is also `touch-action: pinch-zoom`, so a pan on the dimming is not a
   scroll at all while a pinch still zooms. And **Home and End are taken by
-  `useDialog`**, on the document, since WebKit sends them there wherever focus
+  `useHomeEndInside`**, which `useDialog` and the drawer both call, on the document, since WebKit sends them there wherever focus
   is — including `<body>`, after a press on plain text. Measured with Playwright against `next dev` in
   WebKit and Chromium, desktop and phone-sized: wheel, keys and (Chromium only)
   touch over the dimming, the header and short and long content all leave
   `scrollY` alone, and the panels sit where they did. **Playwright cannot drag a
   finger in WebKit**, so iOS touch is the one path not observed — `touch-action`
   and `overscroll-behavior` on a real scroller are both long supported there, but
-  it wants a real iPhone. The `<body>` lock stays only in `useModal`, for the
-  drawer, which is not a `<dialog>`; a drawer that becomes one should take these
-  three pieces rather than the lock. jsdom has no `showModal()` or working
+  it wants a real iPhone. There is no `<body>` lock anywhere: the drawer is the
+  same idea turned sideways, a dialog that is its own scroller (see the drawer
+  bullet above). jsdom has no `showModal()` or working
   `:modal`, so `src/test/dialog.ts` stubs the part the specs lean on, and
   `modalIsOpen()` asks `matches(":modal")` per element for that reason.
 - **The hamburger is rendered by the app bars, and a screen gets its bar by
