@@ -139,9 +139,9 @@ export function SongSearch() {
       const song = open ? (activeSong ?? results[0]) : undefined;
       if (song) {
         const { href, replace } = step(song);
-        navigate(href, { replace });
+        void navigate(href, { replace });
       } else if (typed !== "") {
-        navigate(browseHref({ q: typed }));
+        void navigate(browseHref({ q: typed }));
       }
       return;
     }

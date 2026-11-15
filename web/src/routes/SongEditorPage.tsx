@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type SubmitEvent } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash } from "lucide-react";
 
@@ -30,21 +30,36 @@ import {
   type SongInput,
 } from "@/lib/types";
 
-interface CreditDraft extends PersonSelection {
+/**
+ * A React key for a row the contributor can add and remove. An index would hand
+ * a removed row's component state to the row after it. A counter rather than
+ * `crypto.randomUUID()`, which only exists in a secure context and so not under
+ * `make mobile`.
+ */
+let lastRowKey = 0;
+const rowKey = (): string => String(++lastRowKey);
+
+interface PersonDraft extends PersonSelection {
+  key: string;
+}
+
+interface CreditDraft extends PersonDraft {
   role: CreditRole;
 }
 
 /** One recording being edited. All strings, as input values; the year converts at save. */
 interface RecordingDraft {
+  key: string;
   label: string;
   youtubeUrl: string;
   releaseYear: string;
   notes: string;
   isFirst: boolean;
-  performers: PersonSelection[];
+  performers: PersonDraft[];
 }
 
 const emptyRecording = (): RecordingDraft => ({
+  key: rowKey(),
   label: "",
   youtubeUrl: "",
   releaseYear: "",
@@ -61,7 +76,7 @@ const named = (person: PersonSelection): boolean => Boolean(person.personId || p
 
 /**
  * Whether a recording row is an abandoned add. Mirrors `RecordingDraft` field by
- * field: a new draft field must be added here, or a row holding only it is
+ * field, `key` aside: a new draft field must be added here, or a row holding only it is
  * silently dropped at save. `isFirst` alone says nothing about a performance.
  */
 const isBlankRecording = (recording: RecordingDraft): boolean =>
@@ -110,6 +125,7 @@ export function SongEditorPage() {
     setNotes(existing.notes ?? "");
     setCredits(
       existing.credits.map((credit) => ({
+        key: rowKey(),
         personId: credit.person_id,
         name: credit.name,
         role: credit.role,
@@ -120,12 +136,14 @@ export function SongEditorPage() {
     // only when it is resent unchanged.
     setRecordings(
       existing.recordings.map((recording) => ({
+        key: rowKey(),
         label: recording.label ?? "",
         youtubeUrl: recording.youtube_url ?? "",
         releaseYear: recording.release_year ? String(recording.release_year) : "",
         notes: recording.notes ?? "",
         isFirst: recording.is_first,
         performers: recording.performers.map((performer) => ({
+          key: rowKey(),
           personId: performer.person_id,
           name: performer.name,
         })),
@@ -172,8 +190,8 @@ export function SongEditorPage() {
    * behind it, so it replaces with the song instead. See CLAUDE.md, "Frontend".
    */
   const leaveEditor = () => {
-    if (location.key === "default") navigate(id ? songRefHref(id) : "/", { replace: true });
-    else navigate(-1);
+    if (location.key === "default") void navigate(id ? songRefHref(id) : "/", { replace: true });
+    else void navigate(-1);
   };
 
   const track =
@@ -190,10 +208,7 @@ export function SongEditorPage() {
     );
 
   /** Rewrites one recording's performers. */
-  const editPerformers = (
-    index: number,
-    next: (performers: PersonSelection[]) => PersonSelection[],
-  ) =>
+  const editPerformers = (index: number, next: (performers: PersonDraft[]) => PersonDraft[]) =>
     track(setRecordings)(
       recordings.map((recording, i) =>
         i === index ? { ...recording, performers: next(recording.performers) } : recording,
@@ -218,7 +233,7 @@ export function SongEditorPage() {
     return fieldErrors[`recordings[${sent}].${field}`];
   };
 
-  const onSubmit = async (event: FormEvent) => {
+  const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setFieldErrors({});
@@ -262,7 +277,7 @@ export function SongEditorPage() {
       setDirty(false);
       // A new song lands the reader on it rather than popping back.
       if (isEdit) leaveEditor();
-      else navigate(songHref(saved), { replace: true });
+      else void navigate(songHref(saved), { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, "The song could not be saved."));
       setFieldErrors(errorDetails(caught));
@@ -324,7 +339,7 @@ export function SongEditorPage() {
           </legend>
 
           {credits.map((credit, index) => (
-            <div key={index} className="flex gap-2">
+            <div key={credit.key} className="flex gap-2">
               <div className="flex-1">
                 <PersonAutocomplete
                   id={`credit-name-${index}`}
@@ -373,7 +388,9 @@ export function SongEditorPage() {
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => track(setCredits)([...credits, { name: "", role: "composer" }])}
+            onClick={() =>
+              track(setCredits)([...credits, { key: rowKey(), name: "", role: "composer" }])
+            }
           >
             <Plus aria-hidden className="size-4" />
             Add credit
@@ -420,7 +437,7 @@ export function SongEditorPage() {
 
             return (
               <fieldset
-                key={index}
+                key={recording.key}
                 className="space-y-3 rounded-2xl border border-stone-200 p-4 dark:border-stone-800"
               >
                 <legend className="px-1 text-sm font-medium text-stone-700 dark:text-stone-300">
@@ -497,7 +514,7 @@ export function SongEditorPage() {
                     Performers
                   </span>
                   {recording.performers.map((performer, performerIndex) => (
-                    <div key={performerIndex} className="flex gap-2">
+                    <div key={performer.key} className="flex gap-2">
                       <div className="flex-1">
                         <PersonAutocomplete
                           id={`recording-${index}-performer-${performerIndex}`}
@@ -534,7 +551,10 @@ export function SongEditorPage() {
                     variant="secondary"
                     size="sm"
                     onClick={() =>
-                      editPerformers(index, (performers) => [...performers, { name: "" }])
+                      editPerformers(index, (performers) => [
+                        ...performers,
+                        { key: rowKey(), name: "" },
+                      ])
                     }
                   >
                     <Plus aria-hidden className="size-4" />

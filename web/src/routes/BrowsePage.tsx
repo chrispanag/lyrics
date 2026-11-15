@@ -56,6 +56,7 @@ export function BrowsePage() {
     if (debounced !== draft) return;
     if (debounced === query) return;
 
+    // biome-ignore lint/nursery/useReactCompiler: syncing the debounced input out to the URL is what this effect is for.
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
@@ -213,6 +214,7 @@ export function BrowsePage() {
           <div className="space-y-3">
             {/* `h-28` restates a song card's height; update it if cards change. */}
             {Array.from({ length: 5 }, (_, index) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: identical placeholders with nothing else to key on.
               <Skeleton key={index} className="h-28 w-full" />
             ))}
           </div>

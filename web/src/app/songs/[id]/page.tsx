@@ -107,7 +107,7 @@ export default async function SongPage({
       {song && (
         <script
           type="application/ld+json"
-          // Contributor-typed text: `songJsonLd` returns it already escaped.
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: contributor-typed text, which `songJsonLd` returns already escaped.
           dangerouslySetInnerHTML={{
             __html: songJsonLd(song, `${SITE_ORIGIN}${songHref(song)}`),
           }}

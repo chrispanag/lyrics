@@ -1,11 +1,4 @@
-import {
-  forwardRef,
-  type ButtonHTMLAttributes,
-  type InputHTMLAttributes,
-  type ReactNode,
-  type SelectHTMLAttributes,
-  type TextareaHTMLAttributes,
-} from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { LoaderCircle, X } from "lucide-react";
 
 import { buttonClasses, type ButtonSize, type ButtonVariant } from "./buttonStyles";
@@ -15,19 +8,23 @@ import { useModal } from "@/lib/modal";
 
 /* Shared primitives. Touch-target sizing lives in buttonStyles.ts. */
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends ComponentProps<"button"> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   loading?: boolean | undefined;
 }
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "primary", size = "md", loading, className, children, disabled, ...props },
-  ref,
-) {
+export function Button({
+  variant = "primary",
+  size = "md",
+  loading,
+  className,
+  children,
+  disabled,
+  ...props
+}: ButtonProps) {
   return (
     <button
-      ref={ref}
       // A button that is busy must also be unclickable, or a double tap
       // submits twice.
       disabled={disabled || loading}
@@ -38,57 +35,44 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {children}
     </button>
   );
-});
+}
 
 // The shape the field primitives share. Size, padding and width are stated per
 // primitive, since `cn` cannot override a shared class. <Select> sets no width:
 // its caller does.
 const fieldLayout = "rounded-xl";
 
-export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
-  function Input({ className, ...props }, ref) {
-    return (
-      <input
-        ref={ref}
-        className={cn(fieldChrome, fieldLayout, "h-11 w-full px-3", className)}
-        {...props}
-      />
-    );
-  },
-);
+export function Input({ className, ...props }: ComponentProps<"input">) {
+  return (
+    <input className={cn(fieldChrome, fieldLayout, "h-11 w-full px-3", className)} {...props} />
+  );
+}
 
-export const Textarea = forwardRef<
-  HTMLTextAreaElement,
-  TextareaHTMLAttributes<HTMLTextAreaElement>
->(function Textarea({ className, ...props }, ref) {
+export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
   return (
     <textarea
-      ref={ref}
       className={cn(fieldChrome, fieldLayout, "w-full px-3 py-2.5", className)}
       {...props}
     />
   );
-});
+}
 
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
-  function Select({ className, children, ...props }, ref) {
-    return (
-      <select
-        ref={ref}
-        // select-chevron replaces the native arrow; see styles/index.css.
-        className={cn(
-          fieldChrome,
-          fieldLayout,
-          "select-chevron h-11 appearance-none pl-3 pr-9",
-          className,
-        )}
-        {...props}
-      >
-        {children}
-      </select>
-    );
-  },
-);
+export function Select({ className, children, ...props }: ComponentProps<"select">) {
+  return (
+    <select
+      // select-chevron replaces the native arrow; see styles/index.css.
+      className={cn(
+        fieldChrome,
+        fieldLayout,
+        "select-chevron h-11 appearance-none pl-3 pr-9",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </select>
+  );
+}
 
 /** A labelled form field with optional error and hint text. */
 export function Field({

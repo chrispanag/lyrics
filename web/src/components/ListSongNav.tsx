@@ -278,6 +278,7 @@ function useSwipeHint(): [boolean | null, (element: HTMLElement | null) => void]
   // subscribed to: spending the hint must not unmount the mark mid-fade.
   const [unspent, setUnspent] = useState(false);
   useLayoutEffect(() => {
+    // biome-ignore lint/nursery/useReactCompiler: read once before paint, for the reason above.
     setUnspent(hintUnspent());
   }, []);
   const [hinting, setHinting] = useState(false);

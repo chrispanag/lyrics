@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type SubmitEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { errorDetails, errorMessage } from "@/api/client";
@@ -51,14 +51,14 @@ export function LoginPage() {
   // snapshot, which would bounce someone who came to sign in.
   if (user && !loading) return <Navigate to={destination} replace />;
 
-  const onSubmit = async (event: FormEvent) => {
+  const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setSubmitting(true);
 
     try {
       await login(email.trim(), password);
-      navigate(destination, { replace: true });
+      void navigate(destination, { replace: true });
     } catch (caught) {
       // Credential errors are not distinguished, so registered emails don't leak.
       setError(errorMessage(caught, "That email and password combination was not recognized."));
@@ -236,7 +236,7 @@ export function RegisterPage() {
   // Waits for the session, as the sign-in screen does.
   if (user && !loading) return <Navigate to="/" replace />;
 
-  const onSubmit = async (event: FormEvent) => {
+  const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setFieldErrors({});
@@ -245,7 +245,7 @@ export function RegisterPage() {
     try {
       await register({ email: email.trim(), password, displayName });
       // Straight to the code screen: the gate would send an unverified account there.
-      navigate("/verify-email", { replace: true });
+      void navigate("/verify-email", { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, "Your account could not be created. Please try again."));
       setFieldErrors(errorDetails(caught));
@@ -543,7 +543,7 @@ export function ForgotPasswordPage() {
     setStep("email");
   };
 
-  const onSubmitEmail = async (event: FormEvent) => {
+  const onSubmitEmail = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);
@@ -564,7 +564,7 @@ export function ForgotPasswordPage() {
     }
   };
 
-  const onSubmitCode = async (event: FormEvent) => {
+  const onSubmitCode = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);
@@ -605,7 +605,7 @@ export function ForgotPasswordPage() {
     }
   };
 
-  const onSubmitConfirmCode = async (event: FormEvent) => {
+  const onSubmitConfirmCode = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);
@@ -638,7 +638,7 @@ export function ForgotPasswordPage() {
     }
   };
 
-  const onSubmitPassword = async (event: FormEvent) => {
+  const onSubmitPassword = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);
@@ -859,7 +859,7 @@ export function VerifyEmailPage() {
 
     // No cancellation flag: under StrictMode the cleanup would discard the run
     // that opened the challenge, leaving "Sending code…" forever.
-    (async () => {
+    void (async () => {
       try {
         await startEmailVerification();
       } catch (caught) {
@@ -878,7 +878,7 @@ export function VerifyEmailPage() {
   if (!user) return <Navigate to="/login" replace />;
   if (user.email_verified_at) return <Navigate to="/" replace />;
 
-  const onSubmit = async (event: FormEvent) => {
+  const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setFieldErrors({});
@@ -887,7 +887,7 @@ export function VerifyEmailPage() {
 
     try {
       await verifyEmail(code);
-      navigate("/", { replace: true });
+      void navigate("/", { replace: true });
     } catch (caught) {
       // A wrong code is a Prelude SDK error, named so a typo reads as one.
       setError(
@@ -1006,7 +1006,7 @@ export function ChangePasswordPage() {
     started.current = true;
 
     // No cancellation flag, as on the verification screen.
-    (async () => {
+    void (async () => {
       try {
         await startPasswordChange();
       } catch (caught) {
@@ -1028,7 +1028,7 @@ export function ChangePasswordPage() {
   // Covers the session ending while the screen is open.
   if (!user) return <Navigate to="/login" replace />;
 
-  const onSubmitCode = async (event: FormEvent) => {
+  const onSubmitCode = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);
@@ -1078,7 +1078,7 @@ export function ChangePasswordPage() {
     await onResend();
   };
 
-  const onSubmitPassword = async (event: FormEvent) => {
+  const onSubmitPassword = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     resetFeedback();
     setSubmitting(true);

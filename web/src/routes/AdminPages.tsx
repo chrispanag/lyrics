@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Pencil, Plus, Tags, Trash } from "lucide-react";
 
@@ -49,6 +49,7 @@ function RowSkeletons() {
   return (
     <div className="space-y-2">
       {Array.from({ length: 5 }, (_, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: identical placeholders with nothing else to key on.
         <Skeleton key={index} className="h-16 w-full" />
       ))}
     </div>
@@ -252,7 +253,7 @@ export function AdminGenresPage() {
     }
   };
 
-  const onSubmitName = (event: FormEvent) => {
+  const onSubmitName = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (sheet?.kind === "create") {
       void attempt(() => createGenre.mutateAsync(name.trim()), "The genre could not be created.");

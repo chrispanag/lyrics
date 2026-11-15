@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useSyncExternalStore, type FormEvent } from "react";
+import { lazy, Suspense, useState, useSyncExternalStore, type SubmitEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash } from "lucide-react";
 
@@ -77,7 +77,7 @@ export function ListsPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
 
-  const onCreate = async (event: FormEvent) => {
+  const onCreate = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     try {
@@ -103,6 +103,7 @@ export function ListsPage() {
       {isLoading && (
         <div className="space-y-3">
           {Array.from({ length: 3 }, (_, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: identical placeholders with nothing else to key on.
             <Skeleton key={index} className="h-20 w-full" />
           ))}
         </div>
@@ -251,7 +252,7 @@ export function ListDetailPage() {
     try {
       const copied = await copyList.mutateAsync({ id: list.id, name });
       setNaming(false);
-      navigate(`/lists/${copied.id}`);
+      void navigate(`/lists/${copied.id}`);
     } catch (caught) {
       // Names are unique per owner, so a 409 opens the rename step.
       if (caught instanceof ApiError && caught.status === 409) {
@@ -264,7 +265,7 @@ export function ListDetailPage() {
 
   const onSave = () => {
     if (!user) {
-      navigate("/login", { state: returnTo(location) });
+      void navigate("/login", { state: returnTo(location) });
       return;
     }
     void saveCopy();

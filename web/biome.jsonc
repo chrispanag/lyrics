@@ -33,6 +33,32 @@
           "level": "error",
           "options": { "allowConstantExport": true }
         }
+      },
+      "suspicious": {
+        "noArrayIndexKey": "error",
+        // `error` and `warn` stay: several failures are deliberately reported
+        // only to the console, so that the screen can stay uniform.
+        "noConsole": { "level": "error", "options": { "allow": ["error", "warn"] } },
+        "noDeprecatedImports": "error",
+        "noReactForwardRef": "error"
+      },
+      "security": {
+        // Lyrics are contributor-typed text, so every raw HTML sink has to
+        // say at its site why what it writes cannot carry markup.
+        "noDangerouslySetInnerHtml": "error"
+      },
+      // Nursery rules move between releases, which is safe only because the
+      // Biome version is pinned exactly in package.json.
+      // Left off after a trial, every finding wrong: `useAwaitThenable` and
+      // `noUnsafeReturn`, whose type inference misses `act`'s promise overload
+      // and Testing Library's return types; `useNullishCoalescing`, whose fixes
+      // would make a busy button clickable; and `noMisleadingReturnType`, which
+      // asks for `string` to be narrowed to the literals a function returns.
+      "nursery": {
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "useExhaustiveSwitchCases": "error",
+        "useReactCompiler": "error"
       }
     }
   },
@@ -55,6 +81,11 @@
           }
         }
       }
+    },
+    {
+      // A command-line script, whose output is the console.
+      "includes": ["icons/**"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
     },
     {
       // Specs define throwaway components and are never fast-refreshed, and

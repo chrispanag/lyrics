@@ -76,6 +76,7 @@ function SongArticle() {
   // reader's own state and a store would need a writer of its own.
   const [fontSizeIndex, setFontSizeIndex] = useState(DEFAULT_FONT_SIZE);
   useLayoutEffect(() => {
+    // biome-ignore lint/nursery/useReactCompiler: read once before paint, for the reason above.
     setFontSizeIndex(storedFontSize());
   }, []);
 

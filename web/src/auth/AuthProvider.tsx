@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
+    void (async () => {
       const token = await getAccessToken();
       if (cancelled) return;
 
@@ -276,6 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // form for a code nobody sent them.
       challenges.current = {};
     }
+    // biome-ignore lint/nursery/useReactCompiler: the list is complete; everything else read is a state setter or a ref.
   }, [queryClient]);
 
   // The emailed code is a login (Prelude has no anonymous step-up); the write
