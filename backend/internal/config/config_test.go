@@ -1,6 +1,8 @@
 package config
 
 import (
+	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -56,9 +58,7 @@ func TestJWKSURLAndIssuerFollowTheSessionDomain(t *testing.T) {
 // A session domain with a scheme is refused at startup, since both derived
 // values add their own.
 func TestLoadRejectsASessionDomainWithAScheme(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://localhost/lyrics")
-	t.Setenv("PRELUDE_APP_ID", "ko8zn4d")
-	t.Setenv("PRELUDE_API_KEY", "sk_test")
+	requiredEnv(t)
 	t.Setenv("PRELUDE_SESSION_DOMAIN", "https://auth.songfolio.live")
 
 	_, err := Load()
@@ -67,5 +67,95 @@ func TestLoadRejectsASessionDomainWithAScheme(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "PRELUDE_SESSION_DOMAIN") {
 		t.Errorf("error does not name the offending variable: %v", err)
+	}
+}
+
+// requiredEnv sets the three variables Load refuses to start without, and
+// blanks the optional ones so the developer's own shell cannot leak in.
+func requiredEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("DATABASE_URL", "postgres://localhost/lyrics")
+	t.Setenv("PRELUDE_APP_ID", "ko8zn4d")
+	t.Setenv("PRELUDE_API_KEY", "sk_test")
+	for _, key := range []string{
+		"PORT", "PRELUDE_API_BASE", "PRELUDE_SESSION_DOMAIN", "PRELUDE_JWKS_URL",
+		"PRELUDE_ISSUER", "ADMIN_EMAILS", "CORS_ORIGINS", "CLIENT_IP_HEADER", "LOG_LEVEL",
+	} {
+		t.Setenv(key, "")
+	}
+}
+
+func TestLoadDefaults(t *testing.T) {
+	requiredEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Port != 8080 {
+		t.Errorf("Port = %d, want 8080", cfg.Port)
+	}
+	if cfg.LogLevel != slog.LevelInfo {
+		t.Errorf("LogLevel = %v, want info", cfg.LogLevel)
+	}
+	if cfg.PreludeAPIBase != "https://api.prelude.dev" {
+		t.Errorf("PreludeAPIBase = %q", cfg.PreludeAPIBase)
+	}
+	if !slices.Equal(cfg.CORSOrigins, []string{"http://localhost:5173"}) {
+		t.Errorf("CORSOrigins = %q, want the dev server", cfg.CORSOrigins)
+	}
+	if cfg.AdminEmails != nil {
+		t.Errorf("AdminEmails = %q, want none", cfg.AdminEmails)
+	}
+	// Unset locally means rate limits key on the peer address; see CLAUDE.md,
+	// Deployment.
+	if cfg.ClientIPHeader != "" {
+		t.Errorf("ClientIPHeader = %q, want empty", cfg.ClientIPHeader)
+	}
+}
+
+func TestLoadParsesTheEnvironment(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("PORT", " 9090 ")
+	t.Setenv("LOG_LEVEL", "debug")
+	// Blank entries and stray spaces come from hand-edited .env files.
+	t.Setenv("ADMIN_EMAILS", " Boss@Example.com, ,ops@example.com,")
+	t.Setenv("CORS_ORIGINS", "https://songfolio.live, https://www.songfolio.live")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Port != 9090 {
+		t.Errorf("Port = %d, want 9090", cfg.Port)
+	}
+	if cfg.LogLevel != slog.LevelDebug {
+		t.Errorf("LogLevel = %v, want debug", cfg.LogLevel)
+	}
+	// Lowered, since provisioning compares against a lowered address.
+	if want := []string{"boss@example.com", "ops@example.com"}; !slices.Equal(cfg.AdminEmails, want) {
+		t.Errorf("AdminEmails = %q, want %q", cfg.AdminEmails, want)
+	}
+	// Not lowered: an origin is compared verbatim.
+	if want := []string{"https://songfolio.live", "https://www.songfolio.live"}; !slices.Equal(cfg.CORSOrigins, want) {
+		t.Errorf("CORSOrigins = %q, want %q", cfg.CORSOrigins, want)
+	}
+}
+
+func TestLoadReportsEveryProblemAtOnce(t *testing.T) {
+	requiredEnv(t)
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("PRELUDE_API_KEY", "")
+	t.Setenv("PORT", "eighty")
+	t.Setenv("LOG_LEVEL", "loud")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() accepted an invalid configuration")
+	}
+	for _, key := range []string{"DATABASE_URL", "PRELUDE_API_KEY", "PORT", "LOG_LEVEL"} {
+		if !strings.Contains(err.Error(), key) {
+			t.Errorf("error does not name %s: %v", key, err)
+		}
 	}
 }

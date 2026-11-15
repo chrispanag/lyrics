@@ -143,7 +143,7 @@ func (s *Server) handleDeletePerson(w http.ResponseWriter, r *http.Request) erro
 	if err := s.store.DeletePerson(r.Context(), id); err != nil {
 		if store.IsInUse(err) {
 			return httpx.Conflict(
-				"This person is still credited on songs. Remove those credits first.").WithCause(err)
+				"This person is still credited on songs or performs on a recording. Remove them from those songs first.").WithCause(err)
 		}
 		return storeError(err, "Person")
 	}
