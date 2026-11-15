@@ -14,7 +14,7 @@ import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
 import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Skeletons } from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
-import { LANGUAGE_LABELS, type Song, hasRole } from "@/lib/types";
+import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
 import { catalogName, catalogView, viewGenre } from "@/lib/browse";
 import { songCount } from "@/lib/format";
 import { Link, useSearchParams, useSetSearchParams } from "@/lib/navigation";
@@ -69,6 +69,7 @@ export function BrowsePage() {
     error,
     hasNextPage,
     fetchNextPage,
+    isFetching,
     isFetchingNextPage,
     isFetchNextPageError,
   } = useSongPages(filters);
@@ -87,11 +88,8 @@ export function BrowsePage() {
   // The one list of what counts as a filter; the button and badge both read it.
   const filterCount = [personId, genreSlug, language].filter(Boolean).length;
   const hasFilters = filterCount > 0;
-  // The latest page's count, which sees songs added or removed since the first.
-  const total = data?.pages.at(-1)?.meta.total ?? 0;
-  // Offsets shift when a song is added mid-scroll, which repeats one across
-  // two pages; a key seen twice is a React error, so each song shows once.
-  const songs = uniqueById(data?.pages.flatMap((page) => page.data) ?? []);
+  const total = data?.total ?? 0;
+  const songs = data?.songs ?? [];
 
   // Named by the query or the landing filter, since each is a history entry
   // and a bookmark; `generateMetadata`'s `og:title` is the same name.
@@ -198,17 +196,25 @@ export function BrowsePage() {
           <Skeletons count={2} className="h-28 w-full" stackClassName="mt-3 space-y-3" />
         )}
 
-        {isFetchNextPageError ? (
+        {isFetchNextPageError && (
           // Not retried by scrolling: a failing API would be asked on every pixel.
           <div className="mt-4 space-y-3">
             <ErrorMessage>{errorMessage(error, "More songs could not be loaded.")}</ErrorMessage>
-            <Button variant="secondary" size="sm" onClick={() => fetchNextPage()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              // Waits out a refetch rather than cancelling it, as the trigger does.
+              onClick={() => fetchNextPage({ cancelRefetch: false })}
+            >
               Try again
             </Button>
           </div>
-        ) : (
-          hasNextPage &&
-          !isFetchingNextPage && <InfiniteScrollTrigger onLoadMore={() => fetchNextPage()} />
+        )}
+
+        {/* Not while a refetch runs either: `fetchNextPage` would cancel it and
+            append to the stale pages it was replacing. */}
+        {hasNextPage && !isFetching && !isFetchNextPageError && (
+          <InfiniteScrollTrigger onLoadMore={() => fetchNextPage()} />
         )}
       </div>
 
@@ -303,10 +309,4 @@ export function BrowsePage() {
       )}
     </>
   );
-}
-
-/** The songs in their order, each kept at its first appearance. */
-function uniqueById(songs: Song[]): Song[] {
-  const seen = new Set<string>();
-  return songs.filter((song) => !seen.has(song.id) && Boolean(seen.add(song.id)));
 }

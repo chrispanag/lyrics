@@ -36,7 +36,7 @@ export function genrePageHref(slug: string): string {
 }
 
 /** How many songs each step of the infinite list fetches. */
-export const PAGE_SIZE = 20;
+const PAGE_SIZE = 20;
 
 const SORTS = ["relevance", "title", "newest", "oldest"] as const;
 

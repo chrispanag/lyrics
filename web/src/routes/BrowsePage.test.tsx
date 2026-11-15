@@ -355,10 +355,10 @@ describe("BrowsePage infinite scrolling", () => {
 
 /* The sheet writes every choice to the URL, so a filtered view can be shared. */
 describe("BrowsePage filter sheet", () => {
-  /** A catalog past one page, with two genres for the sheet to offer. */
+  /** A catalog with two genres for the sheet to offer. */
   const recordSheetRequests = () =>
     recordRequests({
-      songs: list([makeSong()], { total: 45 }),
+      songs: list([makeSong()]),
       genres: [
         makeGenre({ id: "genre-1", name: "Ρεμπέτικο", slug: "rempetiko", song_count: 12 }),
         makeGenre({ id: "genre-2", name: "Έντεχνο", slug: "entechno", song_count: 3 }),

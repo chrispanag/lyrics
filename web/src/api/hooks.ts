@@ -6,6 +6,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
   type QueryClient,
   type UseQueryOptions,
 } from "@tanstack/react-query";
@@ -70,6 +71,9 @@ export const queries = {
         const next = last.meta.offset + last.data.length;
         return last.data.length > 0 && next < last.meta.total ? next : undefined;
       },
+      // A refetch asks for every page loaded, one after another, so coming
+      // back from a song should not; an edit invalidates it instead.
+      staleTime: 5 * 60_000,
     }),
   person: (id: string, request?: RequestOptions) =>
     queryOptions({
@@ -94,18 +98,48 @@ export const queries = {
 export function useSongs(filters: SongFilters, enabled = true) {
   return useQuery({
     ...queries.songs(filters),
-    // Keeps the previous page on screen while the next query loads.
-    placeholderData: (previous) => previous,
+    // Keeps the previous results on screen while the next query loads.
+    placeholderData: keepPreviousData,
     enabled,
   });
 }
 
-/** The catalog as an infinite list; see `queries.songPages`. */
+/**
+ * The catalog as an infinite list (`queries.songPages`), read as the songs
+ * loaded so far and the latest page's count, which sees songs added or removed
+ * since the first.
+ */
 export function useSongPages(filters: SongFilters) {
   return useInfiniteQuery({
     ...queries.songPages(filters),
     // Keeps the previous results on screen while a new filter's first page loads.
     placeholderData: keepPreviousData,
+    select: loadedSongs,
+  });
+}
+
+/**
+ * `useSongPages`'s view of its pages. Hoisted, so `select` keeps its identity
+ * and React Query reruns it only when the pages change, not on every render.
+ */
+function loadedSongs(data: InfiniteData<ListResponse<Song>, number>) {
+  return {
+    songs: uniqueById(data.pages.flatMap((page) => page.data)),
+    total: data.pages.at(-1)?.meta.total ?? 0,
+  };
+}
+
+/**
+ * The songs in their order, each kept at its first appearance. Offsets shift
+ * when a song is added mid-scroll, which repeats one across two pages, and a
+ * key seen twice is a React error.
+ */
+function uniqueById(songs: Song[]): Song[] {
+  const seen = new Set<string>();
+  return songs.filter((song) => {
+    if (seen.has(song.id)) return false;
+    seen.add(song.id);
+    return true;
   });
 }
 

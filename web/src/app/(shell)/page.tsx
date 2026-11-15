@@ -103,8 +103,9 @@ type Named = Awaited<ReturnType<typeof namedOf>>;
  * under its own filter alone, so a sort is folded into it. Everything else is
  * `noindex, follow` — still crawled through for the songs it links to, never
  * listed itself: a search (an address space anyone can mint, of thin and
- * overlapping results), a language or a combination of filters, and a filter the API says names
- * nothing. A filter that could not be resolved for an outage stays indexable.
+ * overlapping results), a language or a combination of filters, and a filter
+ * the API says names nothing. A filter that could not be resolved for an
+ * outage stays indexable.
  */
 function canonicalOf(view: CatalogView, named: Named): string | undefined {
   if (view.language) return undefined;
