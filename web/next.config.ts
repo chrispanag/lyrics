@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
   // Off at the source: `headers()` can add a header but not remove one.
   poweredByHeader: false,
 
+  // TypeScript 7 ships `tsc` and no compiler API, so `next build` has to check
+  // types through the CLI. This is the default already, but an experimental
+  // one, and with it off the build demands TypeScript 6.
+  experimental: { useTypeScriptCli: true },
+
   // Without this `make mobile` serves a blank page: next dev answers the LAN
   // address's `/_next/*` chunk requests 403. Hostnames only (no scheme/port),
   // `*` is one segment; 172.* is wider than RFC 1918 since there are no ranges.
