@@ -83,29 +83,35 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Installs the pnpm version web/package.json pins in `packageManager`.
+      # It has to come before setup-node, whose pnpm cache needs it on PATH.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
       # engines.node is also what App Platform's Node buildpack builds
       # production with, so reading it here keeps CI on the same major.
       - uses: actions/setup-node@v7
         with:
           node-version-file: web/package.json
-          cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
 
       - name: Install
         working-directory: web
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck
         working-directory: web
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Lint
         working-directory: web
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Test
         working-directory: web
-        run: npm run test
+        run: pnpm run test
 
       # A base URL is set only because this is a smoke test of the build; the
       # real production build leaves it unset so the bundle calls its own origin.
@@ -113,7 +119,7 @@ jobs:
         working-directory: web
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
-        run: npx next build
+        run: pnpm exec next build
 
   docker:
     name: Docker images

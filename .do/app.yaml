@@ -113,8 +113,8 @@ services:
       branch: main
       deploy_on_push: true
     source_dir: web
-    build_command: npm run build
-    run_command: npm start
+    build_command: pnpm run build
+    run_command: pnpm start
     # `next start -p 3000` — the port is in web/package.json's start script, and
     # the two have to agree.
     http_port: 3000

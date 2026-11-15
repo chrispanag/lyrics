@@ -1,0 +1,4 @@
+allowBuilds:
+  browser-tabs-lock: false
+  esbuild: false
+  msw: false

@@ -6,14 +6,37 @@
 # this stack would otherwise drift from both with nothing failing.
 ARG NODE_VERSION=26
 
-# --- build -------------------------------------------------------------------
-FROM node:${NODE_VERSION}-alpine AS build
+# --- base --------------------------------------------------------------------
+# The manifests and pnpm, shared by both installs below. pnpm-workspace.yaml
+# carries the build-script policy, without which an install refuses to finish.
+# Node 26 ships no corepack, so pnpm is installed with npm at the version
+# `packageManager` pins, read rather than repeated.
+FROM node:${NODE_VERSION}-alpine AS base
 
 WORKDIR /app
 
+# package.json alone first, so a lockfile-only change does not reinstall pnpm.
+COPY package.json ./
+RUN npm install -g "$(node -p 'require("./package.json").packageManager')"
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# --- production dependencies -------------------------------------------------
+# `next start` needs `next` itself and nothing that built the app, and it reads
+# next.config.ts with its own bundled toolchain, so typescript does not have to
+# be here for a .ts config. Installed here rather than in the runtime stage so
+# that pnpm stays out of the runtime image. The store is a cache mount shared
+# with the build stage's install, so a package is downloaded once, not twice.
+FROM base AS prod-deps
+
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --prod --store-dir /pnpm/store
+
+# --- build -------------------------------------------------------------------
+FROM base AS build
+
 # Lockfile-only install layer, reused whenever dependencies are unchanged.
-COPY package.json package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 COPY . .
 
@@ -44,7 +67,7 @@ ENV NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID=$NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFI
 # under this same path at run time. That one is created by the running process
 # for itself, so dropping the build cache here does not switch it off — and
 # there is nothing to carry over, a build having no API to have fetched from.
-RUN npm run build && rm -rf .next/cache
+RUN pnpm run build && rm -rf .next/cache
 
 # --- runtime -----------------------------------------------------------------
 # A Node runtime rather than the nginx one this image used to end in: the app is
@@ -57,12 +80,8 @@ FROM node:${NODE_VERSION}-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Production dependencies only. `next start` needs `next` itself and nothing
-# that built the app, and it reads next.config.ts with its own bundled
-# toolchain, so typescript does not have to be here for a .ts config.
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
-
+COPY package.json ./
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
 COPY --from=build /app/next.config.ts ./next.config.ts
@@ -74,5 +93,9 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
 
 # CMD rather than ENTRYPOINT, for the reason .do/app.yaml gives about the API
 # image: `run_command` replaces a component's command, and with an ENTRYPOINT in
-# place it may be appended to it as arguments instead.
-CMD ["npm", "start"]
+# place it may be appended to it as arguments instead. Next is started directly
+# rather than through `node --run start`: that runner neither forwards SIGTERM to
+# the script it spawns nor handles it itself, and as PID 1 an unhandled SIGTERM
+# is ignored, so every stop would wait out the grace period and end in SIGKILL.
+# The port repeats package.json's start script, as EXPOSE and the healthcheck do.
+CMD ["node", "node_modules/next/dist/bin/next", "start", "-p", "3000"]

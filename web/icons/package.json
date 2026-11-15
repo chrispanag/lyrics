@@ -1,6 +1,11 @@
 {
-  "//": "Exists only to stop npm walking up to web/package.json. Without it, `make icons`' --no-save install of sharp and png-to-ico lands in web/node_modules, where app code can import them: it would typecheck, lint and run under `make web`, then fail in web/Dockerfile's npm ci with a green local build. Keeping them here preserves the property the target is built around — that an image toolchain is not a frontend dependency.",
+  "//": "A project of its own, with its own lockfile and pnpm-workspace.yaml, so sharp and png-to-ico never reach web/node_modules. There app code could import them: it would typecheck, lint and run under `make web`, then fail in web/Dockerfile's install with a green local build. Keeping them here preserves the property `make icons` is built around — that an image toolchain is not a frontend dependency.",
   "name": "songfolio-icons",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "devDependencies": {
+    "png-to-ico": "^3.0.2",
+    "sharp": "^0.35.5"
+  }
 }

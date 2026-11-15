@@ -3,7 +3,7 @@
 Multilingual song lyrics catalog (Greek + English), shipping as
 `songfolio.live`. Go REST API + PostgreSQL, React/TypeScript frontend,
 authentication delegated to Prelude Auth. Only the product name moved: the
-repository, the Go module (`github.com/christos/lyrics/backend`), the npm
+repository, the Go module (`github.com/christos/lyrics/backend`), the web
 package (`lyrics-web`) and the App Platform app all still carry the `lyrics`
 name, so a half-rename never has to be untangled.
 
@@ -1579,9 +1579,9 @@ each of them is written down.
   rasterizing it puts dark wedges in the corners of the home-screen icon —
   invisible anywhere but an actual phone. `icons/generate.mjs` renders every
   PNG and the ICO from the tracked sources beside it; `sharp` and `png-to-ico`
-  are installed ad hoc rather than added to `web/package.json`, because nothing
-  in the build invokes them and every `npm ci` (including the Dockerfile's)
-  would pay for them.
+  are dependencies of `web/icons`, a pnpm project of its own, rather than of
+  `web/package.json`, because nothing in the build invokes them and every
+  install of the app (including the Dockerfile's) would pay for them.
 - **Two things about those SVG sources are load-bearing and neither is about the
   drawing.** A double hyphen is illegal inside an XML comment, so the brand
   token is named `color-brand-600` without its leading dashes; and the comment
