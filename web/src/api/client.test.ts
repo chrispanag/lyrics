@@ -1,7 +1,14 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, apiFetch, setTokenProvider, setUnauthorizedHandler, toQuery } from "./client";
+import {
+  ApiError,
+  apiFetch,
+  guestRead,
+  setTokenProvider,
+  setUnauthorizedHandler,
+  toQuery,
+} from "./client";
 import { API } from "@/test/handlers";
 import { server } from "@/test/server";
 
@@ -145,6 +152,18 @@ describe("apiFetch", () => {
 
     await expect(apiFetch("/api/v1/songs", { method: "POST", body: {} })).rejects.toThrow();
     expect(calls).toBe(1);
+  });
+});
+
+describe("guestRead", () => {
+  it("is a guest's request on a fresh 3s clock", () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+
+    const request = guestRead();
+
+    expect(request.anonymous).toBe(true);
+    expect(timeout).toHaveBeenCalledWith(3000);
+    expect(request.signal).toBe(timeout.mock.results[0]?.value);
   });
 });
 

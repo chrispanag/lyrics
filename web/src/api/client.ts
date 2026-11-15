@@ -50,6 +50,21 @@ export function isNotFound(caught: unknown): boolean {
   return caught instanceof ApiError && caught.status === 404 && caught.code === "not_found";
 }
 
+/**
+ * How long a server render waits on one API read before rendering without it.
+ * With no `loading.tsx`, an in-app link waits on these reads too, so an API
+ * that hangs rather than fails would otherwise freeze the old screen until the
+ * socket gives up — minutes. Past the budget the read counts as failed, never
+ * as a 404: the page is served, nothing is handed over, and the browser asks
+ * for itself.
+ */
+export const READ_BUDGET_MS = 3000;
+
+/** A server render's read: a guest by construction, on a fresh `READ_BUDGET_MS` clock. */
+export function guestRead() {
+  return { anonymous: true, signal: AbortSignal.timeout(READ_BUDGET_MS) } as const;
+}
+
 /** Supplies a bearer token, or null when signed out. Registered by the auth layer. */
 type TokenProvider = (forceRefresh?: boolean) => Promise<string | null>;
 

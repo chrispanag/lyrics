@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { HydrationBoundary, QueryClient, dehydrate } from "@tanstack/react-query";
 import { cache } from "react";
 
-import { isNotFound } from "@/api/client";
+import { guestRead, isNotFound } from "@/api/client";
 import { queries } from "@/api/hooks";
 import { type CatalogView, browseHref, catalogName, catalogView, viewGenre } from "@/lib/browse";
 import { songCount } from "@/lib/format";
@@ -22,27 +22,13 @@ interface Props {
 }
 
 /**
- * How long a server read may take before the page renders without it. With no
- * `loading.tsx`, an in-app link to the catalog waits on these reads too, so an
- * API that hangs rather than fails would otherwise freeze the old screen until
- * the socket gives up — minutes. Past the budget the read counts as failed: the
- * page is served, nothing is handed over, and the browser asks for itself.
- */
-const READ_BUDGET_MS = 3000;
-
-/** A read's request: a guest by construction, on a fresh clock. */
-function guest() {
-  return { anonymous: true, signal: AbortSignal.timeout(READ_BUDGET_MS) } as const;
-}
-
-/**
  * The request's query client, shared through `cache` by `generateMetadata` and
  * the render, so each read is made once per request. The reads are the hooks'
  * own `queries`, so what is handed over sits under the key the hook asks for.
  *
  * `prefetchQuery` never throws: a failed read is left out of the handover and
  * the browser asks again and says so in its own words — never a 500. No retry,
- * and a time budget per read (`READ_BUDGET_MS`): a server render must not wait
+ * and a time budget per read (`guestRead`): a server render must not wait
  * out an outage. Fresh for the length of the request, so the second caller
  * reuses the first's answer — a success, that is; `readNamed` is what keeps a
  * failure from being asked twice.
@@ -72,9 +58,10 @@ async function viewOf(searchParams: Promise<NextSearchParams>): Promise<CatalogV
  * is not asked about.
  */
 const readNamed = cache(async (client: QueryClient, personId: string) => {
-  const genres = queries.genres(guest());
-  const person = queries.person(personId, guest());
   const askPerson = isUuid(personId);
+  const genres = queries.genres(guestRead());
+  // Only a read that is made starts a clock; the key is the same either way.
+  const person = queries.person(personId, askPerson ? guestRead() : undefined);
   await Promise.all([
     client.prefetchQuery(genres),
     askPerson ? client.prefetchQuery(person) : undefined,
@@ -198,7 +185,7 @@ export default async function CatalogPage({ searchParams }: Props) {
   const view = await viewOf(searchParams);
   const client = requestClient();
   await Promise.all([
-    client.prefetchQuery(queries.songs(view.filters, guest())),
+    client.prefetchQuery(queries.songs(view.filters, guestRead())),
     readNamed(client, view.personId),
   ]);
 
