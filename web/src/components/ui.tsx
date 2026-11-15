@@ -331,9 +331,8 @@ export function Sheet({
       aria-labelledby={titleId}
       // A transparent `.dialog-viewport` over the whole screen, so the page
       // behind cannot scroll (see index.css); the dimming is still `::backdrop`.
-      // The dim fades in. Entry only, as is the panel's below: a closing sheet
-      // has already dropped its content (`shown`), so there is nothing to
-      // animate out but an empty frame.
+      // The dim fades in, on entry only like the panel: a closing sheet has
+      // already dropped its content (`shown`).
       className={cn(
         "dialog-viewport border-0 p-0 text-inherit backdrop:bg-scrim backdrop:backdrop-blur-sm",
         "backdrop:transition-opacity backdrop:duration-200 backdrop:starting:opacity-0",
