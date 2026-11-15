@@ -16,8 +16,47 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Decides which of the jobs below a pull request needs, so a change confined
+  # to one stack does not wait on the other's suite. A skipped job reports as
+  # passing, so this stays compatible with required status checks.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.diff.outputs.backend }}
+      frontend: ${{ steps.diff.outputs.frontend }}
+
+    steps:
+      # A pull request checks out its merge commit, whose first parent is the
+      # base branch tip — so two commits are enough to diff exactly what the
+      # pull request would change, however far its branch is behind.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      # Pushes to main run everything, as does any edit to this workflow, since
+      # a change here can break a job that no changed path would otherwise run.
+      - name: Diff against base
+        id: diff
+        run: |
+          all=false changed=
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            all=true
+          else
+            changed=$(git diff --name-only HEAD^1 HEAD)
+            printf '%s\n' "$changed"
+            if grep -qx '.github/workflows/ci.yml' <<<"$changed"; then all=true; fi
+          fi
+          for area in backend:backend frontend:web; do
+            name=${area%%:*} dir=${area#*:}
+            if $all || grep -q "^$dir/" <<<"$changed"; then v=true; else v=false; fi
+            echo "$name=$v" | tee -a "$GITHUB_OUTPUT"
+          done
+
   backend:
     name: Backend
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
 
     services:
@@ -78,6 +117,8 @@ jobs:
 
   frontend:
     name: Frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -134,6 +175,8 @@ jobs:
 
   docker:
     name: Docker images
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -143,6 +186,7 @@ jobs:
       # Built but not pushed: this proves the Dockerfiles still work, which a
       # `go build` alone does not.
       - name: Build API image
+        if: needs.changes.outputs.backend == 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./backend
@@ -151,6 +195,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build web image
+        if: needs.changes.outputs.frontend == 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./web
