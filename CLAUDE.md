@@ -641,8 +641,8 @@ inventory this file records going stale under Head assets.)
   is a hole where the arrangement it replaced had none.** The control that was
   pressed unmounts, so focus goes to `<body>` and a keyboard reader is returned
   to the top of the document — `Sheet` hands focus back to whatever opened it,
-  which is written there rather than here because every one of its callers has
-  the same gap and one of them will close the same way next. That handing-back
+  which is the browser's `close()` on its `<dialog>` rather than anything
+  written here, and holds for every caller. That handing-back
   is why **the pencil must not be `disabled` while busy**: focus cannot land on
   a disabled element, so the guard would eat the fix. Which in turn is why **the
   refusal of a second pick is stated inside the sheet** — `disabled` on the
@@ -1207,16 +1207,14 @@ each of them is written down.
   arrow keys stand down permanently — on phones only, silently, with the drawer
   itself behaving perfectly. `Layout.test.tsx` asks `modalIsOpen()` of a closed
   drawer, which is what says so. **The marking is returned by `useModal` rather
-  than written by either modal**, which is what keeps "write it conditionally"
-  from being a rule an author has to remember: a modal that stays mounted gets
-  the conditional for free, and the `<dialog>`/`showModal()` migration
-  `lib/modal.ts` names becomes a change to that one module. The same hook
-  carries Escape, the scroll lock and the focus — deliberately **two effects
-  with different keys**, which is the whole reason it is a hook rather than one:
-  every call site passes `onClose` as an inline closure, so a focus restore
-  living in the first effect's cleanup fires on any render while the modal is
-  open and pulls focus onto the trigger behind the backdrop. Only the drawer
-  passes `focus`, a modal that unmounts having focus inside it already. It is
+  than written by the drawer**, which is what keeps "write it conditionally"
+  from being a rule an author has to remember. The same hook carries Escape, the
+  scroll lock and the focus — deliberately **two effects with different keys**:
+  `onClose` is an inline closure, so a focus restore living in the first
+  effect's cleanup fires on any render while the drawer is open and pulls focus
+  onto the trigger behind the backdrop. The drawer is the last user of
+  `useModal`; `Sheet` is already a native `<dialog>` (see the sheet bullet
+  below), and moving the drawer is what retires the hook. It is
   `inert` while closed, so its links
   are out of the tab order and the accessibility tree rather than being a second
   copy of the navigation a keyboard reaches through the page, and
@@ -1247,6 +1245,29 @@ each of them is written down.
   to CSS, where this is a one-way close of state whose only control has gone.
   Pinned in `Layout.test.tsx`, which installs a `matchMedia` that can be moved —
   the suite-wide stub answers `false` forever and registers no listeners.
+- **`Sheet` is a native `<dialog>` opened with `showModal()`, and three things
+  hold it up.** The browser supplies what the `<div>` faked or lacked: an inert
+  page, focus moved in and contained, Escape and the back gesture, and focus
+  handed back to the opener — so it carries no `role`, `aria-modal`, Escape
+  handler or focus code, and must not grow any. `useDialog` in `lib/modal.ts`
+  drives it. First, **the `<dialog>` stays mounted while closed** (its content
+  does not), because `close()` is what returns focus; an open dialog removed
+  from the DOM drops focus on `<body>`. Two pages mount a sheet only while open,
+  which is why the hook closes it in a *layout* cleanup — that runs before React
+  removes the element. Second, **`autoFocus` must not be used inside one**:
+  React focuses from script during the commit, before `showModal()` runs, so the
+  dialog records the field as its opener and focus never comes home. Pass
+  `initialFocus` instead. Third, **the native `close` event is reported through
+  `onClose` only while the prop still wants the dialog open and the dialog is
+  actually closed** — the event is a queued task, so without the first check
+  every close the prop asked for echoes back as a second request, and without
+  the second Strict Mode's close-and-reopen on mount closes every sheet that
+  mounts open, in development only. Click-outside is
+  `closedby="any"` where supported and a press-and-release position check in
+  Safari; the `overflow: hidden` scroll lock is still the hook's, since a modal
+  dialog does not stop the page scrolling. jsdom has no `showModal()` or
+  working `:modal`, so `src/test/dialog.ts` stubs the part the specs lean on,
+  and `modalIsOpen()` asks `matches(":modal")` per element for that reason.
 - **The hamburger is rendered by the app bars, and a screen gets its bar by
   position.** The shell has no row of its own on a phone, and giving it one
   would hand back the vertical space the tab bar was removed to reclaim — so the
@@ -1365,12 +1386,12 @@ each of them is written down.
   only, clear of the edges, no open sheet, and not starting on a control. "A
   sheet is open" is `lib/modal.ts` — one question for the swipe and the arrow
   keys both, asked of the DOM rather than of a page, so the next sheet is covered
-  without being added to a list. There are two modals — `Sheet` and the phone's
-  navigation drawer — and neither writes the pair of attributes it looks for:
-  `useModal`, in that same module, hands each of them the marking already
-  resolved for the open state, so a move to `<dialog>` and `showModal()` is a
-  change to `lib/modal.ts` and nowhere else. That is also what makes it safe for
-  the drawer to stay mounted while closed; see the Layout bullets above. The control guard is belt
+  without being added to a list. There are two modals, and `modalIsOpen()`
+  recognizes both shapes: `Sheet` is a `<dialog>` opened with `showModal()`, so
+  it asks for one that matches `:modal`, and the phone's navigation drawer gets
+  `role="dialog"` plus `aria-modal` from `useModal` only while open, which is
+  what makes it safe for the drawer to stay mounted while closed; see the Layout
+  bullets above. The control guard is belt
   and suspenders and deliberately the safe way round — a swipe over a control does
   nothing, rather than a control being unreachable under the gesture, which is
   precisely how the strips went wrong.

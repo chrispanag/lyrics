@@ -120,7 +120,7 @@ describe("ProfilePage pictures", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Saving your picture…");
 
     // Focus parked inside the open sheet must survive the re-render on landing;
-    // see `useModal`'s two effects in lib/modal.ts.
+    // `useDialog` in lib/modal.ts opens the dialog once per `open`, not per render.
     screen.getByRole("button", { name: "Close" }).focus();
 
     // Still "Add picture": the stubbed context holds a fixed record.

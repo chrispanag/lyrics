@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
+import { installDialogStub } from "./src/test/dialog";
 import { StubIntersectionObserver } from "./src/test/intersection";
 import { server } from "./src/test/server";
 
@@ -31,6 +32,8 @@ beforeAll(() => {
       })),
     );
     window.scrollTo = vi.fn();
+    // `Sheet` is a modal `<dialog>`; see src/test/dialog.ts.
+    installDialogStub();
   }
 
   // An unstubbed request is a bug in the test. Outside the guard: node specs too.

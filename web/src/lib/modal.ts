@@ -1,16 +1,47 @@
-import { useEffect, type RefObject } from "react";
+import {
+  type PointerEvent,
+  type RefObject,
+  type SyntheticEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react";
 
 /*
- * What a modal is, asked of the DOM so every modal is covered, and the hook that
- * marks one. Page gestures stand down while one is open. Modals take their
- * marking from `useModal` rather than writing it, so a move to `<dialog>` is a
- * change to this module alone.
+ * What a modal is, asked of the DOM so every modal is covered, and the two hooks
+ * that make one. Page gestures stand down while one is open.
+ *
+ * There are two shapes until the drawer moves too: `useDialog` drives a native
+ * `<dialog>` opened with `showModal()`, which the browser makes modal — inert
+ * page, focus moved in and handed back, Escape — and `useModal` hand-rolls
+ * that marking and Escape for the drawer, which is still a `<div>`.
  */
-const OPEN_MODAL = '[role="dialog"][aria-modal="true"]';
+const MARKED_MODAL = '[role="dialog"][aria-modal="true"]';
 
 /** Whether a modal is currently open anywhere on the page. */
 export function modalIsOpen(): boolean {
-  return document.querySelector(OPEN_MODAL) !== null;
+  if (document.querySelector(MARKED_MODAL) !== null) return true;
+  // Asked per element rather than as `dialog:modal`: jsdom parses that selector
+  // and never matches it, and the test stub can only answer through `matches`.
+  for (const dialog of document.querySelectorAll("dialog[open]")) {
+    if (dialog.matches(":modal")) return true;
+  }
+  return false;
+}
+
+/**
+ * The `overflow: hidden` scroll lock on `<body>`, which a modal `<dialog>` does
+ * not provide.
+ */
+function useScrollLock(open: boolean) {
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
 }
 
 /** The marking `modalIsOpen` looks for, resolved for the current state. */
@@ -20,14 +51,12 @@ export interface ModalMarking {
 }
 
 /**
- * Escape, the scroll lock, focus, and the marking above.
+ * Escape, the scroll lock, focus, and the marking above, for a modal that is
+ * not a `<dialog>` — the navigation drawer, which stays mounted.
  *
  * **Two effects with different keys**: `onClose` is an inline closure at every
  * call site, so the first effect re-runs on any parent render, and a focus
  * restore in its cleanup would pull focus out of the open dialog.
- *
- * Focus returns to the opener on close either way; `focus` is only needed by a
- * modal that stays mounted.
  */
 export function useModal({
   open,
@@ -36,24 +65,18 @@ export function useModal({
 }: {
   open: boolean;
   onClose: () => void;
-  /** Given focus while the modal is up, for a modal that stays mounted. */
+  /** Given focus while the modal is up. */
   focus?: RefObject<HTMLElement | null>;
 }): ModalMarking {
+  useScrollLock(open);
+
   useEffect(() => {
     if (!open) return;
-
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKeyDown);
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
   // `focus` is a ref, so `open` is what actually re-runs this.
@@ -69,4 +92,94 @@ export function useModal({
   }, [open, focus]);
 
   return open ? { role: "dialog", "aria-modal": true } : {};
+}
+
+/** Props for the `<dialog>` that `useDialog` drives. */
+export interface DialogProps {
+  ref: RefObject<HTMLDialogElement | null>;
+  closedby: "any";
+  onClose: (event: SyntheticEvent<HTMLDialogElement>) => void;
+  onPointerDown: (event: PointerEvent<HTMLDialogElement>) => void;
+  onPointerUp: (event: PointerEvent<HTMLDialogElement>) => void;
+}
+
+const lightDismissIsNative =
+  typeof HTMLDialogElement !== "undefined" && "closedBy" in HTMLDialogElement.prototype;
+
+function outside(event: PointerEvent<HTMLDialogElement>): boolean {
+  const r = event.currentTarget.getBoundingClientRect();
+  return (
+    event.clientX < r.left ||
+    event.clientX > r.right ||
+    event.clientY < r.top ||
+    event.clientY > r.bottom
+  );
+}
+
+/**
+ * Opens a `<dialog>` with `showModal()` while `open` holds, and reports every
+ * close the browser makes on its own — Escape, the back gesture, the backdrop —
+ * through `onClose`, so the prop stays the one authority.
+ *
+ * The dialog has to be mounted while closed for `close()` to be what ends it:
+ * that is what hands focus back to the opener. Unmounting an open dialog
+ * instead drops focus on `<body>`, which is why the layout cleanup closes it
+ * first — it runs before React removes the element.
+ *
+ * `initialFocus` stands in for `autofocus`, which React never writes as an
+ * attribute: it focuses from script during the commit, before the dialog is
+ * open, so `showModal()` would record the field as the opener and then move
+ * focus off it. Do not put `autoFocus` inside a dialog.
+ */
+export function useDialog({
+  open,
+  onClose,
+  initialFocus,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialFocus?: RefObject<HTMLElement | null> | undefined;
+}): DialogProps {
+  const ref = useRef<HTMLDialogElement>(null);
+  // Whether the prop still wants the dialog open: a `close` event after the
+  // prop has already said so is the echo of our own `close()`, not news.
+  const wanted = useRef(false);
+  const pressedOutside = useRef(false);
+
+  useScrollLock(open);
+
+  useLayoutEffect(() => {
+    const dialog = ref.current;
+    if (!open || !dialog) return;
+
+    wanted.current = true;
+    dialog.showModal();
+    initialFocus?.current?.focus();
+
+    return () => {
+      wanted.current = false;
+      if (dialog.open) dialog.close();
+    };
+  }, [open, initialFocus]);
+
+  return {
+    ref,
+    // Light dismiss where supported; Safari gets the pointer fallback below.
+    closedby: "any",
+    // The event is a queued task, so it can also land after a reopen — Strict
+    // Mode closes and reopens on mount — and an open dialog is not news either.
+    onClose: (event) => {
+      if (wanted.current && !event.currentTarget.open) onClose();
+    },
+    // By position, not `event.target`: the dialog is also the target of its own
+    // padding. Press *and* release outside, so a selection drag ending on the
+    // backdrop does not dismiss.
+    onPointerDown: (event) => {
+      pressedOutside.current = !lightDismissIsNative && outside(event);
+    },
+    onPointerUp: (event) => {
+      if (pressedOutside.current && outside(event)) event.currentTarget.close();
+      pressedOutside.current = false;
+    },
+  };
 }
