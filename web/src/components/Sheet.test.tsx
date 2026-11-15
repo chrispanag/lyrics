@@ -8,7 +8,7 @@ import { modalIsOpen } from "@/lib/modal";
 
 /*
  * jsdom has no `showModal()`; src/test/dialog.ts stands in for the parts these
- * lean on. Its rectangles are all zero, so a point is "outside" by coordinates.
+ * lean on.
  */
 
 function Harness({ onClose, mounted = true }: { onClose?: () => void; mounted?: boolean }) {
@@ -26,6 +26,10 @@ function Harness({ onClose, mounted = true }: { onClose?: () => void; mounted?: 
       {(mounted || open) && (
         <Sheet open={open} onClose={close} title="Example">
           <Input autoFocus aria-label="Name" />
+          <select aria-label="Sort">
+            <option>Title</option>
+            <option>Newest</option>
+          </select>
         </Sheet>
       )}
     </>
@@ -144,5 +148,20 @@ describe("Sheet", () => {
       false,
     );
     expect(fireEvent.keyDown(screen.getByLabelText("Name"), { key: "Home" })).toBe(true);
+    // A closed `<select>` picks its first and last option on them.
+    expect(fireEvent.keyDown(screen.getByLabelText("Sort"), { key: "End" })).toBe(true);
+  });
+
+  // A press on plain text leaves focus on `<body>`, where a key never passes
+  // through the dialog; the page must not jump then either.
+  it("keeps Home and End from the page while focus is on the body", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Open" }));
+
+    expect(fireEvent.keyDown(document.body, { key: "End" })).toBe(false);
+
+    await user.keyboard("{Escape}");
+    expect(fireEvent.keyDown(document.body, { key: "End" })).toBe(true);
   });
 });

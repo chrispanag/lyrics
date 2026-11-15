@@ -1285,9 +1285,10 @@ each of them is written down.
   follow. Light dismiss is a click on the **`[data-dialog-dismiss]`** layer,
   read by `useDialog` off the click's target — the browser never sees a press
   outside a dialog that covers the viewport, so `closedby` would do nothing; the
-  layer is also `touch-action: none`, so a pan on the dimming is not a scroll at
-  all. And **Home and End are taken by `useDialog`**, since WebKit sends them to
-  the document wherever focus is. Measured with Playwright against `next dev` in
+  layer is also `touch-action: pinch-zoom`, so a pan on the dimming is not a
+  scroll at all while a pinch still zooms. And **Home and End are taken by
+  `useDialog`**, on the document, since WebKit sends them there wherever focus
+  is — including `<body>`, after a press on plain text. Measured with Playwright against `next dev` in
   WebKit and Chromium, desktop and phone-sized: wheel, keys and (Chromium only)
   touch over the dimming, the header and short and long content all leave
   `scrollY` alone, and the panels sit where they did. **Playwright cannot drag a
