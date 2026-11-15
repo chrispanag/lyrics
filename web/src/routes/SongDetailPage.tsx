@@ -1,14 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import {
-  Check,
-  ListPlus,
-  Minus,
-  Pencil,
-  Plus,
-  Trash,
-  Type,
-} from "lucide-react";
+import { Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
 import {
@@ -139,10 +131,7 @@ function SongArticle() {
             <span className="hidden sm:inline">Save</span>
           </Button>
           {canEdit && (
-            <Link
-              to={`${songRefHref(id ?? "")}/edit`}
-              className={buttonClasses("ghost", "sm")}
-            >
+            <Link to={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
               <Pencil aria-hidden className="size-4" />
               <span className="hidden sm:inline">Edit</span>
             </Link>
@@ -256,11 +245,7 @@ function SongArticle() {
 
       {/* Needs only the id, so Save works while the song is loading. */}
       {user && id && (
-        <AddToListSheet
-          songId={id}
-          open={listSheetOpen}
-          onClose={() => setListSheetOpen(false)}
-        />
+        <AddToListSheet songId={id} open={listSheetOpen} onClose={() => setListSheetOpen(false)} />
       )}
 
       {song && (
@@ -406,9 +391,7 @@ function AddToListSheet({
               >
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{list.name}</span>
-                  <span className="block text-xs text-stone-500">
-                    {songCount(list.item_count)}
-                  </span>
+                  <span className="block text-xs text-stone-500">{songCount(list.item_count)}</span>
                 </span>
                 <span
                   className={cn(

@@ -11,7 +11,15 @@ import { Button, ErrorMessage, Field, Input, Notice, Spinner } from "@/component
 import { Wordmark } from "@/components/Wordmark";
 
 /** Shell shared by every auth screen. */
-function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function AuthShell({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-5 py-10">
       {/* Titled per step, so a reset's steps (state, not routes) differ in history. */}
@@ -53,9 +61,7 @@ export function LoginPage() {
       navigate(destination, { replace: true });
     } catch (caught) {
       // Credential errors are not distinguished, so registered emails don't leak.
-      setError(
-        errorMessage(caught, "That email and password combination was not recognized."),
-      );
+      setError(errorMessage(caught, "That email and password combination was not recognized."));
     } finally {
       setSubmitting(false);
     }
@@ -373,9 +379,7 @@ function CodeField({
         className="text-center text-lg tracking-[0.4em]"
         value={value}
         // Non-digits are stripped, so a pasted "Code: 123456" works.
-        onChange={(event) =>
-          onChange(event.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))
-        }
+        onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))}
         aria-describedby={error ? "code-error" : undefined}
       />
     </Field>
@@ -458,7 +462,10 @@ function SignOutOthersPanel() {
       setSignedOut(true);
     } catch (caught) {
       setError(
-        errorMessage(caught, "Your password was changed, but other devices could not be signed out."),
+        errorMessage(
+          caught,
+          "Your password was changed, but other devices could not be signed out.",
+        ),
       );
     } finally {
       setSubmitting(false);
@@ -733,18 +740,15 @@ export function ForgotPasswordPage() {
 
   if (step === "confirm") {
     return (
-      <AuthShell
-        title="One more code"
-        subtitle={`We sent a second code to ${email.trim()}`}
-      >
+      <AuthShell title="One more code" subtitle={`We sent a second code to ${email.trim()}`}>
         <form onSubmit={onSubmitConfirmCode} className="space-y-4" noValidate>
           {error && <ErrorMessage>{error}</ErrorMessage>}
           {notice && <Notice>{notice}</Notice>}
 
           {/* Explains the second code, which otherwise reads as the first failing. */}
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            Setting a new password needs one more check of your email. This is the
-            last step before you choose it.
+            Setting a new password needs one more check of your email. This is the last step before
+            you choose it.
           </p>
 
           <CodeField label="Confirmation code" value={confirmCode} onChange={setConfirmCode} />
@@ -916,7 +920,10 @@ export function VerifyEmailPage() {
   };
 
   return (
-    <AuthShell title="Check your email" subtitle={`We sent a ${CODE_LENGTH}-digit code to ${user.email}`}>
+    <AuthShell
+      title="Check your email"
+      subtitle={`We sent a ${CODE_LENGTH}-digit code to ${user.email}`}
+    >
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {error && <ErrorMessage>{error}</ErrorMessage>}
         {notice && <Notice>{notice}</Notice>}
@@ -941,11 +948,7 @@ export function VerifyEmailPage() {
 
       <div className="mt-6 space-y-2 text-center text-sm text-stone-500 dark:text-stone-400">
         {/* Held while the opening code is in flight, or a second step-up retires it. */}
-        <ResendCodeLink
-          resending={resending || sending}
-          cooldown={cooldown}
-          onResend={onResend}
-        />
+        <ResendCodeLink resending={resending || sending} cooldown={cooldown} onResend={onResend} />
         <p>
           Wrong address?{" "}
           <button
@@ -1109,8 +1112,8 @@ export function ChangePasswordPage() {
           </ErrorMessage>
           {/* The reset proves the same mailbox by the same kind of code. */}
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            You can still set a new password by resetting it, which emails you a
-            code to confirm it is you.
+            You can still set a new password by resetting it, which emails you a code to confirm it
+            is you.
           </p>
           <Link to="/forgot-password" className={buttonClasses("primary", "lg", "w-full")}>
             Reset my password instead
@@ -1197,10 +1200,7 @@ export function ChangePasswordPage() {
   }
 
   return (
-    <AuthShell
-      title="Password changed"
-      subtitle="Your new password is the one to use from now on"
-    >
+    <AuthShell title="Password changed" subtitle="Your new password is the one to use from now on">
       <div className="space-y-4">
         <SignOutOthersPanel />
 

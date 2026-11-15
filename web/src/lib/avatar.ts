@@ -24,13 +24,15 @@ export function avatarSrc(user: Identity): string | null {
 export function initials(user: Pick<User, "email" | "display_name">): string {
   const name = user.display_name?.trim() ?? "";
   if (name) {
-    return name
-      .split(/\s+/)
-      .slice(0, 2)
-      // By code point, so an emoji or astral initial is not cut in half.
-      .map((word) => Array.from(word)[0] ?? "")
-      .join("")
-      .toLocaleUpperCase();
+    return (
+      name
+        .split(/\s+/)
+        .slice(0, 2)
+        // By code point, so an emoji or astral initial is not cut in half.
+        .map((word) => Array.from(word)[0] ?? "")
+        .join("")
+        .toLocaleUpperCase()
+    );
   }
   return (Array.from(user.email)[0] ?? "?").toLocaleUpperCase();
 }

@@ -37,7 +37,10 @@ describe("extractVideoId", () => {
       pasted: "https://www.youtube.com/playlist?list=PLdQw4w9WgXcQ",
     },
     // Already contains `//`, so no scheme is prefixed and there is no host.
-    { what: "a doubled slash where the scheme belongs", pasted: "youtube.com//watch?v=dQw4w9WgXcQ" },
+    {
+      what: "a doubled slash where the scheme belongs",
+      pasted: "youtube.com//watch?v=dQw4w9WgXcQ",
+    },
     { what: "nothing at all", pasted: "   " },
   ])("refuses $what", ({ pasted }) => {
     expect(extractVideoId(pasted)).toBeNull();

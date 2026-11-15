@@ -17,10 +17,7 @@ function serveLists(...lists: ReturnType<typeof makeList>[]) {
   server.use(listById(...lists));
 }
 
-function renderDetail(
-  route: string,
-  options: Parameters<typeof renderWithProviders>[1] = {},
-) {
+function renderDetail(route: string, options: Parameters<typeof renderWithProviders>[1] = {}) {
   return renderWithProviders(
     <Routes>
       <Route path="/lists/:id" element={<ListDetailPage />} />
@@ -67,23 +64,37 @@ describe("ListDetailPage sharing", () => {
   it("offers the copy to a reader who does not own the list", async () => {
     const user = userEvent.setup();
     const source = makeList({ id: "list-1", owner_id: "someone-else", name: "Ρεμπέτικα" });
-    const copy = makeList({ id: "list-2", owner_id: "user-1", name: "Ρεμπέτικα", is_public: false });
+    const copy = makeList({
+      id: "list-2",
+      owner_id: "user-1",
+      name: "Ρεμπέτικα",
+      is_public: false,
+    });
     serveLists(source, copy);
-    server.use(http.post(`${API}/api/v1/lists/:id/copy`, () => HttpResponse.json(copy, { status: 201 })));
+    server.use(
+      http.post(`${API}/api/v1/lists/:id/copy`, () => HttpResponse.json(copy, { status: 201 })),
+    );
 
     renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
 
     await user.click(await screen.findByRole("button", { name: /save to my lists/i }));
 
     // The page moves to the copy, which the reader can edit.
-    await waitFor(() => expect(screen.getByRole("button", { name: /delete list/i })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /delete list/i })).toBeInTheDocument(),
+    );
   });
 
   // Names are unique per owner, so a second copy asks for a new name.
   it("asks for a new name when the copy collides with an existing list", async () => {
     const user = userEvent.setup();
     const source = makeList({ id: "list-1", owner_id: "someone-else", name: "Ρεμπέτικα" });
-    const copy = makeList({ id: "list-2", owner_id: "user-1", name: "Ρεμπέτικα 2", is_public: false });
+    const copy = makeList({
+      id: "list-2",
+      owner_id: "user-1",
+      name: "Ρεμπέτικα 2",
+      is_public: false,
+    });
     serveLists(source, copy);
 
     let sentName: unknown;

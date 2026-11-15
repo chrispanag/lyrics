@@ -215,10 +215,7 @@ describe("SongSearch", () => {
 
     await user.keyboard("{ArrowDown}");
 
-    expect(screen.getByRole("option", { name: /Λίμνης/ })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(screen.getByRole("option", { name: /Λίμνης/ })).toHaveAttribute("aria-selected", "true");
   });
 
   // Focused directly rather than tabbed: the first Tab lands on the clear

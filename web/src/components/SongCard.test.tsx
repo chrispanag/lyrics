@@ -27,9 +27,7 @@ describe("SongCard", () => {
     renderWithProviders(
       <SongCard
         song={makeSong({
-          credits: [
-            { person_id: "person-9", name: "Nick Cave", role: "composer", position: 0 },
-          ],
+          credits: [{ person_id: "person-9", name: "Nick Cave", role: "composer", position: 0 }],
           recordings: [
             makeRecording({
               performers: [{ person_id: "person-9", name: "Nick Cave", position: 0 }],

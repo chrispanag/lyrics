@@ -127,7 +127,9 @@ describe("SongDetailPage", () => {
 
   it("offers editing to the contributor who added the song", async () => {
     server.use(
-      http.get(`${API}/api/v1/songs/:id`, () => HttpResponse.json(makeSong({ created_by: "user-1" }))),
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(makeSong({ created_by: "user-1" })),
+      ),
     );
 
     renderDetail({ user: makeUser({ id: "user-1", role: "contributor" }) });
@@ -333,7 +335,12 @@ describe("SongDetailPage recordings", () => {
    */
   function servePagedList() {
     const songs = [
-      makeSong({ id: "song-2", slug: "second", title: "Θάλασσα Πλατιά", recordings: [makeRecording()] }),
+      makeSong({
+        id: "song-2",
+        slug: "second",
+        title: "Θάλασσα Πλατιά",
+        recordings: [makeRecording()],
+      }),
       makeSong({
         id: "song-3",
         slug: "third",
@@ -887,12 +894,15 @@ describe("SongDetailPage inside a list", () => {
     const registered: { type: string; on: Element; options?: boolean | AddEventListenerOptions }[] =
       [];
     const original = Element.prototype.addEventListener;
-    const spy = vi
-      .spyOn(Element.prototype, "addEventListener")
-      .mockImplementation(function (this: Element, type, listener, options) {
-        registered.push({ type, on: this, options });
-        return original.call(this, type, listener, options);
-      });
+    const spy = vi.spyOn(Element.prototype, "addEventListener").mockImplementation(function (
+      this: Element,
+      type,
+      listener,
+      options,
+    ) {
+      registered.push({ type, on: this, options });
+      return original.call(this, type, listener, options);
+    });
 
     try {
       await openSecond();

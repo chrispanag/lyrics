@@ -72,11 +72,9 @@ describe("THEME_BOOT_SCRIPT", () => {
 
   it("survives a storage that throws", () => {
     prefersDark(true);
-    const getItem = vi
-      .spyOn(Storage.prototype, "getItem")
-      .mockImplementation(() => {
-        throw new Error("storage is blocked");
-      });
+    const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage is blocked");
+    });
 
     expect(() => runBootScript()).not.toThrow();
     expect(document.documentElement.classList.contains("dark")).toBe(false);

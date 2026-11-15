@@ -8,7 +8,16 @@ import { useAuth } from "@/auth/useAuth";
 import { PageTitle } from "@/components/PageTitle";
 import { PersonAutocomplete, type PersonSelection } from "@/components/PersonAutocomplete";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
-import { Button, Chip, ErrorMessage, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
+import {
+  Button,
+  Chip,
+  ErrorMessage,
+  Field,
+  Input,
+  Select,
+  Spinner,
+  Textarea,
+} from "@/components/ui";
 import { songHref, songRefHref } from "@/lib/listContext";
 import { extractVideoId } from "@/lib/youtube";
 import { CREDIT_PICKER_LABELS } from "@/lib/credits";
@@ -145,8 +154,8 @@ export function SongEditorPage() {
       <div className="mx-auto max-w-2xl px-4 py-6">
         <PageTitle name="Edit song" />
         <ErrorMessage>
-          This song could not be loaded, so it cannot be edited right now. Reload the page to
-          try again.
+          This song could not be loaded, so it cannot be edited right now. Reload the page to try
+          again.
         </ErrorMessage>
       </div>
     );
@@ -167,10 +176,12 @@ export function SongEditorPage() {
     else navigate(-1);
   };
 
-  const track = <T,>(setter: (value: T) => void) => (value: T) => {
-    setter(value);
-    setDirty(true);
-  };
+  const track =
+    <T,>(setter: (value: T) => void) =>
+    (value: T) => {
+      setter(value);
+      setDirty(true);
+    };
 
   /** Rewrites one recording, leaving the rest alone. */
   const editRecording = (index: number, patch: Partial<RecordingDraft>) =>
@@ -218,13 +229,11 @@ export function SongEditorPage() {
       language,
       notes: notes.trim() || null,
       // Blank rows are abandoned edits, dropped rather than rejected.
-      credits: credits
-        .filter(named)
-        .map((credit, index) => ({
-          ...(credit.personId ? { person_id: credit.personId } : { name: credit.name.trim() }),
-          role: credit.role,
-          position: index,
-        })),
+      credits: credits.filter(named).map((credit, index) => ({
+        ...(credit.personId ? { person_id: credit.personId } : { name: credit.name.trim() }),
+        role: credit.role,
+        position: index,
+      })),
       genre_ids: genreIds,
       // Blank recordings are dropped too; see `isBlankRecording`.
       recordings: recordings
@@ -236,14 +245,12 @@ export function SongEditorPage() {
           notes: recording.notes.trim() || null,
           is_first: recording.isFirst,
           position: index,
-          performers: recording.performers
-            .filter(named)
-            .map((performer, performerIndex) => ({
-              ...(performer.personId
-                ? { person_id: performer.personId }
-                : { name: performer.name.trim() }),
-              position: performerIndex,
-            })),
+          performers: recording.performers.filter(named).map((performer, performerIndex) => ({
+            ...(performer.personId
+              ? { person_id: performer.personId }
+              : { name: performer.name.trim() }),
+            position: performerIndex,
+          })),
         })),
     };
 
@@ -283,7 +290,11 @@ export function SongEditorPage() {
           />
         </Field>
 
-        <Field label="Alternative title" htmlFor="alt-title" hint="Optional — a transliteration or a well-known variant">
+        <Field
+          label="Alternative title"
+          htmlFor="alt-title"
+          hint="Optional — a transliteration or a well-known variant"
+        >
           <Input
             id="alt-title"
             value={altTitle}
@@ -521,7 +532,9 @@ export function SongEditorPage() {
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={() => editPerformers(index, (performers) => [...performers, { name: "" }])}
+                    onClick={() =>
+                      editPerformers(index, (performers) => [...performers, { name: "" }])
+                    }
                   >
                     <Plus aria-hidden className="size-4" />
                     Add performer
@@ -565,9 +578,7 @@ export function SongEditorPage() {
                     variant="ghost"
                     size="sm"
                     aria-label={`Remove recording ${index + 1}`}
-                    onClick={() =>
-                      track(setRecordings)(recordings.filter((_, i) => i !== index))
-                    }
+                    onClick={() => track(setRecordings)(recordings.filter((_, i) => i !== index))}
                   >
                     <Trash aria-hidden className="size-4 text-red-600" />
                     Remove

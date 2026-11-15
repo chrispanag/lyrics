@@ -63,9 +63,7 @@ describe("Snippet", () => {
   });
 
   it("does not treat a script tag in lyrics as markup", () => {
-    const { container } = render(
-      <Snippet text={`<script>alert(1)</script> ⟦match⟧`} />,
-    );
+    const { container } = render(<Snippet text={`<script>alert(1)</script> ⟦match⟧`} />);
 
     expect(container.querySelector("script")).toBeNull();
     expect(container.textContent).toContain("<script>alert(1)</script>");

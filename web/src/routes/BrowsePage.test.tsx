@@ -50,11 +50,7 @@ describe("BrowsePage", () => {
   });
 
   it("shows an empty state when nothing matches", async () => {
-    server.use(
-      http.get(`${API}/api/v1/songs`, () =>
-        HttpResponse.json(list([])),
-      ),
-    );
+    server.use(http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list([]))));
 
     renderWithProviders(<BrowsePage />, { route: "/?q=nothingmatches" });
 
@@ -135,11 +131,11 @@ describe("BrowsePage sort picker", () => {
 
     const sort = await openSortPicker();
 
-    expect(within(sort).getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "Title (A–Z)",
-      "Newest first",
-      "Oldest first",
-    ]);
+    expect(
+      within(sort)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["Title (A–Z)", "Newest first", "Oldest first"]);
     expect(sort.value).toBe("newest");
   });
 
@@ -148,12 +144,11 @@ describe("BrowsePage sort picker", () => {
 
     const sort = await openSortPicker();
 
-    expect(within(sort).getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "Relevance",
-      "Title (A–Z)",
-      "Newest first",
-      "Oldest first",
-    ]);
+    expect(
+      within(sort)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["Relevance", "Title (A–Z)", "Newest first", "Oldest first"]);
     expect(sort.value).toBe("relevance");
   });
 
@@ -200,9 +195,7 @@ describe("BrowsePage artist filter", () => {
   it("labels the active artist filter with the person's name", async () => {
     server.use(
       // No results, so the only place the name can appear is the chip itself.
-      http.get(`${API}/api/v1/songs`, () =>
-        HttpResponse.json(list([])),
-      ),
+      http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list([]))),
     );
 
     renderWithProviders(<BrowsePage />, { route: "/?person=person-1" });

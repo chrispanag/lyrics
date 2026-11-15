@@ -22,13 +22,7 @@ const genreChip =
  * The subtitle and genre row keep their box when empty so cards stay level; the
  * snippet varies in height and is not reserved.
  */
-export const SongCard = memo(function SongCard({
-  song,
-  listId,
-}: {
-  song: Song;
-  listId?: string;
-}) {
+export const SongCard = memo(function SongCard({ song, listId }: { song: Song; listId?: string }) {
   const credits = songByline(song);
 
   return (

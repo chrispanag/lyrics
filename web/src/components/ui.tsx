@@ -76,7 +76,12 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
       <select
         ref={ref}
         // select-chevron replaces the native arrow; see styles/index.css.
-        className={cn(fieldChrome, fieldLayout, "select-chevron h-11 appearance-none pl-3 pr-9", className)}
+        className={cn(
+          fieldChrome,
+          fieldLayout,
+          "select-chevron h-11 appearance-none pl-3 pr-9",
+          className,
+        )}
         {...props}
       >
         {children}
@@ -101,7 +106,10 @@ export function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={htmlFor} className="block text-sm font-medium text-stone-700 dark:text-stone-300">
+      <label
+        htmlFor={htmlFor}
+        className="block text-sm font-medium text-stone-700 dark:text-stone-300"
+      >
         {label}
       </label>
       {children}
@@ -112,7 +120,11 @@ export function Field({
       )}
       {error && (
         // Callers point the control at these ids with aria-describedby.
-        <p id={`${htmlFor}-error`} role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">
+        <p
+          id={`${htmlFor}-error`}
+          role="alert"
+          className="text-xs font-medium text-red-600 dark:text-red-400"
+        >
           {error}
         </p>
       )}
@@ -180,7 +192,12 @@ export function Spinner({ className }: { className?: string }) {
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden className={cn("animate-pulse rounded-lg bg-stone-200 dark:bg-stone-800", className)} />;
+  return (
+    <div
+      aria-hidden
+      className={cn("animate-pulse rounded-lg bg-stone-200 dark:bg-stone-800", className)}
+    />
+  );
 }
 
 export function EmptyState({
@@ -281,7 +298,9 @@ export function Sheet({
             <X aria-hidden className="size-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-safe">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-safe">
+          {children}
+        </div>
       </div>
     </div>
   );

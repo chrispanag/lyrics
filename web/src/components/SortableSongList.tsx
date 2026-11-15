@@ -103,8 +103,15 @@ function SortableRow({
   onRemove: (songId: string) => void;
   pendingRemoval?: string;
 }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id: song.id });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: song.id });
 
   return (
     <li

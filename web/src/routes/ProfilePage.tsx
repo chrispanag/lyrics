@@ -75,16 +75,10 @@ export function ProfilePage() {
           Sign in to build lists of songs.
         </p>
         <div className="mt-6 flex flex-col gap-2">
-          <Link
-            to="/login"
-            className={buttonClasses("primary", "lg")}
-          >
+          <Link to="/login" className={buttonClasses("primary", "lg")}>
             Sign in
           </Link>
-          <Link
-            to="/register"
-            className={buttonClasses("secondary", "lg")}
-          >
+          <Link to="/register" className={buttonClasses("secondary", "lg")}>
             Create an account
           </Link>
         </div>
@@ -391,4 +385,3 @@ function ThemeToggle({
     </div>
   );
 }
-

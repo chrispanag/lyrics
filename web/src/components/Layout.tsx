@@ -137,9 +137,7 @@ function NavPanel() {
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive
-                  ? SIDEBAR_ACTIVE
-                  : cn(SIDEBAR_HOVER, "text-stone-600 dark:text-stone-400"),
+                isActive ? SIDEBAR_ACTIVE : cn(SIDEBAR_HOVER, "text-stone-600 dark:text-stone-400"),
               )
             }
           >
@@ -164,9 +162,7 @@ function NavPanel() {
               <Avatar user={user} />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{user.display_name ?? user.email}</p>
-                <p className="text-xs capitalize text-stone-500 dark:text-stone-400">
-                  {user.role}
-                </p>
+                <p className="text-xs capitalize text-stone-500 dark:text-stone-400">{user.role}</p>
               </div>
             </NavLink>
           ) : (

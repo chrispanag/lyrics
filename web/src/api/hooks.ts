@@ -39,8 +39,7 @@ export const keys = {
 export function useSongs(filters: SongFilters, enabled = true) {
   return useQuery({
     queryKey: keys.songs(filters),
-    queryFn: () =>
-      apiFetch<ListResponse<Song>>(`/api/v1/songs${toQuery({ ...filters })}`),
+    queryFn: () => apiFetch<ListResponse<Song>>(`/api/v1/songs${toQuery({ ...filters })}`),
     // Keeps the previous page on screen while the next query loads.
     placeholderData: (previous) => previous,
     enabled,
@@ -58,7 +57,8 @@ export function useSong(id: string | undefined) {
 export function usePeople(query: string, options?: Partial<UseQueryOptions<ListResponse<Person>>>) {
   return useQuery({
     queryKey: keys.people(query),
-    queryFn: () => apiFetch<ListResponse<Person>>(`/api/v1/people${toQuery({ q: query, limit: 20 })}`),
+    queryFn: () =>
+      apiFetch<ListResponse<Person>>(`/api/v1/people${toQuery({ q: query, limit: 20 })}`),
     staleTime: 60_000,
     ...options,
   });

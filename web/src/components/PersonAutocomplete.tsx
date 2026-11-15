@@ -131,9 +131,7 @@ export function PersonAutocomplete({
               >
                 <span className="truncate">{person.name}</span>
                 {person.song_count !== undefined && person.song_count > 0 && (
-                  <span className="ml-2 shrink-0 text-xs text-stone-400">
-                    {person.song_count}
-                  </span>
+                  <span className="ml-2 shrink-0 text-xs text-stone-400">{person.song_count}</span>
                 )}
               </button>
             </li>

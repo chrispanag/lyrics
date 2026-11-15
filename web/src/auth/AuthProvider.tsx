@@ -382,21 +382,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await sessionClient.revokeSessions("others");
   }, []);
 
-  const validatePassword = useCallback(
-    async (password: string) => {
-      try {
-        const result = await sessionClient.validatePassword(password);
-        const messages = (result?.results ?? [])
-          .filter((r) => !r.valid)
-          .map(describeCompliancy);
-        return { valid: result?.valid ?? true, messages };
-      } catch {
-        // Rules unavailable: let the server judge.
-        return { valid: true, messages: [] };
-      }
-    },
-    [],
-  );
+  const validatePassword = useCallback(async (password: string) => {
+    try {
+      const result = await sessionClient.validatePassword(password);
+      const messages = (result?.results ?? []).filter((r) => !r.valid).map(describeCompliancy);
+      return { valid: result?.valid ?? true, messages };
+    } catch {
+      // Rules unavailable: let the server judge.
+      return { valid: true, messages: [] };
+    }
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({

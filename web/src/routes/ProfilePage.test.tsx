@@ -19,8 +19,7 @@ const photo = () => new File(["pretend jpeg"], "portrait.jpg", { type: "image/jp
 /**
  * Press the pencil on the picture: the single, named way into both controls.
  */
-const openPictureMenu = () =>
-  userEvent.click(screen.getByRole("button", { name: "Edit picture" }));
+const openPictureMenu = () => userEvent.click(screen.getByRole("button", { name: "Edit picture" }));
 
 /**
  * The page under an auth context whose account record really is replaced;

@@ -136,7 +136,7 @@ export function SongSearch() {
     if (event.key === "Enter") {
       // The highlighted row, else the first, else the catalog. Never a row
       // from a dismissed panel the reader cannot see.
-      const song = open ? activeSong ?? results[0] : undefined;
+      const song = open ? (activeSong ?? results[0]) : undefined;
       if (song) {
         const { href, replace } = step(song);
         navigate(href, { replace });

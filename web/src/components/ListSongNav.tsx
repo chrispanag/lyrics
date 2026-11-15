@@ -94,7 +94,7 @@ const HINT_FADE_MS = 700;
 
 // Fields own their arrow keys; every control owns a press. INTERACTIVE is built
 // from FIELDS so a field added to one cannot be missed on the other.
-const FIELDS = 'input, textarea, select, [contenteditable]';
+const FIELDS = "input, textarea, select, [contenteditable]";
 const INTERACTIVE = `a, button, label, iframe, [role="button"], ${FIELDS}`;
 
 /**
