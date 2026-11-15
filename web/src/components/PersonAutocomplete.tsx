@@ -23,11 +23,17 @@ export function PersonAutocomplete({
   onChange,
   placeholder,
   id,
+  label,
 }: {
   value: PersonSelection;
   onChange: (selection: PersonSelection) => void;
   placeholder?: string;
   id?: string;
+  /**
+   * The field's accessible name. Required: it sits in rows with no visible
+   * label, and a placeholder is no name, gone once anything is typed.
+   */
+  label: string;
 }) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
@@ -58,6 +64,7 @@ export function PersonAutocomplete({
     <div className="relative">
       <Input
         id={inputId}
+        aria-label={label}
         role="combobox"
         aria-expanded={open && suggestions.length > 0}
         aria-controls={listId}

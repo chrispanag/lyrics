@@ -40,6 +40,7 @@ function renderField(initial: PersonSelection = { name: "" }) {
         }}
       >
         <PersonAutocomplete
+          label="Performer"
           value={value}
           placeholder="Name"
           onChange={(selection) => {
@@ -53,7 +54,7 @@ function renderField(initial: PersonSelection = { name: "" }) {
   }
 
   renderWithProviders(<Harness />);
-  return { changes, submitted, field: screen.getByRole("combobox") };
+  return { changes, submitted, field: screen.getByRole("combobox", { name: "Performer" }) };
 }
 
 /** Types a query and waits for the debounced suggestions to arrive. */

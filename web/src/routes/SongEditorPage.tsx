@@ -406,6 +406,7 @@ export function SongEditorPage() {
                     <Described by={error.name ? errorId : undefined}>
                       <PersonAutocomplete
                         id={`credit-name-${index}`}
+                        label={`Name for credit ${index + 1}`}
                         value={credit}
                         placeholder="Name"
                         onChange={(selection) =>
@@ -584,6 +585,7 @@ export function SongEditorPage() {
                             <Described by={error ? errorId : undefined}>
                               <PersonAutocomplete
                                 id={`recording-${index}-performer-${performerIndex}`}
+                                label={`Name of performer ${performerIndex + 1} on recording ${index + 1}`}
                                 value={performer}
                                 placeholder="Name"
                                 onChange={(selection) =>

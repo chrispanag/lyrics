@@ -183,7 +183,10 @@ describe("SongEditorPage", () => {
     await userEvent.click(screen.getByRole("button", { name: /add recording/i }));
     await userEvent.type(screen.getByLabelText("Year"), "1964");
     await userEvent.click(screen.getByRole("button", { name: /add performer/i }));
-    await userEvent.type(screen.getByPlaceholderText("Name"), "Γιώργος Νταλάρας");
+    await userEvent.type(
+      screen.getByLabelText("Name of performer 1 on recording 1"),
+      "Γιώργος Νταλάρας",
+    );
     await userEvent.click(screen.getByLabelText("Mark recording 1 as the first recording"));
     await userEvent.click(screen.getByRole("button", { name: /add recording/i }));
 
@@ -288,11 +291,12 @@ describe("SongEditorPage", () => {
     const sent = captureSave(makeSong({ recordings: [makeRecording()] }));
     renderEditor({ route: "/songs/song-1/edit" });
 
-    const [credit, performer] = await screen.findAllByPlaceholderText("Name");
-    await userEvent.clear(credit!);
-    await userEvent.type(credit!, "Μάνος Χατζιδάκις");
-    await userEvent.clear(performer!);
-    await userEvent.type(performer!, "Μαρία Φαραντούρη");
+    const credit = await screen.findByLabelText("Name for credit 1");
+    const performer = screen.getByLabelText("Name of performer 1 on recording 1");
+    await userEvent.clear(credit);
+    await userEvent.type(credit, "Μάνος Χατζιδάκις");
+    await userEvent.clear(performer);
+    await userEvent.type(performer, "Μαρία Φαραντούρη");
 
     await save();
 
@@ -424,7 +428,7 @@ describe("SongEditorPage", () => {
     await userEvent.selectOptions(await screen.findByLabelText("Role for credit 2"), "lyricist");
     await userEvent.click(screen.getByRole("button", { name: "Remove credit 1" }));
     await userEvent.click(screen.getByRole("button", { name: "Add credit" }));
-    await userEvent.type(screen.getAllByPlaceholderText("Name")[1]!, "  Νίκος Γκάτσος ");
+    await userEvent.type(screen.getByLabelText("Name for credit 2"), "  Νίκος Γκάτσος ");
     // An abandoned add.
     await userEvent.click(screen.getByRole("button", { name: "Add credit" }));
 
@@ -566,8 +570,6 @@ describe("SongEditorPage", () => {
     ).toHaveAccessibleDescription("Notes are too long.");
   });
 
-  const byId = (id: string) => document.getElementById(id) as HTMLElement;
-
   // The server numbers rows as sent, and blank rows are not: a row's error
   // belongs to the row it names in the payload, not the form row at that index.
   it("puts a credit's or performer's error on the row the server meant, past blank ones", async () => {
@@ -617,15 +619,23 @@ describe("SongEditorPage", () => {
     await save();
 
     await screen.findByText("The song could not be saved.");
-    expect(byId("credit-name-1")).toHaveAccessibleDescription("Name is too long.");
-    expect(byId("credit-name-0")).not.toHaveAttribute("aria-describedby");
-    expect(byId("recording-1-performer-1")).toHaveAccessibleDescription("Name is too long.");
-    expect(byId("recording-1-performer-0")).not.toHaveAttribute("aria-describedby");
+    expect(screen.getByLabelText("Name for credit 2")).toHaveAccessibleDescription(
+      "Name is too long.",
+    );
+    expect(screen.getByLabelText("Name for credit 1")).not.toHaveAttribute("aria-describedby");
+    expect(screen.getByLabelText("Name of performer 2 on recording 2")).toHaveAccessibleDescription(
+      "Name is too long.",
+    );
+    expect(screen.getByLabelText("Name of performer 1 on recording 2")).not.toHaveAttribute(
+      "aria-describedby",
+    );
     // Refilling a dropped row must not move the error: the server named the
     // rows of the save that failed, not of the form as it now stands.
-    await userEvent.type(byId("credit-name-0"), "Μάνος Χατζιδάκις");
-    expect(byId("credit-name-1")).toHaveAccessibleDescription("Name is too long.");
-    expect(byId("credit-name-0")).not.toHaveAttribute("aria-describedby");
+    await userEvent.type(screen.getByLabelText("Name for credit 1"), "Μάνος Χατζιδάκις");
+    expect(screen.getByLabelText("Name for credit 2")).toHaveAccessibleDescription(
+      "Name is too long.",
+    );
+    expect(screen.getByLabelText("Name for credit 1")).not.toHaveAttribute("aria-describedby");
   });
 
   it("puts a credit's role error on the role, not the name", async () => {
@@ -644,7 +654,7 @@ describe("SongEditorPage", () => {
     expect(await screen.findByLabelText("Role for credit 1")).toHaveAccessibleDescription(
       "Role must be composer or lyricist.",
     );
-    expect(byId("credit-name-0")).not.toHaveAttribute("aria-describedby");
+    expect(screen.getByLabelText("Name for credit 1")).not.toHaveAttribute("aria-describedby");
   });
 
   // A failed load must not fall through to an empty form: saving it would blank
