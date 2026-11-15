@@ -46,7 +46,7 @@ const adminRowChrome = cn(
 
 /** The wait both screens show: rows the height of the cards they become. */
 function RowSkeletons() {
-  return <Skeletons count={5} className="h-16 w-full" gap="space-y-2" />;
+  return <Skeletons count={5} className="h-16 w-full" stackClassName="space-y-2" />;
 }
 
 /**

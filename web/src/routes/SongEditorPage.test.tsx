@@ -284,6 +284,34 @@ describe("SongEditorPage", () => {
     expect(screen.getByLabelText("Label")).toHaveValue("Live στο Λυκαβηττό");
   });
 
+  // Typing after a pick names somebody else: the picked id must not ride along
+  // and outrank the text, or the save credits the person who was picked.
+  it("sends a retyped name rather than the person it replaced", async () => {
+    let body: SongInput | undefined;
+    server.use(
+      http.get(`${API}/api/v1/songs/song-1`, () =>
+        HttpResponse.json(makeSong({ recordings: [makeRecording()] })),
+      ),
+      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
+        body = (await request.json()) as SongInput;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+    renderEditor({ route: "/songs/song-1/edit" });
+
+    const [credit, performer] = await screen.findAllByPlaceholderText("Name");
+    await userEvent.clear(credit!);
+    await userEvent.type(credit!, "Μάνος Χατζιδάκις");
+    await userEvent.clear(performer!);
+    await userEvent.type(performer!, "Μαρία Φαραντούρη");
+
+    await save();
+
+    await vi.waitFor(() => expect(body).toBeDefined());
+    expect(body!.credits).toEqual([{ name: "Μάνος Χατζιδάκις", role: "composer", position: 0 }]);
+    expect(body!.recordings[0]!.performers).toEqual([{ name: "Μαρία Φαραντούρη", position: 0 }]);
+  });
+
   // Blank rows are not sent, so the server's `recordings[0]` is Recording 2 here.
   // Both rows are asserted: the error shown on the wrong row is still on screen.
   it("puts a recording's error on the row the server counted", async () => {

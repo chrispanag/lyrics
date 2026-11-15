@@ -349,7 +349,11 @@ export function SongEditorPage() {
                   placeholder="Name"
                   onChange={(selection) =>
                     track(setCredits)(
-                      credits.map((item, i) => (i === index ? { ...item, ...selection } : item)),
+                      // The selection replaces the person whole: spread over
+                      // `item`, a retyped name keeps the picked id, which wins.
+                      credits.map((item, i) =>
+                        i === index ? { key: item.key, role: item.role, ...selection } : item,
+                      ),
                     )
                   }
                 />
@@ -525,7 +529,7 @@ export function SongEditorPage() {
                           onChange={(selection) =>
                             editPerformers(index, (performers) =>
                               performers.map((item, i) =>
-                                i === performerIndex ? { ...item, ...selection } : item,
+                                i === performerIndex ? { key: item.key, ...selection } : item,
                               ),
                             )
                           }

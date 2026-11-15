@@ -40,6 +40,10 @@
               "react-router-dom": {
                 "importNames": ["useNavigate"],
                 "message": "Import useNavigate from @/lib/navigation, which says what it returns under BrowserRouter."
+              },
+              "react-router": {
+                "importNames": ["useNavigate"],
+                "message": "Import useNavigate from @/lib/navigation, which says what it returns under BrowserRouter."
               }
             }
           }

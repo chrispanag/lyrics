@@ -182,18 +182,21 @@ export function Skeleton({ className }: { className?: string }) {
   );
 }
 
-/** A stack of placeholder rows for a list still loading. */
+/**
+ * A stack of placeholder rows for a list still loading. `className` styles each
+ * row; `stackClassName` is the stack's own, a `space-y-*` class.
+ */
 export function Skeletons({
   count,
   className,
-  gap = "space-y-3",
+  stackClassName = "space-y-3",
 }: {
   count: number;
   className: string;
-  gap?: string;
+  stackClassName?: string;
 }) {
   return (
-    <div className={gap}>
+    <div className={stackClassName}>
       {Array.from({ length: count }, (_, index) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: identical placeholders with nothing else to key on.
         <Skeleton key={index} className={className} />
