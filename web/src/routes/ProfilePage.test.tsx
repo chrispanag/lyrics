@@ -288,16 +288,9 @@ describe("ProfilePage pictures", () => {
   it("says so when the API refuses the picture", async () => {
     server.use(
       http.post(`${API}/api/v1/me/avatar`, () =>
-        HttpResponse.json(
-          {
-            error: {
-              code: "validation_failed",
-              message: "That picture is too large.",
-              details: { image: "Use a picture under 1024 KB." },
-            },
-          },
-          { status: 422 },
-        ),
+        apiError(422, "validation_failed", "That picture is too large.", {
+          image: "Use a picture under 1024 KB.",
+        }),
       ),
     );
 

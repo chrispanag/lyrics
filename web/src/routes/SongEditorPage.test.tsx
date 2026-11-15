@@ -6,7 +6,7 @@ import { Route, Routes, createPath, useLocation } from "react-router-dom";
 
 import { SongEditorPage } from "./SongEditorPage";
 import { BackButton } from "@/components/BackButton";
-import type { SongInput } from "@/lib/types";
+import type { Song, SongInput } from "@/lib/types";
 import { API, apiError, list, makeGenre, makeRecording, makeSong, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
@@ -43,6 +43,31 @@ const savesTheSong = http.patch(`${API}/api/v1/songs/:id`, () => HttpResponse.js
 
 async function save() {
   await userEvent.click(await screen.findByRole("button", { name: "Save changes" }));
+}
+
+/**
+ * Captures what the editor saves. Given a song, `song-1` is served as that song
+ * and the save is its PATCH; with none, the save is the add form's POST. The
+ * returned getter waits for the request and hands back its body.
+ */
+function captureSave(song?: Song) {
+  let body: SongInput | undefined;
+  const capture = async ({ request }: { request: Request }) => {
+    body = (await request.json()) as SongInput;
+    return HttpResponse.json(makeSong());
+  };
+  server.use(
+    ...(song
+      ? [
+          http.get(`${API}/api/v1/songs/song-1`, () => HttpResponse.json(song)),
+          http.patch(`${API}/api/v1/songs/song-1`, capture),
+        ]
+      : [http.post(`${API}/api/v1/songs`, capture)]),
+  );
+  return async () => {
+    await vi.waitFor(() => expect(body).toBeDefined());
+    return body!;
+  };
 }
 
 describe("SongEditorPage", () => {
@@ -149,13 +174,7 @@ describe("SongEditorPage", () => {
   // Save-time rules: blank rows dropped, positions from the array, a person by id
   // or by name but never both, and no song-level link or year.
   it("sends recordings, dropping blank rows and deriving positions", async () => {
-    let body: SongInput | undefined;
-    server.use(
-      http.post(`${API}/api/v1/songs`, async ({ request }) => {
-        body = (await request.json()) as SongInput;
-        return HttpResponse.json(makeSong());
-      }),
-    );
+    const sent = captureSave();
     renderEditor({ route: "/songs/new" });
 
     await userEvent.type(await screen.findByLabelText("Title"), "Καινούριο");
@@ -170,8 +189,8 @@ describe("SongEditorPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Add song" }));
 
-    await vi.waitFor(() => expect(body).toBeDefined());
-    expect(body?.recordings).toEqual([
+    const body = await sent();
+    expect(body.recordings).toEqual([
       {
         label: null,
         youtube_url: null,
@@ -189,13 +208,7 @@ describe("SongEditorPage", () => {
 
   // At most one recording may be first, so marking a second unmarks the first.
   it("lets only one recording be marked as the first", async () => {
-    let body: SongInput | undefined;
-    server.use(
-      http.post(`${API}/api/v1/songs`, async ({ request }) => {
-        body = (await request.json()) as SongInput;
-        return HttpResponse.json(makeSong());
-      }),
-    );
+    const sent = captureSave();
     renderEditor({ route: "/songs/new" });
 
     await userEvent.type(await screen.findByLabelText("Title"), "Δύο Εκτελέσεις");
@@ -209,19 +222,13 @@ describe("SongEditorPage", () => {
     await userEvent.click(screen.getByLabelText("Mark recording 2 as the first recording"));
     await userEvent.click(screen.getByRole("button", { name: "Add song" }));
 
-    await vi.waitFor(() => expect(body).toBeDefined());
-    expect(body!.recordings.map((recording) => recording.is_first)).toEqual([false, true]);
+    const body = await sent();
+    expect(body.recordings.map((recording) => recording.is_first)).toEqual([false, true]);
   });
 
   // All-false is a real state, and a radio cannot be unpressed: hence "none".
   it("can leave every recording unmarked", async () => {
-    let body: SongInput | undefined;
-    server.use(
-      http.post(`${API}/api/v1/songs`, async ({ request }) => {
-        body = (await request.json()) as SongInput;
-        return HttpResponse.json(makeSong());
-      }),
-    );
+    const sent = captureSave();
     renderEditor({ route: "/songs/new" });
 
     await userEvent.type(await screen.findByLabelText("Title"), "Άγνωστη Πρώτη");
@@ -232,26 +239,17 @@ describe("SongEditorPage", () => {
     await userEvent.click(screen.getByLabelText("No recording marked as first"));
     await userEvent.click(screen.getByRole("button", { name: "Add song" }));
 
-    await vi.waitFor(() => expect(body).toBeDefined());
-    expect(body!.recordings[0]!.is_first).toBe(false);
+    const body = await sent();
+    expect(body.recordings[0]!.is_first).toBe(false);
   });
 
   // An unparseable stored link hydrates and resends verbatim; the preview stays
   // dark and never gates the save.
   it("round-trips a stored link it cannot parse", async () => {
     const stored = "https://youtube.com/watch?feature=share";
-    let body: SongInput | undefined;
-    server.use(
-      http.get(`${API}/api/v1/songs/song-1`, () =>
-        HttpResponse.json(
-          makeSong({
-            recordings: [makeRecording({ youtube_url: stored, youtube_video_id: null })],
-          }),
-        ),
-      ),
-      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
-        body = (await request.json()) as SongInput;
-        return HttpResponse.json(makeSong());
+    const sent = captureSave(
+      makeSong({
+        recordings: [makeRecording({ youtube_url: stored, youtube_video_id: null })],
       }),
     );
     renderEditor({ route: "/songs/song-1/edit" });
@@ -261,8 +259,8 @@ describe("SongEditorPage", () => {
 
     await save();
 
-    await vi.waitFor(() => expect(body).toBeDefined());
-    expect(body!.recordings[0]!.youtube_url).toBe(stored);
+    const body = await sent();
+    expect(body.recordings[0]!.youtube_url).toBe(stored);
   });
 
   // Hydration is keyed on the song's id: a refetch's fresh object must not
@@ -287,16 +285,7 @@ describe("SongEditorPage", () => {
   // Typing after a pick names somebody else: the picked id must not ride along
   // and outrank the text, or the save credits the person who was picked.
   it("sends a retyped name rather than the person it replaced", async () => {
-    let body: SongInput | undefined;
-    server.use(
-      http.get(`${API}/api/v1/songs/song-1`, () =>
-        HttpResponse.json(makeSong({ recordings: [makeRecording()] })),
-      ),
-      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
-        body = (await request.json()) as SongInput;
-        return HttpResponse.json(makeSong());
-      }),
-    );
+    const sent = captureSave(makeSong({ recordings: [makeRecording()] }));
     renderEditor({ route: "/songs/song-1/edit" });
 
     const [credit, performer] = await screen.findAllByPlaceholderText("Name");
@@ -307,9 +296,9 @@ describe("SongEditorPage", () => {
 
     await save();
 
-    await vi.waitFor(() => expect(body).toBeDefined());
-    expect(body!.credits).toEqual([{ name: "Μάνος Χατζιδάκις", role: "composer", position: 0 }]);
-    expect(body!.recordings[0]!.performers).toEqual([{ name: "Μαρία Φαραντούρη", position: 0 }]);
+    const body = await sent();
+    expect(body.credits).toEqual([{ name: "Μάνος Χατζιδάκις", role: "composer", position: 0 }]);
+    expect(body.recordings[0]!.performers).toEqual([{ name: "Μαρία Φαραντούρη", position: 0 }]);
   });
 
   // Blank rows are not sent, so the server's `recordings[0]` is Recording 2 here.
@@ -317,16 +306,9 @@ describe("SongEditorPage", () => {
   it("puts a recording's error on the row the server counted", async () => {
     server.use(
       http.post(`${API}/api/v1/songs`, () =>
-        HttpResponse.json(
-          {
-            error: {
-              code: "validation_failed",
-              message: "The song could not be saved.",
-              details: { "recordings[0].youtube_url": "Not a recognizable YouTube link." },
-            },
-          },
-          { status: 422 },
-        ),
+        apiError(422, "validation_failed", "The song could not be saved.", {
+          "recordings[0].youtube_url": "Not a recognizable YouTube link.",
+        }),
       ),
     );
     renderEditor({ route: "/songs/new" });
@@ -348,34 +330,25 @@ describe("SongEditorPage", () => {
   // Every save sends the whole song, so a field that fails to hydrate is blanked
   // by the next save of anything else.
   it("resends an untouched song exactly as it was stored", async () => {
-    let body: SongInput | undefined;
-    server.use(
-      http.get(`${API}/api/v1/songs/song-1`, () =>
-        HttpResponse.json(
-          makeSong({
-            alt_title: "Thalassa Platia",
-            notes: "Από το «Μικρές Κυκλάδες».",
-            credits: [
-              { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
-              { person_id: "person-3", name: "Οδυσσέας Ελύτης", role: "lyricist", position: 1 },
-            ],
-            genres: [makeGenre({ id: "genre-1" })],
-            // A recording with no year is the common case.
-            recordings: [makeRecording({ release_year: null, label: "Live", notes: "Ηρώδειο" })],
-          }),
-        ),
-      ),
-      http.get(`${API}/api/v1/genres`, () => HttpResponse.json(list([makeGenre()]))),
-      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
-        body = (await request.json()) as SongInput;
-        return HttpResponse.json(makeSong());
+    server.use(http.get(`${API}/api/v1/genres`, () => HttpResponse.json(list([makeGenre()]))));
+    const sent = captureSave(
+      makeSong({
+        alt_title: "Thalassa Platia",
+        notes: "Από το «Μικρές Κυκλάδες».",
+        credits: [
+          { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
+          { person_id: "person-3", name: "Οδυσσέας Ελύτης", role: "lyricist", position: 1 },
+        ],
+        genres: [makeGenre({ id: "genre-1" })],
+        // A recording with no year is the common case.
+        recordings: [makeRecording({ release_year: null, label: "Live", notes: "Ηρώδειο" })],
       }),
     );
     renderEditor({ route: "/songs/song-1/edit" });
 
     await save();
 
-    await vi.waitFor(() => expect(body).toBeDefined());
+    const body = await sent();
     expect(body).toEqual({
       title: "Θάλασσα Πλατιά",
       alt_title: "Thalassa Platia",
@@ -402,16 +375,7 @@ describe("SongEditorPage", () => {
   });
 
   it("sends the song's own fields as edited, blanks as null", async () => {
-    let body: SongInput | undefined;
-    server.use(
-      http.get(`${API}/api/v1/songs/song-1`, () =>
-        HttpResponse.json(makeSong({ alt_title: "Old", notes: "Old notes" })),
-      ),
-      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
-        body = (await request.json()) as SongInput;
-        return HttpResponse.json(makeSong());
-      }),
-    );
+    const sent = captureSave(makeSong({ alt_title: "Old", notes: "Old notes" }));
     renderEditor({ route: "/songs/song-1/edit" });
 
     const title = await screen.findByLabelText("Title");
@@ -428,7 +392,7 @@ describe("SongEditorPage", () => {
 
     await save();
 
-    await vi.waitFor(() => expect(body).toBeDefined());
+    const body = await sent();
     expect(body).toMatchObject({
       title: "Sea",
       alt_title: null,
@@ -441,21 +405,12 @@ describe("SongEditorPage", () => {
 
   // Positions come from the array, so removing a row renumbers what follows.
   it("sends credits as edited: role changed, row removed, row added, blank dropped", async () => {
-    let body: SongInput | undefined;
-    server.use(
-      http.get(`${API}/api/v1/songs/song-1`, () =>
-        HttpResponse.json(
-          makeSong({
-            credits: [
-              { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
-              { person_id: "person-3", name: "Οδυσσέας Ελύτης", role: "composer", position: 1 },
-            ],
-          }),
-        ),
-      ),
-      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
-        body = (await request.json()) as SongInput;
-        return HttpResponse.json(makeSong());
+    const sent = captureSave(
+      makeSong({
+        credits: [
+          { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
+          { person_id: "person-3", name: "Οδυσσέας Ελύτης", role: "composer", position: 1 },
+        ],
       }),
     );
     renderEditor({ route: "/songs/song-1/edit" });
@@ -469,19 +424,15 @@ describe("SongEditorPage", () => {
 
     await save();
 
-    await vi.waitFor(() => expect(body).toBeDefined());
-    expect(body!.credits).toEqual([
+    const body = await sent();
+    expect(body.credits).toEqual([
       { person_id: "person-3", role: "lyricist", position: 0 },
       { name: "Νίκος Γκάτσος", role: "composer", position: 1 },
     ]);
   });
 
   it("toggles genres on and off", async () => {
-    let body: SongInput | undefined;
     server.use(
-      http.get(`${API}/api/v1/songs/song-1`, () =>
-        HttpResponse.json(makeSong({ genres: [makeGenre({ id: "genre-1" })] })),
-      ),
       http.get(`${API}/api/v1/genres`, () =>
         HttpResponse.json(
           list([
@@ -490,11 +441,8 @@ describe("SongEditorPage", () => {
           ]),
         ),
       ),
-      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
-        body = (await request.json()) as SongInput;
-        return HttpResponse.json(makeSong());
-      }),
     );
+    const sent = captureSave(makeSong({ genres: [makeGenre({ id: "genre-1" })] }));
     renderEditor({ route: "/songs/song-1/edit" });
 
     await userEvent.click(await screen.findByRole("button", { name: "Ρεμπέτικο" }));
@@ -502,8 +450,8 @@ describe("SongEditorPage", () => {
 
     await save();
 
-    await vi.waitFor(() => expect(body).toBeDefined());
-    expect(body!.genre_ids).toEqual(["genre-2"]);
+    const body = await sent();
+    expect(body.genre_ids).toEqual(["genre-2"]);
   });
 
   it("says so when no genres exist rather than showing an empty row", async () => {
@@ -514,29 +462,20 @@ describe("SongEditorPage", () => {
 
   // Removing the marked recording needs no rule about who inherits the mark.
   it("drops a removed recording and a removed performer from the save", async () => {
-    let body: SongInput | undefined;
-    server.use(
-      http.get(`${API}/api/v1/songs/song-1`, () =>
-        HttpResponse.json(
-          makeSong({
-            recordings: [
-              makeRecording({ id: "recording-1", release_year: 1964 }),
-              makeRecording({
-                id: "recording-2",
-                release_year: 1988,
-                is_first: false,
-                performers: [
-                  { person_id: "person-2", name: "Γιώργος Νταλάρας", position: 0 },
-                  { person_id: "person-4", name: "Μαρία Φαραντούρη", position: 1 },
-                ],
-              }),
+    const sent = captureSave(
+      makeSong({
+        recordings: [
+          makeRecording({ id: "recording-1", release_year: 1964 }),
+          makeRecording({
+            id: "recording-2",
+            release_year: 1988,
+            is_first: false,
+            performers: [
+              { person_id: "person-2", name: "Γιώργος Νταλάρας", position: 0 },
+              { person_id: "person-4", name: "Μαρία Φαραντούρη", position: 1 },
             ],
           }),
-        ),
-      ),
-      http.patch(`${API}/api/v1/songs/song-1`, async ({ request }) => {
-        body = (await request.json()) as SongInput;
-        return HttpResponse.json(makeSong());
+        ],
       }),
     );
     renderEditor({ route: "/songs/song-1/edit" });
@@ -555,8 +494,8 @@ describe("SongEditorPage", () => {
 
     await save();
 
-    await vi.waitFor(() => expect(body).toBeDefined());
-    expect(body!.recordings).toEqual([
+    const body = await sent();
+    expect(body.recordings).toEqual([
       {
         label: null,
         youtube_url: null,
@@ -577,22 +516,13 @@ describe("SongEditorPage", () => {
         HttpResponse.json(makeSong({ recordings: [makeRecording()] })),
       ),
       http.patch(`${API}/api/v1/songs/song-1`, () =>
-        HttpResponse.json(
-          {
-            error: {
-              code: "validation_failed",
-              message: "The song could not be saved.",
-              details: {
-                title: "Title is required.",
-                recordings: "Only one recording may be the first.",
-                "recordings[0].label": "Label is too long.",
-                "recordings[0].release_year": "Year is out of range.",
-                "recordings[0].notes": "Notes are too long.",
-              },
-            },
-          },
-          { status: 422 },
-        ),
+        apiError(422, "validation_failed", "The song could not be saved.", {
+          title: "Title is required.",
+          recordings: "Only one recording may be the first.",
+          "recordings[0].label": "Label is too long.",
+          "recordings[0].release_year": "Year is out of range.",
+          "recordings[0].notes": "Notes are too long.",
+        }),
       ),
     );
     renderEditor({ route: "/songs/song-1/edit" });
@@ -680,7 +610,6 @@ describe("SongEditorPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(await screen.findByText("Address: /songs/song-1")).toBeInTheDocument();
-    confirm.mockRestore();
   });
 
   // A tab close is the one way out the Cancel button never sees.

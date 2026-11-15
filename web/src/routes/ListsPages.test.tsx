@@ -390,9 +390,9 @@ describe("ListDetailPage sharing", () => {
   // Clipboard access can be refused; the link is still on screen to copy by hand.
   it("asks for a manual copy when the clipboard refuses the link", async () => {
     const user = userEvent.setup();
-    const refused = vi
-      .spyOn(navigator.clipboard, "writeText")
-      .mockRejectedValue(new DOMException("Denied", "NotAllowedError"));
+    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(
+      new DOMException("Denied", "NotAllowedError"),
+    );
     serveLists(makeList({ id: "list-1", owner_id: "user-1", is_public: true }));
 
     renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
@@ -402,7 +402,6 @@ describe("ListDetailPage sharing", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/select the link above/i);
     expect(screen.getByRole("button", { name: "Copy link" })).toBeInTheDocument();
-    refused.mockRestore();
   });
 
   it("lets the owner take a public list private again", async () => {

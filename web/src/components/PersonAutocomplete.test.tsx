@@ -22,9 +22,11 @@ const suggestsPeople = http.get(`${API}/api/v1/people`, ({ request }) =>
 
 /**
  * The field as the editor holds it: controlled, inside a form, so an Enter that
- * escapes would submit. Every selection is recorded as emitted.
+ * escapes would submit, with suggestions served by `suggestsPeople`. Every
+ * selection is recorded as emitted.
  */
 function renderField(initial: PersonSelection = { name: "" }) {
+  server.use(suggestsPeople);
   const changes: PersonSelection[] = [];
   const submitted = vi.fn();
 
@@ -62,7 +64,6 @@ async function typeAndOpen(field: HTMLElement, text = "Μ") {
 
 describe("PersonAutocomplete", () => {
   it("suggests matching people as the name is typed", async () => {
-    server.use(suggestsPeople);
     const { field } = renderField();
 
     await typeAndOpen(field);
@@ -78,7 +79,6 @@ describe("PersonAutocomplete", () => {
 
   // The id is what keeps a picked person one record rather than a new upsert.
   it("emits the person's id with the name when a suggestion is clicked", async () => {
-    server.use(suggestsPeople);
     const { field, changes } = renderField();
 
     await typeAndOpen(field);
@@ -91,7 +91,6 @@ describe("PersonAutocomplete", () => {
 
   // Typing over a pick names somebody else, so no id may ride along with it.
   it("emits a typed name with no id, even over a picked person", async () => {
-    server.use(suggestsPeople);
     const { field, changes } = renderField({ personId: "person-1", name: "Μίκης" });
 
     await userEvent.type(field, "!");
@@ -101,7 +100,6 @@ describe("PersonAutocomplete", () => {
   });
 
   it("moves the highlight with the arrow keys, wrapping at both ends", async () => {
-    server.use(suggestsPeople);
     const { field } = renderField();
     await typeAndOpen(field);
 
@@ -121,7 +119,6 @@ describe("PersonAutocomplete", () => {
   });
 
   it("picks the highlighted suggestion on Enter without submitting the form", async () => {
-    server.use(suggestsPeople);
     const { field, changes, submitted } = renderField();
     await typeAndOpen(field);
 
@@ -134,7 +131,6 @@ describe("PersonAutocomplete", () => {
 
   // The field sits inside the song form: a bare Enter must not save the song.
   it("keeps a typed name on Enter with nothing highlighted, and does not submit", async () => {
-    server.use(suggestsPeople);
     const { field, changes, submitted } = renderField();
     await typeAndOpen(field, "Νέος");
 
@@ -146,7 +142,6 @@ describe("PersonAutocomplete", () => {
   });
 
   it("closes the suggestions on Escape and leaves the text alone", async () => {
-    server.use(suggestsPeople);
     const { field, changes } = renderField();
     await typeAndOpen(field);
     const before = changes.length;
@@ -161,7 +156,6 @@ describe("PersonAutocomplete", () => {
 
   // Placeholder data outlives the query's enabled flag; the field gates it too.
   it("drops the suggestions when the field is cleared", async () => {
-    server.use(suggestsPeople);
     const { field } = renderField();
     await typeAndOpen(field);
 
@@ -171,7 +165,6 @@ describe("PersonAutocomplete", () => {
   });
 
   it("closes the suggestions when focus leaves the field", async () => {
-    server.use(suggestsPeople);
     const { field } = renderField();
     await typeAndOpen(field);
 

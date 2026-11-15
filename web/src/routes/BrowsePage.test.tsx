@@ -4,9 +4,35 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { BrowsePage } from "./BrowsePage";
+import type { Genre, ListResponse, Song } from "@/lib/types";
 import { API, apiError, list, makeGenre, makeSong, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
+
+/**
+ * Records the parameters each catalog request carried, answering every one
+ * with `songs` (an empty catalog by default). `genres`, when given, replaces
+ * the catalog's genres too.
+ */
+function recordRequests({
+  songs = list([]),
+  genres,
+}: {
+  songs?: ListResponse<Song>;
+  genres?: Genre[];
+} = {}) {
+  const requests: URLSearchParams[] = [];
+  server.use(
+    http.get(`${API}/api/v1/songs`, ({ request }) => {
+      requests.push(new URL(request.url).searchParams);
+      return HttpResponse.json(songs);
+    }),
+  );
+  if (genres) {
+    server.use(http.get(`${API}/api/v1/genres`, () => HttpResponse.json(list(genres))));
+  }
+  return requests;
+}
 
 describe("BrowsePage", () => {
   it("lists songs with their credits", async () => {
@@ -33,20 +59,13 @@ describe("BrowsePage", () => {
   // back button behaves.
   it("puts the typed query into the URL", async () => {
     const user = userEvent.setup();
-    let requestedQuery: string | null = null;
-
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        requestedQuery = new URL(request.url).searchParams.get("q");
-        return HttpResponse.json(list([]));
-      }),
-    );
+    const requests = recordRequests();
 
     renderWithProviders(<BrowsePage />);
 
     await user.type(screen.getByRole("searchbox", { name: /search songs/i }), "αγάπη");
 
-    await waitFor(() => expect(requestedQuery).toBe("αγάπη"), { timeout: 3000 });
+    await waitFor(() => expect(requests.at(-1)?.get("q")).toBe("αγάπη"), { timeout: 3000 });
   });
 
   it("shows an empty state when nothing matches", async () => {
@@ -91,27 +110,20 @@ describe("BrowsePage", () => {
 describe("BrowsePage pagination", () => {
   it("advances to the next page and stays there", async () => {
     const user = userEvent.setup();
-    const offsets: string[] = [];
-
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        offsets.push(new URL(request.url).searchParams.get("offset") ?? "0");
-        // Three pages' worth of results behind a single page of rows.
-        return HttpResponse.json(list([makeSong()], { total: 45 }));
-      }),
-    );
+    // Three pages' worth of results behind a single page of rows.
+    const requests = recordRequests({ songs: list([makeSong()], { total: 45 }) });
 
     renderWithProviders(<BrowsePage />);
 
     await user.click(await screen.findByRole("button", { name: /next/i }));
 
     expect(await screen.findByText("Page 2 of 3")).toBeInTheDocument();
-    await waitFor(() => expect(offsets.at(-1)).toBe("20"));
+    await waitFor(() => expect(requests.at(-1)?.get("offset")).toBe("20"));
 
     // The offset has to survive past the debounce, not just the first render.
     await act(() => new Promise((resolve) => setTimeout(resolve, 500)));
     expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
-    expect(offsets.at(-1)).toBe("20");
+    expect(requests.at(-1)?.get("offset")).toBe("20");
   });
 });
 
@@ -154,21 +166,14 @@ describe("BrowsePage sort picker", () => {
 
   // Relevance without a query orders by newest, so the picker says newest.
   it("falls back to newest when a cleared search leaves sort=relevance behind", async () => {
-    let requestedSort: string | null = null;
-
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        requestedSort = new URL(request.url).searchParams.get("sort");
-        return HttpResponse.json(list([makeSong()]));
-      }),
-    );
+    const requests = recordRequests({ songs: list([makeSong()]) });
 
     renderWithProviders(<BrowsePage />, { route: "/?sort=relevance" });
 
     const sort = await openSortPicker();
 
     expect(sort.value).toBe("newest");
-    await waitFor(() => expect(requestedSort).toBe("newest"));
+    await waitFor(() => expect(requests.at(-1)?.get("sort")).toBe("newest"));
   });
 });
 
@@ -178,18 +183,11 @@ describe("BrowsePage sort picker", () => {
  */
 describe("BrowsePage artist filter", () => {
   it("passes the person parameter through to the API", async () => {
-    let requestedPerson: string | null = null;
-
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        requestedPerson = new URL(request.url).searchParams.get("person");
-        return HttpResponse.json(list([makeSong()]));
-      }),
-    );
+    const requests = recordRequests({ songs: list([makeSong()]) });
 
     renderWithProviders(<BrowsePage />, { route: "/?person=person-1" });
 
-    await waitFor(() => expect(requestedPerson).toBe("person-1"));
+    await waitFor(() => expect(requests.at(-1)?.get("person")).toBe("person-1"));
   });
 
   it("labels the active artist filter with the person's name", async () => {
@@ -206,19 +204,13 @@ describe("BrowsePage artist filter", () => {
   });
 
   it("returns to the whole catalog when the artist chip is removed", async () => {
-    let requestedPerson: string | null = "unset";
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        requestedPerson = new URL(request.url).searchParams.get("person");
-        return HttpResponse.json(list([]));
-      }),
-    );
+    const requests = recordRequests();
 
     renderWithProviders(<BrowsePage />, { route: "/?person=person-1" });
 
     await userEvent.click(await screen.findByRole("button", { name: /remove filter/i }));
 
-    await waitFor(() => expect(requestedPerson).toBeNull());
+    await waitFor(() => expect(requests.at(-1)?.get("person")).toBeNull());
     expect(screen.queryByText("Μίκης Θεοδωράκης")).not.toBeInTheDocument();
   });
 });
@@ -261,13 +253,7 @@ describe("BrowsePage filter chips", () => {
   });
 
   it("lifts a language filter from its chip, which names the language", async () => {
-    let requestedLanguage: string | null = "unset";
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        requestedLanguage = new URL(request.url).searchParams.get("language");
-        return HttpResponse.json(list([]));
-      }),
-    );
+    const requests = recordRequests();
 
     renderWithProviders(<BrowsePage />, { route: "/?language=en" });
 
@@ -275,7 +261,7 @@ describe("BrowsePage filter chips", () => {
     expect(await screen.findByText("English")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Remove filter" }));
 
-    await waitFor(() => expect(requestedLanguage).toBeNull());
+    await waitFor(() => expect(requests.at(-1)?.get("language")).toBeNull());
     expect(screen.queryByText("English")).not.toBeInTheDocument();
   });
 });
@@ -287,14 +273,7 @@ describe("BrowsePage filter chips", () => {
 describe("BrowsePage clearing a search", () => {
   it("returns to the unfiltered catalog when the search box is emptied", async () => {
     const user = userEvent.setup();
-    const queries: (string | null)[] = [];
-
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        queries.push(new URL(request.url).searchParams.get("q"));
-        return HttpResponse.json(list([]));
-      }),
-    );
+    const requests = recordRequests();
 
     renderWithProviders(<BrowsePage />, { route: "/?q=αγάπη" });
 
@@ -304,7 +283,7 @@ describe("BrowsePage clearing a search", () => {
 
     // The catalog's own empty state, not the search's.
     expect(await screen.findByText(/no songs yet/i, {}, { timeout: 3000 })).toBeInTheDocument();
-    await waitFor(() => expect(queries.at(-1)).toBeNull());
+    await waitFor(() => expect(requests.at(-1)?.get("q")).toBeNull());
   });
 });
 
@@ -312,14 +291,7 @@ describe("BrowsePage pagination backwards", () => {
   // Page one is the absent parameter, so its address is the bare catalog's.
   it("steps back to the first page", async () => {
     const user = userEvent.setup();
-    const offsets: string[] = [];
-
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        offsets.push(new URL(request.url).searchParams.get("offset") ?? "0");
-        return HttpResponse.json(list([makeSong()], { total: 45 }));
-      }),
-    );
+    const requests = recordRequests({ songs: list([makeSong()], { total: 45 }) });
 
     renderWithProviders(<BrowsePage />, { route: "/?page=1" });
 
@@ -327,7 +299,7 @@ describe("BrowsePage pagination backwards", () => {
     await user.click(screen.getByRole("button", { name: /previous/i }));
 
     expect(await screen.findByText("Page 1 of 3")).toBeInTheDocument();
-    await waitFor(() => expect(offsets.at(-1)).toBe("0"));
+    await waitFor(() => expect(requests.at(-1)?.get("offset")).toBe("0"));
     expect(screen.getByRole("button", { name: /previous/i })).toBeDisabled();
   });
 });
@@ -337,25 +309,15 @@ describe("BrowsePage pagination backwards", () => {
  * narrower filter left on page three is very often past its last page.
  */
 describe("BrowsePage filter sheet", () => {
-  /** Records the parameters each catalog request carried. */
-  function recordRequests() {
-    const requests: URLSearchParams[] = [];
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        requests.push(new URL(request.url).searchParams);
-        return HttpResponse.json(list([makeSong()], { total: 45 }));
-      }),
-      http.get(`${API}/api/v1/genres`, () =>
-        HttpResponse.json(
-          list([
-            makeGenre({ id: "genre-1", name: "Ρεμπέτικο", slug: "rempetiko", song_count: 12 }),
-            makeGenre({ id: "genre-2", name: "Έντεχνο", slug: "entechno", song_count: 3 }),
-          ]),
-        ),
-      ),
-    );
-    return requests;
-  }
+  /** A catalog past one page, with two genres for the sheet to offer. */
+  const recordSheetRequests = () =>
+    recordRequests({
+      songs: list([makeSong()], { total: 45 }),
+      genres: [
+        makeGenre({ id: "genre-1", name: "Ρεμπέτικο", slug: "rempetiko", song_count: 12 }),
+        makeGenre({ id: "genre-2", name: "Έντεχνο", slug: "entechno", song_count: 3 }),
+      ],
+    });
 
   const openFilters = async (user: ReturnType<typeof userEvent.setup>) => {
     await user.click(await screen.findByRole("button", { name: /filters/i }));
@@ -364,7 +326,7 @@ describe("BrowsePage filter sheet", () => {
 
   it("filters by a genre, and a second press on it lifts the filter", async () => {
     const user = userEvent.setup();
-    const requests = recordRequests();
+    const requests = recordSheetRequests();
 
     renderWithProviders(<BrowsePage />, { route: "/?page=2" });
     const sheet = await openFilters(user);
@@ -383,7 +345,7 @@ describe("BrowsePage filter sheet", () => {
 
   it("filters by language, and 'Any language' lifts it rather than sending it empty", async () => {
     const user = userEvent.setup();
-    const requests = recordRequests();
+    const requests = recordSheetRequests();
 
     renderWithProviders(<BrowsePage />);
     const sheet = await openFilters(user);
@@ -398,7 +360,7 @@ describe("BrowsePage filter sheet", () => {
 
   it("puts the chosen ordering into the request", async () => {
     const user = userEvent.setup();
-    const requests = recordRequests();
+    const requests = recordSheetRequests();
 
     renderWithProviders(<BrowsePage />);
     const sheet = await openFilters(user);
@@ -412,7 +374,7 @@ describe("BrowsePage filter sheet", () => {
   // the second leaves a badge that nothing in the sheet can clear.
   it("clears every filter and the ordering, and keeps the search", async () => {
     const user = userEvent.setup();
-    const requests = recordRequests();
+    const requests = recordSheetRequests();
 
     renderWithProviders(<BrowsePage />, {
       route: "/?q=αγάπη&person=person-1&genre_slug=rempetiko&language=el&sort=title&page=1",

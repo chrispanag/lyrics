@@ -234,16 +234,9 @@ describe("AdminGenresPage", () => {
   it("puts the server's reason for a name under the field", async () => {
     server.use(
       http.post(`${API}/api/v1/genres`, () =>
-        HttpResponse.json(
-          {
-            error: {
-              code: "validation_error",
-              message: "Check the highlighted fields.",
-              details: { name: "Name is too long." },
-            },
-          },
-          { status: 422 },
-        ),
+        apiError(422, "validation_error", "Check the highlighted fields.", {
+          name: "Name is too long.",
+        }),
       ),
     );
 

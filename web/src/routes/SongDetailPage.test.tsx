@@ -11,6 +11,8 @@ import { BackButton } from "@/components/BackButton";
 import { deferred } from "@/test/deferred";
 import {
   API,
+  apiError,
+  list,
   listById,
   makeList,
   makeRecording,
@@ -1048,6 +1050,76 @@ describe("SongDetailPage inside a list", () => {
 });
 
 // Exercises the shared `ConfirmSheet`, as does ListsPages' delete spec.
+describe("SongDetailPage save to list", () => {
+  function serveSheet(membership: () => Response | Promise<Response>) {
+    server.use(
+      http.get(`${API}/api/v1/lists`, () =>
+        HttpResponse.json(
+          list([
+            makeList({ id: "list-1", name: "Ρεμπέτικα" }),
+            makeList({ id: "list-2", name: "Έντεχνα" }),
+          ]),
+        ),
+      ),
+      http.get(`${API}/api/v1/songs/:id/lists`, membership),
+    );
+  }
+
+  it("marks the lists the song is on, and pressing one takes it off", async () => {
+    let request = "";
+    serveSheet(() => HttpResponse.json({ list_ids: ["list-1"] }));
+    server.use(
+      http.all(`${API}/api/v1/lists/:listId/songs/:songId`, ({ request: sent, params }) => {
+        request = `${sent.method} ${String(params.listId)}`;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderDetail({ user: makeUser() });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Save to a list" }));
+    const on = await screen.findByRole("button", { name: /Ρεμπέτικα/ });
+    expect(on).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Έντεχνα/ })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    await userEvent.click(on);
+    await waitFor(() => expect(request).toBe("DELETE list-1"));
+  });
+
+  // Drawn from the lists alone, every row reads as unchecked, and pressing
+  // one would add a song that is already there.
+  it("offers no list until it knows which ones the song is on", async () => {
+    const [held, release] = deferred();
+    serveSheet(async () => {
+      await held;
+      return HttpResponse.json({ list_ids: ["list-1"] });
+    });
+    renderDetail({ user: makeUser() });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Save to a list" }));
+    expect(await screen.findByText("Loading")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Ρεμπέτικα/ })).not.toBeInTheDocument();
+
+    release();
+    expect(await screen.findByRole("button", { name: /Ρεμπέτικα/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("says the lists could not be loaded rather than showing every one unchecked", async () => {
+    serveSheet(() => apiError(500, "internal", "Something went wrong."));
+    renderDetail({ user: makeUser() });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Save to a list" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong.");
+    expect(screen.queryByRole("button", { name: /Ρεμπέτικα/ })).not.toBeInTheDocument();
+  });
+});
+
 describe("SongDetailPage deletion", () => {
   it("asks before deleting a song, and deletes the one it named", async () => {
     let deleted = "";

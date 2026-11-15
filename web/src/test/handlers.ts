@@ -133,10 +133,19 @@ export function listById(...lists: SongList[]) {
 
 /**
  * The API's error envelope. Specs use this rather than writing it by hand,
- * except `client.test.ts`, which tests the shape itself.
+ * except `client.test.ts`, which tests the shape itself. `details` maps a field
+ * to its message, and the key is left out entirely when none are given.
  */
-export function apiError(status: number, code: string, message: string) {
-  return HttpResponse.json({ error: { code, message } }, { status });
+export function apiError(
+  status: number,
+  code: string,
+  message: string,
+  details?: Record<string, string>,
+) {
+  return HttpResponse.json(
+    { error: { code, message, ...(details ? { details } : {}) } },
+    { status },
+  );
 }
 
 export function notFound(message: string) {

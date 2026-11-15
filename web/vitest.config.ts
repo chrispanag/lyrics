@@ -14,14 +14,29 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     css: false,
+    // Spies are put back after every test, so a spec need not restore its own
+    // and a failing assertion cannot leak one into the next test.
+    restoreMocks: true,
     exclude: ["node_modules/**", ".next/**", "e2e/**"],
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
-      exclude: ["src/**/*.test.{ts,tsx}", "src/test/**", "src/**/*.d.ts"],
+      exclude: [
+        "src/**/*.test.{ts,tsx}",
+        "src/test/**",
+        "src/**/*.d.ts",
+        // The Next shell: wrappers that do anything only inside a Next build,
+        // where a spec under jsdom would test its own mocks.
+        "src/AppRoot.tsx",
+        "src/app/layout.tsx",
+        "src/app/client.tsx",
+        "src/app/[[]...slug]]/page.tsx",
+        "src/app/songs/new/page.tsx",
+      ],
+      reporter: ["text-summary"],
       // A floor just under what the suite measures, so coverage cannot erode
       // unnoticed. Raise it when the suite rises; lowering it is a decision.
-      thresholds: { statements: 96, branches: 90, functions: 94, lines: 97 },
+      thresholds: { statements: 97, branches: 91, functions: 96, lines: 98 },
     },
   },
 });

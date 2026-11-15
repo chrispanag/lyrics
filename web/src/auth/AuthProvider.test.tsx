@@ -27,12 +27,14 @@ const session = vi.hoisted(() => ({
   logout: vi.fn(async () => {}),
   invalidateCache: vi.fn(async () => {}),
   loginWithPassword: vi.fn(async (_input: { identifier: string; password: string }) => {}),
-  requestStepUp: vi.fn(
-    async (_input: {
-      scope: string;
-      onChallenge: (info: { challengeId: string }) => void;
-    }): Promise<{ status: StepUpStatus }> => ({ status: "review" }),
-  ),
+  // No default: `answerStepUp` gives it one before every test.
+  requestStepUp:
+    vi.fn<
+      (input: {
+        scope: string;
+        onChallenge: (info: { challengeId: string }) => void;
+      }) => Promise<{ status: StepUpStatus }>
+    >(),
   startOTP: vi.fn(async (_input: unknown) => {}),
   retryOTP: vi.fn(async () => {}),
   checkOTP: vi.fn(async (_input: { code: string; challengeId?: string }) => {}),
@@ -72,7 +74,8 @@ vi.mock("./session", () => ({
 /** The ids Prelude hands out, one per opened challenge, in order. */
 let challengeIds: string[] = [];
 
-// Back to no session, and every SDK call to its quiet success. The braces
+// Back to no session, and every SDK call to its quiet success: `mockReset`
+// restores the implementation each `vi.fn` above was built with. The braces
 // matter: returning a mock from `beforeEach` would hand Vitest a teardown
 // callback.
 beforeEach(() => {
@@ -80,9 +83,6 @@ beforeEach(() => {
     if (typeof mock === "function") mock.mockReset();
   }
   session.otpConfigId = "otp-config";
-  session.getAccessToken.mockResolvedValue(null);
-  session.canChangePassword.mockResolvedValue(true);
-  session.validatePassword.mockResolvedValue(null);
   challengeIds = ["challenge-1", "challenge-2", "challenge-3"];
   answerStepUp("review");
 });
@@ -323,17 +323,6 @@ describe("AuthProvider sessions", () => {
 });
 
 describe("AuthProvider email verification", () => {
-  // A second challenge would retire the code already in the inbox.
-  it("opens one challenge however often the screen asks", async () => {
-    await renderSignedIn();
-
-    await act(() => auth.startEmailVerification());
-    await act(() => auth.startEmailVerification());
-
-    expect(stepUpScopes()).toEqual(["email:verify"]);
-    expect(session.startOTP).toHaveBeenCalledExactlyOnceWith({ challengeId: "challenge-1" });
-  });
-
   // The grant is read off the token, so a cached one predating it gets a 403.
   it("records a grant made outright on a freshly refreshed token", async () => {
     server.use(
@@ -370,17 +359,7 @@ describe("AuthProvider email verification", () => {
     expect(session.startOTP).not.toHaveBeenCalled();
   });
 
-  it("refuses a code when no verification was started", async () => {
-    await renderSignedIn();
-
-    expect((await failure(() => auth.verifyEmail("123456"))).message).toBe(
-      "No verification is in progress.",
-    );
-    expect(session.checkOTP).not.toHaveBeenCalled();
-  });
-
-  // A wrong code must leave the challenge open for the corrected one.
-  it("checks the code against its challenge and lets a wrong one be retyped", async () => {
+  it("takes in the profile the API answers a checked code with", async () => {
     server.use(
       http.post(`${API}/api/v1/auth/verify-email`, () =>
         HttpResponse.json(makeUser({ display_name: "Επαληθευμένος" })),
@@ -388,15 +367,9 @@ describe("AuthProvider email verification", () => {
     );
     await renderSignedIn();
     await act(() => auth.startEmailVerification());
-    session.checkOTP.mockRejectedValueOnce(new Error("BadCheckCodeError"));
 
-    expect((await failure(() => auth.verifyEmail("000000"))).message).toBe("BadCheckCodeError");
     await act(() => auth.verifyEmail("123456"));
 
-    expect(session.checkOTP).toHaveBeenLastCalledWith({
-      code: "123456",
-      challengeId: "challenge-1",
-    });
     expect(screen.getByText("Επαληθευμένος")).toBeInTheDocument();
   });
 
@@ -408,22 +381,6 @@ describe("AuthProvider email verification", () => {
 
     expect(session.retryOTP).toHaveBeenCalledOnce();
     expect(stepUpScopes()).toEqual(["email:verify"]);
-  });
-
-  // An expired challenge can never be retried, so every later resend would
-  // fail identically with no way out.
-  it("opens a fresh challenge when the old one cannot be retried", async () => {
-    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-    await renderSignedIn();
-    await act(() => auth.startEmailVerification());
-    session.retryOTP.mockRejectedValueOnce(new Error("expired"));
-
-    await act(() => auth.resendVerificationCode());
-
-    expect(stepUpScopes()).toEqual(["email:verify", "email:verify"]);
-    expect(session.startOTP).toHaveBeenLastCalledWith({ challengeId: "challenge-2" });
-    expect(logged).toHaveBeenCalled();
-    logged.mockRestore();
   });
 });
 
@@ -465,10 +422,7 @@ describe("AuthProvider password reset", () => {
   it("signs the visitor in and reports the second code the write asks for", async () => {
     await renderSettled();
 
-    let answer: { secondCodeSent: boolean } | undefined;
-    await act(async () => {
-      answer = await auth.confirmPasswordResetCode("123456");
-    });
+    const answer = await act(() => auth.confirmPasswordResetCode("123456"));
 
     expect(answer).toEqual({ secondCodeSent: true });
     expect(session.checkOTP).toHaveBeenCalledWith({ code: "123456" });
@@ -482,10 +436,7 @@ describe("AuthProvider password reset", () => {
     answerStepUp("continue");
     await renderSettled();
 
-    let answer: { secondCodeSent: boolean } | undefined;
-    await act(async () => {
-      answer = await auth.confirmPasswordResetCode("123456");
-    });
+    const answer = await act(() => auth.confirmPasswordResetCode("123456"));
 
     expect(answer).toEqual({ secondCodeSent: false });
     expect(session.canChangePassword).toHaveBeenCalledOnce();
@@ -542,16 +493,6 @@ describe("AuthProvider password change", () => {
     );
   });
 
-  it("opens one challenge however often the screen asks", async () => {
-    await renderSignedIn();
-
-    await act(() => auth.startPasswordChange());
-    await act(() => auth.startPasswordChange());
-
-    expect(stepUpScopes()).toEqual(["prld:pwd:write"]);
-    expect(session.startOTP).toHaveBeenCalledExactlyOnceWith({ challengeId: "challenge-1" });
-  });
-
   // Shared, each flow would reuse the other's challenge and check its code
   // against a scope it never asked about.
   it("keeps the verification and password challenges apart", async () => {
@@ -570,30 +511,6 @@ describe("AuthProvider password change", () => {
     ]);
   });
 
-  it("refuses a code when no password change was started", async () => {
-    await renderSignedIn();
-
-    expect((await failure(() => auth.confirmPasswordWriteCode("123456"))).message).toBe(
-      "No password change is in progress.",
-    );
-  });
-
-  it("lets a wrong code be retyped against the same challenge", async () => {
-    await renderSignedIn();
-    await act(() => auth.startPasswordChange());
-    session.checkOTP.mockRejectedValueOnce(new Error("BadCheckCodeError"));
-
-    expect((await failure(() => auth.confirmPasswordWriteCode("000000"))).message).toBe(
-      "BadCheckCodeError",
-    );
-    await act(() => auth.confirmPasswordWriteCode("123456"));
-
-    expect(session.checkOTP).toHaveBeenLastCalledWith({
-      code: "123456",
-      challengeId: "challenge-1",
-    });
-  });
-
   // Here, nameably, rather than as a rejected password a step later.
   it("reports a code that bought no permission before the password is typed", async () => {
     session.canChangePassword.mockResolvedValue(false);
@@ -603,25 +520,6 @@ describe("AuthProvider password change", () => {
     expect((await failure(() => auth.confirmPasswordWriteCode("123456"))).message).toMatch(
       /did not receive permission/,
     );
-  });
-
-  // A challenge expires in ten minutes and retryOTP on a dead one fails for good.
-  it("opens a fresh challenge when the old one cannot be retried", async () => {
-    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-    await renderSignedIn();
-    await act(() => auth.startPasswordChange());
-    session.retryOTP.mockRejectedValueOnce(new Error("expired"));
-
-    await act(() => auth.resendPasswordWriteCode());
-    await act(() => auth.confirmPasswordWriteCode("123456"));
-
-    expect(stepUpScopes()).toEqual(["prld:pwd:write", "prld:pwd:write"]);
-    expect(session.checkOTP).toHaveBeenLastCalledWith({
-      code: "123456",
-      challengeId: "challenge-2",
-    });
-    expect(logged).toHaveBeenCalled();
-    logged.mockRestore();
   });
 
   it("opens a challenge when a resend comes before any was opened", async () => {
@@ -641,6 +539,84 @@ describe("AuthProvider password change", () => {
 
     expect(session.changePassword).toHaveBeenCalledWith("n3w-Password");
     expect(session.revokeSessions).toHaveBeenCalledWith("others");
+  });
+});
+
+// The two step-up flows a signed-in account runs keep their challenges the same
+// way; only the calls, the scope and the idle message differ.
+describe.each([
+  {
+    flow: "email verification",
+    scope: "email:verify",
+    start: () => auth.startEmailVerification(),
+    confirm: (code: string) => auth.verifyEmail(code),
+    resend: () => auth.resendVerificationCode(),
+    idle: "No verification is in progress.",
+  },
+  {
+    flow: "password change",
+    scope: "prld:pwd:write",
+    start: () => auth.startPasswordChange(),
+    confirm: (code: string) => auth.confirmPasswordWriteCode(code),
+    resend: () => auth.resendPasswordWriteCode(),
+    idle: "No password change is in progress.",
+  },
+])("AuthProvider $flow challenge", ({ scope, start, confirm, resend, idle }) => {
+  beforeEach(() => {
+    server.use(http.post(`${API}/api/v1/auth/verify-email`, () => HttpResponse.json(makeUser())));
+  });
+
+  // A second challenge would retire the code already in the inbox.
+  it("opens one challenge however often the screen asks", async () => {
+    await renderSignedIn();
+
+    await act(start);
+    await act(start);
+
+    expect(stepUpScopes()).toEqual([scope]);
+    expect(session.startOTP).toHaveBeenCalledExactlyOnceWith({ challengeId: "challenge-1" });
+  });
+
+  it("refuses a code when none was asked for", async () => {
+    await renderSignedIn();
+
+    expect((await failure(() => confirm("123456"))).message).toBe(idle);
+    expect(session.checkOTP).not.toHaveBeenCalled();
+  });
+
+  // A wrong code must leave the challenge open for the corrected one.
+  it("lets a wrong code be retyped against the same challenge", async () => {
+    await renderSignedIn();
+    await act(start);
+    session.checkOTP.mockRejectedValueOnce(new Error("BadCheckCodeError"));
+
+    expect((await failure(() => confirm("000000"))).message).toBe("BadCheckCodeError");
+    await act(() => confirm("123456"));
+
+    expect(session.checkOTP).toHaveBeenLastCalledWith({
+      code: "123456",
+      challengeId: "challenge-1",
+    });
+  });
+
+  // A challenge expires in ten minutes and retryOTP on a dead one fails for
+  // good, so every later resend would fail identically with no way out.
+  it("opens a fresh challenge when the old one cannot be retried", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    await renderSignedIn();
+    await act(start);
+    session.retryOTP.mockRejectedValueOnce(new Error("expired"));
+
+    await act(resend);
+    await act(() => confirm("123456"));
+
+    expect(stepUpScopes()).toEqual([scope, scope]);
+    expect(session.startOTP).toHaveBeenLastCalledWith({ challengeId: "challenge-2" });
+    expect(session.checkOTP).toHaveBeenLastCalledWith({
+      code: "123456",
+      challengeId: "challenge-2",
+    });
+    expect(logged).toHaveBeenCalled();
   });
 });
 
