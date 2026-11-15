@@ -317,6 +317,7 @@ export function SongEditorPage() {
             id="alt-title"
             value={altTitle}
             onChange={(event) => track(setAltTitle)(event.target.value)}
+            aria-describedby="alt-title-hint"
           />
         </Field>
 
@@ -391,6 +392,8 @@ export function SongEditorPage() {
             </div>
           ))}
 
+          {fieldErrors.credits && <ErrorMessage>{fieldErrors.credits}</ErrorMessage>}
+
           <Button
             type="button"
             variant="secondary"
@@ -428,6 +431,7 @@ export function SongEditorPage() {
               <p className="text-sm text-stone-500">No genres exist yet.</p>
             )}
           </div>
+          {fieldErrors.genre_ids && <ErrorMessage>{fieldErrors.genre_ids}</ErrorMessage>}
         </fieldset>
 
         <fieldset className="space-y-3">
@@ -657,12 +661,18 @@ export function SongEditorPage() {
           />
         </Field>
 
-        <Field label="Notes" htmlFor="notes" hint="Optional — context, sources, or variations">
+        <Field
+          label="Notes"
+          htmlFor="notes"
+          hint="Optional — context, sources, or variations"
+          error={fieldErrors.notes}
+        >
           <Textarea
             id="notes"
             rows={3}
             value={notes}
             onChange={(event) => track(setNotes)(event.target.value)}
+            aria-describedby={fieldErrors.notes ? "notes-error" : "notes-hint"}
           />
         </Field>
 

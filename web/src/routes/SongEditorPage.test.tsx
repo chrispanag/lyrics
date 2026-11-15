@@ -526,7 +526,10 @@ describe("SongEditorPage", () => {
         apiError(422, "validation_failed", "The song could not be saved.", {
           title: "Title is required.",
           language: "Language is not supported.",
-          lyrics: "Lyrics are required.",
+          lyrics: "Lyrics are too long.",
+          notes: "Song notes are too long.",
+          credits: "Too many credits.",
+          genre_ids: "Too many genres.",
           recordings: "Only one recording may be the first.",
           "recordings[0].label": "Label is too long.",
           "recordings[0].release_year": "Year is out of range.",
@@ -544,7 +547,12 @@ describe("SongEditorPage", () => {
     expect(screen.getByLabelText("Language")).toHaveAccessibleDescription(
       "Language is not supported.",
     );
-    expect(screen.getByLabelText("Lyrics")).toHaveAccessibleDescription("Lyrics are required.");
+    expect(screen.getByLabelText("Lyrics")).toHaveAccessibleDescription("Lyrics are too long.");
+    expect(screen.getByLabelText("Notes", { selector: "#notes" })).toHaveAccessibleDescription(
+      "Song notes are too long.",
+    );
+    expect(screen.getByText("Too many credits.")).toBeInTheDocument();
+    expect(screen.getByText("Too many genres.")).toBeInTheDocument();
     expect(screen.getByLabelText("Label")).toHaveAccessibleDescription("Label is too long.");
     expect(screen.getByLabelText("Year")).toHaveAccessibleDescription("Year is out of range.");
     expect(
