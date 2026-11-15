@@ -40,8 +40,8 @@ if (typeof window !== "undefined") {
  * The SDK is a dynamic import: it inlines its WASM core as base64, about
  * 330 kB that would otherwise sit in the first chunk of every page. Every
  * page still downloads it, since the first query asks for a token, but beside
- * hydration rather than ahead of it. A failed chunk load is not kept, so the
- * next call tries again.
+ * hydration rather than ahead of it. A failed chunk load or construction is
+ * not kept, so the next call tries again.
  */
 export function sessionClient(): Promise<PrldSessionClient> {
   if (typeof window === "undefined") {
@@ -49,17 +49,20 @@ export function sessionClient(): Promise<PrldSessionClient> {
       new Error("The Prelude session client is browser-only; a server render is a guest."),
     );
   }
-  client ??= loadSdk().then(
-    ({ PrldSessionClient }) =>
-      new PrldSessionClient({
-        domain: SESSION_DOMAIN,
-        ...(SDK_KEY ? { sdkKey: SDK_KEY } : {}),
-      }),
-    (error: unknown) => {
+  // The catch follows the construction too: a constructor that throws must not
+  // leave a rejected promise behind for every later call.
+  client ??= loadSdk()
+    .then(
+      ({ PrldSessionClient }) =>
+        new PrldSessionClient({
+          domain: SESSION_DOMAIN,
+          ...(SDK_KEY ? { sdkKey: SDK_KEY } : {}),
+        }),
+    )
+    .catch((error: unknown) => {
       client = undefined;
       throw error;
-    },
-  );
+    });
   return client;
 }
 
@@ -69,16 +72,22 @@ export function sessionClient(): Promise<PrldSessionClient> {
  * never copied out of the SDK.
  */
 export async function getAccessToken(forceRefresh?: boolean): Promise<string | null> {
+  // A server render is a guest.
+  if (typeof window === "undefined") return null;
+
+  // Outside the try: an SDK that failed to load says nothing about the
+  // session. Read as signed out, it would turn a signed-in visitor into a guest
+  // and erase their snapshot. Thrown, the request fails and its retry loads
+  // the SDK again.
+  const sdk = await sessionClient();
   try {
-    const sdk = await sessionClient();
     if (forceRefresh) {
       await sdk.invalidateCache();
     }
     const { user: session } = await sdk.refresh();
     return session?.accessToken ?? null;
   } catch {
-    // No session, the refresh token has been revoked, or this is a server,
-    // where `sessionClient` refuses: a server render is a guest.
+    // No session, or the refresh token has been revoked.
     return null;
   }
 }

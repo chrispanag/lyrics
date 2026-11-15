@@ -7,12 +7,16 @@ import { server } from "@/test/server";
 
 // The real client contacts a live session domain. The stub answers `refresh()`
 // like a restored session, and counts how many were built.
-const sdk = vi.hoisted(() => ({ built: 0 }));
+const sdk = vi.hoisted(() => ({ built: 0, failNext: false }));
 
 vi.mock("@prelude.so/js-sdk/session", () => ({
   PrldSessionClient: class {
     constructor() {
       sdk.built += 1;
+      if (sdk.failNext) {
+        sdk.failNext = false;
+        throw new Error("construction failed");
+      }
     }
     invalidated = 0;
     async invalidateCache() {
@@ -65,6 +69,26 @@ describe("auth/session", () => {
 
     expect(await getAccessToken()).toBe("token-0");
     expect(await getAccessToken(true)).toBe("token-1");
+  });
+
+  // A kept rejection would refuse every later call for the life of the page.
+  it("builds the client again after a failed construction", async () => {
+    vi.resetModules();
+    const { sessionClient } = await import("./session");
+    sdk.failNext = true;
+
+    await expect(sessionClient()).rejects.toThrow("construction failed");
+    await expect(sessionClient()).resolves.toBeDefined();
+  });
+
+  // Not a guest: read as one, a signed-in visitor would lose their session.
+  it("fails the token rather than reporting no session when the SDK cannot load", async () => {
+    vi.resetModules();
+    const { getAccessToken } = await import("./session");
+    sdk.failNext = true;
+
+    await expect(getAccessToken()).rejects.toThrow("construction failed");
+    expect(await getAccessToken()).toBe("token-0");
   });
 
   it("reports no token rather than throwing when there is no session", async () => {
