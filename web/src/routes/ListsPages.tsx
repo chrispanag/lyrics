@@ -40,7 +40,8 @@ import {
   Skeleton,
   Skeletons,
 } from "@/components/ui";
-import { BackButton } from "@/components/BackButton";
+import { actionLabel } from "@/components/buttonStyles";
+import { PageBar } from "@/components/PageBar";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
 import { listHref } from "@/lib/listContext";
@@ -258,6 +259,10 @@ export function ListDetailPage() {
   const onRemove = isOwner ? removeFromList : undefined;
   // `variables` outlives its request, so it is held to the flight.
   const pendingRemoval = removeSong.isPending ? removeSong.variables : undefined;
+  // The toggle offers the other state, under that state's icon.
+  const [VisibilityIcon, visibilityAction] = list.is_public
+    ? [Lock, "Make private"]
+    : [Globe, "Make public"];
   // From the origin, so no query or hash leaks into the shared link.
   const shareUrl = `${origin}${listHref(list.id)}`;
 
@@ -298,12 +303,7 @@ export function ListDetailPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-4">
       <PageTitle name={list.name} />
-      {/* The song page's bar: the way back, and what the viewer may do here.
-          Every action is labeled, since its visible text is dropped on small
-          screens. */}
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <BackButton />
-
+      <PageBar>
         {/* A non-owner only reaches a public list; guests are sent to sign in.
             Inert until the session is known: a server-rendered list is on screen
             before then, and `!user` would send a signed-in reader to sign in. */}
@@ -311,46 +311,37 @@ export function ListDetailPage() {
           <Button
             variant="ghost"
             size="sm"
-            aria-label="Save to my lists"
             onClick={onSave}
             loading={copyList.isPending}
             disabled={sessionLoading}
           >
             <Copy aria-hidden className="size-4" />
-            <span className="hidden sm:inline">Save to my lists</span>
+            <span className={actionLabel}>Save to my lists</span>
           </Button>
         )}
 
         {isOwner && (
-          <div className="flex items-center gap-1">
+          <>
             <Button
               variant="ghost"
               size="sm"
-              aria-label="Share"
               onClick={() => {
                 setLinkState("idle");
                 setSharing(true);
               }}
             >
               <Share2 aria-hidden className="size-4" />
-              <span className="hidden sm:inline">Share</span>
+              <span className={actionLabel}>Share</span>
             </Button>
 
             <Button
               variant="ghost"
               size="sm"
-              aria-label={list.is_public ? "Make private" : "Make public"}
               onClick={() => updateList.mutate({ is_public: !list.is_public })}
               loading={updateList.isPending}
             >
-              {list.is_public ? (
-                <Lock aria-hidden className="size-4" />
-              ) : (
-                <Globe aria-hidden className="size-4" />
-              )}
-              <span className="hidden sm:inline">
-                {list.is_public ? "Make private" : "Make public"}
-              </span>
+              <VisibilityIcon aria-hidden className="size-4" />
+              <span className={actionLabel}>{visibilityAction}</span>
             </Button>
 
             {/* The default list cannot be deleted (the server 403s). */}
@@ -364,9 +355,9 @@ export function ListDetailPage() {
                 <Trash aria-hidden className="size-4 text-fg-danger" />
               </Button>
             )}
-          </div>
+          </>
         )}
-      </div>
+      </PageBar>
 
       <header className="mb-6">
         <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">

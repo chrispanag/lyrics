@@ -13,9 +13,10 @@ import {
   useUsers,
 } from "@/api/hooks";
 import { Avatar } from "@/components/Avatar";
-import { segmentClasses, segmentedTrack } from "@/components/buttonStyles";
+import { actionLabel, segmentClasses, segmentedTrack } from "@/components/buttonStyles";
 import { cardChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
+import { sectionLabel } from "@/components/textStyles";
 import {
   Button,
   ConfirmSheet,
@@ -26,6 +27,7 @@ import {
   Select,
   Sheet,
   Skeletons,
+  Tally,
 } from "@/components/ui";
 import { ADMIN_TABS } from "@/routes/adminTabs";
 import { cn } from "@/lib/cn";
@@ -40,21 +42,14 @@ const ROLE_DESCRIPTIONS: Record<Role, string> = {
   admin: "Full access, including deleting anything",
 };
 
-/**
- * The row both console screens list records in, shared so they cannot drift.
- * Each adds its own layout: a user's role picker drops below on a phone, a
- * genre's icon buttons do not need to.
- */
+/** The row both console screens list records in, shared so they cannot drift. */
 const adminRowChrome = cn(cardChrome, "flex gap-3 bg-surface p-4");
 
-/** The count above both screens' rows, as the catalog shows its own. */
-function Tally({ children }: { children: ReactNode }) {
-  return (
-    <p className="text-sm text-fg-muted" aria-live="polite">
-      {children}
-    </p>
-  );
-}
+/** A user's role picker drops below them on a phone. */
+const userRowChrome = cn(adminRowChrome, "flex-col sm:flex-row sm:items-center sm:justify-between");
+
+/** A genre's actions are icons on a phone, so its row stays one line. */
+const genreRowChrome = cn(adminRowChrome, "items-center justify-between");
 
 /** The wait both screens show: rows the height of the cards they become. */
 function RowSkeletons() {
@@ -76,7 +71,7 @@ export function AdminConsole({ children }: { children: ReactNode }) {
     <div className="mx-auto max-w-3xl px-4 py-6">
       <PageTitle name={current ? `Admin · ${current.label}` : "Admin"} />
       {/* The section's name above the screen's, in the song page's label style. */}
-      <p className="text-sm font-semibold uppercase tracking-wide text-fg-muted">Admin</p>
+      <p className={sectionLabel}>Admin</p>
       {current && <h1 className="mt-1 text-2xl font-bold tracking-tight">{current.label}</h1>}
 
       {/* Views of one console, so drawn as the segmented control the theme
@@ -136,9 +131,9 @@ export function AdminUsersPage() {
       </div>
 
       {!isError && (
-        <div className="mb-3">
-          <Tally>{isLoading ? "Searching…" : pluralize(data?.meta.total ?? 0, "user")}</Tally>
-        </div>
+        <Tally className="mb-3">
+          {isLoading ? "Searching…" : pluralize(data?.meta.total ?? 0, "user")}
+        </Tally>
       )}
 
       {error && <ErrorMessage>{error}</ErrorMessage>}
@@ -151,13 +146,7 @@ export function AdminUsersPage() {
 
       <ul className="space-y-2">
         {data?.data.map((row) => (
-          <li
-            key={row.id}
-            className={cn(
-              adminRowChrome,
-              "flex-col sm:flex-row sm:items-center sm:justify-between",
-            )}
-          >
+          <li key={row.id} className={userRowChrome}>
             {/* Grouped so `sm:justify-between` keeps picture and name together. */}
             <div className="flex min-w-0 items-center gap-3">
               <Avatar user={row} size="md" />
@@ -289,9 +278,9 @@ export function AdminGenresPage() {
 
   return (
     <>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <Tally>{isLoading || isError ? "" : pluralize(genres.length, "genre")}</Tally>
-        <Button size="sm" onClick={() => openSheet({ kind: "create" })}>
+      <div className="mb-3 flex items-center gap-3">
+        {!isLoading && !isError && <Tally>{pluralize(genres.length, "genre")}</Tally>}
+        <Button size="sm" className="ml-auto" onClick={() => openSheet({ kind: "create" })}>
           <Plus aria-hidden className="size-4" />
           New genre
         </Button>
@@ -314,7 +303,7 @@ export function AdminGenresPage() {
 
       <ul className="space-y-2">
         {genres.map((genre) => (
-          <li key={genre.id} className={cn(adminRowChrome, "items-center justify-between")}>
+          <li key={genre.id} className={genreRowChrome}>
             <div className="min-w-0">
               <p className="truncate font-medium">{genre.name}</p>
               <p className="mt-0.5 text-xs text-fg-muted">
@@ -322,7 +311,7 @@ export function AdminGenresPage() {
               </p>
             </div>
 
-            {/* The song page's ghost actions: labeled, as the text drops on a phone. */}
+            {/* Labeled with the genre, which the visible text leaves out. */}
             <div className="flex shrink-0 items-center gap-1">
               <Button
                 variant="ghost"
@@ -331,7 +320,7 @@ export function AdminGenresPage() {
                 onClick={() => openSheet({ kind: "rename", genre })}
               >
                 <Pencil aria-hidden className="size-4" />
-                <span className="hidden sm:inline">Rename</span>
+                <span className={actionLabel}>Rename</span>
               </Button>
               <Button
                 variant="ghost"
@@ -340,7 +329,7 @@ export function AdminGenresPage() {
                 onClick={() => openSheet({ kind: "delete", genre })}
               >
                 <Trash aria-hidden className="size-4 text-fg-danger" />
-                <span className="hidden sm:inline">Delete</span>
+                <span className={actionLabel}>Delete</span>
               </Button>
             </div>
           </li>

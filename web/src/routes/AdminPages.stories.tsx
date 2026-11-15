@@ -13,21 +13,23 @@ const admin = makeUser({ id: "admin-1", display_name: "Christos", role: "admin" 
  */
 const meta = {
   title: "Pages/Admin",
-  component: AdminConsole,
-  args: { children: null },
-  parameters: { layout: "fullscreen", user: admin },
-} satisfies Meta<typeof AdminConsole>;
+  component: AdminUsersPage,
+  decorators: [
+    (Story) => (
+      <AdminConsole>
+        <Story />
+      </AdminConsole>
+    ),
+  ],
+  parameters: { layout: "fullscreen", user: admin, route: "/admin/users" },
+} satisfies Meta<typeof AdminUsersPage>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const genresRoute = { route: "/admin/genres" };
+
 export const Users: Story = {
-  render: () => (
-    <AdminConsole>
-      <AdminUsersPage />
-    </AdminConsole>
-  ),
-  parameters: { route: "/admin/users" },
   beforeEach({ msw }) {
     msw.use(
       http.get(`${API}/api/v1/admin/users`, () =>
@@ -52,12 +54,8 @@ export const Users: Story = {
 };
 
 export const Genres: Story = {
-  render: () => (
-    <AdminConsole>
-      <AdminGenresPage />
-    </AdminConsole>
-  ),
-  parameters: { route: "/admin/genres" },
+  render: () => <AdminGenresPage />,
+  parameters: genresRoute,
   beforeEach({ msw }) {
     msw.use(
       http.get(`${API}/api/v1/genres`, () =>
@@ -78,12 +76,8 @@ export const Genres: Story = {
 };
 
 export const NoGenres: Story = {
-  render: () => (
-    <AdminConsole>
-      <AdminGenresPage />
-    </AdminConsole>
-  ),
-  parameters: { route: "/admin/genres" },
+  render: () => <AdminGenresPage />,
+  parameters: genresRoute,
   play: async ({ canvas }) => {
     await expect(await canvas.findByText("No genres yet")).toBeVisible();
   },

@@ -17,5 +17,5 @@ export const panelChrome = "rounded-card bg-panel p-4";
 /** The accent a card takes under the pointer, for the cards that are links. */
 export const cardHover = "transition-colors hover:border-line-accent hover:bg-accent-subtle";
 
-/** A small label on a card or header: a song's genre, a list's visibility. */
+/** A small label on a card or header: a genre on a song card, a list's visibility. */
 export const tagChrome = "rounded-full bg-subtle px-2 py-0.5 text-xs text-fg-tertiary";
