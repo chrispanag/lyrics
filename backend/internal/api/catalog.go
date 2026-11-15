@@ -84,8 +84,9 @@ func (s *Server) handleListPeople(w http.ResponseWriter, r *http.Request) error 
 }
 
 // handleCreditedPeople enumerates the id of every person on at least one song,
-// for the sitemap's catalog pages. Guest-readable, paginated, oldest first. Not
-// /people's order, which is by name and so shifts under a rename mid-walk.
+// for the sitemap's catalog pages. Guest-readable, paginated, oldest first.
+// Its own route rather than a mode of /people because the walk wants ids
+// alone, without the per-row song count every /people row computes.
 func (s *Server) handleCreditedPeople(w http.ResponseWriter, r *http.Request) error {
 	limit, offset := httpx.Pagination(r.URL.Query())
 

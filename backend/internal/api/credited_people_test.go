@@ -80,8 +80,9 @@ func TestCreditedPeopleAreThoseOnASong(t *testing.T) {
 	h.creditSong("Both", both, both)
 
 	page := h.creditedPeoplePage("")
-	got := slices.SortedFunc(slices.Values(personIDs(page.Data)), compareUUID)
-	want := slices.SortedFunc(slices.Values([]uuid.UUID{writer.ID, singer.ID, both.ID}), compareUUID)
+	got, want := personIDs(page.Data), []uuid.UUID{writer.ID, singer.ID, both.ID}
+	slices.SortFunc(got, compareUUID)
+	slices.SortFunc(want, compareUUID)
 	if !slices.Equal(got, want) {
 		t.Errorf("ids = %v, want the writer, the singer and the one who does both, once each: %v", got, want)
 	}

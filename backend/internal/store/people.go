@@ -64,8 +64,7 @@ func (s *Store) ListPeople(ctx context.Context, f PersonFilter) ([]Person, int, 
 			a.next(string(f.Role))))
 	}
 	if f.Performs {
-		conds = append(conds,
-			"EXISTS (SELECT 1 FROM recording_credits rc WHERE rc.person_id = p.id)")
+		conds = append(conds, personPerforms)
 	}
 	where := strings.Join(conds, " AND ")
 
@@ -87,19 +86,18 @@ func (s *Store) ListPeople(ctx context.Context, f PersonFilter) ([]Person, int, 
 	return people, total, err
 }
 
+// personPerforms holds for a person on a recording. Performing is not a
+// credit role, so it is a table of its own.
+const personPerforms = `EXISTS (SELECT 1 FROM recording_credits rc WHERE rc.person_id = p.id)`
+
 // personOnASong holds for a person on at least one song, as a writer or a
 // performer: the same two tables personColumns counts.
-const personOnASong = `(EXISTS (SELECT 1 FROM song_credits sc WHERE sc.person_id = p.id)
-	OR EXISTS (SELECT 1 FROM recording_credits rc WHERE rc.person_id = p.id))`
+const personOnASong = `(EXISTS (SELECT 1 FROM song_credits sc WHERE sc.person_id = p.id) OR ` +
+	personPerforms + `)`
 
 // CreditedPeople returns a page of the ids of people on at least one song, for
-// the sitemap, plus how many there are. Oldest first with the id as tiebreak:
-// a total order in which a person created mid-walk appends rather than
-// shifting a row across a page boundary. Not one in which a person *credited*
-// mid-walk does: they slot in at their creation date, as one losing their last
-// song leaves a gap, which costs one sitemap a duplicate and an omission until
-// the next crawl. Someone on no song is left out because their page is an
-// empty catalog.
+// the sitemap, plus how many there are. Ordered as PublicLists is, and with
+// the same limit: a person credited mid-walk slots in at their creation date.
 func (s *Store) CreditedPeople(ctx context.Context, limit, offset int) ([]CreditedPerson, int, error) {
 	total, err := s.count(ctx, "count credited people", `SELECT count(*) FROM people p WHERE `+personOnASong)
 	if err != nil || total == 0 {

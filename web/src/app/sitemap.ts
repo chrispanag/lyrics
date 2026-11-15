@@ -70,32 +70,24 @@ function offsetsAfterFirst(total: number): number[] {
 }
 
 /**
- * Every genre with a song, read in one request: `/genres` is unpaginated, and
- * small enough to stay so. A genre on no song is left out, its page being an
- * empty catalog. No `lastModified`, here or for a person: a removed song
- * changes the page and leaves no date behind, so any date would claim the page
- * older than it is.
+ * Every genre on a song, from the unpaginated `/genres` in one read. Neither
+ * this nor a person carries a `lastModified` (CLAUDE.md says why).
  */
 async function genreEntries(): Promise<Entry[]> {
   const { data } = await apiFetch<ListResponse<Genre>>("/api/v1/genres", { anonymous: true });
-  return data
-    .filter(hasSongs)
-    .map((genre) => ({ url: `${SITE_ORIGIN}${genrePageHref(genre.slug)}` }));
-}
-
-/**
- * Whether a genre is worth listing. The API omits a count of zero, so an
- * absent one is zero. A genre with no slug throws rather than being dropped,
- * as a song with none does.
- */
-function hasSongs(genre: Genre): boolean {
-  if (!genre.slug) throw new Error(`genre ${genre.id} has no slug`);
-  return (genre.song_count ?? 0) > 0;
+  return data.flatMap((genre) => {
+    // Thrown, not dropped, as a song with no slug is.
+    if (!genre.slug) throw new Error(`genre ${genre.id} has no slug`);
+    // The API omits a count of zero.
+    return (genre.song_count ?? 0) > 0
+      ? [{ url: `${SITE_ORIGIN}${genrePageHref(genre.slug)}` }]
+      : [];
+  });
 }
 
 /** A person's page, under the address their catalog page names as canonical. */
 function personEntry(person: CreditedPerson): Entry {
-  if (!isUuid(person.id ?? "")) throw new Error(`credited person ${person.id} has no id`);
+  if (!isUuid(person.id)) throw new Error(`credited person has no usable id: ${person.id}`);
   return { url: `${SITE_ORIGIN}${personPageHref(person.id)}` };
 }
 
