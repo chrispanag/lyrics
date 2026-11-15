@@ -44,6 +44,20 @@ export function storedFontSize(): number {
   }
 }
 
+/**
+ * The step the lyrics are drawn at now, for the size buttons' limits: the
+ * attribute when there is one, else `storedFontSize()`. The attribute outlives
+ * a client navigation while a write to storage can fail, so reading storage
+ * alone would leave the buttons on the default beside lyrics drawn at another
+ * step. Browser only; the call site reads it in a layout effect.
+ */
+export function drawnFontSize(): number {
+  const drawn = Number(document.documentElement.getAttribute(FONT_SIZE_ATTRIBUTE) ?? Number.NaN);
+  return Number.isInteger(drawn) && drawn >= 0 && drawn < FONT_SIZES.length
+    ? drawn
+    : storedFontSize();
+}
+
 /** Shows the lyrics at `index`, when the reader changes it. The first is the boot script's. */
 export function applyFontSize(index: number): void {
   document.documentElement.setAttribute(FONT_SIZE_ATTRIBUTE, String(index));

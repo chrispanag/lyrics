@@ -772,12 +772,13 @@ The parts below hold that up.
   so the throw never reached the HTML render: the response was a 200 whose
   payload carried the redirect, followed in the browser once the gate opened.
   A `redirects()` entry is decided before any route renders, so a document load
-  and an in-app navigation's RSC request both get a real 307. It reads
-  `ADMIN_TABS[0]` from `routes/adminTabs.ts`, which the config can import because
-  that module imports nothing — keep it that way, or the config starts pulling
-  client code into the build's config step. The page stays as the backstop and
-  as what `test/app.tsx` follows; `src/nextConfig.test.ts` pins the entry, and
-  `next start` is what showed the 307.
+  and an in-app navigation's RSC request both get a real 307. It names the first
+  tab as a literal rather than importing `ADMIN_TABS`: `next start` loads
+  `next.config.ts` at run time, and `web/Dockerfile`'s runtime stage copies that
+  one file without `src/`, so an import from there crashes the container on
+  start while the build and every spec stay green. `src/nextConfig.test.ts` is
+  what holds the literal to `ADMIN_TABS[0]`. The page stays as the backstop and
+  as what `test/app.tsx` follows, and `next start` is what showed the 307.
 - **A value only the browser has may not be read while rendering, and a
   try/catch is not the fix.** Wrapping stops the throw and leaves the worse
   half: the server renders one answer and the client's first render another,
@@ -880,10 +881,15 @@ The parts below hold that up.
   size, where a class chosen from state was drawn at `text-lg` until hydration
   and then jumped. The size buttons still hold the step in state, through
   `useStoredState`, for their disabled limits, and a press writes the attribute
-  and storage together (`applyFontSize`, `storeFontSize`). Three copies of one
+  and storage together (`applyFontSize`, `storeFontSize`). They read the step
+  back with `drawnFontSize()` — the attribute first, storage only without one —
+  because the attribute outlives a client navigation and a storage write can
+  fail, and reading storage alone then puts the buttons on the default beside
+  lyrics drawn at another step. Three copies of one
   rule, then, and `fontSize.test.ts` holds them: the script case by case against
   `storedFontSize()` (junk, out of range and fractional values included, which
-  must all leave the default), and the four `:root[data-lyrics-size]` rules
+  must all leave the default; a blank value is step 0 in both, `Number("")`
+  being 0), and the four `:root[data-lyrics-size]` rules
   against `FONT_SIZES`, read out of the stylesheet since jsdom applies none.
   Verified against `next start` by loading the server's HTML with its inline
   scripts and none of its bundles: a stored step of 3 is already 24px there.
@@ -1188,8 +1194,9 @@ screen changed for it.
 - **The vocabulary is Next's.** `useRouter()` returns `push`, `replace`, `back`,
   `canGoBack` and `prefetch` — the last a hint a backend may ignore, which on
   Next is a *full* prefetch (`PrefetchKind.FULL`, which no public entry point
-  exports, so `nextNavigation.tsx` names the string through Next's
-  `PrefetchOptions` type) and in `TestRouter` nothing. Each call is a server
+  exports, so `nextNavigation.tsx` names the string through the type of the
+  public router's `prefetch` options rather than a `next/dist` import) and in
+  `TestRouter` nothing. Each call is a server
   render of a page nobody may open, so it is for the few places a reader is
   about to go: today a list's neighbors. `Link` and `NavLink` take an `href`
   string and `replace`;

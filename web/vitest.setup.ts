@@ -56,6 +56,9 @@ afterEach(() => {
   if (inBrowser) {
     cleanup();
     localStorage.clear();
+    // A size button writes this on <html>, which outlives `cleanup()`, and the
+    // buttons read it back (lib/fontSize.ts): left, it leaks into the next spec.
+    document.documentElement.removeAttribute("data-lyrics-size");
   }
   server.resetHandlers();
 });

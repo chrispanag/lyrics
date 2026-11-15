@@ -29,8 +29,8 @@ import {
   DEFAULT_FONT_SIZE,
   FONT_SIZES,
   applyFontSize,
+  drawnFontSize,
   storeFontSize,
-  storedFontSize,
 } from "@/lib/fontSize";
 import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
@@ -108,7 +108,7 @@ function SongArticle() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Only the buttons' limits read this: the lyrics are sized by CSS from the
   // attribute the boot script set before first paint (lib/fontSize).
-  const [fontSizeIndex, setFontSizeIndex] = useStoredState(DEFAULT_FONT_SIZE, storedFontSize);
+  const [fontSizeIndex, setFontSizeIndex] = useStoredState(DEFAULT_FONT_SIZE, drawnFontSize);
 
   const setFontSize = (index: number) => {
     const clamped = Math.max(0, Math.min(FONT_SIZES.length - 1, index));

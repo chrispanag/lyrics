@@ -1,7 +1,5 @@
 import type { NextConfig } from "next";
 
-import { ADMIN_TABS } from "./src/routes/adminTabs";
-
 // Nothing else sets these; one `headers()` entry covers every response.
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -39,9 +37,12 @@ const nextConfig: NextConfig = {
 
   // A real 307 for /admin on a document load. The page's own `redirect()` sits
   // under `RequireAdmin`, which a server never opens, so it answered 200.
-  // Not permanent: the tab order may change.
+  // Not permanent: the tab order may change. The first tab written out rather
+  // than imported: `next start` reads this file at run time, and the Docker
+  // runtime image carries it without `src/`. nextConfig.test.ts holds it to
+  // `ADMIN_TABS[0]`.
   async redirects() {
-    return [{ source: "/admin", destination: ADMIN_TABS[0].to, permanent: false }];
+    return [{ source: "/admin", destination: "/admin/users", permanent: false }];
   },
 
   // Same-origin /api proxy for `make mobile`. Development only: in production

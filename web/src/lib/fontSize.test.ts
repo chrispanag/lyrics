@@ -8,6 +8,7 @@ import {
   FONT_SIZE_BOOT_SCRIPT,
   FONT_SIZES,
   applyFontSize,
+  drawnFontSize,
   storeFontSize,
   storedFontSize,
 } from "./fontSize";
@@ -41,12 +42,13 @@ describe("FONT_SIZE_BOOT_SCRIPT", () => {
     "1",
     "2",
     "3",
+    // Blank is not refused: `Number("")` is 0, in both. Neither is ever written.
+    "",
+    " ",
     // Everything `storedFontSize` refuses, each of which must leave the default.
     "4",
     "-1",
     "1.5",
-    "",
-    " ",
     "abc",
     "Infinity",
     "NaN",
@@ -93,6 +95,19 @@ describe("a step the reader chooses", () => {
     document.documentElement.removeAttribute(FONT_SIZE_ATTRIBUTE);
     runBootScript();
     expect(drawnStep()).toBe(3);
+  });
+});
+
+describe("drawnFontSize", () => {
+  it("answers the drawn step over storage, which a failed write leaves behind", () => {
+    localStorage.setItem(KEY, "0");
+    applyFontSize(3);
+    expect(drawnFontSize()).toBe(3);
+  });
+
+  it("falls back to storage with no attribute", () => {
+    localStorage.setItem(KEY, "2");
+    expect(drawnFontSize()).toBe(2);
   });
 });
 

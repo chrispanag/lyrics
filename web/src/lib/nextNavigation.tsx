@@ -2,7 +2,6 @@
 
 import NextLink from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { PrefetchOptions } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { type ReactNode, useMemo } from "react";
 
 import { type BackendLinkProps, type NavigationBackend, NavigationProvider } from "./navigation";
@@ -14,8 +13,12 @@ import { type BackendLinkProps, type NavigationBackend, NavigationProvider } fro
  * CLAUDE.md, "The routing seam".
  */
 
-/** Next's `PrefetchKind.FULL`: an enum no public entry point exports. */
-const FULL_PREFETCH = "full" as PrefetchOptions["kind"];
+/**
+ * Next's `PrefetchKind.FULL`: an enum no public entry point exports, so its type
+ * is read off the public router's `prefetch` rather than imported from `next/dist`.
+ */
+type PrefetchKind = NonNullable<Parameters<ReturnType<typeof useRouter>["prefetch"]>[1]>["kind"];
+const FULL_PREFETCH = "full" as PrefetchKind;
 
 /**
  * `scroll={false}`: Next scrolls a new page into view on its own, by a rule of
