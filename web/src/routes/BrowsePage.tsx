@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { SixteenthNotes, Plus, SlidersHorizontal } from "lucide-react";
+import { Plus, SixteenthNotes, SlidersHorizontal } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
 import { useGenres, usePerson, useSongs } from "@/api/hooks";

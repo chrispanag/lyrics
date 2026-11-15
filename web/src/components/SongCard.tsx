@@ -51,7 +51,11 @@ export const SongCard = memo(function SongCard({
           </p>
         </div>
         {song.youtube_video_id && (
-          <SquarePlay aria-label="Has a video" className="size-5 shrink-0 text-stone-400" />
+          <SquarePlay
+            role="img"
+            aria-label="Has a video"
+            className="size-5 shrink-0 text-stone-400"
+          />
         )}
       </div>
 

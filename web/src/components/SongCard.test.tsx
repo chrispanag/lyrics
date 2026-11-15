@@ -48,6 +48,18 @@ describe("SongCard", () => {
     expect(screen.getByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
   });
 
+  // Read off the id, as the song page's watch link is, so the two agree.
+  it("badges a song with a video, and only one", () => {
+    const { unmount } = renderWithProviders(
+      <SongCard song={makeSong({ youtube_video_id: "dQw4w9WgXcQ" })} />,
+    );
+    expect(screen.getByRole("img", { name: "Has a video" })).toBeInTheDocument();
+    unmount();
+
+    renderWithProviders(<SongCard song={makeSong()} />);
+    expect(screen.queryByRole("img", { name: "Has a video" })).toBeNull();
+  });
+
   // Compared against a real chip's classes, the nearest jsdom gets to its box.
   it("holds the genre row open with a chip's box when a song has none", () => {
     const genre = makeGenre();
