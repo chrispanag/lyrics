@@ -230,7 +230,7 @@ export function SongSearch() {
     // Pinned while focused too: on iOS, focusing a field can scroll the page,
     // which would hide the header before the panel opens.
     <SearchHeader pinned={open || focused}>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: tracks focus leaving its children; nothing here is pressed. */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: tracks focus leaving its children; nothing here is pressed. */}
       <div
         ref={wrapper}
         className="relative"

@@ -243,8 +243,11 @@
     overscroll-behavior-y: none;
   }
 
-  /* A visible focus ring is the only affordance keyboard users have. */
-  :focus-visible {
+  /* A visible focus ring is the only affordance keyboard users have. A control
+     drawn by its label, its own input visually hidden (the theme switch's
+     radios), takes the ring on the label, the one part anyone can see. */
+  :focus-visible,
+  label:has(> .sr-only:focus-visible) {
     @apply outline-2 outline-offset-2 outline-focus;
   }
 

@@ -1,9 +1,10 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { usePeople } from "@/api/hooks";
 import { Input } from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
 import { cn } from "@/lib/cn";
+import { songCount } from "@/lib/format";
 
 export interface PersonSelection {
   personId?: string;
@@ -52,17 +53,30 @@ export function PersonAutocomplete({
   // gated here too or clearing the field would leave stale names showing.
   const suggestions = query.trim() ? (data?.data ?? []) : [];
   const listShown = open && suggestions.length > 0;
+  // Undefined when nothing is highlighted, or the suggestions shrank under it.
+  const activePerson = listShown && highlighted >= 0 ? suggestions[highlighted] : undefined;
   // Focus never leaves the field, so the highlight reaches assistive tech only
   // through `aria-activedescendant` — the same shape as `SongSearch`.
-  const activeId =
-    listShown && highlighted >= 0 && highlighted < suggestions.length
-      ? optionId(listId, highlighted)
-      : undefined;
+  const activeId = activePerson ? optionId(listId, highlighted) : undefined;
+
+  // Keeps the highlighted row in view: focus stays in the field, so the list
+  // never scrolls itself, and it shows about six names. As in SongSearch;
+  // optional call, since jsdom has no `scrollIntoView`.
+  useEffect(() => {
+    if (highlighted < 0) return;
+    document.getElementById(optionId(listId, highlighted))?.scrollIntoView?.({ block: "nearest" });
+  }, [highlighted, listId]);
+
+  // Every way of closing clears the highlight too. Left behind, it outlives the
+  // list: reopening announces a person nobody chose, and Enter picks them.
+  const close = () => {
+    setOpen(false);
+    setHighlighted(-1);
+  };
 
   const select = (person: { id: string; name: string }) => {
     onChange({ personId: person.id, name: person.name });
-    setOpen(false);
-    setHighlighted(-1);
+    close();
   };
 
   return (
@@ -87,20 +101,23 @@ export function PersonAutocomplete({
           setOpen(true);
           setHighlighted(-1);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          // A close a recent blur scheduled would shut the list just reopened.
+          clearTimeout(blurTimer.current);
+          setOpen(true);
+        }}
         // A click on a suggestion fires blur first, so closing is deferred
         // long enough for the click to land.
         onBlur={() => {
-          blurTimer.current = window.setTimeout(() => setOpen(false), 150);
+          blurTimer.current = window.setTimeout(close, 150);
         }}
         onKeyDown={(event) => {
           // Before the bail-out below: this field sits inside the song form, and
           // an Enter let through would submit the whole editor.
           if (event.key === "Enter") {
             event.preventDefault();
-            const person = open && highlighted >= 0 ? suggestions[highlighted] : undefined;
-            if (person) select(person);
-            else setOpen(false);
+            if (activePerson) select(activePerson);
+            else close();
             return;
           }
 
@@ -113,7 +130,7 @@ export function PersonAutocomplete({
             event.preventDefault();
             setHighlighted((index) => (index - 1 + suggestions.length) % suggestions.length);
           } else if (event.key === "Escape") {
-            setOpen(false);
+            close();
           }
         }}
       />
@@ -150,7 +167,13 @@ export function PersonAutocomplete({
               >
                 <span className="truncate">{person.name}</span>
                 {person.song_count !== undefined && person.song_count > 0 && (
-                  <span className="ml-2 shrink-0 text-xs text-fg-subtle">{person.song_count}</span>
+                  // fg-tertiary, not fg-subtle: on the highlighted row's fill the
+                  // quieter token is under 4.5:1. Drawn as a bare number, spoken
+                  // as "12 songs".
+                  <span className="ml-2 shrink-0 text-xs text-fg-tertiary">
+                    <span aria-hidden>{person.song_count}</span>
+                    <span className="sr-only">{songCount(person.song_count)}</span>
+                  </span>
                 )}
               </button>
             </li>

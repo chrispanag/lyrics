@@ -55,7 +55,7 @@ describe("ProfilePage", () => {
       "href",
       "/register",
     );
-    expect(screen.getByRole("radiogroup", { name: "Appearance" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Appearance" })).toBeInTheDocument();
   });
 
   // Until the restore settles, `user` may be null for someone who is signed in.
@@ -70,7 +70,7 @@ describe("ProfilePage", () => {
 
     await userEvent.click(screen.getByRole("radio", { name: "Dark" }));
 
-    expect(screen.getByRole("radio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Dark" })).toBeChecked();
     expect(document.documentElement).toHaveClass("dark");
     // The key app/layout.tsx's boot script reads before first paint.
     expect(localStorage.getItem("lyrics:theme")).toBe("dark");

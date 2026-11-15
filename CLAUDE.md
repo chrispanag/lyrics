@@ -37,6 +37,16 @@ formatting half, and applies Biome's safe lint fixes with it. Biome is pinned
 to an exact version on purpose, since its formatter's output can change between
 releases.
 
+Accessibility is checked from both ends. Biome's whole `a11y` group is on as
+errors, not only its recommended rules, which reads the JSX as written; axe runs
+in every story, in both themes, against what the browser actually rendered (see
+Testing). They catch different things — Biome cannot see a contrast ratio and axe
+cannot see a handler on a `div` nothing renders yet — so neither replaces the
+other. **A suppression says why the rule is wrong for that element**, and the
+reasons that turned out to be wrong are worth knowing: "a segmented control,
+styled as buttons" hid a radio group with no arrow keys, and "a fieldset brings
+form styling" was untrue under preflight. Both were the rule being right.
+
 ---
 
 ## Invariants that fail silently
@@ -1921,10 +1931,15 @@ them is written down.
 - **The frontend suite runs with coverage and fails under a floor**, set in
   `vitest.config.ts` just below what it measures. Raise it as the suite rises;
   lowering it is a decision, not a fix.
-- **Every story is a test.** `@storybook/addon-vitest` runs each story in
+- **Every story is a test, twice.** `@storybook/addon-vitest` runs each story in
   `src/**/*.stories.tsx` in a headless Chromium (`pnpm run test:stories`, part
   of `make test-web` and CI): it must render, its `play` function must pass, and
   axe must find nothing, since `a11y.test` is `"error"` in `.storybook/preview.tsx`.
+  It does so once per theme, as the `storybook-light` and `storybook-dark`
+  projects in `vitest.config.ts`, because contrast is the check a theme decides
+  and the light run alone cannot see the dark ground. The theme
+  reaches the preview as `import.meta.env.STORY_THEME`, from the project's
+  `test.env` — a `define` does not, the Storybook plugin's config wins over it.
   That is the place for what jsdom cannot show — the real `<dialog>` top layer,
   layout, focus. Three things are not obvious. Stories are **excluded from
   coverage**, which stays the unit suite's, because a story renders code without

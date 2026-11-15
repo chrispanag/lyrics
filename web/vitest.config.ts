@@ -6,15 +6,34 @@ import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import { playwright } from "@vitest/browser-playwright";
 import path from "node:path";
 
+/** Every story as a test in a real Chromium, its axe check included, starting in `theme`. */
+function storybookProject(theme: "light" | "dark") {
+  return {
+    extends: true,
+    plugins: [storybookTest({ configDir: path.join(import.meta.dirname, ".storybook") })],
+    test: {
+      name: `storybook-${theme}`,
+      // Read by `.storybook/preview.tsx` as `import.meta.env.STORY_THEME`.
+      env: { STORY_THEME: theme },
+      browser: {
+        enabled: true,
+        headless: true,
+        provider: playwright(),
+        instances: [{ browser: "chromium" as const }],
+      },
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "./src") },
   },
   test: {
-    // Two projects, which the package scripts run separately: `unit` is the
-    // jsdom suite, `storybook` renders every story as a test in a real Chromium,
-    // its a11y check included. Coverage is the unit suite's alone — a story
+    // Three projects, which the package scripts run apart: `unit` is the
+    // jsdom suite, the two `storybook-*` render every story as a test in a real
+    // Chromium, one per theme. Coverage is the unit suite's alone — a story
     // renders a component without asserting on it, so counting stories would
     // let the floor below be met by code nothing checks.
     projects: [
@@ -34,19 +53,8 @@ export default defineConfig({
           exclude: ["node_modules/**", ".next/**", "e2e/**"],
         },
       },
-      {
-        extends: true,
-        plugins: [storybookTest({ configDir: path.join(import.meta.dirname, ".storybook") })],
-        test: {
-          name: "storybook",
-          browser: {
-            enabled: true,
-            headless: true,
-            provider: playwright(),
-            instances: [{ browser: "chromium" }],
-          },
-        },
-      },
+      storybookProject("light"),
+      storybookProject("dark"),
     ],
     coverage: {
       provider: "v8",

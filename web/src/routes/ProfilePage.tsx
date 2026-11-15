@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type SubmitEvent } from "react";
+import { useId, useState, type ChangeEvent, type SubmitEvent } from "react";
 import { Link } from "react-router-dom";
 import { KeyRound, LoaderCircle, LogOut, Moon, Pencil, Sun, Trash, Upload } from "lucide-react";
 
@@ -314,8 +314,12 @@ function PictureMenu({
  * The label above a group of settings, shared so the two groups cannot drift
  * apart — `cn()` is a plain join, so chrome is shared rather than overridden.
  */
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-2 text-sm font-medium text-fg-secondary">{children}</h2>;
+function SectionHeading({ children, id }: { children: React.ReactNode; id?: string }) {
+  return (
+    <h2 id={id} className="mb-2 text-sm font-medium text-fg-secondary">
+      {children}
+    </h2>
+  );
 }
 
 /** What the live region says while a picture is saving or being removed. */
@@ -350,28 +354,37 @@ function ThemeToggle({
   onChange: (theme: Theme) => void;
   className?: string;
 }) {
+  const id = useId();
+
+  // Native radios drawn as a segmented control: the browser gives the group one
+  // Tab stop and moves the choice with the arrow keys. Named by the visible
+  // heading rather than a <legend>, which will not lay out as a flex row's
+  // sibling and would repeat the heading's text.
   return (
     <div className={className}>
-      <SectionHeading>Appearance</SectionHeading>
-      <div role="radiogroup" aria-label="Appearance" className="flex gap-1 rounded-xl bg-muted p-1">
+      <SectionHeading id={`${id}-heading`}>Appearance</SectionHeading>
+      <fieldset aria-labelledby={`${id}-heading`} className="flex gap-1 rounded-xl bg-muted p-1">
         {THEME_OPTIONS.map((option) => (
-          // biome-ignore lint/a11y/useSemanticElements: a segmented control, styled as one row of buttons.
-          <button
+          <label
             key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={theme === option.value}
-            onClick={() => onChange(option.value)}
             className={cn(
-              "flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors",
+              "flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-colors",
               theme === option.value ? "bg-canvas text-fg shadow-sm" : "text-fg-tertiary",
             )}
           >
+            <input
+              type="radio"
+              name={`${id}-theme`}
+              value={option.value}
+              checked={theme === option.value}
+              onChange={() => onChange(option.value)}
+              className="sr-only"
+            />
             {option.icon && <option.icon aria-hidden className="size-4" />}
             {option.label}
-          </button>
+          </label>
         ))}
-      </div>
+      </fieldset>
     </div>
   );
 }
