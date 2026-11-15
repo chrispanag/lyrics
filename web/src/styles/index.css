@@ -53,6 +53,25 @@
        is no class and the page is light, so light is the right answer there
        too. */
     @apply scheme-light dark:scheme-dark;
+    /* Keeps a control reached by Tab from landing under the sticky header,
+       whose height `StickyHeader` measures into this property; screens without
+       one leave it unset. Below `md` as well, although the header hides on the
+       way down and the padding then leaves a gap above the target: Shift+Tab
+       scrolls up, which brings the header back over it, and a gap is cosmetic
+       where that is the failure. */
+    scroll-padding-top: var(--sticky-header-height, 0px);
+  }
+
+  /* The padding's other half. A control inside the stuck header sits in the
+     padded band by definition, so focusing it reads as obscured and the page
+     scrolls — Chromium centers it, half a viewport up — while the header stays
+     put. That is every Shift+Tab into the search box and every modal handing
+     focus back to the button that opened it (the filter sheet, the drawer). A
+     negative margin as deep as the padding moves the target out of the band.
+     `:focus` only, so the search panel's rows keep their own `scrollIntoView`
+     inside the listbox. */
+  [data-sticky-header] :focus {
+    scroll-margin-top: calc(-1 * var(--sticky-header-height, 0px));
   }
 
   @media (prefers-reduced-motion: reduce) {

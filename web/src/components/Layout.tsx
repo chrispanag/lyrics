@@ -272,6 +272,12 @@ export function MenuButton() {
  *
  * `mobileOnly` goes on the `<header>` itself, since a bordered box with a
  * hidden child still draws a hairline at a desk.
+ *
+ * Its height is published as `--sticky-header-height` on `<html>`, which the
+ * root's `scroll-padding-top` reads, so a control reached by Tab is scrolled
+ * clear of the header rather than to the viewport edge underneath it. Measured
+ * rather than written down: the catalog's filter chips change the height, and
+ * a `mobileOnly` header at a desk is `display: none` and measures 0.
  */
 export function StickyHeader({
   children,
@@ -283,6 +289,23 @@ export function StickyHeader({
   mobileOnly?: boolean;
 }) {
   const [hidden, setHidden] = useState(false);
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const header = ref.current;
+    if (!header) return;
+    const root = document.documentElement.style;
+    // `offsetHeight` is the border box, so the safe-area padding counts too.
+    const observer = new ResizeObserver(() => {
+      root.setProperty("--sticky-header-height", `${header.offsetHeight}px`);
+    });
+    // Border box here too, or a rotation that changes only the inset is missed.
+    observer.observe(header, { box: "border-box" });
+    return () => {
+      observer.disconnect();
+      root.removeProperty("--sticky-header-height");
+    };
+  }, []);
 
   useEffect(() => {
     let lastY = window.scrollY;
@@ -308,6 +331,9 @@ export function StickyHeader({
 
   return (
     <header
+      ref={ref}
+      // Read by index.css, which keeps focus inside the header from scrolling.
+      data-sticky-header
       className={cn(
         "sticky top-0 z-30 border-b border-stone-200 bg-stone-50/90 backdrop-blur transition-transform duration-200 pt-safe dark:border-stone-800 dark:bg-stone-950/90",
         hidden && !pinned && "max-md:-translate-y-full",
