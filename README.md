@@ -27,6 +27,10 @@ make api                  # run the API on :8080
 make install && make web  # run the web app on :5173
 ```
 
+The web app uses pnpm, at the version `packageManager` pins in
+`web/package.json`. Node 26 ships no corepack, so install it once with
+`npm install -g pnpm@<that version>`.
+
 Next only exposes variables prefixed with `NEXT_PUBLIC_`, so `make web` maps
 `PRELUDE_APP_ID` and `PRELUDE_SESSION_DOMAIN` across for you — there is no second
 copy to keep in sync.

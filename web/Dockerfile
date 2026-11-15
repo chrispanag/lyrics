@@ -15,23 +15,28 @@ FROM node:${NODE_VERSION}-alpine AS base
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# package.json alone first, so a lockfile-only change does not reinstall pnpm.
+COPY package.json ./
 RUN npm install -g "$(node -p 'require("./package.json").packageManager')"
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # --- production dependencies -------------------------------------------------
 # `next start` needs `next` itself and nothing that built the app, and it reads
 # next.config.ts with its own bundled toolchain, so typescript does not have to
 # be here for a .ts config. Installed here rather than in the runtime stage so
-# that the image carries no package manager.
+# that pnpm stays out of the runtime image. The store is a cache mount shared
+# with the build stage's install, so a package is downloaded once, not twice.
 FROM base AS prod-deps
 
-RUN pnpm install --frozen-lockfile --prod
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --prod --store-dir /pnpm/store
 
 # --- build -------------------------------------------------------------------
 FROM base AS build
 
 # Lockfile-only install layer, reused whenever dependencies are unchanged.
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 COPY . .
 
@@ -88,7 +93,9 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
 
 # CMD rather than ENTRYPOINT, for the reason .do/app.yaml gives about the API
 # image: `run_command` replaces a component's command, and with an ENTRYPOINT in
-# place it may be appended to it as arguments instead. `node --run` runs the
-# package.json script with no package manager installed, so the port stays
-# written in one place.
-CMD ["node", "--run", "start"]
+# place it may be appended to it as arguments instead. Next is started directly
+# rather than through `node --run start`: that runner neither forwards SIGTERM to
+# the script it spawns nor handles it itself, and as PID 1 an unhandled SIGTERM
+# is ignored, so every stop would wait out the grace period and end in SIGKILL.
+# The port repeats package.json's start script, as EXPOSE and the healthcheck do.
+CMD ["node", "node_modules/next/dist/bin/next", "start", "-p", "3000"]
