@@ -1,5 +1,5 @@
 import { type ComponentProps, type ReactNode, useId } from "react";
-import { LoaderCircle, X } from "lucide-react";
+import { ChevronDown, LoaderCircle, X } from "lucide-react";
 
 import { buttonClasses, type ButtonSize, type ButtonVariant } from "./buttonStyles";
 import { fieldChrome } from "@/components/fieldStyles";
@@ -57,18 +57,22 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
   );
 }
 
+// The native arrow ignores the field's padding, sits hard against the border
+// and is drawn at each engine's own size, so it is switched off and replaced.
+// An icon rather than a background image, so its color follows the theme.
+// `className` sizes the wrapper, which is what a caller's width has to reach.
 export function Select({ className, ...props }: ComponentProps<"select">) {
   return (
-    <select
-      // select-chevron replaces the native arrow; see styles/index.css.
-      className={cn(
-        fieldChrome,
-        fieldLayout,
-        "select-chevron h-11 appearance-none pl-3 pr-9",
-        className,
-      )}
-      {...props}
-    />
+    <div className={cn("relative", className)}>
+      <select
+        className={cn(fieldChrome, fieldLayout, "peer h-11 w-full appearance-none pl-3 pr-9")}
+        {...props}
+      />
+      <ChevronDown
+        aria-hidden
+        className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-stone-500 peer-disabled:opacity-50 dark:text-stone-400"
+      />
+    </div>
   );
 }
 

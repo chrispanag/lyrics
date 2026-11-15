@@ -111,32 +111,14 @@
   }
 }
 
-@layer components {
-  /* The chevron for <Select>, drawn rather than left to the browser.
-     The native indicator ignores the field's padding and sits hard against the
-     border, and each engine draws it at its own size — so it is switched off
-     (appearance-none, on the component) and replaced with one that is inset to
-     match the text. Written here rather than as an arbitrary Tailwind value
-     because a data URI in a class name needs every space and # escaped. */
-  .select-chevron {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2378716c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 0.75rem center;
-    background-size: 1rem 1rem;
-  }
-  .dark .select-chevron {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  }
-}
-
-/* The rest are utilities rather than component classes, so they take variants
-   and are only emitted when used. */
+/* Utilities rather than component classes, so they take variants and are only
+   emitted when used. */
 
 /* For a search field that draws its own clear button — see `SearchField`.
    WebKit and Chromium put a cancel button inside `type="search"` themselves,
    landing right where the component renders its own: two crosses side by side,
    the native one a 14px target that ignores the field's padding. Given up the
-   same way `<Select>` gives up the native chevron above.
+   same way `<Select>` gives up the native arrow.
 
    By class rather than for every `type="search"` in the app, because the admin
    console's box has no button of its own and that native cross is the only way
