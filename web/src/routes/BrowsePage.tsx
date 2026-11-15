@@ -143,6 +143,9 @@ export function BrowsePage() {
     <>
       {/* Named by the query, since a search is a history entry and a bookmark. */}
       <PageTitle name={query ? `Search: ${query}` : "Browse"} />
+      {/* Hidden: the search box is the page's visible heading in all but name.
+          What it holds is the outline's root, which each card's h2 sits under. */}
+      <h1 className="sr-only">{query ? `Search: ${query}` : "Browse"}</h1>
       <SearchHeader
         trailing={
           <Button
@@ -151,7 +154,9 @@ export function BrowsePage() {
             variant={hasFilters ? "primary" : "secondary"}
             onClick={() => setFiltersOpen(true)}
             // The count is in the label: `aria-label` hides the badge from AT.
-            aria-label={hasFilters ? `Filters (${filterCount} active)` : "Filters"}
+            // A bare number, not "(1", so the label holds the badge's visible
+            // text as a word, which voice control matches on.
+            aria-label={hasFilters ? `Filters, ${filterCount} active` : "Filters"}
             className="relative"
           >
             <SlidersHorizontal aria-hidden className="size-5" />

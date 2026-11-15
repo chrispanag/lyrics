@@ -54,6 +54,7 @@
     "@vitest/coverage-v8": "^5.1.0",
     "jsdom": "^31.0.1",
     "msw": "^3.0.5",
+    "msw-storybook-addon": "^3.0.3",
     "storybook": "^10.6.7",
     "tailwindcss": "^4.3.5",
     "typescript": "^7.0.2",

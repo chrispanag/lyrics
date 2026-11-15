@@ -142,6 +142,32 @@ describe("SongSearch", () => {
     expect(screen.queryByText(/No songs matched/)).not.toBeInTheDocument();
   });
 
+  // React Query keeps the last answer when a refetch fails (as it does on a
+  // return to the tab), so rows are still in hand while the panel says the
+  // search is unavailable. Nothing may act on rows the reader cannot see.
+  it("hides held rows behind a failed refetch, in what it shows, says and opens", async () => {
+    const user = userEvent.setup();
+    searchAnswers(matches);
+
+    const { queryClient } = renderSearch();
+    await user.type(box(), "τραγ");
+    await screen.findByRole("option", { name: /Λίμνης/ });
+    await user.keyboard("{ArrowDown}");
+
+    server.use(http.get(`${API}/api/v1/songs`, () => apiError(500, "internal", "boom")));
+    await act(() => queryClient.refetchQueries());
+
+    expect(await screen.findByText(/unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByRole("option")).not.toBeInTheDocument();
+    expect(box()).toHaveAttribute("aria-expanded", "false");
+    expect(box()).not.toHaveAttribute("aria-controls");
+    expect(box()).not.toHaveAttribute("aria-activedescendant");
+
+    // With no row to open, Enter takes the query to the catalog.
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("Now at /?q=%CF%84%CF%81%CE%B1%CE%B3")).toBeInTheDocument();
+  });
+
   // An absent `q` returns the entire catalog, not an empty result.
   it("asks for nothing while the box is empty", async () => {
     const user = userEvent.setup();
@@ -247,7 +273,7 @@ describe("SongSearch", () => {
     expect(screen.getByRole("listbox")).toBeInTheDocument();
   });
 
-  it("names the listbox only when there are rows in it", async () => {
+  it("is expanded and names the listbox only when there are rows in it", async () => {
     const user = userEvent.setup();
     searchAnswers([]);
 
@@ -255,7 +281,8 @@ describe("SongSearch", () => {
     await user.type(box(), "zzz");
     await screen.findByText(/No songs matched/);
 
-    expect(box()).toHaveAttribute("aria-expanded", "true");
+    // The note is a status message, not the combobox's popup.
+    expect(box()).toHaveAttribute("aria-expanded", "false");
     expect(box()).not.toHaveAttribute("aria-controls");
   });
 

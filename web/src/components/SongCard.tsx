@@ -36,9 +36,11 @@ export const SongCard = memo(function SongCard({ song, listId }: { song: Song; l
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold text-stone-900 dark:text-stone-100">
+          {/* h2: both pages that list cards (the catalog and a list) put them
+              directly under the page's h1, and an h3 there skips a level. */}
+          <h2 className="truncate font-semibold text-stone-900 dark:text-stone-100">
             {song.title}
-          </h3>
+          </h2>
           {/* Always rendered; `min-h-lh` gives an empty <p> its line box. */}
           <p className="mt-0.5 min-h-lh truncate text-sm text-stone-500 dark:text-stone-400">
             {credits}

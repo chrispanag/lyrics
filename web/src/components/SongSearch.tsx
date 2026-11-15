@@ -87,6 +87,10 @@ export function SongSearch() {
   // Waits for the debounce as well as the request, or every first keystroke
   // would flash "nothing matched".
   const searching = query !== typed || isLoading;
+  // Whether the panel holds the listbox rather than a note: the one decision
+  // `panelBody` and the combobox's ARIA state both read, so they cannot drift.
+  // Never on a failure, or a failed refetch would read as "nothing matched".
+  const listShown = open && !isError && results.length > 0;
 
   /** Closes the panel, leaving the text. The one path for every way of closing. */
   const dismiss = useCallback(() => {
@@ -136,8 +140,9 @@ export function SongSearch() {
 
     if (event.key === "Enter") {
       // The highlighted row, else the first, else the catalog. Never a row
-      // from a dismissed panel the reader cannot see.
-      const song = open ? (activeSong ?? results[0]) : undefined;
+      // the reader cannot see: a dismissed panel, or one saying search failed
+      // over rows a failed refetch left held.
+      const song = listShown ? (activeSong ?? results[0]) : undefined;
       if (song) {
         const { href, replace } = step(song);
         navigate(href, { replace });
@@ -170,19 +175,11 @@ export function SongSearch() {
   }, [active, listboxId]);
 
   /**
-   * The open panel's content. `isError` first, or a failure reads as "nothing
-   * matched"; rows before `searching`, so held results do not blink.
+   * The open panel's content. Rows before `searching`, so held results do not
+   * blink.
    */
   const panelBody = (): ReactNode => {
-    if (isError) {
-      return (
-        <p className={cn(noteChrome, "text-red-700 dark:text-red-300")}>
-          Search is unavailable right now.
-        </p>
-      );
-    }
-
-    if (results.length > 0) {
+    if (listShown) {
       return (
         <>
           <div
@@ -215,6 +212,14 @@ export function SongSearch() {
             </Link>
           )}
         </>
+      );
+    }
+
+    if (isError) {
+      return (
+        <p className={cn(noteChrome, "text-red-700 dark:text-red-300")}>
+          Search is unavailable right now.
+        </p>
       );
     }
 
@@ -255,11 +260,14 @@ export function SongSearch() {
           // Unguarded: losing the caret to nowhere still counts.
           onBlur={() => setFocused(false)}
           role="combobox"
-          aria-expanded={open}
-          // Only while the listbox is actually rendered.
-          aria-controls={results.length > 0 ? listboxId : undefined}
+          // Both only while the listbox is rendered: the "nothing matched" and
+          // "unavailable" notes are status messages, not the combobox's popup,
+          // and expanded with nothing to control is announced as a popup that
+          // is not there.
+          aria-expanded={listShown}
+          aria-controls={listShown ? listboxId : undefined}
           aria-autocomplete="list"
-          aria-activedescendant={activeSong ? optionId(listboxId, active) : undefined}
+          aria-activedescendant={listShown && activeSong ? optionId(listboxId, active) : undefined}
         />
 
         {open && (
@@ -314,14 +322,16 @@ const SongOption = memo(function SongOption({
       )}
     >
       <span className="block truncate font-medium">{song.title}</span>
+      {/* stone-600 rather than 500 for the secondary lines: on the highlighted
+          row's stone-100, 500 is under 4.5:1. */}
       {credits && (
-        <span className="block truncate text-xs text-stone-500 dark:text-stone-400">{credits}</span>
+        <span className="block truncate text-xs text-stone-600 dark:text-stone-400">{credits}</span>
       )}
       {/* One line, without `whitespace-pre-line`, so a verse break stays a row. */}
       {song.snippet && (
         <Snippet
           text={song.snippet}
-          className="mt-0.5 line-clamp-1 text-xs text-stone-500 dark:text-stone-400"
+          className="mt-0.5 line-clamp-1 text-xs text-stone-600 dark:text-stone-400"
         />
       )}
     </Link>

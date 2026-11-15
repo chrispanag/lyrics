@@ -230,7 +230,7 @@ describe("BrowsePage filter button", () => {
     // `size="icon"` is unconditional, so one direction is enough.
     expect(button).toHaveClass("size-11");
     // `aria-label` hides the badge, so the name must carry the number.
-    expect(button).toHaveAccessibleName("Filters (2 active)");
+    expect(button).toHaveAccessibleName("Filters, 2 active");
   });
 });
 
@@ -339,7 +339,7 @@ describe("BrowsePage filter sheet", () => {
 
     await waitFor(() => expect(requests.at(-1)?.get("genre_slug")).toBe("rempetiko"));
     expect(requests.at(-1)?.get("offset")).toBe("0");
-    expect(screen.getByRole("button", { name: "Filters (1 active)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Filters, 1 active" })).toBeInTheDocument();
     expect(genre).toHaveAttribute("aria-pressed", "true");
 
     await user.click(genre);
