@@ -978,8 +978,8 @@ scraper rather than by anyone inside the app, which is why each is written down.
   The request is derived from the address by `catalogView` in `lib/browse.ts`,
   which `BrowsePage` calls too; and each read is a `queries` entry in
   `api/hooks.ts` — key, request and result type in one `queryOptions` — which
-  the hooks spread and the route `prefetchQuery`s, with `{ anonymous: true }` as
-  the factory's request argument. Built by hand beside the hook instead, the key
+  the hooks spread and the route `prefetchQuery`s, with `guestRead()` as the
+  factory's request argument. Built by hand beside the hook instead, the key
   can match while the request does not, and an entry under the right key holds
   the answer to another question; with the key off, the failure is invisible —
   the page renders, the browser fetches the same page again, and the server's
@@ -990,12 +990,13 @@ scraper rather than by anyone inside the app, which is why each is written down.
   route's own handover. **The reads go into one `QueryClient` per request**,
   made through React's `cache` so `generateMetadata` and the page share it — no
   retry (a server render must not wait out an outage) and fresh for the
-  request. **Each read has a time budget, `READ_BUDGET_MS` (3s)**, on a signal
-  made per read: with no `loading.tsx`, an in-app link to the catalog waits on
-  these reads as well as a document load does, and an API that *hangs* rather
-  than fails would otherwise freeze the old screen until the socket gives up,
+  request. **Each read has a time budget of 3s**, on a signal made per read by
+  `guestRead` in `api/client.ts`, which the song route's `loadSong` shares: with
+  no `loading.tsx`, an in-app link to the catalog or to a song waits on these
+  reads as well as a document load does, and an API that *hangs* rather than
+  fails would otherwise freeze the old screen until the socket gives up,
   minutes later. Past the budget the read counts as failed, exactly like one
-  refused. The song route's `loadSong` has no such budget yet. **The client alone does not make a read once**: a query that failed
+  refused — an outage, never a 404. **The client alone does not make a read once**: a query that failed
   holds no data, so a second `prefetchQuery` asks again and the page waits out
   the outage a second time after the metadata did. `readNamed` is wrapped in
   `cache` as well for that, and takes the client as an argument rather than
@@ -1035,8 +1036,8 @@ scraper rather than by anyone inside the app, which is why each is written down.
   page (a different slice, so canonicalizing it to page one would be a false
   claim, and the sitemap lists every song anyway), a language, two filters at
   once, and a filter that names nothing. "Names nothing" is the song route's
-  rule: only the API's own `not_found` counts (`isNotFound` in `api/client.ts`;
-  the song route still writes the same test inline), and a person id that is
+  rule: only the API's own `not_found` counts (`isNotFound` in `api/client.ts`,
+  which the song route asks too), and a person id that is
   not a UUID (`isUuid`: canonical or undashed, either case) is not asked about
   at all — the API would only refuse it. A person's page is canonical under the
   person's **own** id rather than the address's spelling of it, since the API
@@ -1095,7 +1096,10 @@ scraper rather than by anyone inside the app, which is why each is written down.
   The throw is in the `catch` block, where nothing catches it again; moved into
   the `try`, it would be swallowed with the failures it sits beside. An outage
   renders the page with nothing handed over, and the browser asks again and
-  says so in its own words. Any other unmatched address renders
+  says so in its own words — and so does a read past `guestRead`'s budget, so a
+  hung API costs a song page three seconds rather than freezing the screen a
+  link was pressed on. Never a 404 for that either: a timeout says nothing
+  about the song. Any other unmatched address renders
   `app/not-found.tsx` — server-rendered, 404, inside the group layouts it mounts
   itself, since the root's not-found sits outside the route groups.
 - **A list page's HTML carries the list only when a guest may read it, and a

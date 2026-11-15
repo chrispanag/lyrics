@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { type DehydratedState, HydrationBoundary } from "@tanstack/react-query";
-import { HttpResponse, http } from "msw";
+import { HttpResponse, delay, http } from "msw";
 import type { ReactElement } from "react";
 import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -182,6 +182,25 @@ describe("a song's server-rendered document", () => {
     expect(structuredData(tree)).toBeNull();
     expect(child<{ state?: unknown }>(tree, HydrationBoundary)?.props.state).toBeUndefined();
     expect(await generateMetadata(props(UUID))).toEqual({});
+  });
+
+  it("gives up on an API that hangs rather than fails, within its budget", async () => {
+    // The budget's clock, shortened: the route asks for 3s, the spec waits 20ms.
+    const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => realTimeout(20));
+    server.use(
+      http.get(`${API}/api/v1/songs/:ref`, async () => {
+        await delay("infinite");
+        return HttpResponse.json(makeSong());
+      }),
+    );
+
+    // Past the budget the read is an outage: the page, never a 404.
+    const tree = await SongPage(props(SLUG));
+
+    expect(timeout).toHaveBeenCalledWith(3000);
+    expect(structuredData(tree)).toBeNull();
+    expect(child<{ state?: unknown }>(tree, HydrationBoundary)?.props.state).toBeUndefined();
   });
 
   it("refuses a song carrying no address rather than redirecting to one", async () => {
