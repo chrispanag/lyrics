@@ -189,7 +189,7 @@ export function SongSearch() {
             id={listboxId}
             role="listbox"
             aria-label="Song search results"
-            className="max-h-[50vh] overflow-y-auto overscroll-contain py-1"
+            className="max-h-[50dvh] overflow-y-auto overscroll-contain py-1"
           >
             {results.map((song, index) => {
               const { href, replace } = step(song);

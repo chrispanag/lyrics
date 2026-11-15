@@ -287,7 +287,7 @@ export function Sheet({
         // bottom, centered from `sm`. The margins are stated because preflight
         // zeroes the UA's `auto`, which is what places a modal dialog at all.
         // `display` only while open, or it would override the closed state.
-        "m-auto mb-0 max-h-[85vh] w-full max-w-full flex-col border-0 p-0 text-inherit open:flex",
+        "m-auto mb-0 max-h-[85dvh] w-full max-w-full flex-col border-0 p-0 text-inherit open:flex",
         "rounded-t-3xl bg-white shadow-2xl",
         "sm:mb-auto sm:max-w-lg sm:rounded-3xl",
         "dark:bg-stone-900",
