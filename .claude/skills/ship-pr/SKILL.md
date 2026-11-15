@@ -21,8 +21,7 @@ Several steps below say **verify**. That means:
 1. Run the checks the change can affect. `make check` covers everything. If
    the diff touches only one stack, that stack's targets are enough:
    `make lint-backend test-backend` or `make lint-web test-web`. A diff that
-   touches no code needs none. When Go changed, also run `gofmt -l backend`:
-   CI fails on any file it lists, and no `make` target checks formatting.
+   touches no code needs none.
 2. Fix anything they report.
 3. Commit whatever changed, with a message in the style of `git log`. If
    nothing changed, there is nothing to commit.

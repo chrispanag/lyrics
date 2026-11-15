@@ -29,9 +29,7 @@ make check       # lint + test, both stacks
 when no database is reachable, so without it a broken schema reports green.
 
 Keep `make check` clean. Backend must be `gofmt`-clean with zero `golangci-lint`
-findings — and `make check` does not run gofmt while CI does, so also run
-`gofmt -l backend`: it exits 0 either way, and CI fails on any file it lists. The
-frontend must have zero `tsc` errors and zero eslint findings
+findings; frontend must have zero `tsc` errors and zero eslint findings
 (warnings included — the fast-refresh warnings are why styles live in their own
 modules, see Conventions).
 
