@@ -1,6 +1,14 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { ListMusic, Menu, Search, Shield, User as UserIcon } from "lucide-react";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type RefObject,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
@@ -8,8 +16,8 @@ import { buttonClasses } from "@/components/buttonStyles";
 import { Button, Spinner } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
-import { useModal } from "@/lib/modal";
-import { NavDrawerContext, useNavDrawer } from "@/lib/navDrawer";
+import { useHomeEndInside } from "@/lib/modal";
+import { NAV_DRAWER_ID, NavDrawerContext, useNavDrawer } from "@/lib/navDrawer";
 import { hasRole } from "@/lib/types";
 
 interface NavItem {
@@ -66,9 +74,9 @@ export function Layout() {
     setNavOpen(false);
   }
 
-  // Growing past `md` (768px) closes the drawer. The drawer and hamburger are
-  // `md:hidden`, so an open but invisible drawer would keep the scroll lock and
-  // the modal marking, silently disabling the song page's swipe and arrow keys.
+  // Growing past `md` (768px) closes the drawer. The hamburger is `md:hidden`,
+  // so an open drawer would keep the page inert, and the song page's swipe and
+  // arrow keys standing down, with the only control that opened it gone.
   useEffect(() => {
     const desk = window.matchMedia("(min-width: 768px)");
     const close = (event: MediaQueryListEvent) => {
@@ -185,58 +193,159 @@ function DesktopSidebar() {
 }
 
 /**
- * The same navigation on a phone, slid in over the page.
+ * Scrolls the drawer to its closed stop. `auto` defers to the stylesheet:
+ * smooth unless motion is reduced. Marks it leaving, so a slide in still
+ * waiting on its frames stands down.
+ */
+function slideOutOf(track: HTMLElement | null, leaving: RefObject<boolean>) {
+  leaving.current = true;
+  track?.scrollTo({ left: track.offsetWidth, behavior: "auto" });
+}
+
+/**
+ * The same navigation on a phone: a modal `<dialog>`, so the browser makes the
+ * page inert, moves focus in, closes on Escape and hands focus back.
  *
- * Stays mounted while closed so it can slide. That costs three things: the
- * dialog marking must apply only while open (or `modalIsOpen()` disables the
- * song page's swipe and arrow keys for good), it must be `inert` while closed,
- * and `pointer-events-none` keeps the invisible backdrop from eating presses.
- * See "Frontend" in CLAUDE.md.
+ * The dialog is also a horizontal scroller with two snap stops, the sheet and
+ * a viewport-wide spacer, so the swipe that dismisses it is the browser's own
+ * scrolling and follows the finger. Closing is a scroll to the spacer, and the
+ * observer below calls `close()` once the sheet is off-screen: a closed dialog
+ * is `display: none`, so closing first would cut the slide. Styles are
+ * `.nav-drawer` in index.css. See "Frontend" in CLAUDE.md.
  */
 function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const panel = useRef<HTMLDivElement>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const sheet = useRef<HTMLDivElement>(null);
+  // Whether the sheet has been on screen since `showModal()`. Until it has,
+  // being off-screen is where it starts, not a dismissal.
+  const shown = useRef(false);
+  const leaving = useRef(false);
+  // WebKit would otherwise send Home and End to the page behind.
+  useHomeEndInside(open, dialog);
+  const slideOut = () => slideOutOf(dialog.current, leaving);
 
-  // A focus target is passed because this stays mounted while closed.
-  const marking = useModal({ open, onClose, focus: panel });
+  // Once: the observer that closes the dialog, the dim's fallback, and the
+  // `close()` an open dialog needs before it is unmounted.
+  useEffect(() => {
+    const element = dialog.current;
+    const panel = sheet.current;
+    if (!element || !panel) return;
+
+    // Any pixel of the sheet still showing counts as open.
+    const visible = 1 / window.innerWidth;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // A programmatic scroll can deliver several; the last is where it is.
+        const ratio = entries.at(-1)?.intersectionRatio ?? 0;
+        if (ratio >= visible) shown.current = true;
+        else if (shown.current && element.open) element.close();
+      },
+      { root: element, threshold: [visible, 1] },
+    );
+    observer.observe(panel);
+
+    // Without scroll-driven animations the stylesheet never writes the dim.
+    const fade = () => {
+      const progress = 1 - element.scrollLeft / (panel.offsetWidth || 1);
+      element.style.setProperty("--drawer-backdrop", String(Math.max(0, progress)));
+    };
+    if (!CSS.supports?.("animation-timeline: scroll()")) {
+      element.addEventListener("scroll", fade, { passive: true });
+    }
+
+    return () => {
+      observer.disconnect();
+      element.removeEventListener("scroll", fade);
+      if (element.open) element.close();
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+
+    if (!open) {
+      // A navigation or the breakpoint rather than the drawer's own dismissal.
+      // A sheet that never reached the screen has nothing to slide.
+      if (!element.open) return;
+      if (shown.current) slideOutOf(element, leaving);
+      else element.close();
+      return;
+    }
+
+    if (element.open) return;
+    shown.current = false;
+    leaving.current = false;
+    element.showModal();
+    // `showModal()` focuses the first focusable thing inside, and a link there
+    // would scroll the sheet into view before it could slide. The dialog is
+    // what a screen reader should land on anyway, being the thing named.
+    // `close()` still hands focus to the opener `showModal()` recorded.
+    element.focus({ preventScroll: true });
+
+    // `scroll-initial-target` opens the scroller on the closed stop. Without
+    // it, it opens on the sheet: jumped to the spacer first, and given two
+    // frames to commit, since a scroll in the first would cancel the jump.
+    if (CSS.supports?.("scroll-initial-target", "nearest")) {
+      element.scrollTo({ left: 0, behavior: "auto" });
+      return;
+    }
+    element.scrollTo({ left: element.offsetWidth, behavior: "instant" });
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (!leaving.current) element.scrollTo({ left: 0, behavior: "auto" });
+      }),
+    );
+  }, [open]);
 
   return (
-    <div
-      className={cn("fixed inset-0 z-50 md:hidden", !open && "pointer-events-none")}
-      inert={!open}
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the click is a tap on the dim; the keyboard's way out is Escape.
+    <dialog
+      ref={dialog}
+      id={NAV_DRAWER_ID}
+      aria-label="Navigation"
+      // Focusable only as the target of `focus()` on opening.
+      tabIndex={-1}
+      className="nav-drawer outline-none"
+      // Every close ends here: the observer's, and an uncancelable Escape's.
+      onClose={() => {
+        shown.current = false;
+        onClose();
+      }}
+      // Escape slides out rather than vanishing. A repeated Escape with no
+      // activation in between is uncancelable and closes at once.
+      onCancel={(event) => {
+        if (!event.cancelable) return;
+        event.preventDefault();
+        slideOut();
+      }}
+      // The dialog fills the viewport, so a tap on the dim lands on the dialog
+      // rather than on `::backdrop`. That is also why this is not
+      // `closedby="any"`, which would close without the slide.
+      onClick={(event) => {
+        if (!sheet.current?.contains(event.target as Node)) slideOut();
+      }}
     >
       <div
-        aria-hidden
-        onClick={onClose}
+        ref={sheet}
         className={cn(
-          "absolute inset-0 bg-black/40 transition-opacity duration-200",
-          // Blur only while open: `backdrop-filter` is a viewport-sized
-          // composited layer that would otherwise persist on every page.
-          open ? "opacity-100 backdrop-blur-sm" : "opacity-0",
-        )}
-      />
-      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: `marking` spreads role="dialog" while open. */}
-      <div
-        ref={panel}
-        // Focusable only as `useModal`'s focus target. `outline-none`, not
-        // `outline-hidden`: that one is unconditional, so forced colors would
-        // draw it on the panel permanently, a sliver of it even while closed.
-        tabIndex={-1}
-        {...marking}
-        aria-label="Navigation"
-        className={cn(
-          "absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col bg-white shadow-2xl outline-none",
-          "border-r border-stone-200 transition-transform duration-200 pt-safe pb-safe",
-          "dark:border-stone-800 dark:bg-stone-900",
-          open ? "translate-x-0" : "-translate-x-full",
+          "nav-drawer-sheet flex flex-col bg-white shadow-2xl pt-safe pb-safe",
+          "border-r border-stone-200 dark:border-stone-800 dark:bg-stone-900",
         )}
       >
-        {/* Padding here, not on the panel, so it cannot collide with the
-            safe-area padding. `min-h-0` lets this scroll. */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-6">
-          <NavPanel />
+        {/* Padding here, not on the sheet, so it cannot collide with the
+            safe-area padding. `min-h-0` lets this scroll, and it always does,
+            by the extra pixel inside: iOS Safari honors `overscroll-behavior`
+            only on a box that actually scrolls, and a vertical swipe here
+            would otherwise scroll the page behind. `-y` only, so a sideways
+            swipe still reaches the drawer. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-6">
+          <div className="flex min-h-[calc(100%+1px)] flex-col">
+            <NavPanel />
+          </div>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }
 
@@ -255,6 +364,7 @@ export function MenuButton() {
       onClick={() => setOpen(true)}
       aria-label="Open menu"
       aria-expanded={open}
+      aria-controls={NAV_DRAWER_ID}
       className="shrink-0 md:hidden"
     >
       <Menu aria-hidden className="size-5" />

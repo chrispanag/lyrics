@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +7,7 @@ import { Layout, StickyHeader } from "./Layout";
 import { MenuHeader } from "./SearchHeader";
 import { modalIsOpen } from "@/lib/modal";
 import { makeUser } from "@/test/handlers";
+import { intersectAll } from "@/test/intersection";
 import { renderWithProviders } from "@/test/render";
 import { scrollDown, scrollUp, setScrollY } from "@/test/scroll";
 
@@ -15,15 +16,15 @@ import { scrollDown, scrollUp, setScrollY } from "@/test/scroll";
  * document; each is asserted separately. See `identityCard` in Layout.tsx.
  */
 describe("Layout navigation", () => {
-  // The drawer by its label: it has `role="dialog"` only while open.
+  // `hidden` throughout: a closed `<dialog>` is `display: none`.
   const sidebar = () => screen.getByRole("complementary");
   const drawer = () => screen.getByLabelText("Navigation");
 
   // By destination, not label, so a renamed entry is still caught; and inside
   // the `<nav>`, pinning the card as part of the landmark.
   const routesToProfile = (navigation: HTMLElement) =>
-    within(within(navigation).getByRole("navigation"))
-      .getAllByRole("link")
+    within(within(navigation).getByRole("navigation", { hidden: true }))
+      .getAllByRole("link", { hidden: true })
       .filter((link) => link.getAttribute("href") === "/profile");
 
   it("reaches the profile from the identity card rather than a link", () => {
@@ -32,7 +33,7 @@ describe("Layout navigation", () => {
     for (const navigation of [sidebar(), drawer()]) {
       expect(routesToProfile(navigation)).toHaveLength(1);
       expect(routesToProfile(navigation)[0]).toBe(
-        within(navigation).getByRole("link", { name: /Christos/ }),
+        within(navigation).getByRole("link", { name: /Christos/, hidden: true }),
       );
     }
   });
@@ -48,7 +49,9 @@ describe("Layout navigation", () => {
     renderWithProviders(<Layout />, { user: null });
 
     expect(within(sidebar()).getByRole("link", { name: "Sign in" })).toBeInTheDocument();
-    expect(within(drawer()).getByRole("link", { name: "Sign in" })).toBeInTheDocument();
+    expect(
+      within(drawer()).getByRole("link", { name: "Sign in", hidden: true }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -64,19 +67,35 @@ describe("Mobile navigation drawer", () => {
       { user: null },
     );
 
-  const trigger = () => screen.getByRole("button", { name: "Open menu" });
+  // The trigger is outside the dialog, so it is inert while the drawer is up.
+  const trigger = () => screen.getByRole("button", { name: "Open menu", hidden: true });
 
-  // The drawer stays mounted; marked as a modal while closed, it would disable
-  // the song page's swipe and arrow keys for the whole session.
+  /*
+   * jsdom has no layout or scroll snap, so the slide is the stub observer
+   * reporting where the sheet is: on screen once it has slid in, gone once
+   * it has slid out.
+   */
+  const openDrawer = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(trigger());
+    act(() => intersectAll(1));
+  };
+  const slidOut = () => act(() => intersectAll(0));
+
+  // The drawer stays mounted; a modal while closed, it would disable the song
+  // page's swipe and arrow keys for the whole session.
   it("is no modal at all while it is closed", () => {
     renderShell();
 
     expect(modalIsOpen()).toBe(false);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(trigger()).toHaveAttribute("aria-expanded", "false");
+    expect(trigger()).toHaveAttribute(
+      "aria-controls",
+      screen.getByRole("dialog", { hidden: true }).id,
+    );
   });
 
-  it("opens on the hamburger and says so", async () => {
+  it("opens on the hamburger as a modal and says so", async () => {
     const user = userEvent.setup();
     renderShell();
 
@@ -87,27 +106,67 @@ describe("Mobile navigation drawer", () => {
     expect(trigger()).toHaveAttribute("aria-expanded", "true");
   });
 
-  // The drawer is the last user of the `<body>` lock: a `Sheet` is held still
-  // by CSS, so nothing else exercises it.
-  it("locks the page's scroll while open, and releases it on close", async () => {
+  // Escape's `cancel` is turned into the slide, so the dialog stays modal
+  // until the sheet is off-screen, and only then closes.
+  it("slides out on Escape, closing once the sheet has gone", async () => {
     const user = userEvent.setup();
     renderShell();
 
-    await user.click(trigger());
-    expect(document.body.style.overflow).toBe("hidden");
-
+    await openDrawer(user);
     await user.keyboard("{Escape}");
-    expect(document.body.style.overflow).toBe("");
-  });
 
-  it("closes on Escape", async () => {
-    const user = userEvent.setup();
-    renderShell();
+    expect(modalIsOpen()).toBe(true);
 
-    await user.click(trigger());
-    await user.keyboard("{Escape}");
+    slidOut();
 
     expect(modalIsOpen()).toBe(false);
+    await waitFor(() => expect(trigger()).toHaveAttribute("aria-expanded", "false"));
+  });
+
+  it("slides out on a tap on the dim, and not on one on the sheet", async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    await openDrawer(user);
+    // Past the slide in's two frames, so every scroll from here is a slide out.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const scrolls = vi.mocked(Element.prototype.scrollTo);
+    scrolls.mockClear();
+    const dialog = screen.getByRole("dialog");
+
+    // The sheet's own padding, then the dim beside it, which is the dialog.
+    fireEvent.click(within(dialog).getByRole("navigation").parentElement as HTMLElement);
+    expect(scrolls).not.toHaveBeenCalled();
+
+    fireEvent.click(dialog);
+    expect(scrolls).toHaveBeenCalledTimes(1);
+
+    slidOut();
+
+    expect(modalIsOpen()).toBe(false);
+  });
+
+  // Swiped away, nothing in the app asked: the observer alone closes it.
+  it("closes when the sheet is swiped off-screen", async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    await openDrawer(user);
+    slidOut();
+
+    expect(modalIsOpen()).toBe(false);
+    await waitFor(() => expect(trigger()).toHaveAttribute("aria-expanded", "false"));
+  });
+
+  // Where it starts, before the slide in, is off-screen too.
+  it("does not mistake the sheet's starting position for a dismissal", async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    await user.click(trigger());
+    slidOut();
+
+    expect(modalIsOpen()).toBe(true);
   });
 
   // Browse is the current screen, so the pathname does not change.
@@ -121,13 +180,14 @@ describe("Mobile navigation drawer", () => {
     expect(modalIsOpen()).toBe(false);
   });
 
-  // Closing unmounts nothing, so focus would otherwise stay in a hidden panel.
+  // `close()` does this; the drawer only has to call it rather than unmount.
   it("hands focus back to the hamburger", async () => {
     const user = userEvent.setup();
     renderShell();
 
-    await user.click(trigger());
+    await openDrawer(user);
     await user.keyboard("{Escape}");
+    slidOut();
 
     expect(trigger()).toHaveFocus();
   });
@@ -139,14 +199,13 @@ describe("Mobile navigation drawer", () => {
     const crossInto = stubBreakpoint();
     renderShell();
 
-    await user.click(trigger());
+    await openDrawer(user);
     expect(modalIsOpen()).toBe(true);
 
     crossInto(true);
+    slidOut();
 
     expect(modalIsOpen()).toBe(false);
-    // Kept, the lock would freeze a desk's page with no modal on it.
-    expect(document.body.style.overflow).toBe("");
   });
 });
 

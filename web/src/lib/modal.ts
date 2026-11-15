@@ -9,90 +9,24 @@ import {
 } from "react";
 
 /*
- * What a modal is, asked of the DOM so every modal is covered, and the two hooks
+ * What a modal is, asked of the DOM so every modal is covered, and the hooks
  * that make one. Page gestures stand down while one is open.
  *
- * There are two shapes until the drawer moves too: `useDialog` drives a native
- * `<dialog>` opened with `showModal()`, which the browser makes modal — inert
- * page, focus moved in and handed back, Escape — and `useModal` hand-rolls
- * that marking and Escape for the drawer, which is still a `<div>`.
+ * Every modal is a native `<dialog>` opened with `showModal()`, which the
+ * browser makes modal: inert page, focus moved in and handed back, Escape.
+ * `useDialog` drives `Sheet`'s; the navigation drawer drives its own, since it
+ * closes by sliding away (see `MobileNavDrawer`), and shares only
+ * `useHomeEndInside`.
  */
-const MARKED_MODAL = '[role="dialog"][aria-modal="true"]';
 
 /** Whether a modal is currently open anywhere on the page. */
 export function modalIsOpen(): boolean {
-  if (document.querySelector(MARKED_MODAL) !== null) return true;
   // Asked per element rather than as `dialog:modal`: jsdom parses that selector
   // and never matches it, and the test stub can only answer through `matches`.
   for (const dialog of document.querySelectorAll("dialog[open]")) {
     if (dialog.matches(":modal")) return true;
   }
   return false;
-}
-
-/**
- * The `overflow: hidden` scroll lock on `<body>`, for the drawer only. A modal
- * `<dialog>` is held still by `.dialog-viewport` in `index.css` instead.
- */
-function useScrollLock(open: boolean) {
-  useEffect(() => {
-    if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [open]);
-}
-
-/** The marking `modalIsOpen` looks for, resolved for the current state. */
-export interface ModalMarking {
-  role?: "dialog";
-  "aria-modal"?: true;
-}
-
-/**
- * Escape, the scroll lock, focus, and the marking above, for a modal that is
- * not a `<dialog>` — the navigation drawer, which stays mounted.
- *
- * **Two effects with different keys**: `onClose` is an inline closure at every
- * call site, so the first effect re-runs on any parent render, and a focus
- * restore in its cleanup would pull focus out of the open dialog.
- */
-export function useModal({
-  open,
-  onClose,
-  focus,
-}: {
-  open: boolean;
-  onClose: () => void;
-  /** Given focus while the modal is up. */
-  focus: RefObject<HTMLElement | null>;
-}): ModalMarking {
-  useScrollLock(open);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
-
-  // `focus` is a ref, so `open` is what actually re-runs this.
-  useEffect(() => {
-    if (!open) return;
-
-    const opener = document.activeElement;
-    focus.current?.focus();
-
-    return () => {
-      if (opener instanceof HTMLElement) opener.focus();
-    };
-  }, [open, focus]);
-
-  return open ? { role: "dialog", "aria-modal": true } : {};
 }
 
 /**
@@ -130,6 +64,32 @@ function scrollerFor(target: EventTarget | null, dialog: HTMLDialogElement): HTM
     if (scrollsY(el)) return el;
   }
   return null;
+}
+
+/**
+ * Keeps Home and End inside an open modal `<dialog>`. WebKit sends them to the
+ * document wherever focus is, so the page behind jumps to an end; taken here
+ * and given to the scroller they were meant for. On the document rather than
+ * the dialog, because a press on plain text leaves focus on `<body>`, where a
+ * key never passes through the dialog. A field keeps them: a caret, or a
+ * `<select>`'s first and last option. Shared by `useDialog` and the drawer.
+ */
+export function useHomeEndInside(open: boolean, ref: RefObject<HTMLDialogElement | null>) {
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!open || !dialog) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Home" && event.key !== "End") return;
+      // Shift extends a selection, which is the reader's, not a scroll.
+      if (event.defaultPrevented || event.shiftKey) return;
+      if (event.target instanceof Element && event.target.closest(FIELDS)) return;
+      event.preventDefault();
+      const scroller = scrollerFor(event.target, dialog);
+      scroller?.scrollTo({ top: event.key === "Home" ? 0 : scroller.scrollHeight });
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, ref]);
 }
 
 /**
@@ -178,26 +138,7 @@ export function useDialog({
     };
   }, [open]);
 
-  // WebKit sends Home and End to the document wherever focus is, so the page
-  // behind jumps to an end; taken here and given to the scroller they were
-  // meant for. On the document rather than the dialog, because a press on plain
-  // text leaves focus on `<body>`, where a key never passes through the dialog.
-  // A field keeps them: a caret, or a `<select>`'s first and last option.
-  useEffect(() => {
-    const dialog = ref.current;
-    if (!open || !dialog) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Home" && event.key !== "End") return;
-      // Shift extends a selection, which is the reader's, not a scroll.
-      if (event.defaultPrevented || event.shiftKey) return;
-      if (event.target instanceof Element && event.target.closest(FIELDS)) return;
-      event.preventDefault();
-      const scroller = scrollerFor(event.target, dialog);
-      scroller?.scrollTo({ top: event.key === "Home" ? 0 : scroller.scrollHeight });
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  useHomeEndInside(open, ref);
 
   const props: DialogProps = {
     ref,

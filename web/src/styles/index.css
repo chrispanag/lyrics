@@ -178,6 +178,90 @@
   }
 }
 
+@layer components {
+  /* The phone's navigation drawer — see `MobileNavDrawer`. A modal `<dialog>`
+     filling the viewport that is itself a horizontal scroller with two snap
+     stops: the sheet, and a viewport-wide spacer after it. Swiping between
+     them is the browser's own scrolling, momentum and all, and `mandatory`
+     means it always settles fully open or fully closed. It is the same idea as
+     `dialog-viewport` above, a dialog that is its own scroller so the page
+     behind never scrolls, turned sideways. The UA's modal box is
+     reset because the scroller has to reach every edge to be swiped anywhere.
+
+     The dialog is the scroller, rather than holding one, so the dim's timeline
+     is `scroll(self)`: a named timeline declared on a child needs
+     `timeline-scope` to reach the dialog, and WebKit, which parses that,
+     resolves no timeline through it and leaves the dim off. */
+  .nav-drawer {
+    /* `w-72 max-w-[85%]` as it was: the strip of page left showing is what
+       says a tap there dismisses. */
+    --drawer-width: min(18rem, 85vw);
+    inset: 0;
+    width: auto;
+    height: auto;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    grid-template-columns: var(--drawer-width) 100%;
+    overflow-x: scroll;
+    overflow-y: hidden;
+    /* Neither axis chains into the page underneath at either stop. */
+    overscroll-behavior: none;
+    /* And a vertical swipe is no pan at all, since iOS Safari chains one from
+       a box that cannot scroll that way whatever `overscroll-behavior` says —
+       on the dim, or on the sheet outside its own scroller. A scroll container
+       resets `touch-action` for what is inside it, so the sheet's list still
+       scrolls (see `MobileNavDrawer`). */
+    touch-action: pan-x;
+    scrollbar-width: none;
+    scroll-snap-type: x mandatory;
+  }
+  /* Only while open: a `display` on the class would beat the UA's
+     `display: none` for a closed dialog. */
+  .nav-drawer[open] {
+    display: grid;
+  }
+  .nav-drawer::after {
+    content: "";
+    scroll-snap-align: end;
+    /* Opens on the closed stop, so opening is one scroll to the sheet. Chromium
+       only so far; the component jumps there itself elsewhere. */
+    /* biome-ignore lint/correctness/noUnknownProperty: newer than Biome's property list. */
+    scroll-initial-target: nearest;
+  }
+  /* The 40% black and the blur the drawer always had, faded by how far the
+     sheet is on screen rather than by a timer, so the dim follows the finger.
+     ::backdrop inherits the progress from the dialog. */
+  .nav-drawer::backdrop {
+    background: rgb(0 0 0 / 0.4);
+    backdrop-filter: blur(8px);
+    opacity: var(--drawer-backdrop, 0);
+  }
+  .nav-drawer-sheet {
+    /* `svh`, so the iOS toolbar resizing mid-swipe does not resize the sheet. */
+    height: 100svh;
+    scroll-snap-align: start;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .nav-drawer {
+      scroll-behavior: smooth;
+    }
+  }
+  /* Gated because a browser without scroll timelines would run the animation
+     on the document timeline, fill it backwards and pin the dim fully on. There
+     the component writes `--drawer-backdrop` from a scroll listener instead. */
+  @supports (animation-timeline: scroll()) {
+    .nav-drawer {
+      animation: nav-drawer-backdrop linear both;
+      animation-timeline: scroll(self x);
+    }
+  }
+}
+
 /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the edges
    of the viewport, so anything pinned to one of them needs the inset added:
    the sheet's scrolling body, and the navigation drawer, which reaches both
@@ -187,4 +271,23 @@
 }
 @utility pt-safe {
   padding-top: env(safe-area-inset-top);
+}
+
+/* The drawer's open fraction, from 1 with the sheet on screen to 0 with it
+   gone. Registered as a number so the scroll-driven animation can interpolate
+   it; unregistered, it would jump from one end to the other. */
+@property --drawer-backdrop {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+/* Scroll position 0 is the sheet, so the dim starts full. */
+@keyframes nav-drawer-backdrop {
+  from {
+    --drawer-backdrop: 1;
+  }
+  to {
+    --drawer-backdrop: 0;
+  }
 }
