@@ -116,8 +116,9 @@ func TestProfilePictureRefusals(t *testing.T) {
 		},
 		{
 			name: "a real image that is too wide",
-			body: func(t testing.TB) []byte {
-				return testutil.SolidPNG(t, imaging.MaxDimension+1, 8, testutil.Opaque)
+			body: func(tb testing.TB) []byte {
+				tb.Helper()
+				return testutil.SolidPNG(tb, imaging.MaxDimension+1, 8, testutil.Opaque)
 			},
 			want: http.StatusUnprocessableEntity,
 		},
@@ -161,16 +162,16 @@ func TestProfilePictureRefusals(t *testing.T) {
 func TestProfilePictureUploadsAreRateLimited(t *testing.T) {
 	h := newHarness(t)
 	token := h.tokenFor("picture.flood@example.com", store.RoleUser)
-	image := testutil.SolidPNG(t, 16, 16, testutil.Opaque)
+	picture := testutil.SolidPNG(t, 16, 16, testutil.Opaque)
 
-	first := h.doRaw("POST", "/api/v1/me/avatar", token, "image/png", image)
+	first := h.doRaw("POST", "/api/v1/me/avatar", token, "image/png", picture)
 	if first.StatusCode != http.StatusOK {
 		t.Fatalf("first upload = %d, want 200 — a 429 below has to be the limiter and nothing else", first.StatusCode)
 	}
 
 	var limited bool
 	for range 15 {
-		resp := h.doRaw("POST", "/api/v1/me/avatar", token, "image/png", image)
+		resp := h.doRaw("POST", "/api/v1/me/avatar", token, "image/png", picture)
 		if resp.StatusCode == http.StatusTooManyRequests {
 			limited = true
 			break
@@ -186,7 +187,7 @@ func TestProfilePictureUploadsAreRateLimited(t *testing.T) {
 	}
 
 	other := h.tokenFor("picture.bystander@example.com", store.RoleUser)
-	if resp := h.doRaw("POST", "/api/v1/me/avatar", other, "image/png", image); resp.StatusCode != http.StatusOK {
+	if resp := h.doRaw("POST", "/api/v1/me/avatar", other, "image/png", picture); resp.StatusCode != http.StatusOK {
 		t.Errorf("another account's first upload = %d, want 200 — one account's flood must not spend anyone else's limit", resp.StatusCode)
 	}
 }

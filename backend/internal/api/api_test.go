@@ -108,7 +108,7 @@ func (h *harness) doRaw(method, path, token, contentType string, body []byte) *h
 		reader = bytes.NewReader(body)
 	}
 
-	req, err := http.NewRequest(method, h.server.URL+path, reader)
+	req, err := http.NewRequestWithContext(h.t.Context(), method, h.server.URL+path, reader)
 	if err != nil {
 		h.t.Fatalf("build request: %v", err)
 	}
@@ -125,7 +125,7 @@ func (h *harness) doRaw(method, path, token, contentType string, body []byte) *h
 func (h *harness) doConditional(path, etag string) *http.Response {
 	h.t.Helper()
 
-	req, err := http.NewRequest("GET", h.server.URL+path, nil)
+	req, err := http.NewRequestWithContext(h.t.Context(), http.MethodGet, h.server.URL+path, http.NoBody)
 	if err != nil {
 		h.t.Fatalf("build request: %v", err)
 	}
@@ -326,19 +326,19 @@ func TestContributorCanEditOnlyOwnSongs(t *testing.T) {
 	edit := map[string]any{"title": "Edited", "lyrics": "new lyrics", "language": "el"}
 
 	t.Run("author may edit", func(t *testing.T) {
-		if resp := h.do("PATCH", "/api/v1/songs/"+songID, authorTok, edit); resp.StatusCode != 200 {
+		if resp := h.do("PATCH", "/api/v1/songs/"+songID, authorTok, edit); resp.StatusCode != http.StatusOK {
 			t.Errorf("status = %d, want 200", resp.StatusCode)
 		}
 	})
 
 	t.Run("another contributor may not", func(t *testing.T) {
-		if resp := h.do("PATCH", "/api/v1/songs/"+songID, otherTok, edit); resp.StatusCode != 403 {
+		if resp := h.do("PATCH", "/api/v1/songs/"+songID, otherTok, edit); resp.StatusCode != http.StatusForbidden {
 			t.Errorf("status = %d, want 403", resp.StatusCode)
 		}
 	})
 
 	t.Run("admin may edit anything", func(t *testing.T) {
-		if resp := h.do("PATCH", "/api/v1/songs/"+songID, adminTok, edit); resp.StatusCode != 200 {
+		if resp := h.do("PATCH", "/api/v1/songs/"+songID, adminTok, edit); resp.StatusCode != http.StatusOK {
 			t.Errorf("status = %d, want 200", resp.StatusCode)
 		}
 	})
@@ -390,7 +390,8 @@ func TestJustInTimeProvisioning(t *testing.T) {
 
 	t.Run("unknown user becomes a plain user", func(t *testing.T) {
 		token := h.issuer.Sign(t, testutil.TokenOptions{
-			UserID: "usr_never_seen", Email: "stranger@example.com"})
+			UserID: "usr_never_seen", Email: "stranger@example.com",
+		})
 
 		resp := h.do("GET", "/api/v1/me", token, nil)
 		if resp.StatusCode != http.StatusOK {
@@ -404,7 +405,8 @@ func TestJustInTimeProvisioning(t *testing.T) {
 
 	t.Run("bootstrap email becomes admin", func(t *testing.T) {
 		token := h.issuer.Sign(t, testutil.TokenOptions{
-			UserID: "usr_boss", Email: "boss@example.com"})
+			UserID: "usr_boss", Email: "boss@example.com",
+		})
 
 		resp := h.do("GET", "/api/v1/me", token, nil)
 		if resp.StatusCode != http.StatusOK {
@@ -418,7 +420,8 @@ func TestJustInTimeProvisioning(t *testing.T) {
 
 	t.Run("missing email claim is refused", func(t *testing.T) {
 		token := h.issuer.Sign(t, testutil.TokenOptions{
-			UserID: "usr_no_email", OmitEmail: true})
+			UserID: "usr_no_email", OmitEmail: true,
+		})
 
 		resp := h.do("GET", "/api/v1/me", token, nil)
 		if resp.StatusCode != http.StatusInternalServerError {
@@ -438,26 +441,26 @@ func TestListVisibility(t *testing.T) {
 	list := h.seedList(ownerTok, map[string]any{"name": "Private Picks"})
 	path := "/api/v1/lists/" + list.ID.String()
 
-	if resp := h.do("GET", path, ownerTok, nil); resp.StatusCode != 200 {
+	if resp := h.do("GET", path, ownerTok, nil); resp.StatusCode != http.StatusOK {
 		t.Errorf("owner read = %d, want 200", resp.StatusCode)
 	}
-	if resp := h.do("GET", path, strangerTok, nil); resp.StatusCode != 404 {
+	if resp := h.do("GET", path, strangerTok, nil); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("stranger read of private list = %d, want 404", resp.StatusCode)
 	}
-	if resp := h.do("GET", path, "", nil); resp.StatusCode != 404 {
+	if resp := h.do("GET", path, "", nil); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("guest read of private list = %d, want 404", resp.StatusCode)
 	}
 
-	if resp := h.do("PATCH", path, ownerTok, map[string]any{"is_public": true}); resp.StatusCode != 200 {
+	if resp := h.do("PATCH", path, ownerTok, map[string]any{"is_public": true}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("publish status = %d, want 200", resp.StatusCode)
 	}
 
-	if resp := h.do("GET", path, "", nil); resp.StatusCode != 200 {
+	if resp := h.do("GET", path, "", nil); resp.StatusCode != http.StatusOK {
 		t.Errorf("guest read of public list = %d, want 200", resp.StatusCode)
 	}
 
 	// Another user still may not modify it.
-	if resp := h.do("PATCH", path, strangerTok, map[string]any{"name": "Hijacked"}); resp.StatusCode != 404 {
+	if resp := h.do("PATCH", path, strangerTok, map[string]any{"name": "Hijacked"}); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("stranger write = %d, want 404", resp.StatusCode)
 	}
 }
@@ -472,7 +475,7 @@ func TestReorderList(t *testing.T) {
 	songs := make([]string, 4)
 	for i := range songs {
 		songs[i] = h.seedSong(nil, fmt.Sprintf("Song %d", i))
-		if resp := h.do("PUT", path+"/songs/"+songs[i], token, nil); resp.StatusCode != 204 {
+		if resp := h.do("PUT", path+"/songs/"+songs[i], token, nil); resp.StatusCode != http.StatusNoContent {
 			t.Fatalf("add song %d status = %d, want 204", i, resp.StatusCode)
 		}
 	}
@@ -484,8 +487,9 @@ func TestReorderList(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("read list status = %d, want 200", resp.StatusCode)
 		}
-		var got []int
-		for _, song := range decode[store.List](t, resp).Songs {
+		listSongs := decode[store.List](t, resp).Songs
+		got := make([]int, 0, len(listSongs))
+		for _, song := range listSongs {
 			got = append(got, slices.Index(songs, song.ID.String()))
 		}
 		return got
@@ -497,7 +501,7 @@ func TestReorderList(t *testing.T) {
 	}
 
 	t.Run("a full payload is applied verbatim", func(t *testing.T) {
-		if resp := reorder(songs[3], songs[1], songs[0], songs[2]); resp.StatusCode != 200 {
+		if resp := reorder(songs[3], songs[1], songs[0], songs[2]); resp.StatusCode != http.StatusOK {
 			t.Fatalf("status = %d, want 200", resp.StatusCode)
 		}
 		if got := order(); !slices.Equal(got, []int{3, 1, 0, 2}) {
@@ -507,7 +511,7 @@ func TestReorderList(t *testing.T) {
 
 	// A stale client cannot drop songs it never knew about.
 	t.Run("songs left out keep their relative order at the end", func(t *testing.T) {
-		if resp := reorder(songs[2], songs[0]); resp.StatusCode != 200 {
+		if resp := reorder(songs[2], songs[0]); resp.StatusCode != http.StatusOK {
 			t.Fatalf("status = %d, want 200", resp.StatusCode)
 		}
 		if got := order(); !slices.Equal(got, []int{2, 0, 3, 1}) {
@@ -519,7 +523,7 @@ func TestReorderList(t *testing.T) {
 		before := order()
 		stranger := h.seedSong(nil, "Not In This List")
 
-		if resp := reorder(songs[0], stranger, songs[1]); resp.StatusCode != 404 {
+		if resp := reorder(songs[0], stranger, songs[1]); resp.StatusCode != http.StatusNotFound {
 			t.Errorf("status = %d, want 404", resp.StatusCode)
 		}
 		// One transaction: the valid ids must not have been written either.
@@ -545,7 +549,7 @@ func TestReorderList(t *testing.T) {
 		strangerTok := h.tokenFor("meddler@example.com", store.RoleUser)
 		resp := h.do("POST", path+"/reorder", strangerTok,
 			map[string]any{"song_ids": []string{songs[0]}})
-		if resp.StatusCode != 404 {
+		if resp.StatusCode != http.StatusNotFound {
 			t.Errorf("status = %d, want 404", resp.StatusCode)
 		}
 	})
@@ -566,14 +570,14 @@ func TestCopyPublicList(t *testing.T) {
 	first := h.seedSong(nil, "Πρώτο Τραγούδι")
 	second := h.seedSong(nil, "Δεύτερο Τραγούδι")
 	for _, songID := range []string{first, second} {
-		if resp := h.do("PUT", path+"/songs/"+songID, ownerTok, nil); resp.StatusCode != 204 {
+		if resp := h.do("PUT", path+"/songs/"+songID, ownerTok, nil); resp.StatusCode != http.StatusNoContent {
 			t.Fatalf("add song status = %d, want 204", resp.StatusCode)
 		}
 	}
 	// Reordered first, so the copy must carry positions, not insertion order.
 	if resp := h.do("POST", path+"/reorder", ownerTok, map[string]any{
 		"song_ids": []string{second, first},
-	}); resp.StatusCode != 200 {
+	}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("reorder status = %d, want 200", resp.StatusCode)
 	}
 
@@ -628,7 +632,7 @@ func TestCopyPublicList(t *testing.T) {
 	}
 
 	// Editing the copy leaves the original alone.
-	if resp := h.do("DELETE", "/api/v1/lists/"+copied.ID.String()+"/songs/"+first, strangerTok, nil); resp.StatusCode != 204 {
+	if resp := h.do("DELETE", "/api/v1/lists/"+copied.ID.String()+"/songs/"+first, strangerTok, nil); resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("remove from copy status = %d, want 204", resp.StatusCode)
 	}
 	if resp := h.do("GET", path, ownerTok, nil); decode[store.List](t, resp).ItemCount != 2 {
@@ -645,14 +649,14 @@ func TestCopyPrivateListIsNotFound(t *testing.T) {
 
 	path := "/api/v1/lists/" + h.seedList(ownerTok, map[string]any{"name": "Private Picks"}).ID.String() + "/copy"
 
-	if resp := h.do("POST", path, strangerTok, map[string]any{}); resp.StatusCode != 404 {
+	if resp := h.do("POST", path, strangerTok, map[string]any{}); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("stranger copy of private list = %d, want 404", resp.StatusCode)
 	}
-	if resp := h.do("POST", path, "", map[string]any{}); resp.StatusCode != 401 {
+	if resp := h.do("POST", path, "", map[string]any{}); resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("guest copy = %d, want 401", resp.StatusCode)
 	}
 	// The owner duplicating their own list needs a free name, but is allowed.
-	if resp := h.do("POST", path, ownerTok, map[string]any{"name": "Private Picks Copy"}); resp.StatusCode != 201 {
+	if resp := h.do("POST", path, ownerTok, map[string]any{"name": "Private Picks Copy"}); resp.StatusCode != http.StatusCreated {
 		t.Errorf("owner copy of own list = %d, want 201", resp.StatusCode)
 	}
 }
@@ -770,7 +774,7 @@ func TestSongValidation(t *testing.T) {
 			"youtube_url": "https://youtu.be/dQw4w9WgXcQ",
 		}, 400},
 		{"a song-level release year", map[string]any{"title": "T", "release_year": 1964}, 400},
-		{"unknown field", map[string]any{"title": "T", "colour": "blue"}, 400},
+		{"unknown field", map[string]any{"title": "T", "color": "blue"}, 400},
 		{"valid", map[string]any{
 			"title":    "Good Song",
 			"lyrics":   "words",
@@ -1004,10 +1008,10 @@ func TestRegistration(t *testing.T) {
 		h := newHarness(t)
 		body := map[string]any{"email": "dupe@example.com", "password": "s3cret-password"}
 
-		if resp := h.do("POST", "/api/v1/auth/register", "", body); resp.StatusCode != 201 {
+		if resp := h.do("POST", "/api/v1/auth/register", "", body); resp.StatusCode != http.StatusCreated {
 			t.Fatalf("first registration status = %d, want 201", resp.StatusCode)
 		}
-		if resp := h.do("POST", "/api/v1/auth/register", "", body); resp.StatusCode != 409 {
+		if resp := h.do("POST", "/api/v1/auth/register", "", body); resp.StatusCode != http.StatusConflict {
 			t.Errorf("second registration status = %d, want 409", resp.StatusCode)
 		}
 	})
@@ -1128,11 +1132,11 @@ func TestRegistrationRateLimited(t *testing.T) {
 
 // signUp registers an account over the API and returns it with a bearer token.
 // Pass EmailVerifyScope to simulate a completed step-up challenge.
-func (h *harness) signUp(email string, scopes ...string) (*store.User, string) {
+func (h *harness) signUp(scopes ...string) (*store.User, string) {
 	h.t.Helper()
 
 	resp := h.do("POST", "/api/v1/auth/register", "", map[string]any{
-		"email": email, "password": "s3cret-password",
+		"email": "verify.me@example.com", "password": "s3cret-password",
 	})
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
@@ -1146,16 +1150,15 @@ func (h *harness) signUp(email string, scopes ...string) (*store.User, string) {
 		h.t.Fatalf("load registered user: %v", err)
 	}
 	return user, h.issuer.Sign(h.t, testutil.TokenOptions{
-		UserID: user.PreludeUserID, Email: user.Email, Scopes: scopes})
+		UserID: user.PreludeUserID, Email: user.Email, Scopes: scopes,
+	})
 }
 
 func TestEmailVerification(t *testing.T) {
-	const email = "verify.me@example.com"
-
 	t.Run("registration leaves the account unverified", func(t *testing.T) {
 		h := newHarness(t)
 
-		user, _ := h.signUp(email)
+		user, _ := h.signUp()
 		if user.EmailVerified() {
 			t.Error("a new account must start unverified")
 		}
@@ -1164,7 +1167,7 @@ func TestEmailVerification(t *testing.T) {
 	// The signed scope is the whole proof; there is no code in the request.
 	t.Run("a granted scope confirms the address and opens the account", func(t *testing.T) {
 		h := newHarness(t)
-		_, token := h.signUp(email, api.EmailVerifyScope)
+		_, token := h.signUp(api.EmailVerifyScope)
 
 		resp := h.do("POST", "/api/v1/auth/verify-email", token, nil)
 		if resp.StatusCode != http.StatusOK {
@@ -1184,7 +1187,7 @@ func TestEmailVerification(t *testing.T) {
 	// 403, not 401: a 401 makes the client refresh a token that is fine.
 	t.Run("a token without the scope cannot verify", func(t *testing.T) {
 		h := newHarness(t)
-		_, token := h.signUp(email)
+		_, token := h.signUp()
 
 		resp := h.do("POST", "/api/v1/auth/verify-email", token, nil)
 		if resp.StatusCode != http.StatusForbidden {
@@ -1198,7 +1201,7 @@ func TestEmailVerification(t *testing.T) {
 
 	t.Run("an unrelated scope cannot verify", func(t *testing.T) {
 		h := newHarness(t)
-		_, token := h.signUp(email, "prld:pwd:write")
+		_, token := h.signUp("prld:pwd:write")
 
 		if resp := h.do("POST", "/api/v1/auth/verify-email", token, nil); resp.StatusCode != http.StatusForbidden {
 			t.Errorf("status = %d, want 403", resp.StatusCode)
@@ -1207,7 +1210,7 @@ func TestEmailVerification(t *testing.T) {
 
 	t.Run("verifying twice is idempotent", func(t *testing.T) {
 		h := newHarness(t)
-		user, token := h.signUp(email, api.EmailVerifyScope)
+		user, token := h.signUp(api.EmailVerifyScope)
 
 		first := decode[store.User](t, h.do("POST", "/api/v1/auth/verify-email", token, nil))
 		second := decode[store.User](t, h.do("POST", "/api/v1/auth/verify-email", token, nil))
@@ -1225,7 +1228,7 @@ func TestEmailVerification(t *testing.T) {
 	// The code is between the browser and Prelude, never this API.
 	t.Run("registration does not talk to prelude about codes", func(t *testing.T) {
 		h := newHarness(t)
-		h.signUp(email)
+		h.signUp()
 
 		for _, call := range h.prelude.Calls {
 			if call != "CreateUser" && call != "SetPassword" {
@@ -1270,7 +1273,8 @@ func TestUnverifiedAccountIsGated(t *testing.T) {
 	}
 
 	scoped := h.issuer.Sign(t, testutil.TokenOptions{
-		UserID: admin.PreludeUserID, Email: admin.Email, Scopes: []string{api.EmailVerifyScope}})
+		UserID: admin.PreludeUserID, Email: admin.Email, Scopes: []string{api.EmailVerifyScope},
+	})
 	if resp := h.do("POST", "/api/v1/auth/verify-email", scoped, nil); resp.StatusCode != http.StatusOK {
 		t.Errorf("POST /auth/verify-email unverified = %d, want 200", resp.StatusCode)
 	}
@@ -1320,13 +1324,13 @@ func TestPatchSemanticsPreserveOmittedFields(t *testing.T) {
 	h := newHarness(t)
 	token := h.tokenFor("patcher@example.com", store.RoleUser)
 
-	if resp := h.do("PATCH", "/api/v1/me", token, map[string]any{"display_name": "Original"}); resp.StatusCode != 200 {
+	if resp := h.do("PATCH", "/api/v1/me", token, map[string]any{"display_name": "Original"}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("set display name status = %d, want 200", resp.StatusCode)
 	}
 
 	t.Run("empty patch leaves the value alone", func(t *testing.T) {
 		resp := h.do("PATCH", "/api/v1/me", token, map[string]any{})
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("status = %d, want 200", resp.StatusCode)
 		}
 		user := decode[store.User](t, resp)
@@ -1337,7 +1341,7 @@ func TestPatchSemanticsPreserveOmittedFields(t *testing.T) {
 
 	t.Run("explicit null clears the value", func(t *testing.T) {
 		resp := h.do("PATCH", "/api/v1/me", token, map[string]any{"display_name": nil})
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("status = %d, want 200", resp.StatusCode)
 		}
 		if user := decode[store.User](t, resp); user.DisplayName != nil {
@@ -1449,7 +1453,7 @@ func TestListPatchPreservesOmittedFields(t *testing.T) {
 	path := "/api/v1/lists/" + list.ID.String()
 
 	resp := h.do("PATCH", path, token, map[string]any{"name": "Renamed"})
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("patch status = %d, want 200", resp.StatusCode)
 	}
 
@@ -1474,7 +1478,7 @@ func TestWhitespaceRenameIsRejected(t *testing.T) {
 	list := h.seedList(token, map[string]any{"name": "Keeps Its Name"})
 
 	resp := h.do("PATCH", "/api/v1/lists/"+list.ID.String(), token, map[string]any{"name": "   "})
-	if resp.StatusCode != 422 {
+	if resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("patch status = %d, want 422", resp.StatusCode)
 	}
 }

@@ -62,7 +62,7 @@ func Normalize(data []byte) ([]byte, string, error) {
 	// Decode allocates the full bitmap before any later check could refuse it.
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: %v", ErrUnsupported, err)
+		return nil, "", fmt.Errorf("%w: %w", ErrUnsupported, err)
 	}
 	if cfg.Width < 1 || cfg.Height < 1 {
 		return nil, "", fmt.Errorf("%w: %s image has no pixels", ErrUnsupported, format)
@@ -73,7 +73,7 @@ func Normalize(data []byte) ([]byte, string, error) {
 
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: %v", ErrUnsupported, err)
+		return nil, "", fmt.Errorf("%w: %w", ErrUnsupported, err)
 	}
 
 	var out bytes.Buffer

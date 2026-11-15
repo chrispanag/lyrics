@@ -98,7 +98,7 @@ func run() error {
 func load(path string) ([]*song, *warnings, error) {
 	in := io.ReadCloser(os.Stdin)
 	if path != "-" {
-		f, err := os.Open(path)
+		f, err := os.Open(path) //nolint:gosec // G304: the path is the operator's own -file argument.
 		if err != nil {
 			return nil, nil, fmt.Errorf("open input: %w", err)
 		}

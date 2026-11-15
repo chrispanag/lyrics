@@ -18,6 +18,7 @@ import (
 // on these; the human-readable message may change without notice.
 type ErrorCode string
 
+// The error codes the API answers with.
 const (
 	CodeBadRequest   ErrorCode = "bad_request"
 	CodeValidation   ErrorCode = "validation_failed"
@@ -69,38 +70,47 @@ func newErr(status int, code ErrorCode, format string, args ...any) *APIError {
 	return &APIError{Status: status, Code: code, Message: fmt.Sprintf(format, args...)}
 }
 
+// BadRequest is a 400: the request could not be understood.
 func BadRequest(format string, args ...any) *APIError {
 	return newErr(http.StatusBadRequest, CodeBadRequest, format, args...)
 }
 
+// Validation is a 422: the request was understood but its content is invalid.
 func Validation(format string, args ...any) *APIError {
 	return newErr(http.StatusUnprocessableEntity, CodeValidation, format, args...)
 }
 
+// Unauthorized is a 401: no valid credentials were presented.
 func Unauthorized(format string, args ...any) *APIError {
 	return newErr(http.StatusUnauthorized, CodeUnauthorized, format, args...)
 }
 
+// Forbidden is a 403: the caller is known but not permitted.
 func Forbidden(format string, args ...any) *APIError {
 	return newErr(http.StatusForbidden, CodeForbidden, format, args...)
 }
 
+// NotFound is a 404.
 func NotFound(format string, args ...any) *APIError {
 	return newErr(http.StatusNotFound, CodeNotFound, format, args...)
 }
 
+// Conflict is a 409: the write collides with existing state.
 func Conflict(format string, args ...any) *APIError {
 	return newErr(http.StatusConflict, CodeConflict, format, args...)
 }
 
+// RateLimited is a 429.
 func RateLimited(format string, args ...any) *APIError {
 	return newErr(http.StatusTooManyRequests, CodeRateLimited, format, args...)
 }
 
+// Upstream is a 502: a dependency such as Prelude failed.
 func Upstream(format string, args ...any) *APIError {
 	return newErr(http.StatusBadGateway, CodeUpstream, format, args...)
 }
 
+// Internal is a 500.
 func Internal(format string, args ...any) *APIError {
 	return newErr(http.StatusInternalServerError, CodeInternal, format, args...)
 }

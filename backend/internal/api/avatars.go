@@ -63,7 +63,7 @@ func (s *Server) handleDeleteAvatar(w http.ResponseWriter, r *http.Request) erro
 }
 
 func (s *Server) handleGetUserAvatar(w http.ResponseWriter, r *http.Request) error {
-	id, err := urlUUID(r, "id")
+	id, err := urlUUID(r)
 	if err != nil {
 		return err
 	}

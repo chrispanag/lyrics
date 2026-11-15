@@ -155,9 +155,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// urlUUID reads a UUID path parameter.
-func urlUUID(r *http.Request, name string) (uuid.UUID, error) {
-	raw := chi.URLParam(r, name)
+// urlUUID reads the {id} path parameter as a UUID.
+func urlUUID(r *http.Request) (uuid.UUID, error) {
+	raw := chi.URLParam(r, "id")
 	id, err := uuid.Parse(raw)
 	if err != nil {
 		return uuid.Nil, httpx.BadRequest("%q is not a valid identifier.", raw)

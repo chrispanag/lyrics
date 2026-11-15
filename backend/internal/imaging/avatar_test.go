@@ -49,7 +49,9 @@ func TestNormalizeCropsAndShrinksToACenteredSquare(t *testing.T) {
 
 	for name, fixture := range fixtures {
 		for _, size := range [][2]int{
-			{1000, 500}, {60, 240}, {33, 33},
+			{1000, 500},
+			{60, 240},
+			{33, 33},
 			// MaxDimension exactly: the shrink, not the refusal.
 			{imaging.MaxDimension, imaging.MaxDimension},
 		} {
@@ -180,15 +182,17 @@ func TestNormalizeRefusals(t *testing.T) {
 		},
 		{
 			name: "wider than the limit",
-			data: func(t testing.TB) []byte {
-				return testutil.SolidPNG(t, imaging.MaxDimension+1, 4, testutil.Opaque)
+			data: func(tb testing.TB) []byte {
+				tb.Helper()
+				return testutil.SolidPNG(tb, imaging.MaxDimension+1, 4, testutil.Opaque)
 			},
 			want: imaging.ErrTooLarge,
 		},
 		{
 			name: "taller than the limit",
-			data: func(t testing.TB) []byte {
-				return testutil.SolidPNG(t, 4, imaging.MaxDimension+1, testutil.Opaque)
+			data: func(tb testing.TB) []byte {
+				tb.Helper()
+				return testutil.SolidPNG(tb, 4, imaging.MaxDimension+1, testutil.Opaque)
 			},
 			want: imaging.ErrTooLarge,
 		},

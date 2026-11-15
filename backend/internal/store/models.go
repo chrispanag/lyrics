@@ -12,6 +12,7 @@ import (
 // role, so a forgotten assignment fails closed rather than granting access.
 type Role string
 
+// The roles, from least to most privileged.
 const (
 	RoleUser        Role = "user"
 	RoleContributor Role = "contributor"
@@ -42,6 +43,7 @@ func (r Role) Valid() bool { return r.rank() > 0 }
 // authorship only. Performers live in RecordingPerformer.
 type CreditRole string
 
+// The credit roles the schema accepts.
 const (
 	CreditComposer CreditRole = "composer"
 	CreditLyricist CreditRole = "lyricist"

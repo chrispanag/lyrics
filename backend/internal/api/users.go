@@ -70,7 +70,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) handleSetUserRole(w http.ResponseWriter, r *http.Request) error {
-	id, err := urlUUID(r, "id")
+	id, err := urlUUID(r)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func (s *Server) handleSetUserRole(w http.ResponseWriter, r *http.Request) error
 }
 
 func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) error {
-	id, err := urlUUID(r, "id")
+	id, err := urlUUID(r)
 	if err != nil {
 		return err
 	}

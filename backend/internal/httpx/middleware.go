@@ -62,29 +62,31 @@ func RequestLogger(next http.Handler) http.Handler {
 // process. The stack is logged; the client is told nothing beyond "internal error".
 func Recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			rec := recover()
-			if rec == nil {
-				return
-			}
-			// A dropped client connection surfaces as a panic with this value and
-			// is not an application fault; there is also nobody left to respond to.
-			if rec == http.ErrAbortHandler {
-				panic(rec)
-			}
-
-			slog.Error("panic recovered",
-				"panic", rec,
-				"method", r.Method,
-				"path", r.URL.Path,
-				"request_id", RequestIDFrom(r.Context()),
-				"stack", string(debug.Stack()),
-			)
-			JSON(w, http.StatusInternalServerError, errorEnvelope{
-				Error: Internal("An unexpected error occurred."),
-			})
-		}()
-
+		defer recoverPanic(w, r)
 		next.ServeHTTP(w, r)
+	})
+}
+
+// recoverPanic must be deferred directly: recover only works in the deferred call.
+func recoverPanic(w http.ResponseWriter, r *http.Request) {
+	rec := recover()
+	if rec == nil {
+		return
+	}
+	// A dropped client connection surfaces as a panic with this value and
+	// is not an application fault; there is also nobody left to respond to.
+	if rec == http.ErrAbortHandler { //nolint:errorlint // net/http panics with this exact value; rec is not an error chain.
+		panic(rec)
+	}
+
+	slog.ErrorContext(r.Context(), "panic recovered",
+		"panic", rec,
+		"method", r.Method,
+		"path", r.URL.Path,
+		"request_id", RequestIDFrom(r.Context()),
+		"stack", string(debug.Stack()),
+	)
+	JSON(w, http.StatusInternalServerError, errorEnvelope{
+		Error: Internal("An unexpected error occurred."),
 	})
 }

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"net/url"
 	"regexp"
 	"sort"
@@ -272,7 +272,7 @@ func normalizeText(s string) string {
 func (r record) clean(w *warnings) (*song, error) {
 	title := normalizeText(r.Title)
 	if title == "" {
-		return nil, fmt.Errorf("title is empty")
+		return nil, errors.New("title is empty")
 	}
 
 	s := &song{
@@ -344,13 +344,13 @@ func (r record) cleanRecordings(performers []resolvedPerformer, w *warnings) []r
 		return out
 	}
 
-	url, videoID := cleanVideo(r.YouTubeURL, w)
+	link, videoID := cleanVideo(r.YouTubeURL, w)
 	year := cleanYear(r.ReleaseYear, w)
-	if len(performers) == 0 && url == nil && year == nil {
+	if len(performers) == 0 && link == nil && year == nil {
 		return nil
 	}
 	return []resolvedRecording{{
-		youTubeURL:     url,
+		youTubeURL:     link,
 		youTubeVideoID: videoID,
 		releaseYear:    year,
 		isFirst:        true,
@@ -360,18 +360,18 @@ func (r record) cleanRecordings(performers []resolvedPerformer, w *warnings) []r
 
 // cleanVideo stores the link verbatim and sets the id only when it parses; an
 // unparsed link loses only the watch button, and the API carries it through.
-func cleanVideo(raw *string, w *warnings) (url *string, videoID *string) {
+func cleanVideo(raw *string, w *warnings) (link, videoID *string) {
 	trimmed := strings.TrimSpace(derefOr(raw))
 	if trimmed == "" {
 		return nil, nil
 	}
-	url = &trimmed
+	link = &trimmed
 	if id := youTubeVideoID(trimmed); id != "" {
 		videoID = &id
 	} else {
 		w.add("youtube_url %q yields no video id", trimmed)
 	}
-	return url, videoID
+	return link, videoID
 }
 
 // cleanYear drops a year outside the CHECK's bounds rather than failing the row.

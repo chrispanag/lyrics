@@ -12,6 +12,7 @@ import (
 // SongSort selects the ordering of a song listing.
 type SongSort string
 
+// The orderings a song listing accepts.
 const (
 	SortRelevance SongSort = "relevance"
 	SortTitle     SongSort = "title"
@@ -55,9 +56,11 @@ const songColumns = songSummaryColumns + `, s.lyrics`
 // songScanDest appends the body as the projection does. A mismatch compiles and
 // silently lands values in the wrong fields.
 func songSummaryScanDest(s *Song) []any {
-	return []any{&s.ID, &s.Title, &s.Slug, &s.AltTitle, &s.Language, &s.YouTubeURL,
+	return []any{
+		&s.ID, &s.Title, &s.Slug, &s.AltTitle, &s.Language, &s.YouTubeURL,
 		&s.YouTubeVideoID, &s.ReleaseYear, &s.Notes, &s.CreatedBy, &s.UpdatedBy,
-		&s.CreatedAt, &s.UpdatedAt}
+		&s.CreatedAt, &s.UpdatedAt,
+	}
 }
 
 func songScanDest(s *Song) []any {

@@ -67,7 +67,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) error {
 	// A Prelude user without a password can neither sign in nor re-register:
 	// remove it on failure or the address is burned.
 	if err := s.prelude.SetPassword(r.Context(), preludeUserID, req.Password); err != nil {
-		s.compensateFailedRegistration(preludeUserID, email)
+		s.compensateFailedRegistration(r.Context(), preludeUserID, email)
 
 		if errors.Is(err, prelude.ErrWeakPassword) {
 			return httpx.Validation("Your account could not be created.").
@@ -87,7 +87,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) error {
 		// provisioning would fail the same way forever, so roll back. Never
 		// re-key the row. See CLAUDE.md "Decisions worth not reversing".
 		if store.IsEmailTaken(err) {
-			s.compensateFailedRegistration(preludeUserID, email)
+			s.compensateFailedRegistration(r.Context(), preludeUserID, email)
 			slog.Error("local row holds this address under another prelude account",
 				"prelude_user_id", preludeUserID, "error", err)
 			return httpx.Conflict("An account with that email already exists.").WithCause(err)
@@ -105,18 +105,19 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) error {
 }
 
 // compensateFailedRegistration removes a half-created Prelude account. It uses
-// a fresh context so a canceled request cannot skip the cleanup.
-func (s *Server) compensateFailedRegistration(preludeUserID, email string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// a context detached from cancellation so a canceled request cannot skip the
+// cleanup.
+func (s *Server) compensateFailedRegistration(reqCtx context.Context, preludeUserID, email string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(reqCtx), 10*time.Second)
 	defer cancel()
 
 	if err := s.prelude.DeleteUser(ctx, preludeUserID); err != nil {
-		slog.Error("failed to roll back partially created prelude user; "+
+		slog.ErrorContext(ctx, "failed to roll back partially created prelude user; "+
 			"this email cannot be registered again until the account is deleted manually",
 			"prelude_user_id", preludeUserID, "email", email, "error", err)
 		return
 	}
-	slog.Info("rolled back partially created prelude user", "prelude_user_id", preludeUserID)
+	slog.InfoContext(ctx, "rolled back partially created prelude user", "prelude_user_id", preludeUserID)
 }
 
 // EmailVerifyScope is the step-up scope that proves an address. Must match the

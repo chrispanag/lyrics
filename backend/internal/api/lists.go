@@ -39,7 +39,7 @@ func (s *Server) handleListLists(w http.ResponseWriter, r *http.Request) error {
 // of their own. Anything else is 404, not 403, so private lists cannot be
 // probed. It checks the row alone, before loading the songs.
 func (s *Server) readableList(r *http.Request) (*store.List, error) {
-	id, err := urlUUID(r, "id")
+	id, err := urlUUID(r)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (s *Server) handleCopyList(w http.ResponseWriter, r *http.Request) error {
 
 // ownedList loads a list and confirms the caller owns it.
 func (s *Server) ownedList(r *http.Request) (*store.List, error) {
-	id, err := urlUUID(r, "id")
+	id, err := urlUUID(r)
 	if err != nil {
 		return nil, err
 	}
