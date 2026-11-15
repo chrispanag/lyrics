@@ -1,8 +1,12 @@
 import {
+  infiniteQueryOptions,
+  keepPreviousData,
   queryOptions,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
   type QueryClient,
   type UseQueryOptions,
 } from "@tanstack/react-query";
@@ -22,6 +26,8 @@ import type {
 /** Query key factory, so invalidations cannot drift from the keys they target. */
 export const keys = {
   songs: (filters: SongFilters) => ["songs", filters] as const,
+  // Under `songs`, so every invalidation of the catalog reaches it too.
+  songPages: (filters: SongFilters) => ["songs", "pages", filters] as const,
   song: (id: string) => ["song", id] as const,
   people: (query: string) => ["people", query] as const,
   person: (id: string) => ["person", id] as const,
@@ -46,6 +52,29 @@ export const queries = {
       queryFn: () =>
         apiFetch<ListResponse<Song>>(`/api/v1/songs${toQuery({ ...filters })}`, request),
     }),
+  /**
+   * The catalog, a page at a time from `offset` 0, for infinite scrolling.
+   * `filters` carries the page size; the offset is each page's own.
+   */
+  songPages: (filters: SongFilters, request?: RequestOptions) =>
+    infiniteQueryOptions({
+      queryKey: keys.songPages(filters),
+      queryFn: ({ pageParam }) =>
+        apiFetch<ListResponse<Song>>(
+          `/api/v1/songs${toQuery({ ...filters, offset: pageParam })}`,
+          request,
+        ),
+      initialPageParam: 0,
+      // An empty page ends the list even short of `total`, so a catalog that
+      // shrank under the reader cannot ask for the same offset forever.
+      getNextPageParam: (last) => {
+        const next = last.meta.offset + last.data.length;
+        return last.data.length > 0 && next < last.meta.total ? next : undefined;
+      },
+      // A refetch asks for every page loaded, one after another, so coming
+      // back from a song should not; an edit invalidates it instead.
+      staleTime: 5 * 60_000,
+    }),
   person: (id: string, request?: RequestOptions) =>
     queryOptions({
       queryKey: keys.person(id),
@@ -69,9 +98,48 @@ export const queries = {
 export function useSongs(filters: SongFilters, enabled = true) {
   return useQuery({
     ...queries.songs(filters),
-    // Keeps the previous page on screen while the next query loads.
-    placeholderData: (previous) => previous,
+    // Keeps the previous results on screen while the next query loads.
+    placeholderData: keepPreviousData,
     enabled,
+  });
+}
+
+/**
+ * The catalog as an infinite list (`queries.songPages`), read as the songs
+ * loaded so far and the latest page's count, which sees songs added or removed
+ * since the first.
+ */
+export function useSongPages(filters: SongFilters) {
+  return useInfiniteQuery({
+    ...queries.songPages(filters),
+    // Keeps the previous results on screen while a new filter's first page loads.
+    placeholderData: keepPreviousData,
+    select: loadedSongs,
+  });
+}
+
+/**
+ * `useSongPages`'s view of its pages. Hoisted, so `select` keeps its identity
+ * and React Query reruns it only when the pages change, not on every render.
+ */
+function loadedSongs(data: InfiniteData<ListResponse<Song>, number>) {
+  return {
+    songs: uniqueById(data.pages.flatMap((page) => page.data)),
+    total: data.pages.at(-1)?.meta.total ?? 0,
+  };
+}
+
+/**
+ * The songs in their order, each kept at its first appearance. Offsets shift
+ * when a song is added mid-scroll, which repeats one across two pages, and a
+ * key seen twice is a React error.
+ */
+function uniqueById(songs: Song[]): Song[] {
+  const seen = new Set<string>();
+  return songs.filter((song) => {
+    if (seen.has(song.id)) return false;
+    seen.add(song.id);
+    return true;
   });
 }
 
