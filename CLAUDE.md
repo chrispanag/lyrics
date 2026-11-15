@@ -734,9 +734,12 @@ no application code — but while it stands, these are the parts holding it up.
   spent is what makes both sides agree. Nothing is lost by that — the mark waits
   for an IntersectionObserver before it shows anything, and `md:hidden` still
   denies the box any geometry at a desk, so the single showing cannot be spent
-  there. All four layout effects carry a `useReactCompiler` suppression saying
-  why, and are the only storage reads that should: the shape suits a value the
-  reader also writes, or one read exactly once. (The rule reaches further than
+  there. The shape is `lib/useStoredState.ts`, so its compiler suppression and
+  its reason are written once; `AuthProvider` alone writes it out inline,
+  because the compiler lint cannot see a custom hook's setter as stable and
+  every one of the provider's callbacks calls it. These are the only storage
+  reads that should take it: the shape suits a value the reader also writes, or
+  one read exactly once. (The rule reaches further than
   this shape, so a grep also finds `BrowsePage`'s URL sync and `AuthProvider`'s
   `logout`, each with its own reason.) `storedTheme`/`storeTheme` and
   `ListsPages`'s share URL are the other two. The first needed only the wrap,
@@ -1234,9 +1237,11 @@ implement, which is why the parts below look the way they do.
   hydration — Sign in, no Lists, no Add song — which is what a reader with
   JavaScript off or slow to arrive sees, and what a crawler indexes; that is the
   right answer for both, and the cost is only that the HTML is not the page a
-  signed-in reader ends up on. The first commit is a guest too, so the `[user]`
-  write below forgets the snapshot for an instant before the next commit writes
-  it back — harmless, since the read has already happened.
+  signed-in reader ends up on. The first commit is a guest too, which is why
+  the `[user]` write below waits for `loading` to clear: until then `user` is
+  only that guest or the snapshot, and writing the guest would erase the
+  snapshot from storage for a beat — visible to another tab — before writing
+  the same value back.
   What the snapshot must not do is move anybody, which is why **`loading` keeps
   its exact meaning and every redirect reads it first**: `VerificationGate`, the
   sign-in and sign-up screens' "already signed in" redirects, and
@@ -1247,7 +1252,8 @@ implement, which is why the parts below look the way they do.
   than the page they opened; a snapshot outliving its session sends someone who
   came to sign in to the catalog and leaves them there as a guest; and a step-up
   opened on a session Prelude has not restored yet fails as "we could not send a
-  code" with nothing wrong. The write is **one effect keyed on `[user]`** rather
+  code" with nothing wrong. The write is **one effect keyed on `[user]`** (and
+  on `loading`, see above) rather
   than a line at each call site — sign-in, sign-out, a dead session, a new
   picture, a changed name all end in `setUser` already, and the call site that
   forgets is the one that leaves an account remembered on the machine it signed

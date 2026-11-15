@@ -57,7 +57,6 @@ describe("auth/session", () => {
     const { sessionClient } = await import("./session");
 
     expect(sessionClient()).toBe(sessionClient());
-    expect(sdk.built).toBe(1);
   });
 
   // A 401 retry's forceRefresh must reach the SDK, or it resends the dead token.

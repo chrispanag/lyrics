@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { QueryClient } from "@tanstack/react-query";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -12,6 +11,7 @@ import { DEFAULT_FONT_SIZE, storeFontSize, storedFontSize } from "@/lib/fontSize
 import type { ListPosition } from "@/lib/listContext";
 import { storeTheme, storedTheme } from "@/lib/theme";
 import { makeSong, makeUser } from "@/test/handlers";
+import { testQueryClient } from "@/test/providers";
 import { TestProviders } from "@/test/TestProviders";
 
 /*
@@ -102,7 +102,7 @@ describe("rendering without a browser", () => {
     { screen: "a song page", route: `/songs/${song.slug}` },
     { screen: "the profile", route: "/profile" },
   ])("renders $screen", ({ route }) => {
-    const client = new QueryClient();
+    const client = testQueryClient();
     client.setQueryData(keys.song(song.slug), song);
 
     const html = renderToString(

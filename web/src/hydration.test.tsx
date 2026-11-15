@@ -1,9 +1,9 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import { type DehydratedState, QueryClient, dehydrate, hydrate } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
 import { AuthProvider } from "@/auth/AuthProvider";
@@ -13,6 +13,7 @@ import type { User } from "@/lib/types";
 import { storeTheme } from "@/lib/theme";
 import { catalogList, catalogSongs } from "@/test/catalog";
 import { listById, makeUser } from "@/test/handlers";
+import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 import { TestProviders } from "@/test/TestProviders";
 
@@ -38,7 +39,11 @@ vi.mock("@/auth/session", () => ({
   },
 }));
 
-/** A client with the screen's data already in it, as a server page would hand over. */
+/**
+ * A client with the screen's data already in it, as a server page would hand
+ * over. Not `testQueryClient`: its zero `gcTime` can collect an entry nothing
+ * observes yet before hydration reads it.
+ */
 function clientWith(state: DehydratedState): QueryClient {
   const client = new QueryClient({
     // Fresh forever: a refetch during hydration is noise, not a mismatch.
@@ -54,18 +59,15 @@ function clientWith(state: DehydratedState): QueryClient {
  * this, exactly as `dehydratedState` reaches `AppRoot` from a server page.
  */
 async function dataFor(route: string, user: User | null): Promise<DehydratedState> {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const { unmount } = render(
-    <TestProviders queryClient={client} route={route} user={user}>
-      <App />
-    </TestProviders>,
-  );
-  await waitFor(() => expect(client.isFetching()).toBe(0));
+  const { queryClient, unmount } = renderWithProviders(<App />, { route, user });
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
   // Twice: a query enabled by another's answer starts a beat later.
   await act(async () => {});
-  await waitFor(() => expect(client.isFetching()).toBe(0));
+  await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  // Before unmounting: the test client collects unobserved entries at once.
+  const state = dehydrate(queryClient);
   unmount();
-  return dehydrate(client);
+  return state;
 }
 
 /**
@@ -74,7 +76,7 @@ async function dataFor(route: string, user: User | null): Promise<DehydratedStat
  */
 async function hydrationProblems(
   build: (client: QueryClient) => ReactElement,
-  { state, seed }: { state: DehydratedState; seed: () => void },
+  { state, seed }: { state: DehydratedState; seed?: () => void },
 ): Promise<{ problems: string[]; container: HTMLElement }> {
   // A server has no storage: every read refuses, which each wrapped read
   // answers with its default. The spy also clears whatever priming wrote.
@@ -85,7 +87,7 @@ async function hydrationProblems(
   const html = renderToString(build(clientWith(state)));
   refuse.mockRestore();
 
-  seed();
+  seed?.();
 
   const container = document.createElement("div");
   container.innerHTML = html;
@@ -103,18 +105,13 @@ async function hydrationProblems(
       onRecoverableError: (error) => problems.push(String(error)),
     }),
   );
-  cleanups.push(() => {
+  onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
   });
 
   return { problems, container };
 }
-
-const cleanups: (() => void)[] = [];
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) cleanup();
-});
 
 /** The route table under the test providers, auth stubbed as `user`. */
 function stubbed(route: string, user: User | null) {
@@ -132,10 +129,7 @@ describe("hydrating over a server render", () => {
   it("agrees about the catalog and its shell", async () => {
     const state = await dataFor("/", reader);
 
-    const { problems, container } = await hydrationProblems(stubbed("/", reader), {
-      state,
-      seed: () => {},
-    });
+    const { problems, container } = await hydrationProblems(stubbed("/", reader), { state });
 
     expect(problems).toEqual([]);
     // The premise: the catalog rendered rows, not its loading state.

@@ -63,10 +63,11 @@ function describeCompliancy(result: { criteria: string; expected: number }): str
  * lives in `./session`, outside React, so a token exists before the first effect.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Starts as the guest a server renders, then takes the last session's
-  // snapshot (./storedUser) before the first paint, so a refresh flashes no
-  // guest chrome and hydration has nothing to disagree about. `loading` still
-  // means nothing is known; every redirect reads it.
+  // A guest, as a server renders, until the last session's snapshot
+  // (./storedUser) is taken before the first paint: a refresh flashes no guest
+  // chrome. `loading` still means nothing is known; every redirect reads it.
+  // Inline rather than `useStoredState`: the compiler lint cannot see that
+  // hook's setter as stable, and every callback below calls this one.
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   useLayoutEffect(() => {
@@ -136,10 +137,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   // One effect, not a write per call site: a forgotten site would remember an
-  // account that has signed out.
+  // account that has signed out. Not while restoring: `user` is then only the
+  // snapshot or the server's guest, and the guest would erase the snapshot.
   useEffect(() => {
-    storeUser(user);
-  }, [user]);
+    if (!loading) storeUser(user);
+  }, [user, loading]);
 
   // Everything after Prelude mints a session, whichever credential opened it
   // (password reset's code included); skipping a step leaves it half signed in.

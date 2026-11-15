@@ -26,9 +26,13 @@ let client: PrldSessionClient | undefined;
 /**
  * The Prelude session client, built on first use. A singleton: a second
  * instance would disagree about the session. Lazy so this module imports on a
- * server, where the SDK refuses to run; nothing there may call this.
+ * server, where it refuses by name rather than leaving the SDK to fail at
+ * some later call.
  */
 export function sessionClient(): PrldSessionClient {
+  if (typeof window === "undefined") {
+    throw new Error("The Prelude session client is browser-only; a server render is a guest.");
+  }
   client ??= new PrldSessionClient({
     domain: SESSION_DOMAIN,
     ...(SDK_KEY ? { sdkKey: SDK_KEY } : {}),
@@ -42,8 +46,6 @@ export function sessionClient(): PrldSessionClient {
  * never copied out of the SDK.
  */
 export async function getAccessToken(forceRefresh?: boolean): Promise<string | null> {
-  // A server render is a guest by construction, and the SDK needs a browser.
-  if (typeof window === "undefined") return null;
   try {
     if (forceRefresh) {
       await sessionClient().invalidateCache();
@@ -51,7 +53,8 @@ export async function getAccessToken(forceRefresh?: boolean): Promise<string | n
     const { user: session } = await sessionClient().refresh();
     return session?.accessToken ?? null;
   } catch {
-    // No session, or the refresh token has been revoked.
+    // No session, the refresh token has been revoked, or this is a server,
+    // where `sessionClient` refuses: a server render is a guest.
     return null;
   }
 }
