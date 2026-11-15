@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { HttpResponse, delay, http } from "msw";
+import { HttpResponse, http } from "msw";
 import type { ReactElement } from "react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,7 @@ import { BrowsePage } from "@/routes/BrowsePage";
 import { catalogGenres, catalogSongs } from "@/test/catalog";
 import { API, apiError, list, makePerson, notFound } from "@/test/handlers";
 import { server } from "@/test/server";
+import { hanging, shortenReadBudget } from "@/test/readBudget";
 import { handover, structuredData } from "@/test/serverTree";
 import { TestProviders } from "@/test/TestProviders";
 
@@ -140,19 +141,11 @@ describe("the catalog's server render", () => {
   });
 
   it("gives up on an API that hangs rather than fails, within its budget", async () => {
-    // The budget's clock, shortened: the route asks for 3s, the spec waits 20ms.
-    const realTimeout = AbortSignal.timeout.bind(AbortSignal);
-    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => realTimeout(20));
-    server.use(
-      http.get(`${API}/api/v1/songs`, async () => {
-        await delay("infinite");
-        return HttpResponse.json(list([]));
-      }),
-    );
+    shortenReadBudget();
+    server.use(hanging(`${API}/api/v1/songs`));
 
     const tree = await CatalogPage(props());
 
-    expect(timeout).toHaveBeenCalledWith(3000);
     // The songs read gave up and is not handed over; the genres still are.
     expect(entries(tree).map((entry) => entry.queryKey)).toEqual([keys.genres()]);
   });

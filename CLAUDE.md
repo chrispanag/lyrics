@@ -1096,10 +1096,7 @@ scraper rather than by anyone inside the app, which is why each is written down.
   The throw is in the `catch` block, where nothing catches it again; moved into
   the `try`, it would be swallowed with the failures it sits beside. An outage
   renders the page with nothing handed over, and the browser asks again and
-  says so in its own words — and so does a read past `guestRead`'s budget, so a
-  hung API costs a song page three seconds rather than freezing the screen a
-  link was pressed on. Never a 404 for that either: a timeout says nothing
-  about the song. Any other unmatched address renders
+  says so in its own words — and so does a read past `guestRead`'s budget. Any other unmatched address renders
   `app/not-found.tsx` — server-rendered, 404, inside the group layouts it mounts
   itself, since the root's not-found sits outside the route groups.
 - **A list page's HTML carries the list only when a guest may read it, and a
