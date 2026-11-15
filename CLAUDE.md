@@ -766,22 +766,35 @@ The parts below hold that up.
   `Waiting` from `routes/guards.tsx`, so the next screen that waits finds the
   title already in the shape it copies; a bare `<Spinner/>` there is a page
   with no `<title>` in its server HTML.
-- **`/admin` redirects on the server, and on a document load the redirect is
-  still the browser's.** Its `page.tsx` calls `redirect()` to the first tab, but
-  `RequireAdmin` sits above it and withholds the page while the session
-  restores — on the server, always — so the throw never reaches the HTML render
-  and the response is a 200 whose payload carries the redirect, which the
-  router follows once the gate opens. An in-app navigation gets it straight
-  from the payload. A `next.config` redirect would be a real 307 at the cost of
-  naming the first tab in a second place; nothing is indexed under `/admin`.
+- **`/admin` is redirected by `next.config.ts`, because its own page cannot
+  do it on a document load.** The page's `redirect()` sits under `RequireAdmin`,
+  which withholds the page while the session restores — on a server, always —
+  so the throw never reached the HTML render: the response was a 200 whose
+  payload carried the redirect, followed in the browser once the gate opened.
+  A `redirects()` entry is decided before any route renders, so a document load
+  and an in-app navigation's RSC request both get a real 307. It names the first
+  tab as a literal rather than importing `ADMIN_TABS`: `next start` loads
+  `next.config.ts` at run time, and `web/Dockerfile`'s runtime stage copies that
+  one file without `src/`, so an import from there crashes the container on
+  start while the build and every spec stay green. `src/nextConfig.test.ts` is
+  what holds the literal to `ADMIN_TABS[0]`. The page stays as the backstop and
+  as what `test/app.tsx` follows, and `next start` is what showed the 307.
 - **A value only the browser has may not be read while rendering, and a
   try/catch is not the fix.** Wrapping stops the throw and leaves the worse
   half: the server renders one answer and the client's first render another,
   which React 19 answers by discarding the server's HTML and re-rendering the
   whole root. So each of these starts from the default that a server would
-  produce and takes the stored answer in a `useLayoutEffect`, before the browser
-  paints. The reader's font size (`lib/fontSize.ts`, extracted from
-  `SongDetailPage` so a spec can call it without the page's import graph),
+  produce and takes the stored answer in a `useLayoutEffect`. **"Before the
+  browser paints" means before the paint that follows hydration, not before the
+  first one**: the server's HTML is on screen well before the bundle arrives,
+  so anything this shape decides is drawn at the server's default first and
+  then changes. It suits what the reader barely sees change — a button's
+  disabled state, a switch — and is wrong for anything large; the lyrics' size
+  was that, visibly jumping on every song load for a reader with a non-default
+  size, and is now the boot script's (see the theme-script bullet below). The
+  reader's font size (`lib/fontSize.ts`, extracted from `SongDetailPage` so a
+  spec can call it without the page's import graph) still takes this shape, for
+  the size buttons' limits only,
   `useSwipeHint`'s `unspent`, the profile's theme switch and `AuthProvider`'s
   remembered user are the four, and the hint is the one that decides markup
   most abruptly: `ListSongSwipe` returns null outright while the hook answers
@@ -857,6 +870,29 @@ The parts below hold that up.
   `id`, so an override spelled like the pair is taken over as one of them — and
   React's later removal of it throws once "system" has already removed it. The
   spec hydrates the pair over the boot script's output to hold that.
+- **The lyrics' size is set by the same inline script, and the stylesheet
+  draws it — never a class React picks.** `FONT_SIZE_BOOT_SCRIPT`
+  (`lib/fontSize.ts`, rendered in one tag after the theme's) reads
+  `lyrics:font-size`, validates it exactly as `storedFontSize` does, and puts
+  the step on `<html>` as `data-lyrics-size`; `.lyrics-size` in `index.css` sizes
+  the lyrics from that attribute, with no attribute meaning the default step.
+  So the server's markup is identical for every reader — no cookie, nothing that
+  stops a song page being cached — and the first paint is already at the stored
+  size, where a class chosen from state was drawn at `text-lg` until hydration
+  and then jumped. The size buttons still hold the step in state, through
+  `useStoredState`, for their disabled limits, and a press writes the attribute
+  and storage together (`applyFontSize`, `storeFontSize`). They read the step
+  back with `drawnFontSize()` — the attribute first, storage only without one —
+  because the attribute outlives a client navigation and a storage write can
+  fail, and reading storage alone then puts the buttons on the default beside
+  lyrics drawn at another step. Three copies of one
+  rule, then, and `fontSize.test.ts` holds them: the script case by case against
+  `storedFontSize()` (junk, out of range and fractional values included, which
+  must all leave the default; a blank value is step 0 in both, `Number("")`
+  being 0), and the four `:root[data-lyrics-size]` rules
+  against `FONT_SIZES`, read out of the stylesheet since jsdom applies none.
+  Verified against `next start` by loading the server's HTML with its inline
+  scripts and none of its bundles: a stored step of 3 is already 24px there.
 - **The `/api` proxy is a `rewrites()` entry in `next.config.ts` and is
   development-only.** It replaces the Vite dev-server proxy, and `make mobile`
   is what depends on it: emptied `NEXT_PUBLIC_API_BASE_URL` sends every call
@@ -933,14 +969,32 @@ scraper rather than by anyone inside the app, which is why each is written down.
   in-app navigation the boundary only fills what the client cache lacks, so a
   song already cached is not replaced by an older server read. `page.test.tsx`
   pins the key, the stamp and the HTML (rendered to a string under Node).
-- **A step to another song waits for the server.** An in-app navigation fetches
-  the next route's payload, which reads the song first, so the list's arrows,
-  swipe and keys no longer paint the page shell instantly with the song behind
-  a skeleton: the new page arrives whole, a server round trip later. The read
-  is cached for `CACHE_SECONDS`, and the client refetches the stale entry once
-  it lands. A `loading.tsx` for the segment would bring the instant shell back,
-  at the cost of a streamed boundary — which is exactly what would turn the
-  404 and the 308 below into 200s (see "The Next.js app").
+- **A step through a list is loaded before it is taken.** An in-app navigation
+  fetches the next route's payload, which reads the song first, so a step that
+  has to ask for it waits a whole server round trip with nothing changing on
+  screen. So the list position prefetches both neighbors the moment it is known
+  — `usePrefetchedSteps` in `ListSongNav.tsx`, an effect on the two hrefs,
+  through the seam's `router.prefetch` — and on Next that is a *full* prefetch
+  (`PrefetchKind.FULL`): the neighbor's whole payload, song included, held in
+  the router's cache for five minutes (`staleTimes.static`). Next's default
+  would not do it, since on a dynamic route with no `loading.tsx` it prefetches
+  nothing worth having. All three ways to step — the arrows, the keys, the swipe
+  — navigate to those same hrefs and are answered from those entries, `?list=`
+  included, which is why the href must be the step's own and not rebuilt. **An
+  effect, not `prefetch` on the arrows' links**, which was the first version: a
+  link's prefetch waits for it to scroll into view, so the keys and the swipe
+  were fast only because the bar happened to be on screen. Measured against
+  `next start` with 400 ms added to every RSC and API request: a step took
+  415–430 ms before, every one waiting on its RSC fetch, and 9–17 ms after, for
+  arrows and keys alike, with no request for the destination at all — only the
+  prefetch of the *next* neighbor and the refetch of the song's stale cache
+  entry. **Not a `loading.tsx`**, the other way to paint at once: it streams a
+  boundary before the page decides, which turns the 404 and the 308 below into
+  200s (see "The Next.js app"). What prefetching costs is a server render per
+  neighbor per page view, mostly answered from the data cache's copy of the
+  song, which is why it is for a list's neighbors and nothing else (see "The
+  routing seam"). The history the steps keep is untouched: `prefetch` loads,
+  and `replace` still decides the entry.
 - **A song the API says does not exist is a real 404**, thrown by `loadSong`
   itself, so `generateMetadata` and the page share it through `cache`, and
   rendered by `songs/[id]/not-found.tsx` — the page's own "not available" under
@@ -1139,6 +1193,23 @@ scraper rather than by anyone inside the app, which is why each is written down.
   `app/robots.ts` claim the same path, and there is nothing in it worth
   generating. Its `Sitemap:` line therefore names a path with no file behind it,
   which is fine and is worth knowing before someone goes looking for one.
+- **`public/llms.txt` is the site described for agents, and it describes only
+  what a guest can read.** The addresses (`/songs/<slug>`, `/?q=`, `/?person=`,
+  `/lists/<uuid>`) and the read API under `/api/v1` — the routes in the Go
+  router's optional-auth group, never one behind a session, since an agent
+  following it has none and a documented route answering 401 is a dead end. It
+  is hand-written prose, so nothing checks it against `server.go` or against
+  `BrowsePage`'s parameters: **a renamed query parameter or a moved route has to
+  be changed there too.** It gets the day-long `Cache-Control` of the other
+  `public/` files, which `src/nextConfig.test.ts` pins; robots.txt points at it
+  in a comment, there being no directive for it.
+- **A song page names its JSON with `<link rel="alternate"
+  type="application/json">`**, through `generateMetadata`'s `alternates.types`
+  — the slug's `/api/v1/songs/<slug>`, whichever address was asked, like the
+  canonical. Written as a path; `metadataBase` makes it absolute on
+  `SITE_ORIGIN`, which is right because the ingress serves `/api` from the Go
+  service on that same origin. A local build therefore names production, as the
+  canonical already does.
 
 ### The routing seam
 
@@ -1179,8 +1250,15 @@ screen changed for it.
   and a filter written into the catalog's query string, which `writeSearch`
   hands to the History API rather than the router, does not scroll at all. The backend's `push`/`replace`/`back` are built
   once from Next's stable router object, so `useRouter()` is stable for good.
-- **The vocabulary is Next's.** `useRouter()` returns `push`, `replace`, `back`
-  and `canGoBack`; `Link` and `NavLink` take an `href` string and `replace`;
+- **The vocabulary is Next's.** `useRouter()` returns `push`, `replace`, `back`,
+  `canGoBack` and `prefetch` — the last a hint a backend may ignore, which on
+  Next is a *full* prefetch (`PrefetchKind.FULL`, which no public entry point
+  exports, so `nextNavigation.tsx` names the string through the type of the
+  public router's `prefetch` options rather than a `next/dist` import) and in
+  `TestRouter` nothing. Each call is a server
+  render of a page nobody may open, so it is for the few places a reader is
+  about to go: today a list's neighbors. `Link` and `NavLink` take an `href`
+  string and `replace`;
   `usePathname`, `useSearchParams` (read-only) and `useParams` read the address;
   `useSetSearchParams` writes the search string from what it holds now, and is
   not counted as a navigation — through the backend's `writeSearch`, which on

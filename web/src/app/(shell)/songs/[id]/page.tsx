@@ -30,6 +30,11 @@ import { SongDetailPage } from "@/routes/SongDetailPage";
  */
 const CACHE_SECONDS = 300;
 
+/** The API's address for a song, by either of its addresses. */
+function songApiPath(ref: string): string {
+  return `/api/v1/songs/${encodeURIComponent(ref)}`;
+}
+
 /**
  * The song at an address, or null if it could not be read. Throws `notFound()`
  * when the API says no song has the address.
@@ -47,7 +52,7 @@ const CACHE_SECONDS = 300;
  */
 const loadSong = cache(async (ref: string): Promise<Song | null> => {
   try {
-    const song = await apiFetch<Song>(`/api/v1/songs/${encodeURIComponent(ref)}`, {
+    const song = await apiFetch<Song>(songApiPath(ref), {
       anonymous: true,
       revalidate: CACHE_SECONDS,
     });
@@ -100,7 +105,11 @@ export async function generateMetadata({
 
   return {
     description,
-    alternates: { canonical: path },
+    alternates: {
+      canonical: path,
+      // The same song as JSON, for agents; /api is same-origin in production.
+      types: { "application/json": songApiPath(song.slug) },
+    },
     openGraph: {
       ...OG_BASE,
       type: "music.song",

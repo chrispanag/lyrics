@@ -51,6 +51,11 @@ export interface NavigationBackend {
    * route on the server for a push, which the screen's own state never needs.
    */
   writeSearch(href: string, options: { replace: boolean }): void;
+  /**
+   * Loads a destination whole before anything navigates to it, so the step
+   * paints at once. A hint: a router with nothing to load ignores it.
+   */
+  prefetch(href: string): void;
   Link: ComponentType<BackendLinkProps>;
 }
 
@@ -114,11 +119,17 @@ export interface Router {
    * tab, where there is nothing behind it and Back would leave the site.
    */
   canGoBack(): boolean;
+  /**
+   * Loads `href` ahead of a navigation to it. On Next that is a server render
+   * of a page nobody may open, so it is for the few places a reader is about
+   * to go: today a list's neighbors. See "The routing seam" in CLAUDE.md.
+   */
+  prefetch(href: string): void;
 }
 
 /** Stable for as long as the backend's functions are, which is for good. */
 export function useRouter(): Router {
-  const { push, replace, back } = useBackend();
+  const { push, replace, back, prefetch } = useBackend();
   const { noteNavigation, canGoBack } = useContext(HistoryContext);
 
   return useMemo(
@@ -135,8 +146,9 @@ export function useRouter(): Router {
       },
       back,
       canGoBack,
+      prefetch,
     }),
-    [push, replace, back, noteNavigation, canGoBack],
+    [push, replace, back, prefetch, noteNavigation, canGoBack],
   );
 }
 
@@ -384,6 +396,8 @@ export function TestRouter({ entries, children }: { entries: string[]; children:
       replace,
       back,
       writeSearch: (href, options) => (options.replace ? replace(href) : push(href)),
+      // Nothing to load: every screen is already in memory.
+      prefetch: () => {},
       Link: MemoryLink,
     }),
     [pathname, search, push, replace, back],

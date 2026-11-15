@@ -14,6 +14,13 @@ import { type BackendLinkProps, type NavigationBackend, NavigationProvider } fro
  */
 
 /**
+ * Next's `PrefetchKind.FULL`: an enum no public entry point exports, so its type
+ * is read off the public router's `prefetch` rather than imported from `next/dist`.
+ */
+type PrefetchKind = NonNullable<Parameters<ReturnType<typeof useRouter>["prefetch"]>[1]>["kind"];
+const FULL_PREFETCH = "full" as PrefetchKind;
+
+/**
  * `scroll={false}`: Next scrolls a new page into view on its own, by a rule of
  * its own, and `Layout`'s pathname-keyed scroll to the top is the app's. Two
  * rules would disagree about a filter written into the catalog's query string,
@@ -47,6 +54,11 @@ export function NextNavigation({ children }: { children: ReactNode }) {
         if (replace) window.history.replaceState(null, "", href);
         else window.history.pushState(null, "", href);
       },
+      // The full kind: the default stops at the nearest `loading.tsx`, and
+      // these routes have none, so it would load nothing worth having. The
+      // payload is held for `staleTimes.static` (five minutes), and a
+      // navigation to the same href, by link or by `replace`, is answered from it.
+      prefetch: (href: string) => router.prefetch(href, { kind: FULL_PREFETCH }),
     }),
     [router],
   );

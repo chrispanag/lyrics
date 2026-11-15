@@ -481,3 +481,27 @@
     --drawer-backdrop: 0;
   }
 }
+
+/* The reader's lyrics size, from the attribute `FONT_SIZE_BOOT_SCRIPT` puts on
+   <html> before first paint (lib/fontSize.ts). Keyed on the attribute rather
+   than on a class React picks, so the server's markup is the same for everyone
+   and the first paint is already at the stored size. No attribute is the
+   default step. The four steps are `FONT_SIZES`, in order; change both. Size
+   only: the line height is the `leading-loose` beside it. */
+@layer components {
+  .lyrics-size {
+    font-size: --theme(--text-lg inline);
+  }
+  :root[data-lyrics-size="0"] .lyrics-size {
+    font-size: --theme(--text-base inline);
+  }
+  :root[data-lyrics-size="1"] .lyrics-size {
+    font-size: --theme(--text-lg inline);
+  }
+  :root[data-lyrics-size="2"] .lyrics-size {
+    font-size: --theme(--text-xl inline);
+  }
+  :root[data-lyrics-size="3"] .lyrics-size {
+    font-size: --theme(--text-2xl inline);
+  }
+}

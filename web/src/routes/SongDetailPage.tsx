@@ -25,7 +25,13 @@ import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
 import { cn } from "@/lib/cn";
 import { panelChrome } from "@/components/cardStyles";
-import { DEFAULT_FONT_SIZE, FONT_SIZES, storeFontSize, storedFontSize } from "@/lib/fontSize";
+import {
+  DEFAULT_FONT_SIZE,
+  FONT_SIZES,
+  applyFontSize,
+  drawnFontSize,
+  storeFontSize,
+} from "@/lib/fontSize";
 import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
@@ -100,13 +106,14 @@ function SongArticle() {
   const [listSheetOpen, setListSheetOpen] = useState(false);
   const [recordingsOpen, setRecordingsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // State rather than a store, since the size is also the reader's own state
-  // and a store would need a writer of its own.
-  const [fontSizeIndex, setFontSizeIndex] = useStoredState(DEFAULT_FONT_SIZE, storedFontSize);
+  // Only the buttons' limits read this: the lyrics are sized by CSS from the
+  // attribute the boot script set before first paint (lib/fontSize).
+  const [fontSizeIndex, setFontSizeIndex] = useStoredState(DEFAULT_FONT_SIZE, drawnFontSize);
 
   const setFontSize = (index: number) => {
     const clamped = Math.max(0, Math.min(FONT_SIZES.length - 1, index));
     setFontSizeIndex(clamped);
+    applyFontSize(clamped);
     storeFontSize(clamped);
   };
 
@@ -232,7 +239,7 @@ function SongArticle() {
           // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
           <p
             lang={song.language}
-            className={cn("whitespace-pre-line leading-loose text-fg", FONT_SIZES[fontSizeIndex])}
+            className="lyrics-size whitespace-pre-line leading-loose text-fg"
             style={{ fontFamily: "var(--font-lyrics)" }}
           >
             {song.lyrics}
