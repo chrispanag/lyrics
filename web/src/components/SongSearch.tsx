@@ -87,6 +87,8 @@ export function SongSearch() {
   // Waits for the debounce as well as the request, or every first keystroke
   // would flash "nothing matched".
   const searching = query !== typed || isLoading;
+  // Whether `panelBody` renders the listbox rather than a note.
+  const listShown = open && !isError && results.length > 0;
 
   /** Closes the panel, leaving the text. The one path for every way of closing. */
   const dismiss = useCallback(() => {
@@ -255,9 +257,12 @@ export function SongSearch() {
           // Unguarded: losing the caret to nowhere still counts.
           onBlur={() => setFocused(false)}
           role="combobox"
-          aria-expanded={open}
-          // Only while the listbox is actually rendered.
-          aria-controls={results.length > 0 ? listboxId : undefined}
+          // Both only while the listbox is rendered: the "nothing matched" and
+          // "unavailable" notes are status messages, not the combobox's popup,
+          // and expanded with nothing to control is announced as a popup that
+          // is not there.
+          aria-expanded={listShown}
+          aria-controls={listShown ? listboxId : undefined}
           aria-autocomplete="list"
           aria-activedescendant={activeSong ? optionId(listboxId, active) : undefined}
         />
@@ -314,14 +319,16 @@ const SongOption = memo(function SongOption({
       )}
     >
       <span className="block truncate font-medium">{song.title}</span>
+      {/* stone-600 rather than 500 for the secondary lines: on the highlighted
+          row's stone-100, 500 is under 4.5:1. */}
       {credits && (
-        <span className="block truncate text-xs text-stone-500 dark:text-stone-400">{credits}</span>
+        <span className="block truncate text-xs text-stone-600 dark:text-stone-400">{credits}</span>
       )}
       {/* One line, without `whitespace-pre-line`, so a verse break stays a row. */}
       {song.snippet && (
         <Snippet
           text={song.snippet}
-          className="mt-0.5 line-clamp-1 text-xs text-stone-500 dark:text-stone-400"
+          className="mt-0.5 line-clamp-1 text-xs text-stone-600 dark:text-stone-400"
         />
       )}
     </Link>

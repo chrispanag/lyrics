@@ -1,8 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { ReactElement, ReactNode } from "react";
 
+import { stubAuth, testQueryClient } from "./providers";
 import { AuthContext, type AuthContextValue } from "@/auth/context";
 import type { User } from "@/lib/types";
 
@@ -24,36 +25,8 @@ export function renderWithProviders(
 ) {
   const { user = null, route = "/", auth, ...rest } = options;
   const entries = Array.isArray(route) ? route : [route];
-
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      // Retries turn an intentional error-case test into a multi-second wait.
-      queries: { retry: false, gcTime: 0 },
-      mutations: { retry: false },
-    },
-  });
-
-  const authValue: AuthContextValue = {
-    user,
-    loading: false,
-    register: async () => {},
-    login: async () => {},
-    logout: async () => {},
-    reload: async () => {},
-    startEmailVerification: async () => {},
-    verifyEmail: async () => {},
-    resendVerificationCode: async () => {},
-    startPasswordReset: async () => {},
-    resendPasswordResetCode: async () => {},
-    confirmPasswordResetCode: async () => ({ secondCodeSent: false }),
-    startPasswordChange: async () => {},
-    confirmPasswordWriteCode: async () => {},
-    resendPasswordWriteCode: async () => {},
-    changePassword: async () => {},
-    signOutOtherDevices: async () => {},
-    validatePassword: async () => ({ valid: true, messages: [] }),
-    ...auth,
-  };
+  const queryClient = testQueryClient();
+  const authValue = stubAuth(user, auth);
 
   function Wrapper({ children }: { children: ReactNode }) {
     return (

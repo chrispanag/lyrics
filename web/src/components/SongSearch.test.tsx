@@ -247,7 +247,7 @@ describe("SongSearch", () => {
     expect(screen.getByRole("listbox")).toBeInTheDocument();
   });
 
-  it("names the listbox only when there are rows in it", async () => {
+  it("is expanded and names the listbox only when there are rows in it", async () => {
     const user = userEvent.setup();
     searchAnswers([]);
 
@@ -255,7 +255,8 @@ describe("SongSearch", () => {
     await user.type(box(), "zzz");
     await screen.findByText(/No songs matched/);
 
-    expect(box()).toHaveAttribute("aria-expanded", "true");
+    // The note is a status message, not the combobox's popup.
+    expect(box()).toHaveAttribute("aria-expanded", "false");
     expect(box()).not.toHaveAttribute("aria-controls");
   });
 

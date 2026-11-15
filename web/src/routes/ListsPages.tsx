@@ -344,6 +344,11 @@ export function ListDetailPage() {
         )}
       </header>
 
+      {/* Each row's title is an h3 (`SongCard`), so without this the outline
+          jumps from the list's h1 straight to h3. Visually the header already
+          says what follows. */}
+      {songs.length > 0 && <h2 className="sr-only">Songs</h2>}
+
       {/* `songs` is `omitempty` in Go, hence the `?? []` above. */}
       {songs.length === 0 ? (
         <EmptyState

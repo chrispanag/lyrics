@@ -151,7 +151,9 @@ export function BrowsePage() {
             variant={hasFilters ? "primary" : "secondary"}
             onClick={() => setFiltersOpen(true)}
             // The count is in the label: `aria-label` hides the badge from AT.
-            aria-label={hasFilters ? `Filters (${filterCount} active)` : "Filters"}
+            // A bare number, not "(1", so the label holds the badge's visible
+            // text as a word, which voice control matches on.
+            aria-label={hasFilters ? `Filters, ${filterCount} active` : "Filters"}
             className="relative"
           >
             <SlidersHorizontal aria-hidden className="size-5" />

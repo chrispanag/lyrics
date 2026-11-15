@@ -4,7 +4,7 @@
   // The .gitignore that matters is the repository's, one level up.
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true, "root": ".." },
   "files": {
-    "includes": ["**", "!pnpm-lock.yaml", "!next-env.d.ts", "!**/*.md"]
+    "includes": ["**", "!pnpm-lock.yaml", "!next-env.d.ts", "!**/*.md", "!.storybook/public"]
   },
   "formatter": {
     "indentStyle": "space",

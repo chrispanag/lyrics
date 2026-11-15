@@ -9,6 +9,9 @@ const config: StorybookConfig = {
   stories: ["../src/**/*.stories.@(ts|tsx)"],
   addons: ["@storybook/addon-docs", "@storybook/addon-a11y", "@storybook/addon-vitest"],
   framework: "@storybook/react-vite",
+  // Holds only MSW's worker script, kept out of the app's public/ so
+  // production never serves it.
+  staticDirs: ["./public"],
   // TypeScript 7 has no compiler API, so react-docgen-typescript cannot run;
   // react-docgen parses the source itself.
   typescript: { reactDocgen: "react-docgen" },
@@ -20,6 +23,16 @@ const config: StorybookConfig = {
       ...config.resolve.alias,
       "@": path.resolve(import.meta.dirname, "../src"),
     };
+    // Imported only by lazy chunks (`SortableSongList`), so Vite would find them
+    // mid-run, re-optimize and reload — which on a cold cache, as in CI, loads
+    // a second React and every hook throws. Named here, they are bundled up front.
+    config.optimizeDeps ??= {};
+    config.optimizeDeps.include = [
+      ...(config.optimizeDeps.include ?? []),
+      "@dnd-kit/core",
+      "@dnd-kit/sortable",
+      "@dnd-kit/utilities",
+    ];
     // Next inlines `process.env.NEXT_PUBLIC_*` at build time and Vite does not,
     // so `api/client.ts` would throw on `process` in the browser. Mirror Next:
     // what is set in the shell is inlined (unlike Next, `.env*` files are not
