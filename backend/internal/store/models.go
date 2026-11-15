@@ -193,3 +193,11 @@ type PublicList struct {
 	ID        uuid.UUID `json:"id"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+// CreditedPerson is what anyone may enumerate about a person on at least one
+// song: the id their catalog page is addressed by, and nothing else. No date,
+// because none is honest: a song deleted, or a credit removed, changes the
+// page and leaves no timestamp behind.
+type CreditedPerson struct {
+	ID uuid.UUID `json:"id"`
+}

@@ -87,6 +87,35 @@ func (s *Store) ListPeople(ctx context.Context, f PersonFilter) ([]Person, int, 
 	return people, total, err
 }
 
+// personOnASong holds for a person on at least one song, as a writer or a
+// performer: the same two tables personColumns counts.
+const personOnASong = `(EXISTS (SELECT 1 FROM song_credits sc WHERE sc.person_id = p.id)
+	OR EXISTS (SELECT 1 FROM recording_credits rc WHERE rc.person_id = p.id))`
+
+// CreditedPeople returns a page of the ids of people on at least one song, for
+// the sitemap, plus how many there are. Oldest first with the id as tiebreak:
+// a total order in which a person created mid-walk appends rather than
+// shifting a row across a page boundary. Not one in which a person *credited*
+// mid-walk does: they slot in at their creation date, as one losing their last
+// song leaves a gap, which costs one sitemap a duplicate and an omission until
+// the next crawl. Someone on no song is left out because their page is an
+// empty catalog.
+func (s *Store) CreditedPeople(ctx context.Context, limit, offset int) ([]CreditedPerson, int, error) {
+	total, err := s.count(ctx, "count credited people", `SELECT count(*) FROM people p WHERE `+personOnASong)
+	if err != nil || total == 0 {
+		return nil, total, err
+	}
+	people, err := queryAll(ctx, s, "credited people", `
+		SELECT p.id
+		FROM people p
+		WHERE `+personOnASong+`
+		ORDER BY p.created_at ASC, p.id ASC
+		LIMIT $1 OFFSET $2`, func(row pgx.Row, p *CreditedPerson) error {
+		return row.Scan(&p.ID)
+	}, limit, offset)
+	return people, total, err
+}
+
 // GetPerson loads one person.
 func (s *Store) GetPerson(ctx context.Context, id uuid.UUID) (*Person, error) {
 	var p Person

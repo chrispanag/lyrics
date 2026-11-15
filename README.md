@@ -499,6 +499,8 @@ GET    /songs            ?q=&person=&performer=&composer=&lyricist=&genre_slug=
                            at once is a 400)
 GET    /songs/{id}                       by slug or by uuid
 GET    /people           ?q=&role=
+GET    /credited-people  ?limit=&offset= the id of every person on at least one
+                                         song, oldest first (the sitemap's walk)
 GET    /genres
 GET    /lists/{id}                       public lists, or your own
 GET    /public-lists     ?limit=&offset= every public list's id and updated_at,

@@ -180,6 +180,11 @@ export interface PublicList {
   updated_at: string;
 }
 
+/** A row of `GET /credited-people`: a person on at least one song, for the sitemap. */
+export interface CreditedPerson {
+  id: string;
+}
+
 export interface ListResponse<T> {
   data: T[];
   meta: { total: number; limit: number; offset: number };
