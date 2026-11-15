@@ -151,7 +151,10 @@ export function Link({ href, replace, onClick, ...rest }: LinkProps) {
   return (
     <RouterLink
       to={href}
-      {...(replace === undefined ? {} : { replace })}
+      // Only ever `true`: an explicit `false` would override react-router's own
+      // replace for a link to the address showing, which `noteNavigation` has
+      // just counted as one.
+      {...(replace ? { replace: true } : {})}
       onClick={onPress}
       {...rest}
     />
@@ -224,23 +227,18 @@ const HistoryContext = createContext<HistoryState>({
   revisits: 0,
 });
 
-/** The Navigation API, where the browser has one. Not in the DOM typings yet. */
-interface NavigationApi {
-  canGoBack: boolean;
-}
-
 /**
  * What this module knows about history that the router does not say: whether
  * anything in the app is behind the current entry, and how many navigations
  * have gone nowhere new. Mounted once, just inside the router.
  *
- * `canGoBack` asks the browser's Navigation API where there is one: it lists
- * this origin's entries in the tab, so it is right after a reload too, which
- * nothing kept in memory can be. Elsewhere — and in jsdom — it falls back to
- * whether this page has pushed an entry or been moved through history since it
- * loaded, which reads a reloaded editor as a fresh tab. That is the safe way to
- * be wrong: the editor then replaces itself with the song rather than popping
- * an entry that might be another site.
+ * `canGoBack` is whether this document has pushed an entry or been moved
+ * through history since it loaded — the in-app trail, and nothing else. Not
+ * the Navigation API's `canGoBack`, which is also true over an earlier page
+ * load of this site: an editor address pasted into a tab already on a song
+ * would then pop to that other song after saving. Kept in memory, it reads a
+ * reloaded editor as a fresh tab, which is the safe way to be wrong: the editor
+ * replaces itself with its own song rather than popping somewhere unrelated.
  *
  * Mounted by `AppRouter` and `TestRouter`, never on its own, so no tree can have
  * the router without it and quietly answer from the context's defaults.
@@ -279,10 +277,7 @@ function HistoryProvider({
     return same;
   }, []);
 
-  const canGoBack = useCallback(() => {
-    const navigation = (window as { navigation?: NavigationApi }).navigation;
-    return navigation ? navigation.canGoBack : movedRef.current;
-  }, []);
+  const canGoBack = useCallback(() => movedRef.current, []);
 
   const value = useMemo(
     () => ({ noteNavigation, canGoBack, revisits }),

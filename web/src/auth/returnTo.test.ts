@@ -25,6 +25,10 @@ describe("returnTo", () => {
     "//evil.example/",
     "/\\evil.example/",
     "/\t/evil.example/",
+    // Unparseable as a host, so `new URL` throws rather than resolving.
+    "//",
+    "/\\",
+    "//[",
     "javascript:alert(1)",
     "evil.example",
     "",

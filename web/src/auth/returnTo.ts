@@ -41,8 +41,15 @@ export function returnDestination(params: Pick<URLSearchParams, "get">): string 
   // Resolved against a stand-in origin, which a same-site path cannot leave.
   // The parser also does what a browser would to `/\host` and to tabs or
   // newlines inside `//host`, so those cannot slip past a prefix check.
+  // A host the parser cannot accept (`//`, `/\`, `//[`) throws rather than
+  // resolving, and is refused the same way.
   const origin = "https://app.invalid";
-  const url = new URL(raw, origin);
+  let url: URL;
+  try {
+    url = new URL(raw, origin);
+  } catch {
+    return "/";
+  }
   if (url.origin !== origin) return "/";
   return url.pathname + url.search + url.hash;
 }

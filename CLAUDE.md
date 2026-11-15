@@ -1082,21 +1082,24 @@ implement, which is why the parts below look the way they do.
   `returnTo.test.ts` walks those spellings.
 - **"Is anything of ours behind this entry" is `router.canGoBack()`, and it
   replaced `location.key === "default"`**, which Next has no equivalent of. It
-  asks the browser's Navigation API where there is one — `navigation.canGoBack`
-  lists this origin's entries in the tab, so it is right after a reload too —
-  and falls back to whether the page has pushed an entry or moved through
-  history since it loaded. That fallback is what jsdom and older browsers get,
-  and it reads a *reloaded* editor as a fresh tab, so the editor replaces itself
-  with the song instead of popping. That is the safe way to be wrong: the other
-  way pops an entry that may be another site. `window.history.length` was the
-  option rejected: it counts entries from other sites, so a link opened from
-  search results reads as having something behind it. Persisting the fallback
-  (an index in `sessionStorage` or `history.state`) would fix the reload as
-  well, and was left until the browsers lacking the API justify it. The
-  fallback lives in a provider that `AppRouter` and `TestRouter` mount and
-  nothing else can, so no tree has a router without it; `TestRouter` reads the
-  history behind the first screen (`route: [...]`) off its entries, which is
-  how the editor's specs keep both sides pinned.
+  is whether this document has pushed an entry or moved through history since
+  it loaded: the in-app trail and nothing else, kept in memory. Two browser
+  answers were rejected for counting more than that trail.
+  `window.history.length` counts other sites' entries, so a link opened from
+  search results reads as having something behind it. The Navigation API's
+  `navigation.canGoBack` counts earlier *page loads* of this site, so an editor
+  address pasted into a tab already on a song pops to that other song after
+  saving — it was the first version here, and review caught it. What memory
+  costs is the reload: a reloaded editor reads as a fresh tab and replaces
+  itself with its own song instead of popping, which leaves one duplicate
+  entry behind. That is the safe way to be wrong, since the other way lands
+  somewhere unrelated; it is also the one case `location.key` got right, because
+  react-router keeps the key in `history.state`. Persisting a mark of our own
+  there would recover it, at the price of depending on what each router does to
+  `history.state`. The flag lives in a provider that `AppRouter` and
+  `TestRouter` mount and nothing else can, so no tree has a router without it;
+  `TestRouter` reads the history behind the first screen (`route: [...]`) off
+  its entries, which is how the editor's specs keep both sides pinned.
 - **`useNavigationKey` replaced `location.key` as "a navigation happened".** The
   drawer closes on it and the song page's search box empties on it, and both
   need a link to the address already showing to count — which changes neither

@@ -125,11 +125,12 @@ describe("canGoBack", () => {
     expect(canGoBack()).toBe("true");
   });
 
-  // Right after a reload too, which nothing kept in memory can be.
-  it("asks the Navigation API where the browser has one", () => {
+  // An earlier page load of this site is not the app's trail: the editor would
+  // pop to an unrelated song. The Navigation API would say true here.
+  it("ignores the browser's own history from before the page loaded", () => {
     vi.stubGlobal("navigation", { canGoBack: true });
     renderWithProviders(<Probe />, { route: "/songs/a" });
 
-    expect(canGoBack()).toBe("true");
+    expect(canGoBack()).toBe("false");
   });
 });
