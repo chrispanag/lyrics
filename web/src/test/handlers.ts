@@ -22,9 +22,7 @@ export function makeSong(overrides: Partial<Song> = {}): Song {
     youtube_video_id: null,
     release_year: 1964,
     notes: null,
-    credits: [
-      { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
-    ],
+    credits: [{ person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 }],
     genres: [],
     recordings: [],
     created_by: null,
@@ -108,10 +106,7 @@ export function makeList(overrides: Partial<SongList> = {}): SongList {
  * Wraps rows in the API's list envelope, `total` defaulting to the row count.
  * Override `meta` for a paginated page.
  */
-export function list<T>(
-  data: T[],
-  meta: Partial<ListResponse<T>["meta"]> = {},
-): ListResponse<T> {
+export function list<T>(data: T[], meta: Partial<ListResponse<T>["meta"]> = {}): ListResponse<T> {
   return { data, meta: { total: data.length, limit: 20, offset: 0, ...meta } };
 }
 

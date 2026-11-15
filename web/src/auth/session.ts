@@ -10,8 +10,7 @@ const SDK_KEY = process.env.NEXT_PUBLIC_PRELUDE_SDK_KEY ?? "";
 // per-host, so two different hosts reject every token. The custom domain keeps
 // session cookies first-party.
 const SESSION_DOMAIN =
-  (process.env.NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN ?? "").trim() ||
-  `${APP_ID}.session.prelude.dev`;
+  (process.env.NEXT_PUBLIC_PRELUDE_SESSION_DOMAIN ?? "").trim() || `${APP_ID}.session.prelude.dev`;
 
 /**
  * The email OTP login configuration password reset sends its code through. Not

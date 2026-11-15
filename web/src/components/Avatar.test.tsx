@@ -55,7 +55,11 @@ describe("Avatar", () => {
 
   // A picture that fails to load is still a picture; no initials underneath.
   it("decides from the record, not from the response", () => {
-    render(<Avatar user={makeUser({ display_name: "Never Shown", avatar_updated_at: "2026-01-01T00:00:00Z" })} />);
+    render(
+      <Avatar
+        user={makeUser({ display_name: "Never Shown", avatar_updated_at: "2026-01-01T00:00:00Z" })}
+      />,
+    );
 
     expect(screen.queryByText("NS")).not.toBeInTheDocument();
   });

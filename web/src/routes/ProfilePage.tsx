@@ -75,16 +75,10 @@ export function ProfilePage() {
           Sign in to build lists of songs.
         </p>
         <div className="mt-6 flex flex-col gap-2">
-          <Link
-            to="/login"
-            className={buttonClasses("primary", "lg")}
-          >
+          <Link to="/login" className={buttonClasses("primary", "lg")}>
             Sign in
           </Link>
-          <Link
-            to="/register"
-            className={buttonClasses("secondary", "lg")}
-          >
+          <Link to="/register" className={buttonClasses("secondary", "lg")}>
             Create an account
           </Link>
         </div>
@@ -369,6 +363,7 @@ function ThemeToggle({
         className="flex gap-1 rounded-xl bg-stone-200 p-1 dark:bg-stone-800"
       >
         {THEME_OPTIONS.map((option) => (
+          // biome-ignore lint/a11y/useSemanticElements: a segmented control, styled as one row of buttons.
           <button
             key={option.value}
             type="button"
@@ -390,4 +385,3 @@ function ThemeToggle({
     </div>
   );
 }
-

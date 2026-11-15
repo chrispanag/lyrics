@@ -1,14 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import {
-  Check,
-  ListPlus,
-  Minus,
-  Pencil,
-  Plus,
-  Trash,
-  Type,
-} from "lucide-react";
+import { Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
 import {
@@ -80,10 +72,10 @@ function SongArticle() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Starts at the default and reads storage in a layout effect, before paint:
   // reading it while rendering would mismatch a server render. See CLAUDE.md,
-  // "The Next.js shell".
+  // "The Next.js shell". State rather than a store, since the size is also the
+  // reader's own state and a store would need a writer of its own.
   const [fontSizeIndex, setFontSizeIndex] = useState(DEFAULT_FONT_SIZE);
   useLayoutEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- the deliberate second pass above; the size is also the reader's own state, so a store would need a writer of its own
     setFontSizeIndex(storedFontSize());
   }, []);
 
@@ -140,10 +132,7 @@ function SongArticle() {
             <span className="hidden sm:inline">Save</span>
           </Button>
           {canEdit && (
-            <Link
-              to={`${songRefHref(id ?? "")}/edit`}
-              className={buttonClasses("ghost", "sm")}
-            >
+            <Link to={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
               <Pencil aria-hidden className="size-4" />
               <span className="hidden sm:inline">Edit</span>
             </Link>
@@ -197,6 +186,7 @@ function SongArticle() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Lyrics
           </h2>
+          {/* biome-ignore lint/a11y/useSemanticElements: a toolbar, not a form; a fieldset brings form styling. */}
           <div className="flex items-center gap-1" role="group" aria-label="Text size">
             <Type aria-hidden className="mr-1 size-4 text-stone-400" />
             <button
@@ -256,11 +246,7 @@ function SongArticle() {
 
       {/* Needs only the id, so Save works while the song is loading. */}
       {user && id && (
-        <AddToListSheet
-          songId={id}
-          open={listSheetOpen}
-          onClose={() => setListSheetOpen(false)}
-        />
+        <AddToListSheet songId={id} open={listSheetOpen} onClose={() => setListSheetOpen(false)} />
       )}
 
       {song && (
@@ -406,9 +392,7 @@ function AddToListSheet({
               >
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{list.name}</span>
-                  <span className="block text-xs text-stone-500">
-                    {songCount(list.item_count)}
-                  </span>
+                  <span className="block text-xs text-stone-500">{songCount(list.item_count)}</span>
                 </span>
                 <span
                   className={cn(

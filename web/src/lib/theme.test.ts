@@ -8,7 +8,8 @@ import { THEME_BOOT_SCRIPT, applyTheme, storedTheme } from "./theme";
  *
  * Indirect eval, so the script runs in global scope like a real `<script>`.
  */
-const runBootScript = () => (0, eval)(THEME_BOOT_SCRIPT);
+// biome-ignore lint/security/noGlobalEval: runs our own constant, and global scope is the point.
+const runBootScript = () => globalThis.eval(THEME_BOOT_SCRIPT);
 
 const prefersDark = (matches: boolean) =>
   vi.stubGlobal(
@@ -70,11 +71,9 @@ describe("THEME_BOOT_SCRIPT", () => {
 
   it("survives a storage that throws", () => {
     prefersDark(true);
-    const getItem = vi
-      .spyOn(Storage.prototype, "getItem")
-      .mockImplementation(() => {
-        throw new Error("storage is blocked");
-      });
+    const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage is blocked");
+    });
 
     expect(() => runBootScript()).not.toThrow();
     expect(document.documentElement.classList.contains("dark")).toBe(false);

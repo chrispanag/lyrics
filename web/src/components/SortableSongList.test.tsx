@@ -37,9 +37,9 @@ describe("SortableSongList", () => {
     await user.tab();
     expect(screen.getByRole("button", { name: "Reorder First" })).toHaveFocus();
 
-    await user.keyboard("{ }");        // lift
+    await user.keyboard("{ }"); // lift
     await user.keyboard("{ArrowDown}"); // over the next song
-    await user.keyboard("{ }");        // drop
+    await user.keyboard("{ }"); // drop
 
     await waitFor(() => expect(onReorder).toHaveBeenCalledWith(["song-2", "song-1", "song-3"]));
   });

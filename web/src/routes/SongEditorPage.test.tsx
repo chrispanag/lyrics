@@ -165,9 +165,7 @@ describe("SongEditorPage", () => {
     await userEvent.type(screen.getByLabelText("Year"), "1964");
     await userEvent.click(screen.getByRole("button", { name: /add performer/i }));
     await userEvent.type(screen.getByPlaceholderText("Name"), "Γιώργος Νταλάρας");
-    await userEvent.click(
-      screen.getByLabelText("Mark recording 1 as the first recording"),
-    );
+    await userEvent.click(screen.getByLabelText("Mark recording 1 as the first recording"));
     await userEvent.click(screen.getByRole("button", { name: /add recording/i }));
 
     await userEvent.click(screen.getByRole("button", { name: "Add song" }));

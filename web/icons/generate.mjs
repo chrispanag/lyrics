@@ -37,7 +37,9 @@ async function assertBrand() {
     const text = await readFile(file, "utf8");
     for (const token of tokens) {
       if (!text.includes(BRAND[token])) {
-        drifted.push(`  ${path.relative(here, file)} no longer contains ${BRAND[token]} (${token})`);
+        drifted.push(
+          `  ${path.relative(here, file)} no longer contains ${BRAND[token]} (${token})`,
+        );
       }
     }
   }

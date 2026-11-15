@@ -198,17 +198,16 @@ export function BrowsePage() {
           </p>
           {hasRole(user?.role, "contributor") && (
             // A styled Link: an anchor nested in a button is invalid.
-            <Link
-              to="/songs/new"
-              className={buttonClasses("secondary", "sm")}
-            >
+            <Link to="/songs/new" className={buttonClasses("secondary", "sm")}>
               <Plus aria-hidden className="size-4" />
               Add song
             </Link>
           )}
         </div>
 
-        {isError && <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>}
+        {isError && (
+          <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
+        )}
 
         {isLoading && (
           <div className="space-y-3">
@@ -273,7 +272,9 @@ export function BrowsePage() {
                   <Chip
                     key={genre.id}
                     active={genre.slug === genreSlug}
-                    onClick={() => setParam("genre_slug", genre.slug === genreSlug ? null : genre.slug)}
+                    onClick={() =>
+                      setParam("genre_slug", genre.slug === genreSlug ? null : genre.slug)
+                    }
                   >
                     {genre.name}
                     {genre.song_count !== undefined && (
@@ -288,7 +289,10 @@ export function BrowsePage() {
             </div>
 
             <div>
-              <label htmlFor="filter-language" className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300">
+              <label
+                htmlFor="filter-language"
+                className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300"
+              >
                 Language
               </label>
               <Select
@@ -304,7 +308,10 @@ export function BrowsePage() {
             </div>
 
             <div>
-              <label htmlFor="filter-sort" className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300">
+              <label
+                htmlFor="filter-sort"
+                className="mb-2 block text-sm font-medium text-stone-700 dark:text-stone-300"
+              >
                 Sort by
               </label>
               <Select

@@ -1,13 +1,7 @@
 import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  ApiError,
-  apiFetch,
-  setTokenProvider,
-  setUnauthorizedHandler,
-  toQuery,
-} from "./client";
+import { ApiError, apiFetch, setTokenProvider, setUnauthorizedHandler, toQuery } from "./client";
 import { API } from "@/test/handlers";
 import { server } from "@/test/server";
 

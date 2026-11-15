@@ -94,7 +94,7 @@ const HINT_FADE_MS = 700;
 
 // Fields own their arrow keys; every control owns a press. INTERACTIVE is built
 // from FIELDS so a field added to one cannot be missed on the other.
-const FIELDS = 'input, textarea, select, [contenteditable]';
+const FIELDS = "input, textarea, select, [contenteditable]";
 const INTERACTIVE = `a, button, label, iframe, [role="button"], ${FIELDS}`;
 
 /**
@@ -274,10 +274,10 @@ function spendHint(): void {
  */
 function useSwipeHint(): [boolean | null, (element: HTMLElement | null) => void] {
   // Starts spent and reads storage in a layout effect: this decides markup, so
-  // reading it during render would mismatch a server render.
+  // reading it during render would mismatch a server render. Read once, not
+  // subscribed to: spending the hint must not unmount the mark mid-fade.
   const [unspent, setUnspent] = useState(false);
   useLayoutEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- the deliberate second pass above; read once, since spending the hint must not unmount the mark mid-fade
     setUnspent(hintUnspent());
   }, []);
   const [hinting, setHinting] = useState(false);

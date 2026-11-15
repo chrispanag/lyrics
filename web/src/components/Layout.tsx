@@ -52,6 +52,7 @@ export function Layout() {
 
   // Route changes start at the top. Keyed on `pathname` so a filter written
   // into the query string does not scroll the catalog.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the key is the trigger, not a value read.
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [location.pathname]);
@@ -136,9 +137,7 @@ function NavPanel() {
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive
-                  ? SIDEBAR_ACTIVE
-                  : cn(SIDEBAR_HOVER, "text-stone-600 dark:text-stone-400"),
+                isActive ? SIDEBAR_ACTIVE : cn(SIDEBAR_HOVER, "text-stone-600 dark:text-stone-400"),
               )
             }
           >
@@ -163,9 +162,7 @@ function NavPanel() {
               <Avatar user={user} />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{user.display_name ?? user.email}</p>
-                <p className="text-xs capitalize text-stone-500 dark:text-stone-400">
-                  {user.role}
-                </p>
+                <p className="text-xs capitalize text-stone-500 dark:text-stone-400">{user.role}</p>
               </div>
             </NavLink>
           ) : (
@@ -217,6 +214,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
           open ? "opacity-100 backdrop-blur-sm" : "opacity-0",
         )}
       />
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: `marking` spreads role="dialog" while open. */}
       <div
         ref={panel}
         // Focusable only as `useModal`'s focus target.

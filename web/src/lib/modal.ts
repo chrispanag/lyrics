@@ -56,6 +56,7 @@ export function useModal({
     };
   }, [open, onClose]);
 
+  // `focus` is a ref, so `open` is what actually re-runs this.
   useEffect(() => {
     if (!open) return;
 
@@ -65,9 +66,7 @@ export function useModal({
     return () => {
       if (opener instanceof HTMLElement) opener.focus();
     };
-    // `open` alone is the key; `focus` is a stable ref.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, focus]);
 
   return open ? { role: "dialog", "aria-modal": true } : {};
 }

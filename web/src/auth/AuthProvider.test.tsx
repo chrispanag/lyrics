@@ -38,7 +38,9 @@ function Probe() {
     <div>
       <p>{user ? (user.display_name ?? user.email) : "guest"}</p>
       <p>{loading ? "restoring" : "settled"}</p>
-      <button onClick={() => void logout()}>Sign out</button>
+      <button type="button" onClick={() => void logout()}>
+        Sign out
+      </button>
     </div>
   );
 }

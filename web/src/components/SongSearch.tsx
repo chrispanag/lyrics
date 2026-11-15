@@ -136,7 +136,7 @@ export function SongSearch() {
     if (event.key === "Enter") {
       // The highlighted row, else the first, else the catalog. Never a row
       // from a dismissed panel the reader cannot see.
-      const song = open ? activeSong ?? results[0] : undefined;
+      const song = open ? (activeSong ?? results[0]) : undefined;
       if (song) {
         const { href, replace } = step(song);
         navigate(href, { replace });
@@ -228,6 +228,7 @@ export function SongSearch() {
     // Pinned while focused too: on iOS, focusing a field can scroll the page,
     // which would hide the header before the panel opens.
     <SearchHeader pinned={open || focused}>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: tracks focus leaving its children; nothing here is pressed. */}
       <div
         ref={wrapper}
         className="relative"

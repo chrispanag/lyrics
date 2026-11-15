@@ -237,9 +237,7 @@ describe("ForgotPasswordPage", () => {
     await userEvent.type(screen.getByLabelText("Email"), "  forgetful@example.com  ");
     await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
 
-    await waitFor(() =>
-      expect(startPasswordReset).toHaveBeenCalledWith("forgetful@example.com"),
-    );
+    await waitFor(() => expect(startPasswordReset).toHaveBeenCalledWith("forgetful@example.com"));
     expect(await screen.findByLabelText("Reset code")).toBeInTheDocument();
   });
 
@@ -405,12 +403,12 @@ describe("ForgotPasswordPage", () => {
 
     await userEvent.type(screen.getByLabelText("New password"), "a-better-secret");
     await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Sign out my other devices" }),
-    );
+    await userEvent.click(await screen.findByRole("button", { name: "Sign out my other devices" }));
 
     await waitFor(() => expect(signOutOtherDevices).toHaveBeenCalled());
-    expect(await screen.findByRole("status")).toHaveTextContent(/other devices have been signed out/i);
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      /other devices have been signed out/i,
+    );
   });
 
   // The password is already saved; this failure must not read otherwise.
@@ -420,9 +418,7 @@ describe("ForgotPasswordPage", () => {
 
     await userEvent.type(screen.getByLabelText("New password"), "a-better-secret");
     await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Sign out my other devices" }),
-    );
+    await userEvent.click(await screen.findByRole("button", { name: "Sign out my other devices" }));
 
     expect(
       await screen.findByText(
@@ -743,9 +739,7 @@ describe("ChangePasswordPage", () => {
 
     await userEvent.type(screen.getByLabelText("New password"), "a-better-secret");
     await userEvent.click(screen.getByRole("button", { name: "Save new password" }));
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Sign out my other devices" }),
-    );
+    await userEvent.click(await screen.findByRole("button", { name: "Sign out my other devices" }));
 
     await waitFor(() => expect(signOutOtherDevices).toHaveBeenCalled());
     expect(await screen.findByRole("status")).toHaveTextContent(
