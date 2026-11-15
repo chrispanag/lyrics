@@ -137,11 +137,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   // One effect, not a write per call site: a forgotten site would remember an
-  // account that has signed out. Not while restoring: `user` is then only the
-  // snapshot or the server's guest, and the guest would erase the snapshot.
+  // account that has signed out. The first commit's guest erases the snapshot
+  // the layout effect has just read, and the next commit writes it back.
   useEffect(() => {
-    if (!loading) storeUser(user);
-  }, [user, loading]);
+    storeUser(user);
+  }, [user]);
 
   // Everything after Prelude mints a session, whichever credential opened it
   // (password reset's code included); skipping a step leaves it half signed in.

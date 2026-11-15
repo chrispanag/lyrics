@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuthProvider } from "./AuthProvider";
+import { apiFetch } from "@/api/client";
 import {
   PASSWORD_CHANGE_UNAVAILABLE_ERROR,
   RESET_UNCONFIGURED_ERROR,
@@ -147,6 +148,23 @@ describe("AuthProvider", () => {
     // The confirmed profile (no seeded name) replaces the guess.
     expect(await screen.findByText("singer@example.com")).toBeInTheDocument();
     expect(screen.getByText("settled")).toBeInTheDocument();
+  });
+
+  // A session found dead mid-restore must not stay remembered: the write keys
+  // on `user` alone, never waiting for the restore to settle.
+  it("forgets a session that answers 401 while the restore is in flight", async () => {
+    storeUser(makeUser({ display_name: "Νίκος" }));
+    session.getAccessToken.mockImplementation(() => new Promise<string | null>(() => {}));
+    server.use(http.get(`${API}/api/v1/lists`, () => new HttpResponse(null, { status: 401 })));
+
+    renderProvider();
+    expect(screen.getByText("Νίκος")).toBeInTheDocument();
+
+    await act(() => apiFetch("/api/v1/lists").catch(() => {}));
+
+    expect(screen.getByText("guest")).toBeInTheDocument();
+    expect(screen.getByText("restoring")).toBeInTheDocument();
+    expect(storedUser()).toBeNull();
   });
 
   // A plain restore has no call site of its own to write the snapshot.

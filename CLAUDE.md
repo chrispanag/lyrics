@@ -1237,11 +1237,11 @@ implement, which is why the parts below look the way they do.
   hydration — Sign in, no Lists, no Add song — which is what a reader with
   JavaScript off or slow to arrive sees, and what a crawler indexes; that is the
   right answer for both, and the cost is only that the HTML is not the page a
-  signed-in reader ends up on. The first commit is a guest too, which is why
-  the `[user]` write below waits for `loading` to clear: until then `user` is
-  only that guest or the snapshot, and writing the guest would erase the
-  snapshot from storage for a beat — visible to another tab — before writing
-  the same value back.
+  signed-in reader ends up on. The first commit is a guest too, so the `[user]`
+  write below erases the snapshot for a beat after it has been read, and the
+  next commit writes it back. Gating that write on `loading` looks like the
+  tidy fix and is not: a 401 during the restore then leaves a dead session
+  remembered on the machine until a later load repairs it.
   What the snapshot must not do is move anybody, which is why **`loading` keeps
   its exact meaning and every redirect reads it first**: `VerificationGate`, the
   sign-in and sign-up screens' "already signed in" redirects, and
@@ -1252,8 +1252,7 @@ implement, which is why the parts below look the way they do.
   than the page they opened; a snapshot outliving its session sends someone who
   came to sign in to the catalog and leaves them there as a guest; and a step-up
   opened on a session Prelude has not restored yet fails as "we could not send a
-  code" with nothing wrong. The write is **one effect keyed on `[user]`** (and
-  on `loading`, see above) rather
+  code" with nothing wrong. The write is **one effect keyed on `[user]`** rather
   than a line at each call site — sign-in, sign-out, a dead session, a new
   picture, a changed name all end in `setUser` already, and the call site that
   forgets is the one that leaves an account remembered on the machine it signed

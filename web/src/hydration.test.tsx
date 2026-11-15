@@ -151,6 +151,8 @@ describe("hydrating over a server render", () => {
 
     expect(problems).toEqual([]);
     expect(container).toHaveTextContent(catalogSongs[0]?.title ?? "");
+    // Then takes the stored size before paint: 3 is the largest, so it cannot grow.
+    expect(container.querySelector('[aria-label="Increase text size"]')).toBeDisabled();
   });
 
   it("agrees about the profile's theme switch", async () => {
