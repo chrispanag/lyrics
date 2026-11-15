@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 import { OG_BASE, SITE_NAME, SITE_ORIGIN } from "@/lib/site";
-import { THEME_BOOT_SCRIPT } from "@/lib/theme";
+import { THEME_BOOT_SCRIPT, THEME_COLORS } from "@/lib/theme";
 import "@/styles/index.css";
 
 export const metadata: Metadata = {
@@ -42,8 +42,8 @@ export const viewport: Viewport = {
   // because the theme is the reader's; html's color-scheme decides from there.
   colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0c0a09" },
-    { media: "(prefers-color-scheme: light)", color: "#fafaf9" },
+    { media: "(prefers-color-scheme: dark)", color: THEME_COLORS.dark },
+    { media: "(prefers-color-scheme: light)", color: THEME_COLORS.light },
   ],
 };
 

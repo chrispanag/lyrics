@@ -781,10 +781,17 @@ no application code — but while it stands, these are the parts holding it up.
   a divergence here shows only as one white frame and only to a visitor whose
   theme is dark. `suppressHydrationWarning` on `<html>` is part of it — the
   script legitimately makes the client's markup differ from the server's. And
-  the script declares its two temporaries with `let`: an inline `<script>` runs
+  the script declares its temporaries with `let`: an inline `<script>` runs
   in global scope, where `var` inside a block is still function-scoped, so `var`
   put `window.t` and `window.d` on every page in the app. That is the other
-  thing the spec pins, by asking for the globals rather than the class.
+  thing the spec pins, by asking for the globals rather than the class. An
+  explicit theme also prepends its own unscoped `theme-color` meta ahead of the
+  `viewport` export's media-scoped pair, and **its colors are upper case on
+  purpose**: React hydrates a `<meta>` by adopting the first in the document
+  with the same `name` and `content` string, never checking `media` or `id`, so
+  an override spelled like the pair is taken over as one of them — and React's
+  later removal of it throws once "system" has already removed it. The spec
+  hydrates the pair over the boot script's output to hold that.
 - **The `/api` proxy is a `rewrites()` entry in `next.config.ts` and is
   development-only.** It replaces the Vite dev-server proxy, and `make mobile`
   is what depends on it: emptied `NEXT_PUBLIC_API_BASE_URL` sends every call
