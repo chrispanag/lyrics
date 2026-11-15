@@ -1819,6 +1819,20 @@ each of them is written down.
 - **The frontend suite runs with coverage and fails under a floor**, set in
   `vitest.config.ts` just below what it measures. Raise it as the suite rises;
   lowering it is a decision, not a fix.
+- **Every story is a test.** `@storybook/addon-vitest` runs each story in
+  `src/**/*.stories.tsx` in a headless Chromium (`pnpm run test:stories`, part
+  of `make test-web` and CI): it must render, its `play` function must pass, and
+  axe must find nothing, since `a11y.test` is `"error"` in `.storybook/preview.tsx`.
+  That is the place for what jsdom cannot show — the real `<dialog>` top layer,
+  layout, focus. Three things are not obvious. Stories are **excluded from
+  coverage**, which stays the unit suite's, because a story renders code without
+  asserting on it. `storybook/test`'s `userEvent` dispatches **synthetic**
+  events, so anything a browser reserves for trusted input (Escape closing a
+  dialog) cannot be driven from a story. And `.storybook/main.ts` defines
+  `process.env` the way Next inlines it, or `api/client.ts` throws on `process`
+  in the browser the moment a story's import graph reaches it. Stories borrow
+  the fixture factories in `src/test/handlers.ts` rather than keeping a second
+  set.
 - `renderWithProviders` stubs the auth context rather than mounting the real
   provider, so tests never touch the Prelude SDK.
 - Playwright's guest specs need only a running seeded stack. The signed-in spec

@@ -114,6 +114,16 @@ jobs:
         working-directory: web
         run: pnpm run test:coverage
 
+      # Every story is also a test (its play function plus an axe check), run
+      # in a real browser rather than jsdom.
+      - name: Install Chromium
+        working-directory: web
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
+      - name: Story tests
+        working-directory: web
+        run: pnpm run test:stories
+
       # A base URL is set only because this is a smoke test of the build; the
       # real production build leaves it unset so the bundle calls its own origin.
       - name: Build

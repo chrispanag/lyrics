@@ -103,7 +103,9 @@
       // Specs define throwaway components and are never fast-refreshed, and
       // index into fixtures they built themselves, which `noUncheckedIndexedAccess`
       // then makes them assert.
-      "includes": ["**/*.test.ts", "**/*.test.tsx", "e2e/**"],
+      // Stories are the same shape: a CSF file's exports are a meta object and
+      // story objects, which is the format rather than a fast-refresh hazard.
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.stories.tsx", ".storybook/**", "e2e/**"],
       "linter": {
         "rules": {
           "style": {
