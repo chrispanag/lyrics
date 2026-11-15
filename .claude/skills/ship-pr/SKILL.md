@@ -70,11 +70,14 @@ Record the PR number as `<n>`.
 ## 3. Wait for CI
 
 Checks take a few seconds to register after a push, and until they do,
-`gh pr checks` may report the previous commit's results or none at all. Run
-this with `run_in_background: true`, since you are notified when it exits:
+`gh pr checks` may report the previous commit's results or none at all. Get
+the pushed SHA with a plain `git rev-parse HEAD` first, and write it into the
+loop as `<sha>`: a worktree-isolated session refuses a `git` call nested inside
+a compound command. Then run this with `run_in_background: true`, since you are
+notified when it exits:
 
 ```bash
-head=$(git rev-parse HEAD)
+head=<sha>
 for i in $(seq 30); do
   if [ "$(gh pr view <n> --json headRefOid -q .headRefOid)" = "$head" ]; then
     count=$(gh pr checks <n> --json name -q length 2>/dev/null)
