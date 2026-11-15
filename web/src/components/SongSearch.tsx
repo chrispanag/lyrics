@@ -8,7 +8,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { SearchField } from "./SearchField";
 import { SearchHeader } from "./SearchHeader";
@@ -21,6 +21,7 @@ import { songCount } from "@/lib/format";
 import { songHref, songMatchesRef, songRefFromPath } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
 import { useDebounced } from "@/lib/useDebounced";
+import { useNavigate } from "@/lib/navigation";
 
 /** How many songs the panel offers before deferring to the catalog. */
 const PANEL_SIZE = 6;
@@ -139,9 +140,9 @@ export function SongSearch() {
       const song = open ? (activeSong ?? results[0]) : undefined;
       if (song) {
         const { href, replace } = step(song);
-        void navigate(href, { replace });
+        navigate(href, { replace });
       } else if (typed !== "") {
-        void navigate(browseHref({ q: typed }));
+        navigate(browseHref({ q: typed }));
       }
       return;
     }

@@ -32,6 +32,17 @@
         "useComponentExportOnlyModules": {
           "level": "error",
           "options": { "allowConstantExport": true }
+        },
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "react-router-dom": {
+                "importNames": ["useNavigate"],
+                "message": "Import useNavigate from @/lib/navigation, which says what it returns under BrowserRouter."
+              }
+            }
+          }
         }
       },
       "suspicious": {
@@ -49,11 +60,8 @@
       },
       // Nursery rules move between releases, which is safe only because the
       // Biome version is pinned exactly in package.json.
-      // Left off after a trial, every finding wrong: `useAwaitThenable` and
-      // `noUnsafeReturn`, whose type inference misses `act`'s promise overload
-      // and Testing Library's return types; `useNullishCoalescing`, whose fixes
-      // would make a busy button clickable; and `noMisleadingReturnType`, which
-      // asks for `string` to be narrowed to the literals a function returns.
+      // Tried and left off, every finding wrong: useAwaitThenable,
+      // noUnsafeReturn, useNullishCoalescing, noMisleadingReturnType.
       "nursery": {
         "noFloatingPromises": "error",
         "noMisusedPromises": "error",

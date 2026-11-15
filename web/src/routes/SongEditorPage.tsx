@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type SubmitEvent } from "react";
-import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useParams } from "react-router-dom";
 import { Plus, Trash } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
@@ -21,6 +21,7 @@ import {
 import { songHref, songRefHref } from "@/lib/listContext";
 import { extractVideoId } from "@/lib/youtube";
 import { CREDIT_PICKER_LABELS } from "@/lib/credits";
+import { useNavigate } from "@/lib/navigation";
 import {
   CREDIT_ROLES,
   LANGUAGE_LABELS,
@@ -76,8 +77,9 @@ const named = (person: PersonSelection): boolean => Boolean(person.personId || p
 
 /**
  * Whether a recording row is an abandoned add. Mirrors `RecordingDraft` field by
- * field, `key` aside: a new draft field must be added here, or a row holding only it is
- * silently dropped at save. `isFirst` alone says nothing about a performance.
+ * field, `key` aside: a new draft field must be added here, or a row holding
+ * only it is silently dropped at save. `isFirst` alone says nothing about a
+ * performance.
  */
 const isBlankRecording = (recording: RecordingDraft): boolean =>
   !recording.label.trim() &&
@@ -190,8 +192,8 @@ export function SongEditorPage() {
    * behind it, so it replaces with the song instead. See CLAUDE.md, "Frontend".
    */
   const leaveEditor = () => {
-    if (location.key === "default") void navigate(id ? songRefHref(id) : "/", { replace: true });
-    else void navigate(-1);
+    if (location.key === "default") navigate(id ? songRefHref(id) : "/", { replace: true });
+    else navigate(-1);
   };
 
   const track =
@@ -277,7 +279,7 @@ export function SongEditorPage() {
       setDirty(false);
       // A new song lands the reader on it rather than popping back.
       if (isEdit) leaveEditor();
-      else void navigate(songHref(saved), { replace: true });
+      else navigate(songHref(saved), { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, "The song could not be saved."));
       setFieldErrors(errorDetails(caught));

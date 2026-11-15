@@ -57,7 +57,7 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
   );
 }
 
-export function Select({ className, children, ...props }: ComponentProps<"select">) {
+export function Select({ className, ...props }: ComponentProps<"select">) {
   return (
     <select
       // select-chevron replaces the native arrow; see styles/index.css.
@@ -68,9 +68,7 @@ export function Select({ className, children, ...props }: ComponentProps<"select
         className,
       )}
       {...props}
-    >
-      {children}
-    </select>
+    />
   );
 }
 
@@ -181,6 +179,26 @@ export function Skeleton({ className }: { className?: string }) {
       aria-hidden
       className={cn("animate-pulse rounded-lg bg-stone-200 dark:bg-stone-800", className)}
     />
+  );
+}
+
+/** A stack of placeholder rows for a list still loading. */
+export function Skeletons({
+  count,
+  className,
+  gap = "space-y-3",
+}: {
+  count: number;
+  className: string;
+  gap?: string;
+}) {
+  return (
+    <div className={gap}>
+      {Array.from({ length: count }, (_, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: identical placeholders with nothing else to key on.
+        <Skeleton key={index} className={className} />
+      ))}
+    </div>
   );
 }
 

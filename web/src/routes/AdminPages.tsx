@@ -24,7 +24,7 @@ import {
   Input,
   Select,
   Sheet,
-  Skeleton,
+  Skeletons,
 } from "@/components/ui";
 import { ADMIN_TABS } from "@/routes/adminTabs";
 import { cn } from "@/lib/cn";
@@ -46,14 +46,7 @@ const adminRowChrome = cn(
 
 /** The wait both screens show: rows the height of the cards they become. */
 function RowSkeletons() {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: 5 }, (_, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: identical placeholders with nothing else to key on.
-        <Skeleton key={index} className="h-16 w-full" />
-      ))}
-    </div>
-  );
+  return <Skeletons count={5} className="h-16 w-full" gap="space-y-2" />;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ListMusic } from "lucide-react";
 
 import { cardChrome } from "./cardStyles";
@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import type { ListPosition } from "@/lib/listContext";
 import { modalIsOpen } from "@/lib/modal";
 import { startsClearOfEdges, swipeDirection } from "@/lib/swipe";
+import { useNavigate } from "@/lib/navigation";
 
 /*
  * Moving through a list without leaving it: the bar's arrows (links, so a

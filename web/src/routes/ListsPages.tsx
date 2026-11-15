@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useSyncExternalStore, type SubmitEvent } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { Copy, Globe, Link2, ListMusic, Lock, Plus, Share2, Trash } from "lucide-react";
 
 import { ApiError, errorMessage } from "@/api/client";
@@ -27,11 +27,13 @@ import {
   Input,
   Sheet,
   Skeleton,
+  Skeletons,
 } from "@/components/ui";
 import { BackButton } from "@/components/BackButton";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
 import type { Song } from "@/lib/types";
+import { useNavigate } from "@/lib/navigation";
 
 // Only an owner can reorder, so the drag machinery loads on demand.
 const SortableSongList = lazy(() =>
@@ -100,14 +102,7 @@ export function ListsPage() {
         </Button>
       </div>
 
-      {isLoading && (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }, (_, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: identical placeholders with nothing else to key on.
-            <Skeleton key={index} className="h-20 w-full" />
-          ))}
-        </div>
-      )}
+      {isLoading && <Skeletons count={3} className="h-20 w-full" />}
 
       {!isLoading && data?.data.length === 0 && (
         <EmptyState
@@ -252,7 +247,7 @@ export function ListDetailPage() {
     try {
       const copied = await copyList.mutateAsync({ id: list.id, name });
       setNaming(false);
-      void navigate(`/lists/${copied.id}`);
+      navigate(`/lists/${copied.id}`);
     } catch (caught) {
       // Names are unique per owner, so a 409 opens the rename step.
       if (caught instanceof ApiError && caught.status === 409) {
@@ -265,7 +260,7 @@ export function ListDetailPage() {
 
   const onSave = () => {
     if (!user) {
-      void navigate("/login", { state: returnTo(location) });
+      navigate("/login", { state: returnTo(location) });
       return;
     }
     void saveCopy();

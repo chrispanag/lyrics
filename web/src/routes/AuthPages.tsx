@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type SubmitEvent } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import { PASSWORD_CHANGE_UNAVAILABLE_ERROR, RESET_UNCONFIGURED_ERROR } from "@/auth/context";
@@ -9,6 +9,7 @@ import { buttonClasses } from "@/components/buttonStyles";
 import { PageTitle } from "@/components/PageTitle";
 import { Button, ErrorMessage, Field, Input, Notice, Spinner } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
+import { useNavigate } from "@/lib/navigation";
 
 /** Shell shared by every auth screen. */
 function AuthShell({
@@ -58,7 +59,7 @@ export function LoginPage() {
 
     try {
       await login(email.trim(), password);
-      void navigate(destination, { replace: true });
+      navigate(destination, { replace: true });
     } catch (caught) {
       // Credential errors are not distinguished, so registered emails don't leak.
       setError(errorMessage(caught, "That email and password combination was not recognized."));
@@ -245,7 +246,7 @@ export function RegisterPage() {
     try {
       await register({ email: email.trim(), password, displayName });
       // Straight to the code screen: the gate would send an unverified account there.
-      void navigate("/verify-email", { replace: true });
+      navigate("/verify-email", { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, "Your account could not be created. Please try again."));
       setFieldErrors(errorDetails(caught));
@@ -887,7 +888,7 @@ export function VerifyEmailPage() {
 
     try {
       await verifyEmail(code);
-      void navigate("/", { replace: true });
+      navigate("/", { replace: true });
     } catch (caught) {
       // A wrong code is a Prelude SDK error, named so a typo reads as one.
       setError(
