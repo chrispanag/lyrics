@@ -3,7 +3,7 @@ import { HttpResponse, http } from "msw";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { API, makeSong, notFound } from "@/test/handlers";
+import { API, makeSong, makeUnaddressedSong, notFound } from "@/test/handlers";
 import { server } from "@/test/server";
 
 /*
@@ -17,8 +17,11 @@ const SLUG = "thalassa-platia";
 
 /** What `permanentRedirect` throws, so a spec can see where it was sent. */
 class Redirected extends Error {
-  constructor(readonly location: string) {
+  readonly location: string;
+
+  constructor(location: string) {
     super(`redirected to ${location}`);
+    this.location = location;
   }
 }
 
@@ -103,7 +106,7 @@ describe("a song's server-rendered document", () => {
   it("refuses a song carrying no address rather than redirecting to one", async () => {
     // An API older than migration 000010 omits the field; `songHref` would
     // build a permanent redirect to `/songs/undefined`.
-    server.use(servingSong(makeSong({ id: UUID, slug: undefined })));
+    server.use(servingSong(makeUnaddressedSong({ id: UUID })));
 
     const tree = await SongPage(props(UUID));
 

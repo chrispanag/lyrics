@@ -29,7 +29,7 @@ export function SearchHeader({
   /** Under the row and inside the same column: the catalog's filter chips. */
   below?: ReactNode;
   /** Held still regardless of scrolling — see `StickyHeader`. */
-  pinned?: boolean;
+  pinned?: boolean | undefined;
 }) {
   return (
     <StickyHeader pinned={pinned}>

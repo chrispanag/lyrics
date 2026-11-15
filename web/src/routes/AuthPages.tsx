@@ -364,7 +364,7 @@ function CodeField({
 }: {
   label: string;
   value: string;
-  error?: string;
+  error?: string | undefined;
   onChange: (code: string) => void;
 }) {
   return (

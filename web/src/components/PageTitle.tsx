@@ -10,6 +10,6 @@ import { SITE_NAME } from "@/lib/site";
  * `name` is optional so a page still fetching its record renders the bare
  * product name rather than "undefined — Songfolio".
  */
-export function PageTitle({ name }: { name?: string }) {
+export function PageTitle({ name }: { name?: string | undefined }) {
   return <title>{name ? `${name} — ${SITE_NAME}` : SITE_NAME}</title>;
 }

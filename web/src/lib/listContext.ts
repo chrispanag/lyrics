@@ -91,9 +91,9 @@ export interface ListPosition {
   index: number;
   total: number;
   /** Absent on the first song of the list, which is what draws the dead arrow. */
-  previousHref?: string;
+  previousHref?: string | undefined;
   /** Absent on the last one, for the same reason. */
-  nextHref?: string;
+  nextHref?: string | undefined;
 }
 
 /**

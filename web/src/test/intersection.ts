@@ -14,8 +14,10 @@ class StubIntersectionObserver implements IntersectionObserver {
   readonly thresholds: readonly number[] = [0];
 
   private readonly targets = new Set<Element>();
+  private readonly callback: Callback;
 
-  constructor(private readonly callback: Callback) {
+  constructor(callback: Callback) {
+    this.callback = callback;
     live.add(this);
   }
 

@@ -891,8 +891,11 @@ describe("SongDetailPage inside a list", () => {
   // Every touch listener must be passive: `{ passive: false }` kills vertical
   // scrolling on phones, invisibly in jsdom and on a desktop.
   it("reads every touch passively, so a long song still scrolls", async () => {
-    const registered: { type: string; on: Element; options?: boolean | AddEventListenerOptions }[] =
-      [];
+    const registered: {
+      type: string;
+      on: Element;
+      options?: boolean | AddEventListenerOptions | undefined;
+    }[] = [];
     const original = Element.prototype.addEventListener;
     const spy = vi.spyOn(Element.prototype, "addEventListener").mockImplementation(function (
       this: Element,

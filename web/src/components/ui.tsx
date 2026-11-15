@@ -18,7 +18,7 @@ import { useModal } from "@/lib/modal";
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
-  loading?: boolean;
+  loading?: boolean | undefined;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -100,8 +100,8 @@ export function Field({
 }: {
   label: string;
   htmlFor: string;
-  error?: string;
-  hint?: string;
+  error?: string | undefined;
+  hint?: string | undefined;
   children: ReactNode;
 }) {
   return (
@@ -208,7 +208,7 @@ export function EmptyState({
 }: {
   icon?: ReactNode;
   title: string;
-  description?: string;
+  description?: string | undefined;
   action?: ReactNode;
 }) {
   return (
@@ -327,7 +327,7 @@ export function ConfirmSheet({
   children: ReactNode;
   confirmLabel?: string;
   pending?: boolean;
-  error?: string;
+  error?: string | undefined;
   onConfirm: () => void;
 }) {
   return (

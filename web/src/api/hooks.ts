@@ -216,7 +216,7 @@ export function useCreateList() {
 export function useCopyList() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, name }: { id: string; name?: string }) =>
+    mutationFn: ({ id, name }: { id: string; name?: string | undefined }) =>
       apiFetch<SongList>(`/api/v1/lists/${id}/copy`, {
         method: "POST",
         body: name === undefined ? {} : { name },
