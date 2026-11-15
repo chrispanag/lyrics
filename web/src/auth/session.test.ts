@@ -1,13 +1,14 @@
 import { HttpResponse, http } from "msw";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiFetch, setTokenProvider } from "@/api/client";
-import { API } from "@/test/handlers";
+import { API, makeUser } from "@/test/handlers";
 import { server } from "@/test/server";
+import { storeUser } from "./storedUser";
 
 // The real client contacts a live session domain. The stub answers `refresh()`
-// like a restored session, and counts how many were built.
-const sdk = vi.hoisted(() => ({ built: 0, failNext: false }));
+// like a restored session, and counts how many were built and refreshed.
+const sdk = vi.hoisted(() => ({ built: 0, failNext: false, refreshes: 0 }));
 
 vi.mock("@prelude.so/js-sdk/session", () => ({
   PrldSessionClient: class {
@@ -23,10 +24,26 @@ vi.mock("@prelude.so/js-sdk/session", () => ({
       this.invalidated += 1;
     }
     async refresh() {
+      sdk.refreshes += 1;
       return { user: { accessToken: `token-${this.invalidated}` } };
     }
   },
 }));
+
+const HINT = "lyrics:session";
+
+/** An SDK error as the session domain's 401 throws it. */
+function unauthorized(): Error {
+  const error = new Error("Unauthorized");
+  error.name = "UnauthorizedError";
+  return error;
+}
+
+// Every spec but the guest's has signed in on this browser before.
+beforeEach(() => {
+  localStorage.setItem(HINT, "");
+  sdk.refreshes = 0;
+});
 
 afterEach(() => {
   setTokenProvider(async () => null);
@@ -96,5 +113,52 @@ describe("auth/session", () => {
     vi.spyOn(await sessionClient(), "refresh").mockRejectedValueOnce(new Error("no session"));
 
     expect(await getAccessToken()).toBeNull();
+  });
+
+  // A guest's refresh is a 401 the browser logs on every page.
+  it("answers a guest without asking the session domain", async () => {
+    const { getAccessToken } = await import("./session");
+    localStorage.removeItem(HINT);
+
+    expect(await getAccessToken()).toBeNull();
+    expect(await getAccessToken(true)).toBeNull();
+    expect(sdk.refreshes).toBe(0);
+  });
+
+  it("forgets the session once the session domain refuses it", async () => {
+    const { getAccessToken, sessionClient } = await import("./session");
+    vi.spyOn(await sessionClient(), "refresh").mockRejectedValueOnce(unauthorized());
+
+    expect(await getAccessToken()).toBeNull();
+    expect(localStorage.getItem(HINT)).toBeNull();
+  });
+
+  // Read as signed out for good, a dropped connection would end the session.
+  it("keeps the session through a failure that is not a refusal", async () => {
+    const { getAccessToken, sessionClient } = await import("./session");
+    vi.spyOn(await sessionClient(), "refresh").mockRejectedValueOnce(new TypeError("offline"));
+
+    expect(await getAccessToken()).toBeNull();
+    expect(await getAccessToken()).not.toBeNull();
+  });
+
+  // Signed in before the hint shipped: only the profile snapshot says so.
+  it("takes a profile snapshot as a session to restore", async () => {
+    vi.resetModules();
+    localStorage.removeItem(HINT);
+    storeUser(makeUser());
+
+    const { getAccessToken } = await import("./session");
+
+    expect(await getAccessToken()).not.toBeNull();
+  });
+
+  it("records a session opened and closed", async () => {
+    const { markSession } = await import("./session");
+
+    markSession(false);
+    expect(localStorage.getItem(HINT)).toBeNull();
+    markSession(true);
+    expect(localStorage.getItem(HINT)).not.toBeNull();
   });
 });
