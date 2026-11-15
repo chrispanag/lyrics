@@ -18,45 +18,52 @@ concurrency:
 jobs:
   # Decides which of the jobs below a pull request needs, so a change confined
   # to one stack does not wait on the other's suite. A skipped job reports as
-  # passing, so this stays compatible with required status checks.
+  # passing, so this stays compatible with required status checks — which is
+  # also why the jobs below gate on `!= 'false'` under `!cancelled()`: if this
+  # job fails, its outputs are empty and everything runs, rather than every
+  # check skipping and reading as green with nothing tested.
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.diff.outputs.backend }}
-      frontend: ${{ steps.diff.outputs.frontend }}
+      web: ${{ steps.diff.outputs.web }}
 
     steps:
       # A pull request checks out its merge commit, whose first parent is the
       # base branch tip — so two commits are enough to diff exactly what the
       # pull request would change, however far its branch is behind.
       - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
         with:
           fetch-depth: 2
 
       # Pushes to main run everything, as does any edit to this workflow, since
       # a change here can break a job that no changed path would otherwise run.
+      # `--no-renames` lists both ends of a move, so a file moved out of a stack
+      # still counts against it; `core.quotePath=false` keeps a non-ASCII path
+      # (a Greek file name) unquoted, where it would otherwise start with `"`
+      # and never match its directory.
       - name: Diff against base
         id: diff
         run: |
-          all=false changed=
+          all=false
           if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
             all=true
           else
-            changed=$(git diff --name-only HEAD^1 HEAD)
+            changed=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD)
             printf '%s\n' "$changed"
-            if grep -qx '.github/workflows/ci.yml' <<<"$changed"; then all=true; fi
+            if grep -qxF '.github/workflows/ci.yml' <<<"$changed"; then all=true; fi
           fi
-          for area in backend:backend frontend:web; do
-            name=${area%%:*} dir=${area#*:}
+          for dir in backend web; do
             if $all || grep -q "^$dir/" <<<"$changed"; then v=true; else v=false; fi
-            echo "$name=$v" | tee -a "$GITHUB_OUTPUT"
+            echo "$dir=$v" | tee -a "$GITHUB_OUTPUT"
           done
 
   backend:
     name: Backend
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.backend != 'false' }}
     runs-on: ubuntu-latest
 
     services:
@@ -118,7 +125,7 @@ jobs:
   frontend:
     name: Frontend
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.web != 'false' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -173,34 +180,45 @@ jobs:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
         run: pnpm exec next build
 
-  docker:
-    name: Docker images
+  # Each image is built but not pushed: this proves the Dockerfiles still work,
+  # which a `go build` or `next build` alone does not. One job per image, so
+  # each is gated once and a green check names the image it actually built.
+  docker-api:
+    name: API image
     needs: changes
-    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.backend != 'false' }}
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
 
-      # Built but not pushed: this proves the Dockerfiles still work, which a
-      # `go build` alone does not.
-      - name: Build API image
-        if: needs.changes.outputs.backend == 'true'
+      - name: Build
         uses: docker/build-push-action@v7
         with:
           context: ./backend
           push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # A scope per image: in the shared default scope, the image whose
+          # build saved last replaced the other's cache index.
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
 
-      - name: Build web image
-        if: needs.changes.outputs.frontend == 'true'
+  docker-web:
+    name: Web image
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.web != 'false' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build
         uses: docker/build-push-action@v7
         with:
           context: ./web
           push: false
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
