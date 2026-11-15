@@ -847,9 +847,42 @@ no application code — but while it stands, these are the parts holding it up.
 
 `generateMetadata`, a `<script type="application/ld+json">` and `sitemap.xml` are
 rendered by the Node process whatever the body does, so all three ship with
-`ssr: false` still standing. Nothing below is visible from inside the app — every
-one of these is read by a crawler or a scraper and by nothing else — which is why
-each of them is written down.
+`ssr: false` still standing — and so does a song page's own content, rendered
+beside the app rather than by it. Nearly nothing below is visible from inside the
+app — these are read by a crawler, an agent or a scraper — which is why each of
+them is written down.
+
+- **A song page's HTML carries the song, and the app removes it on mounting.**
+  `SongPreview` renders the title, credits and lyrics (and a `<title>`, which
+  React hoists into the server's `<head>`) inside `UntilAppMounts`, which drops
+  them when `AppRoot` calls `markAppMounted` from a layout effect — after the
+  whole app has committed and before the browser paints, so the two are never on
+  screen together. **Unmounted, never hidden**: the `<title>` must go with it, or
+  it stays first in the head and pins the tab exactly as a metadata title would
+  (see Head assets). It is a static copy, not the app's components: those need
+  the router, and anything pressable here does nothing until the app arrives —
+  so plain links and no buttons. **Its geometry mirrors the app's** — the
+  sidebar's `w-60`, the search header's height, the back-button row, the
+  recordings line, the lyrics heading's `h-8` — so the text does not jump at the
+  swap; measured to within a pixel at a desk and on a phone. Change `SongHeader`
+  and `SongPreview` together, and measure again.
+- **The app starts from the server's copy of the song, stamped stale.**
+  `ClientOnly` is handed `seeded`, which `AppRoot` writes under `keys.song(ref)`
+  before its first render, so the page draws the song with no second round trip.
+  The key is the *address* the page was asked under, as `useSong` keys it — the
+  id form never gets this far, being redirected first. It is written with
+  `updatedAt: 0` so it is refetched at once: the server read may be up to
+  `CACHE_SECONDS` old from Next's data cache, and fresh it would show a reader
+  who reloads after an edit the version before it. `AppRoot.test.tsx` holds the
+  API's answer back forever to prove the first paint came from the seed.
+- **A song the API says does not exist is a real 404**, through `notFound()` and
+  `app/not-found.tsx`, which still serves the app so it shows its own "not
+  available" — and Next adds `noindex`. Only the API's *own* `not_found` code
+  counts: a bare 404 from whatever sits in front of it (a misrouted ingress, a
+  wrong `API_ORIGIN`) is an outage, and answering every song 404 for one would
+  deindex the catalog. Like the redirect, `notFound` throws, so it stays outside
+  the `try`. Unknown paths outside `/songs/` still answer 200; nothing on the
+  server knows react-router's table.
 
 - **A server render needs an origin, and `""` is not one.** `API_BASE` in
   `api/client.ts` is two branches now: the browser's, unchanged, and the Node

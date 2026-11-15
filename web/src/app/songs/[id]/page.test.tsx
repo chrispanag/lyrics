@@ -25,14 +25,23 @@ class Redirected extends Error {
   }
 }
 
+/** What `notFound` throws. */
+class NotFound extends Error {}
+
 vi.mock("next/navigation", () => ({
-  // The real one throws too, which is what stops the render.
+  // The real ones throw too, which is what stops the render.
   permanentRedirect: (location: string) => {
     throw new Redirected(location);
+  },
+  notFound: () => {
+    throw new NotFound();
   },
 }));
 
 const { default: SongPage, generateMetadata } = await import("./page");
+const { ClientOnly } = await import("@/app/client");
+const { UntilAppMounts } = await import("@/app/UntilAppMounts");
+const { SongPreview } = await import("./SongPreview");
 
 /** Answers the song at both of its addresses, and 404s anything else. */
 function servingSong(song = makeSong({ id: UUID, slug: SLUG })) {
@@ -57,6 +66,14 @@ function structuredData(tree: ReactElement): string | null {
     }
   }
   return null;
+}
+
+/** The page's top-level element of a given component, if it rendered one. */
+function child<P>(tree: ReactElement, type: unknown): ReactElement<P> | undefined {
+  const children = (tree.props as { children: unknown[] }).children;
+  return children.flat().find((node) => (node as ReactElement | null)?.type === type) as
+    | ReactElement<P>
+    | undefined;
 }
 
 beforeEach(() => server.use(servingSong()));
@@ -89,6 +106,43 @@ describe("a song's server-rendered document", () => {
     );
   });
 
+  it("renders the song for readers without JavaScript, until the app takes over", async () => {
+    const tree = await SongPage(props(SLUG));
+
+    // Inside the boundary that unmounts it, or its <title> outlives the app's.
+    const standIn = child<{ children: ReactElement<{ song: { slug: string } }> }>(
+      tree,
+      UntilAppMounts,
+    );
+    expect(standIn?.props.children.type).toBe(SongPreview);
+    expect(standIn?.props.children.props.song.slug).toBe(SLUG);
+  });
+
+  it("hands the app the song it read, under the address it was read at", async () => {
+    const tree = await SongPage(props(SLUG));
+
+    // Keyed as `useSong` keys it: the address, not the id.
+    const app = child<{ seeded?: { ref: string; song: { id: string } } }>(tree, ClientOnly);
+    expect(app?.props.seeded?.ref).toBe(SLUG);
+    expect(app?.props.seeded?.song.id).toBe(UUID);
+  });
+
+  it("answers 404 when the API says no such song exists", async () => {
+    await expect(SongPage(props("no-such-song"))).rejects.toThrow(NotFound);
+    expect(await generateMetadata(props("no-such-song"))).toEqual({});
+  });
+
+  it("does not 404 on a bare 404 from something in front of the API", async () => {
+    // A misrouted ingress answers 404 for every song; that must not deindex them.
+    server.use(
+      http.get(`${API}/api/v1/songs/:ref`, () => new HttpResponse("Not Found", { status: 404 })),
+    );
+
+    const tree = await SongPage(props(SLUG));
+
+    expect(child(tree, ClientOnly)).toBeDefined();
+  });
+
   it("serves the app rather than redirecting when the song cannot be read", async () => {
     server.use(http.get(`${API}/api/v1/songs/:ref`, () => HttpResponse.error()));
 
@@ -96,6 +150,8 @@ describe("a song's server-rendered document", () => {
     const tree = await SongPage(props(UUID, { list: "list-1" }));
 
     expect(structuredData(tree)).toBeNull();
+    expect(child(tree, UntilAppMounts)).toBeUndefined();
+    expect(child<{ seeded?: unknown }>(tree, ClientOnly)?.props.seeded).toBeUndefined();
     expect(await generateMetadata(props(UUID))).toEqual({});
   });
 
