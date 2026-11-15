@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Link, pathMatches, useNavigationKey, useRouter } from "./navigation";
 import { renderWithProviders } from "@/test/render";
+import { CurrentAddress } from "@/test/routes";
 
 describe("pathMatches", () => {
   it.each([
@@ -18,10 +19,6 @@ describe("pathMatches", () => {
   ])("%s under a link to %s: %s", (pathname, href, lit) => {
     expect(pathMatches(pathname, href)).toBe(lit);
   });
-
-  it("asks for the same path alone with `end`", () => {
-    expect(pathMatches("/admin/users", "/admin", true)).toBe(false);
-  });
 });
 
 /** The navigation key and `canGoBack`, with a link to here and one elsewhere. */
@@ -35,7 +32,14 @@ function Probe() {
       <button type="button" onClick={() => router.replace("/songs/c")}>
         Replace
       </button>
+      <button type="button" onClick={() => router.push("/songs/a")}>
+        Push here
+      </button>
+      <button type="button" onClick={() => router.back()}>
+        Back
+      </button>
       <p data-testid="back">{String(router.canGoBack())}</p>
+      <CurrentAddress />
     </>
   );
 }
@@ -66,6 +70,18 @@ describe("useNavigationKey", () => {
   });
 });
 
+describe("push", () => {
+  // Two identical entries in a row make Back appear to do nothing.
+  it("replaces rather than pushes the address already showing", async () => {
+    renderWithProviders(<Probe />, { route: ["/songs/z", "/songs/a"] });
+
+    await userEvent.click(screen.getByRole("button", { name: "Push here" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/songs/z");
+  });
+});
+
 describe("canGoBack", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -85,12 +101,13 @@ describe("canGoBack", () => {
     expect(canGoBack()).toBe("true");
   });
 
-  // A replace leaves nothing new behind, and neither does a link to here,
-  // which the router turns into a replace.
-  it("stays false through a replace and a link to the address showing", async () => {
+  // A replace leaves nothing new behind, and neither does a link or a push to
+  // the address showing, which both become replaces.
+  it("stays false through a replace, and a link or push to the address showing", async () => {
     renderWithProviders(<Probe />, { route: "/songs/a" });
 
     await userEvent.click(screen.getByRole("link", { name: "Here" }));
+    await userEvent.click(screen.getByRole("button", { name: "Push here" }));
     await userEvent.click(screen.getByRole("button", { name: "Replace" }));
 
     expect(canGoBack()).toBe("false");

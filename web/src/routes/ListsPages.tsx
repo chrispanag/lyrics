@@ -12,7 +12,7 @@ import {
   useReorderList,
   useUpdateList,
 } from "@/api/hooks";
-import { signInHref } from "@/auth/returnTo";
+import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { cardChrome, cardHover } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
@@ -32,7 +32,7 @@ import { BackButton } from "@/components/BackButton";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
 import type { Song } from "@/lib/types";
-import { Link, useCurrentHref, useParams, useRouter } from "@/lib/navigation";
+import { Link, useParams, useRouter } from "@/lib/navigation";
 
 // Only an owner can reorder, so the drag machinery loads on demand.
 const SortableSongList = lazy(() =>
@@ -172,7 +172,7 @@ function subscribeToNothing() {
 export function ListDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const here = useCurrentHref();
+  const signIn = useSignInHref();
   const { user, loading: sessionLoading } = useAuth();
 
   // Waiting on the session is redundant now that auth/session registers the
@@ -262,7 +262,7 @@ export function ListDetailPage() {
 
   const onSave = () => {
     if (!user) {
-      router.push(signInHref(here));
+      router.push(signIn);
       return;
     }
     void saveCopy();

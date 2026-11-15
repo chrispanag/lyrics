@@ -9,16 +9,23 @@
  * seam".
  */
 
+import { useCurrentHref } from "@/lib/navigation";
+
 /** The query parameter the sign-in screen reads its destination from. */
 const NEXT = "next";
 
-/**
- * The sign-in screen, asked to come back to `here` afterwards. `here` is the
- * router's current address (path plus search), so a guard that redirects
- * mid-navigation records where the visitor was headed.
- */
+/** The sign-in screen, asked to come back to `here` (a path, search included) afterwards. */
 export function signInHref(here: string): string {
   return `/login?${new URLSearchParams({ [NEXT]: here })}`;
+}
+
+/**
+ * The sign-in screen, asked to come back to the current address. The router's
+ * address, search string included, so a guard that redirects mid-navigation
+ * records where the visitor was headed and a filter survives the detour.
+ */
+export function useSignInHref(): string {
+  return signInHref(useCurrentHref());
 }
 
 /**

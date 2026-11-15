@@ -12,6 +12,8 @@ import {
   useState,
 } from "react";
 import {
+  BrowserRouter,
+  MemoryRouter,
   Navigate,
   Link as RouterLink,
   useLocation,
@@ -65,19 +67,16 @@ export function useSetSearchParams(): (
   options?: { replace?: boolean },
 ) => void {
   const [, setParams] = useRouterSearchParams();
-  return useCallback(
-    (edit, options = {}) => {
-      setParams(
-        (previous) => {
-          const next = new URLSearchParams(previous);
-          edit(next);
-          return next;
-        },
-        { replace: Boolean(options.replace) },
-      );
-    },
-    [setParams],
-  );
+  return (edit, options = {}) => {
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        edit(next);
+        return next;
+      },
+      { replace: Boolean(options.replace) },
+    );
+  };
 }
 
 export interface Router {
@@ -99,9 +98,11 @@ export function useRouter(): Router {
   return useMemo(
     () => ({
       push(href) {
-        noteNavigation(href, "push");
+        // A push to the address showing replaces it, as a link to it does:
+        // two identical entries in a row make Back appear to do nothing.
+        const same = noteNavigation(href, "push");
         // Typed to allow a promise, which only a data router returns.
-        void navigate(href);
+        void navigate(href, { replace: same });
       },
       replace(href) {
         noteNavigation(href, "replace");
@@ -173,13 +174,13 @@ function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
 /**
  * Whether a link to `href` names the screen at `pathname`: the same path, or one
  * below it by whole segments (`/admin` lights on `/admin/users`, never on
- * `/admin-x`). `/` matches only itself. `end` asks for the same path alone.
+ * `/admin-x`). `/` matches only itself, or it would be lit everywhere.
  */
-export function pathMatches(pathname: string, href: string, end = false): boolean {
+export function pathMatches(pathname: string, href: string): boolean {
   const here = pathname.toLowerCase();
   const to = href.toLowerCase();
   if (here === to) return true;
-  return !end && to !== "/" && here.startsWith(`${to}/`);
+  return to !== "/" && here.startsWith(`${to}/`);
 }
 
 /**
@@ -188,14 +189,12 @@ export function pathMatches(pathname: string, href: string, end = false): boolea
  */
 export function NavLink({
   href,
-  end,
   className,
   ...rest
 }: Omit<LinkProps, "className"> & {
-  end?: boolean;
   className: (state: { isActive: boolean }) => string;
 }) {
-  const isActive = pathMatches(usePathname(), href, end);
+  const isActive = pathMatches(usePathname(), href);
   return (
     <Link
       href={href}
@@ -212,14 +211,15 @@ export function Redirect({ href }: { href: string }) {
 }
 
 interface HistoryState {
-  noteNavigation(href: string, kind: "push" | "replace"): void;
+  /** Records a navigation about to happen; true when it goes to the address showing. */
+  noteNavigation(href: string, kind: "push" | "replace"): boolean;
   canGoBack(): boolean;
   /** How many navigations have landed on the address already showing. */
   revisits: number;
 }
 
 const HistoryContext = createContext<HistoryState>({
-  noteNavigation: () => {},
+  noteNavigation: () => false,
   canGoBack: () => false,
   revisits: 0,
 });
@@ -241,12 +241,14 @@ interface NavigationApi {
  * loaded, which reads a reloaded editor as a fresh tab. That is the safe way to
  * be wrong: the editor then replaces itself with the song rather than popping
  * an entry that might be another site.
+ *
+ * Mounted by `AppRouter` and `TestRouter`, never on its own, so no tree can have
+ * the router without it and quietly answer from the context's defaults.
  */
-export function HistoryProvider({
+function HistoryProvider({
   entriesBehind = false,
   children,
 }: {
-  /** For a test that renders with history already behind the first screen. */
   entriesBehind?: boolean;
   children: ReactNode;
 }) {
@@ -269,9 +271,12 @@ export function HistoryProvider({
   }, []);
 
   const noteNavigation = useCallback((href: string, kind: "push" | "replace") => {
-    // A link to the address showing replaces its entry rather than adding one.
-    if (sameAddress(href, hereRef.current)) setRevisits((count) => count + 1);
+    // A navigation to the address showing replaces its entry rather than
+    // adding one, whether a link or a push asked for it.
+    const same = sameAddress(href, hereRef.current);
+    if (same) setRevisits((count) => count + 1);
     else if (kind === "push") movedRef.current = true;
+    return same;
   }, []);
 
   const canGoBack = useCallback(() => {
@@ -284,6 +289,27 @@ export function HistoryProvider({
     [noteNavigation, canGoBack, revisits],
   );
   return <HistoryContext.Provider value={value}>{children}</HistoryContext.Provider>;
+}
+
+/** The app's router, on the browser's address bar. Mounted once, by `AppRoot`. */
+export function AppRouter({ children }: { children: ReactNode }) {
+  return (
+    <BrowserRouter>
+      <HistoryProvider>{children}</HistoryProvider>
+    </BrowserRouter>
+  );
+}
+
+/**
+ * A router held in memory, for specs and stories: rendered at the last of
+ * `entries`, with the rest behind it (oldest first) for a spec that goes Back.
+ */
+export function TestRouter({ entries, children }: { entries: string[]; children: ReactNode }) {
+  return (
+    <MemoryRouter initialEntries={entries}>
+      <HistoryProvider entriesBehind={entries.length > 1}>{children}</HistoryProvider>
+    </MemoryRouter>
+  );
 }
 
 /** Whether two in-app addresses are the same screen, hash aside. */

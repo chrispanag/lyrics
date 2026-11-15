@@ -1,13 +1,13 @@
 import { lazy } from "react";
 import { Outlet, Route, Routes } from "react-router-dom";
 
-import { signInHref } from "@/auth/returnTo";
+import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { Layout } from "@/components/Layout";
 import { MenuHeader } from "@/components/SearchHeader";
 import { PageTitle } from "@/components/PageTitle";
 import { EmptyState, Spinner } from "@/components/ui";
-import { Redirect, useCurrentHref, usePathname } from "@/lib/navigation";
+import { Redirect, usePathname } from "@/lib/navigation";
 import { hasRole } from "@/lib/types";
 import {
   ChangePasswordPage,
@@ -40,10 +40,10 @@ const AdminGenresPage = lazy(() =>
 /** Requires a session before rendering. Display only; the server enforces. */
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const here = useCurrentHref();
+  const signIn = useSignInHref();
 
   if (loading) return <Spinner />;
-  if (!user) return <Redirect href={signInHref(here)} />;
+  if (!user) return <Redirect href={signIn} />;
   return <>{children}</>;
 }
 

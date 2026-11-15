@@ -38,8 +38,8 @@
         },
         // The routing seam: react-router is reached through @/lib/navigation,
         // whose API `next/navigation` can implement too, so changing routers is
-        // a change to that module. The route table, the router's mount and the
-        // spec and story harness are the only other importers (the override
+        // a change to that module. The route table and the harness's
+        // `test/routes.tsx` are the only other importers (the override
         // below). See CLAUDE.md, "The routing seam".
         "noRestrictedImports": {
           "level": "error",
@@ -97,9 +97,9 @@
       }
     },
     {
-      // The router's mount and route table, and the harness that stands in for
-      // them in specs and stories. The seam itself says so in its own file.
-      "includes": ["src/App.tsx", "src/AppRoot.tsx", "src/test/**", ".storybook/**"],
+      // The route table, and the harness that stands in for it in specs and
+      // stories. The seam itself says so in its own file.
+      "includes": ["src/App.tsx", "src/test/routes.tsx"],
       "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
     },
     {

@@ -1,18 +1,16 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
 import { type ReactNode, useMemo, useState } from "react";
 
 import { stubAuth, testQueryClient } from "./providers";
 import { AuthContext, type AuthContextValue } from "@/auth/context";
-import { HistoryProvider } from "@/lib/navigation";
+import { TestRouter } from "@/lib/navigation";
 import type { User } from "@/lib/types";
 
 /**
  * The query client, router and auth stub a component reaches for outside
  * `AppRoot`, nested once for `renderWithProviders` and the Storybook preview.
- * The router is the one place here that names react-router; everything below
- * it goes through `@/lib/navigation`, so moving routers swaps this provider and
- * `./routes.tsx` alone.
+ * The router is the seam's `TestRouter`, so moving routers changes nothing
+ * here; `./routes.tsx` is the one harness file that names react-router.
  * Pass `queryClient` to keep a handle on it; otherwise each mount makes its own.
  */
 export function TestProviders({
@@ -32,15 +30,12 @@ export function TestProviders({
   const [client] = useState(() => given ?? testQueryClient());
   // Stable across re-renders, or every consumer of the context re-renders too.
   const authValue = useMemo(() => stubAuth(user, auth), [user, auth]);
-  const entries = Array.isArray(route) ? route : [route];
 
   return (
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={entries}>
-        <HistoryProvider entriesBehind={entries.length > 1}>
-          <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
-        </HistoryProvider>
-      </MemoryRouter>
+      <TestRouter entries={Array.isArray(route) ? route : [route]}>
+        <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
+      </TestRouter>
     </QueryClientProvider>
   );
 }

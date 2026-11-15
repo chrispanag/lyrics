@@ -1047,29 +1047,35 @@ them is written down.
 Every screen is still a react-router route, and the plan is to move them onto
 App Router pages backed by `next/navigation`. `lib/navigation.tsx` is what makes
 that switch one module: it is the only file that may import react-router outside
-the route table (`App.tsx`), the router's mount (`AppRoot.tsx`) and the spec and
-story harness (`src/test/`, `.storybook/`), and Biome's `noRestrictedImports`
-refuses it anywhere else. What it offers is shaped by what Next can also
+the route table (`App.tsx`) and the harness's `test/routes.tsx`, and Biome's
+`noRestrictedImports` refuses it anywhere else. It mounts the router too —
+`AppRouter` for `AppRoot`, `TestRouter` for `TestProviders` — so neither names
+a router. What it offers is shaped by what Next can also
 implement, which is why the parts below look the way they do.
 
 - **The vocabulary is Next's.** `useRouter()` returns `push`, `replace` and
   `back`; `Link` and `NavLink` take an `href` string and `replace`; `usePathname`,
   `useSearchParams` (read-only) and `useParams` read the address;
   `useSetSearchParams` writes the search string from what it holds now; and
-  `<Redirect>` always replaces, since every guard did. An address is a string —
-  never react-router's object `To`, which Next's `href` object is not the same
+  `<Redirect>` always replaces, since every guard did. A `push` to the address
+  already showing is a replace, as react-router's `Link` already made one: two
+  identical entries in a row are a Back press that appears to do nothing. An
+  address is a string — never react-router's object `To`, which Next's `href` object is not the same
   shape as — and there is no hash in `useCurrentHref`, because no Next hook
   exposes one. `NavLink` is written here over `usePathname` rather than wrapped,
   and its `pathMatches` is also what `AdminConsole` names its heading by, so the
   tab that is lit and the heading cannot disagree. It mirrors react-router's
-  rule, including the one that surprises: a link to `/` is lit on `/` alone.
+  rule, including the one that surprises: a link to `/` is lit on `/` alone —
+  which is why there is no `end` prop to say it a second time.
   `Layout` and `AdminConsole` take `children`; the `<Outlet/>` stays in the
   route table, which is the part a layout file replaces.
 - **Sign-in's destination travels as `?next=`, not router state.** Router state
   is react-router's alone, and the address also survives a reload of the
   sign-in screen. `auth/returnTo.ts` writes it (`signInHref`) and reads it
   (`returnDestination`), and the reader is where the cost lands: anyone can
-  write the parameter, so only a path on this site is accepted. The check is a
+  write the parameter, so only a path on this site is accepted. Writers call
+  `useSignInHref()`, which reads the current address *with* its search string;
+  one built by hand from `usePathname` drops a filter on the way back. The check is a
   `URL` resolved against a stand-in origin, not a prefix test, because the
   parser is what turns `/\host` and a tab inside `//host` into another host —
   exactly as a browser would, and exactly what a `startsWith("//")` misses.
@@ -1084,10 +1090,13 @@ implement, which is why the parts below look the way they do.
   with the song instead of popping. That is the safe way to be wrong: the other
   way pops an entry that may be another site. `window.history.length` was the
   option rejected: it counts entries from other sites, so a link opened from
-  search results reads as having something behind it. `HistoryProvider` holds
-  the fallback, mounted just inside the router; a spec rendering with history
-  behind it (`route: [...]`) says so through `entriesBehind`, which is how the
-  editor's specs keep both sides pinned.
+  search results reads as having something behind it. Persisting the fallback
+  (an index in `sessionStorage` or `history.state`) would fix the reload as
+  well, and was left until the browsers lacking the API justify it. The
+  fallback lives in a provider that `AppRouter` and `TestRouter` mount and
+  nothing else can, so no tree has a router without it; `TestRouter` reads the
+  history behind the first screen (`route: [...]`) off its entries, which is
+  how the editor's specs keep both sides pinned.
 - **`useNavigationKey` replaced `location.key` as "a navigation happened".** The
   drawer closes on it and the song page's search box empties on it, and both
   need a link to the address already showing to count — which changes neither
@@ -1110,8 +1119,8 @@ implement, which is why the parts below look the way they do.
   is a full reload instead of a fast refresh when it is edited.
 - **Specs say which screen answers which address through `test/routes.tsx`**
   (`TestRoutes`, and `CurrentAddress` for asserting a destination), never by
-  naming `<Routes>`. With `TestProviders`, that is the whole of the harness a
-  router change has to touch.
+  naming `<Routes>`. That file is the whole of the harness a router change has
+  to touch.
 
 ### Frontend
 

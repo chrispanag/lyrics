@@ -10,7 +10,7 @@ import {
   useSongLists,
   useToggleSongInList,
 } from "@/api/hooks";
-import { signInHref } from "@/auth/returnTo";
+import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongSwipe } from "@/components/ListSongNav";
 import { PageTitle } from "@/components/PageTitle";
@@ -29,7 +29,7 @@ import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { recordingCount, songCount } from "@/lib/format";
-import { Link, useCurrentHref, useParams, useRouter, useSearchParams } from "@/lib/navigation";
+import { Link, useParams, useRouter, useSearchParams } from "@/lib/navigation";
 import { RecordingsSheet } from "@/components/RecordingsSheet";
 
 /**
@@ -53,7 +53,7 @@ export function SongDetailPage() {
 function SongArticle() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const here = useCurrentHref();
+  const signIn = useSignInHref();
   const params = useSearchParams();
   const { user, loading: sessionLoading } = useAuth();
 
@@ -127,7 +127,7 @@ function SongArticle() {
             // `user` is only a snapshot until the restore settles; neither branch
             // may be decided on it.
             disabled={sessionLoading}
-            onClick={() => (user ? setListSheetOpen(true) : router.push(signInHref(here)))}
+            onClick={() => (user ? setListSheetOpen(true) : router.push(signIn))}
           >
             <ListPlus aria-hidden className="size-4" />
             <span className="hidden sm:inline">Save</span>
