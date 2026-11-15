@@ -282,10 +282,17 @@ export function ListDetailPage() {
         {list.description && <p className="mt-1 text-sm text-fg-muted">{list.description}</p>}
         <p className="mt-1 text-sm text-fg-muted">{songCount(list.item_count)}</p>
 
-        {/* A non-owner only reaches a public list; guests are sent to sign in. */}
+        {/* A non-owner only reaches a public list; guests are sent to sign in.
+            Inert until the session is known: a server-rendered list is on screen
+            before then, and `!user` would send a signed-in reader to sign in. */}
         {!isOwner && (
           <div className="mt-4">
-            <Button size="sm" onClick={onSave} loading={copyList.isPending}>
+            <Button
+              size="sm"
+              onClick={onSave}
+              loading={copyList.isPending}
+              disabled={sessionLoading}
+            >
               <Copy aria-hidden className="size-4" />
               Save to my lists
             </Button>

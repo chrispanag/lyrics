@@ -179,6 +179,24 @@ describe("ListDetailPage", () => {
     expect(screen.queryByText(/not available/i)).not.toBeInTheDocument();
   });
 
+  // The server's read of a public list renders before the session is known, so
+  // `!user` there would send a signed-in reader to sign in.
+  it("holds the copy button until the session is known", async () => {
+    const { queryClient } = renderDetail("/lists/list-1", {
+      user: null,
+      auth: { loading: true },
+    });
+    act(() => {
+      queryClient.setQueryData(
+        keys.list("list-1"),
+        makeList({ id: "list-1", owner_id: "someone-else", name: "Ρεμπέτικα" }),
+      );
+    });
+
+    expect(await screen.findByRole("heading", { name: "Ρεμπέτικα" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save to my lists/i })).toBeDisabled();
+  });
+
   it("asks once the session has settled", async () => {
     serveLists(makeList({ id: "list-1", owner_id: "user-1", name: "Ρεμπέτικα" }));
 

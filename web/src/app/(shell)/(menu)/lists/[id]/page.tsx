@@ -32,6 +32,9 @@ import { ListDetailPage } from "@/routes/ListsPages";
  */
 type ServerList = SongList | "hidden" | null;
 
+/** How long the server waits for the API before rendering without the list. */
+const READ_TIMEOUT_MS = 5_000;
+
 /**
  * The list, read once per request for both `generateMetadata` and the render.
  *
@@ -48,6 +51,8 @@ const loadList = cache(async (id: string): Promise<ServerList> => {
   try {
     const list = await apiFetch<SongList>(`/api/v1/lists/${encodeURIComponent(id)}`, {
       anonymous: true,
+      // A hung API is an outage too: serve the page and let the browser ask.
+      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
     });
     return (list.songs ?? []).some((song) => !song.slug) ? null : list;
   } catch (caught) {

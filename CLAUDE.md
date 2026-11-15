@@ -988,8 +988,16 @@ scraper rather than by anyone inside the app, which is why each is written down.
   the server describing it now, not `CACHE_SECONDS` later. Which is also why the
   entry is stamped fresh rather than `updatedAt: 0` — nothing made it stale, and
   a shared link's every reader would otherwise ask for it twice. A list whose
-  songs carry no `slug` is treated as an outage, for the reason below. The API
-  exposes no owner name, so the description says the count instead.
+  songs carry no `slug` is treated as an outage, for the reason below, and so is
+  a read that takes longer than `READ_TIMEOUT_MS`. The API exposes no owner
+  name, so the description says the count instead. Two costs are accepted. Every
+  list open, a private list's included, waits for that guest read before
+  anything changes on screen, though for an owner's private list it can only
+  ever answer "hidden" — the same server round trip a step to another song
+  pays. And a public list is on screen while the session is still restoring,
+  so `user` is null for a moment for everyone: "Save to my lists" is
+  `disabled` until `loading` clears, because pressed in that moment it reads a
+  signed-in reader as a guest and sends them to sign in.
 - **A server render needs an origin, and `""` is not one.** `API_BASE` in
   `api/client.ts` is two branches now: the browser's, unchanged, and the Node
   process's, which resolves `API_ORIGIN` and falls back to `:8080`. It is one
