@@ -30,6 +30,14 @@ beforeAll(() => {
         dispatchEvent: vi.fn(),
       })),
     );
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
     window.scrollTo = vi.fn();
   }
 

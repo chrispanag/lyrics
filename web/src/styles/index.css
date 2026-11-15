@@ -53,6 +53,13 @@
        is no class and the page is light, so light is the right answer there
        too. */
     @apply scheme-light dark:scheme-dark;
+    /* Keeps a control reached by Tab from landing under the sticky header,
+       whose height `StickyHeader` measures into this property; screens without
+       one leave it unset. Below `md` as well, although the header hides on the
+       way down and the padding then leaves a gap above the target: Shift+Tab
+       scrolls up, which brings the header back over it, and a gap is cosmetic
+       where that is the failure. */
+    scroll-padding-top: var(--sticky-header-height, 0px);
   }
 
   @media (prefers-reduced-motion: reduce) {
