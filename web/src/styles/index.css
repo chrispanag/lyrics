@@ -54,9 +54,11 @@
     *,
     *::before,
     *::after {
+      /* biome-ignore-start lint/complexity/noImportantStyles: a reduced-motion override has to beat every animation, whatever its specificity. */
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+      /* biome-ignore-end lint/complexity/noImportantStyles: see above. */
     }
   }
 

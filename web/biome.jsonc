@@ -1,0 +1,75 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "root": true,
+  // The .gitignore that matters is the repository's, one level up.
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true, "root": ".." },
+  "files": {
+    "includes": ["**", "!pnpm-lock.yaml", "!next-env.d.ts", "!**/*.md"]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "css": {
+    "parser": { "tailwindDirectives": true }
+  },
+  // Off: imports are grouped by hand (framework, packages, then `@/`), and
+  // sorting them is a decision of its own rather than part of formatting.
+  "assist": {
+    "actions": { "source": { "organizeImports": "off" } }
+  },
+  "linter": {
+    "rules": {
+      "correctness": {
+        "useExhaustiveDependencies": "error",
+        "useHookAtTopLevel": "error"
+      },
+      "style": {
+        // `noUncheckedIndexedAccess` makes `!` the deliberate way to say an
+        // index is known to be there.
+        "noNonNullAssertion": "off",
+        // What keeps component files exporting only components, which fast
+        // refresh needs and the style modules in CLAUDE.md exist for.
+        "useComponentExportOnlyModules": {
+          "level": "error",
+          "options": { "allowConstantExport": true }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      // The App Router's own export vocabulary, in the one directory that has
+      // route files, so the rule still holds everywhere else.
+      "includes": ["src/app/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useComponentExportOnlyModules": {
+              "level": "error",
+              "options": {
+                "allowConstantExport": true,
+                "allowExportNames": ["metadata", "viewport", "generateMetadata"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      // Specs define throwaway components and are never fast-refreshed.
+      "includes": ["**/*.test.tsx"],
+      "linter": {
+        "rules": { "style": { "useComponentExportOnlyModules": "off" } }
+      }
+    }
+  ]
+}

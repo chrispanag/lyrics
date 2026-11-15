@@ -258,6 +258,7 @@ export function Sheet({
         onClick={onClose}
         aria-hidden
       />
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: `useModal` spreads role="dialog" onto it. */}
       <div
         // role="dialog" + aria-modal from `useModal`; the page's swipe and arrow
         // keys stand down while it is present.

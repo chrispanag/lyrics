@@ -369,6 +369,7 @@ function ThemeToggle({
         className="flex gap-1 rounded-xl bg-stone-200 p-1 dark:bg-stone-800"
       >
         {THEME_OPTIONS.map((option) => (
+          // biome-ignore lint/a11y/useSemanticElements: a segmented control, styled as one row of buttons.
           <button
             key={option.value}
             type="button"

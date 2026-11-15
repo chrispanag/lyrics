@@ -83,7 +83,6 @@ function SongArticle() {
   // "The Next.js shell".
   const [fontSizeIndex, setFontSizeIndex] = useState(DEFAULT_FONT_SIZE);
   useLayoutEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- the deliberate second pass above; the size is also the reader's own state, so a store would need a writer of its own
     setFontSizeIndex(storedFontSize());
   }, []);
 
@@ -197,6 +196,7 @@ function SongArticle() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">
             Lyrics
           </h2>
+          {/* biome-ignore lint/a11y/useSemanticElements: a toolbar, not a form; a fieldset brings form styling. */}
           <div className="flex items-center gap-1" role="group" aria-label="Text size">
             <Type aria-hidden className="mr-1 size-4 text-stone-400" />
             <button

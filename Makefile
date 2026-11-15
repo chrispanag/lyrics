@@ -138,8 +138,13 @@ test-web: ## Run frontend unit tests
 	cd web && pnpm run test
 
 .PHONY: lint-web
-lint-web: ## Typecheck and lint the frontend
+lint-web: ## Typecheck, lint and check formatting of the frontend
 	cd web && pnpm run typecheck && pnpm run lint
+
+.PHONY: format
+format: ## Format both stacks (gofmt, Biome)
+	gofmt -w backend
+	cd web && pnpm run format
 
 .PHONY: icons
 # web/icons is a pnpm project of its own; its package.json says why.

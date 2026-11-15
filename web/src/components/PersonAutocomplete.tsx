@@ -106,6 +106,7 @@ export function PersonAutocomplete({
       {open && suggestions.length > 0 && (
         <ul
           id={listId}
+          // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: the ARIA combobox pattern's listbox.
           role="listbox"
           className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-900"
         >

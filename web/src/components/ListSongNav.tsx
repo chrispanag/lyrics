@@ -277,7 +277,6 @@ function useSwipeHint(): [boolean | null, (element: HTMLElement | null) => void]
   // reading it during render would mismatch a server render.
   const [unspent, setUnspent] = useState(false);
   useLayoutEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- the deliberate second pass above; read once, since spending the hint must not unmount the mark mid-fade
     setUnspent(hintUnspent());
   }, []);
   const [hinting, setHinting] = useState(false);

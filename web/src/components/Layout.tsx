@@ -52,6 +52,7 @@ export function Layout() {
 
   // Route changes start at the top. Keyed on `pathname` so a filter written
   // into the query string does not scroll the catalog.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the key is the trigger, not a value read.
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [location.pathname]);
@@ -217,6 +218,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
           open ? "opacity-100 backdrop-blur-sm" : "opacity-0",
         )}
       />
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: `marking` spreads role="dialog" while open. */}
       <div
         ref={panel}
         // Focusable only as `useModal`'s focus target.

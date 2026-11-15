@@ -22,6 +22,7 @@ make up          # start PostgreSQL (host port 5433)
 make seed        # migrate + load sample songs
 make api         # run the API on :8080
 make web         # run the web app on :5173
+make format      # gofmt + Biome, rewriting files
 make check       # lint + test, both stacks
 ```
 
@@ -29,9 +30,11 @@ make check       # lint + test, both stacks
 when no database is reachable, so without it a broken schema reports green.
 
 Keep `make check` clean. Backend must be `gofmt`-clean with zero `golangci-lint`
-findings; frontend must have zero `tsc` errors and zero eslint findings
-(warnings included — the fast-refresh warnings are why styles live in their own
-modules, see Conventions).
+findings; frontend must have zero `tsc` errors and zero Biome findings, which
+covers formatting as well as lint (warnings included — the fast-refresh rule is
+why styles live in their own modules, see Conventions). `make format` fixes the
+formatting half. Biome is pinned to an exact version on purpose, since its
+formatter's output can change between releases.
 
 ---
 
@@ -1724,9 +1727,10 @@ each of them is written down.
 - **Style modules over co-exports.** `buttonStyles.ts`, `fieldStyles.ts`,
   `lib/snippet.ts`, `lib/credits.ts`, `lib/theme.ts`, `auth/context.ts` exist so
   component files export *only* components — that is what keeps fast refresh
-  working, and eslint enforces it. The App Router's own export vocabulary
-  (`metadata`, `viewport`, `generateMetadata`) is allowed in an override scoped to
-  `src/app/**` rather than added to the rule for the whole app: that vocabulary
+  working, and Biome's `useComponentExportOnlyModules` enforces it. The App
+  Router's own export vocabulary (`metadata`, `viewport`, `generateMetadata`) is
+  allowed in an override scoped to `src/app/**` in `web/biome.jsonc` rather than
+  added to the rule for the whole app: that vocabulary
   keeps growing, and each widening would otherwise stop the rule catching a hook
   exported beside a component in `src/components` — which is where the convention
   above actually lives.

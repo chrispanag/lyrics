@@ -70,7 +70,7 @@ one-line pointer to that section.
 
 ### Keep untouched
 
-- Tool directives: `//go:embed`, `//go:build`, `//nolint`, `// eslint-disable…`,
+- Tool directives: `//go:embed`, `//go:build`, `//nolint`, `// biome-ignore…`,
   `// @vitest-environment`, `/// <reference …>`, `// @ts-expect-error` (trim only
   the explanation after it), shebangs.
 - License headers.
@@ -105,8 +105,8 @@ is still true, check; if you cannot tell, leave it and list it in the report.
 3. Confirm only comments changed: review `git diff` and make sure every changed
    line is a comment line, a now-blank line left by a deleted comment (collapse
    duplicated blank lines), or a gofmt realignment.
-4. Run `make lint` (gofmt, golangci-lint, go vet, tsc, eslint). Fix anything
-   the edit caused, such as an unused `eslint-disable` or a missing directive.
+4. Run `make lint` (gofmt, golangci-lint, go vet, tsc, biome). Fix anything
+   the edit caused, such as an unused `biome-ignore` or a missing directive.
 5. Report:
    - Per file: comments deleted / shortened.
    - Comments left alone because truth could not be verified, with

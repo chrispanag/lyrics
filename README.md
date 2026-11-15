@@ -563,7 +563,8 @@ curl 'localhost:8080/api/v1/songs?q=Θεοδορακης'   # misspelled artist 
 
 ```bash
 make test          # backend (race detector) + frontend
-make lint          # gofmt, golangci-lint, go vet, tsc, eslint
+make lint          # gofmt, golangci-lint, go vet, tsc, biome
+make format        # gofmt + biome, rewriting files
 make check         # both
 ```
 

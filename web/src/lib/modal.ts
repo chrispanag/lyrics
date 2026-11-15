@@ -56,6 +56,7 @@ export function useModal({
     };
   }, [open, onClose]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `open` alone is the key; `focus` is a stable ref.
   useEffect(() => {
     if (!open) return;
 
@@ -65,8 +66,6 @@ export function useModal({
     return () => {
       if (opener instanceof HTMLElement) opener.focus();
     };
-    // `open` alone is the key; `focus` is a stable ref.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   return open ? { role: "dialog", "aria-modal": true } : {};
