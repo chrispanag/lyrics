@@ -1,5 +1,5 @@
-import { makeGenre, makeRecording, makeSong } from "./handlers";
-import type { Song } from "@/lib/types";
+import { makeGenre, makeList, makeRecording, makeSong } from "./handlers";
+import type { Song, SongList } from "@/lib/types";
 
 /*
  * A handful of songs shaped like the real catalog, for stories that show a
@@ -7,9 +7,9 @@ import type { Song } from "@/lib/types";
  * recording, a few with performers, a video or genres.
  */
 
-const rempetiko = makeGenre();
-const laiko = makeGenre({ id: "genre-2", name: "Λαϊκό", slug: "laiko" });
-const entechno = makeGenre({ id: "genre-3", name: "Έντεχνο", slug: "entechno" });
+export const rempetiko = makeGenre();
+export const laiko = makeGenre({ id: "genre-2", name: "Λαϊκό", slug: "laiko" });
+export const entechno = makeGenre({ id: "genre-3", name: "Έντεχνο", slug: "entechno" });
 
 export const catalogGenres = [rempetiko, laiko, entechno];
 
@@ -54,3 +54,9 @@ export const catalogSongs: Song[] = [
   }),
   makeSong({ id: "song-5", slug: "choris-stoicheia", title: "Χωρίς Στοιχεία", credits: [] }),
 ];
+
+/** A list holding the first `count` catalog songs, its count derived from them. */
+export function catalogList(count: number, overrides: Partial<SongList> = {}): SongList {
+  const songs = catalogSongs.slice(0, count).map((song, position) => ({ ...song, position }));
+  return makeList({ songs, item_count: songs.length, ...overrides });
+}

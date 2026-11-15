@@ -1,10 +1,9 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import type { ReactElement, ReactNode } from "react";
 
-import { stubAuth, testQueryClient } from "./providers";
-import { AuthContext, type AuthContextValue } from "@/auth/context";
+import { testQueryClient } from "./providers";
+import { TestProviders } from "./TestProviders";
+import type { AuthContextValue } from "@/auth/context";
 import type { User } from "@/lib/types";
 
 /**
@@ -24,17 +23,13 @@ export function renderWithProviders(
   } & Omit<RenderOptions, "wrapper"> = {},
 ) {
   const { user = null, route = "/", auth, ...rest } = options;
-  const entries = Array.isArray(route) ? route : [route];
   const queryClient = testQueryClient();
-  const authValue = stubAuth(user, auth);
 
   function Wrapper({ children }: { children: ReactNode }) {
     return (
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={entries}>
-          <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
-        </MemoryRouter>
-      </QueryClientProvider>
+      <TestProviders user={user} route={route} auth={auth} queryClient={queryClient}>
+        {children}
+      </TestProviders>
     );
   }
 

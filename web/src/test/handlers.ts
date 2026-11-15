@@ -1,5 +1,6 @@
 import { HttpResponse, http } from "msw";
 
+import { songMatchesRef } from "@/lib/listContext";
 import type { Genre, ListResponse, Person, Recording, Song, SongList, User } from "@/lib/types";
 
 /** Base URL the client talks to under test. Exported so specs cannot drift from it. */
@@ -128,6 +129,17 @@ export function listById(...lists: SongList[]) {
   return http.get(`${API}/api/v1/lists/:id`, ({ params }) => {
     const found = lists.find((list) => list.id === params.id);
     return found ? HttpResponse.json(found) : notFound("List was not found.");
+  });
+}
+
+/**
+ * Serves each of these songs at both of its addresses, slug and id, as the API
+ * does, and a not-found envelope for any other.
+ */
+export function songByRef(...songs: Song[]) {
+  return http.get(`${API}/api/v1/songs/:ref`, ({ params }) => {
+    const found = songs.find((song) => songMatchesRef(song, String(params.ref)));
+    return found ? HttpResponse.json(found) : notFound("Song was not found.");
   });
 }
 

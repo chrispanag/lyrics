@@ -66,11 +66,11 @@ export const DrawerOpen: Story = {
   parameters: { user: makeUser({ display_name: "Christos" }) },
   // The hamburger is `md:hidden`; the addon sizes the test browser from this.
   globals: { viewport: { value: "mobile1", isRotated: false } },
-  play: async ({ canvas, canvasElement }) => {
+  play: async ({ canvas }) => {
     const trigger = canvas.getByRole("button", { name: "Open menu" });
     await userEvent.click(trigger);
 
-    const drawer = within(canvasElement).getByRole("dialog", { name: "Navigation" });
+    const drawer = canvas.getByRole("dialog", { name: "Navigation" });
     await expect(drawer).toBeVisible();
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await expect(within(drawer).getByRole("link", { name: /Christos/ })).toBeVisible();

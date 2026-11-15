@@ -3,7 +3,7 @@ import { HttpResponse, http } from "msw";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { API, makeSong, makeUnaddressedSong, notFound } from "@/test/handlers";
+import { API, makeSong, makeUnaddressedSong, songByRef } from "@/test/handlers";
 import { server } from "@/test/server";
 
 /*
@@ -36,11 +36,7 @@ const { default: SongPage, generateMetadata } = await import("./page");
 
 /** Answers the song at both of its addresses, and 404s anything else. */
 function servingSong(song = makeSong({ id: UUID, slug: SLUG })) {
-  return http.get(`${API}/api/v1/songs/:ref`, ({ params }) =>
-    params.ref === song.id || params.ref === song.slug
-      ? HttpResponse.json(song)
-      : notFound("Song was not found."),
-  );
+  return songByRef(song);
 }
 
 const props = (id: string, search: Record<string, string | string[]> = {}) => ({

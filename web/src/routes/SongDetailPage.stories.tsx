@@ -1,27 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { HttpResponse, http } from "msw";
 import { expect } from "storybook/test";
 
 import { SongDetailPage } from "./SongDetailPage";
-import type { Song } from "@/lib/types";
-import { catalogSongs } from "@/test/catalog";
-import {
-  API,
-  listById,
-  makeList,
-  makeRecording,
-  makeSong,
-  makeUser,
-  notFound,
-} from "@/test/handlers";
-
-/** Answers `/songs/:ref` by slug or id, as the API does. */
-function serveSongs(...songs: Song[]) {
-  return http.get(`${API}/api/v1/songs/:ref`, ({ params }) => {
-    const found = songs.find((song) => song.slug === params.ref || song.id === params.ref);
-    return found ? HttpResponse.json(found) : notFound("Song was not found.");
-  });
-}
+import { catalogList, catalogSongs, entechno } from "@/test/catalog";
+import { listById, makeRecording, makeSong, makeUser, songByRef } from "@/test/handlers";
 
 const documented = makeSong({
   id: "song-9",
@@ -49,7 +31,7 @@ const documented = makeSong({
       performers: [{ person_id: "person-7", name: "Χάρις Αλεξίου", position: 0 }],
     }),
   ],
-  genres: catalogSongs[0]?.genres ?? [],
+  genres: [entechno],
 });
 
 /*
@@ -61,7 +43,7 @@ const meta = {
   component: SongDetailPage,
   parameters: { layout: "fullscreen", path: "/songs/:id", route: "/songs/thalassa-platia" },
   beforeEach({ msw }) {
-    msw.use(serveSongs(makeSong(), documented, ...catalogSongs.slice(1)));
+    msw.use(songByRef(makeSong(), documented, ...catalogSongs.slice(1)));
   },
 } satisfies Meta<typeof SongDetailPage>;
 
@@ -91,14 +73,7 @@ export const Documented: Story = {
 export const InAList: Story = {
   parameters: { route: "/songs/frangosyriani?list=list-1" },
   beforeEach({ msw }) {
-    msw.use(
-      listById(
-        makeList({
-          songs: catalogSongs.slice(0, 3).map((song, position) => ({ ...song, position })),
-          item_count: 3,
-        }),
-      ),
-    );
+    msw.use(listById(catalogList(3)));
   },
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole("link", { name: "Ρεμπέτικα" })).toBeVisible();

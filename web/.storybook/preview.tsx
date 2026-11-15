@@ -1,53 +1,46 @@
 import type { Decorator, Preview } from "@storybook/react-vite";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { setupWorker } from "msw/browser";
 import { createPreviewAnnotations } from "msw-storybook-addon/preview";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { useLayoutEffect, useState } from "react";
+import { Route, Routes } from "react-router-dom";
+import { useLayoutEffect } from "react";
 
-import { AuthContext } from "@/auth/context";
 import { applyTheme, type Theme } from "@/lib/theme";
 import type { User } from "@/lib/types";
 import { API, handlers } from "@/test/handlers";
-import { stubAuth, testQueryClient } from "@/test/providers";
+import { TestProviders } from "@/test/TestProviders";
 import "@/styles/index.css";
 
 /*
  * Stories render outside `AppRoot`, so the providers a component reaches for
  * are supplied here, configured per story through parameters:
  *
- * - `user`: who is signed in, `null` (the default) for a guest. The auth
- *   context is `stubAuth`, the same stub the specs use.
+ * - `user`: who is signed in, `null` (the default) for a guest.
  * - `route`: the address to render at, or the history behind it.
  * - `path`: a route pattern to mount the story under, for a page that reads
  *   `useParams` (`/songs/:id`).
  *
- * Requests go to MSW with the specs' default handlers (`src/test/handlers.ts`);
- * a story adds its own in `beforeEach({ msw }) { msw.use(...) }`, which take
- * precedence and are reset after the story.
+ * `TestProviders` is the same nesting `renderWithProviders` uses, with a fresh
+ * query client per story. Requests go to MSW with the specs' default handlers
+ * (`src/test/handlers.ts`); a story adds its own in
+ * `beforeEach({ msw }) { msw.use(...) }`, which take precedence and are reset
+ * after the story.
  */
 
 const withProviders: Decorator = (Story, { parameters }) => {
-  // One client per story, so no cached answer leaks into the next.
-  const [queryClient] = useState(testQueryClient);
-  const route = (parameters.route as string | string[] | undefined) ?? "/";
   const path = parameters.path as string | undefined;
-  const user = (parameters.user as User | null | undefined) ?? null;
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={Array.isArray(route) ? route : [route]}>
-        <AuthContext.Provider value={stubAuth(user)}>
-          {path ? (
-            <Routes>
-              <Route path={path} element={<Story />} />
-            </Routes>
-          ) : (
-            <Story />
-          )}
-        </AuthContext.Provider>
-      </MemoryRouter>
-    </QueryClientProvider>
+    <TestProviders
+      user={parameters.user as User | null | undefined}
+      route={parameters.route as string | string[] | undefined}
+    >
+      {path ? (
+        <Routes>
+          <Route path={path} element={<Story />} />
+        </Routes>
+      ) : (
+        <Story />
+      )}
+    </TestProviders>
   );
 };
 

@@ -1874,20 +1874,22 @@ each of them is written down.
   the fixture factories in `src/test/handlers.ts` rather than keeping a second
   set.
 - **A story gets its providers from parameters, and its API from MSW.**
-  `.storybook/preview.tsx` mounts the query client and `stubAuth` from
-  `src/test/providers.ts` — the same pair `renderWithProviders` uses — plus a
-  `MemoryRouter`; `parameters.user`, `route` and `path` configure them, `path`
-  being the route pattern for a page that reads `useParams`. Requests go to an
+  `.storybook/preview.tsx` wraps every story in `src/test/TestProviders.tsx` —
+  the same query client, router and auth stub `renderWithProviders` nests —
+  and `parameters.user`, `route` and `path` configure it, `path` being the
+  route pattern for a page that reads `useParams`. Requests go to an
   MSW worker started with the specs' default handlers, and a story adds its own
   in `beforeEach({ msw }) { msw.use(...) }`; an API request nothing answers is
   an error, as it is in the specs. Four things bite. **A loading story must wait
   for its content in `play`**, since axe runs after it, and without the wait it
   checks the skeleton and passes whatever the page looks like. The worker
   script is in `.storybook/public`, not `public/`, so production never serves
-  it. **A dependency only a lazy chunk imports must be in `optimizeDeps.include`**
-  in `.storybook/main.ts`: found mid-run, Vite re-optimizes and reloads, and on
-  a cold cache — every CI run — that loads a second React and every hook throws
-  `Cannot read properties of null`, while a warm local cache passes. And the
+  it. **`.storybook/main.ts` pre-bundles every package in `dependencies`**, read
+  from `package.json`, because Vite's scan starts at the story files: a package
+  only a lazy chunk imports is otherwise found mid-run, re-optimized and
+  reloaded, and on a cold cache — every CI run — that loads a second React and
+  every hook throws `Cannot read properties of null`, while a warm local cache
+  passes. A dependency installed as a devDependency would slip past it. And the
   test browser is 1200×900, so a phone-only control needs the story to set
   `globals: { viewport: { value: "mobile1" } }`, as `Layout`'s drawer story does.
 - `renderWithProviders` stubs the auth context rather than mounting the real

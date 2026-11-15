@@ -3,6 +3,7 @@
 // client-only behind `ssr: false`. `@storybook/nextjs-vite` is the switch to
 // make if a story ever needs Next's modules mocked.
 import type { StorybookConfig } from "@storybook/react-vite";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const config: StorybookConfig = {
@@ -23,15 +24,19 @@ const config: StorybookConfig = {
       ...config.resolve.alias,
       "@": path.resolve(import.meta.dirname, "../src"),
     };
-    // Imported only by lazy chunks (`SortableSongList`), so Vite would find them
-    // mid-run, re-optimize and reload — which on a cold cache, as in CI, loads
-    // a second React and every hook throws. Named here, they are bundled up front.
+    // Every runtime dependency is bundled up front. Vite's scan starts from the
+    // story files, so a package only a lazy chunk imports (`@dnd-kit/*` from
+    // `SortableSongList`) is found mid-run instead, re-optimized and reloaded —
+    // which on a cold cache, as in CI, loads a second React and every hook
+    // throws. Read from package.json, so a new dependency needs no entry here.
+    // `next` is the exception: the app's shell, which no story imports.
+    const { dependencies } = JSON.parse(
+      readFileSync(path.join(import.meta.dirname, "../package.json"), "utf8"),
+    ) as { dependencies: Record<string, string> };
     config.optimizeDeps ??= {};
     config.optimizeDeps.include = [
       ...(config.optimizeDeps.include ?? []),
-      "@dnd-kit/core",
-      "@dnd-kit/sortable",
-      "@dnd-kit/utilities",
+      ...Object.keys(dependencies).filter((name) => name !== "next"),
     ];
     // Next inlines `process.env.NEXT_PUBLIC_*` at build time and Vite does not,
     // so `api/client.ts` would throw on `process` in the browser. Mirror Next:

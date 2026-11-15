@@ -105,7 +105,6 @@ export const Loading: Story = {
     msw.use(
       http.get(`${API}/api/v1/songs`, async () => {
         await delay("infinite");
-        return HttpResponse.json(list([]));
       }),
     );
   },

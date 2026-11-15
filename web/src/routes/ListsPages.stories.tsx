@@ -3,16 +3,12 @@ import { HttpResponse, http } from "msw";
 import { expect } from "storybook/test";
 
 import { ListDetailPage, ListsPage } from "./ListsPages";
-import { catalogSongs } from "@/test/catalog";
+import { catalogList } from "@/test/catalog";
 import { API, list, listById, makeList, makeUser } from "@/test/handlers";
 
 const owner = makeUser({ id: "user-1", display_name: "Christos" });
 
-const rempetika = makeList({
-  description: "Όσα παίζουμε τα Σάββατα.",
-  songs: catalogSongs.slice(0, 4).map((song, position) => ({ ...song, position })),
-  item_count: 4,
-});
+const rempetika = catalogList(4, { description: "Όσα παίζουμε τα Σάββατα." });
 
 /*
  * The list pages. The detail page is mounted under `/lists/:id`; each story

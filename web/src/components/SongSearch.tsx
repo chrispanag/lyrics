@@ -87,7 +87,9 @@ export function SongSearch() {
   // Waits for the debounce as well as the request, or every first keystroke
   // would flash "nothing matched".
   const searching = query !== typed || isLoading;
-  // Whether `panelBody` renders the listbox rather than a note.
+  // Whether the panel holds the listbox rather than a note: the one decision
+  // `panelBody` and the combobox's ARIA state both read, so they cannot drift.
+  // Never on a failure, or a failed refetch would read as "nothing matched".
   const listShown = open && !isError && results.length > 0;
 
   /** Closes the panel, leaving the text. The one path for every way of closing. */
@@ -172,19 +174,11 @@ export function SongSearch() {
   }, [active, listboxId]);
 
   /**
-   * The open panel's content. `isError` first, or a failure reads as "nothing
-   * matched"; rows before `searching`, so held results do not blink.
+   * The open panel's content. Rows before `searching`, so held results do not
+   * blink.
    */
   const panelBody = (): ReactNode => {
-    if (isError) {
-      return (
-        <p className={cn(noteChrome, "text-red-700 dark:text-red-300")}>
-          Search is unavailable right now.
-        </p>
-      );
-    }
-
-    if (results.length > 0) {
+    if (listShown) {
       return (
         <>
           <div
@@ -217,6 +211,14 @@ export function SongSearch() {
             </Link>
           )}
         </>
+      );
+    }
+
+    if (isError) {
+      return (
+        <p className={cn(noteChrome, "text-red-700 dark:text-red-300")}>
+          Search is unavailable right now.
+        </p>
       );
     }
 
