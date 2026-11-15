@@ -279,7 +279,7 @@ export function StickyHeader({
   mobileOnly,
 }: {
   children: React.ReactNode;
-  pinned?: boolean;
+  pinned?: boolean | undefined;
   mobileOnly?: boolean;
 }) {
   const [hidden, setHidden] = useState(false);

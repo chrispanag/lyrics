@@ -62,7 +62,7 @@ export function ListSongNavBar({ position }: { position: ListPosition }) {
  * so the bar does not reflow. The placeholder takes no hover state from
  * `stepChrome`: a dead arrow that lights up reads as a broken control.
  */
-function StepArrow({ href, back }: { href?: string; back?: boolean }) {
+function StepArrow({ href, back }: { href?: string | undefined; back?: boolean | undefined }) {
   const Icon = back ? ChevronLeft : ChevronRight;
 
   if (!href) {

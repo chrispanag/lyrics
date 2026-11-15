@@ -25,9 +25,9 @@ export function SongRow({
   listId: string;
   handle?: ReactNode;
   /** Omitted for anyone who may not change the list, leaving the row read-only. */
-  onRemove?: (songId: string) => void;
+  onRemove?: ((songId: string) => void) | undefined;
   /** The song whose removal is in flight, if any. */
-  pendingRemoval?: string;
+  pendingRemoval?: string | undefined;
 }) {
   return (
     <div className="flex items-center gap-2">

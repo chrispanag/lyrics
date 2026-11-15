@@ -50,8 +50,8 @@ function StaticSongList({
 }: {
   songs: Song[];
   listId: string;
-  onRemove?: (songId: string) => void;
-  pendingRemoval?: string;
+  onRemove?: ((songId: string) => void) | undefined;
+  pendingRemoval?: string | undefined;
 }) {
   return (
     <ul className="space-y-3">

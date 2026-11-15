@@ -113,8 +113,8 @@ async function send(
   return fetch(apiUrl(path), {
     method: options.method ?? "GET",
     headers,
-    body: payload?.body,
-    signal: options.signal,
+    body: payload?.body ?? null,
+    signal: options.signal ?? null,
     // Spread so an uncached request carries no `next` key at all.
     ...(options.revalidate === undefined ? {} : { next: { revalidate: options.revalidate } }),
   });

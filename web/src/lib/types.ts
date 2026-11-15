@@ -236,15 +236,15 @@ export interface RecordingInput {
 }
 
 export interface SongFilters {
-  q?: string;
+  q?: string | undefined;
   // Not `artist`: the API keeps that only as an alias for old links.
   performer?: string;
   composer?: string;
   lyricist?: string;
-  person?: string;
+  person?: string | undefined;
   genre?: string;
-  genre_slug?: string;
-  language?: string;
+  genre_slug?: string | undefined;
+  language?: string | undefined;
   year_from?: number;
   year_to?: number;
   sort?: "relevance" | "title" | "newest" | "oldest";

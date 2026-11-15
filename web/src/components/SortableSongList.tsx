@@ -45,7 +45,7 @@ export function SortableSongList({
   onReorder: (songIds: string[]) => void;
   onRemove: (songId: string) => void;
   /** The song whose removal is in flight, if any. */
-  pendingRemoval?: string;
+  pendingRemoval?: string | undefined;
 }) {
   const sensors = useSensors(
     // So a press and release on the handle stays a click.
@@ -101,7 +101,7 @@ function SortableRow({
   song: Song;
   listId: string;
   onRemove: (songId: string) => void;
-  pendingRemoval?: string;
+  pendingRemoval?: string | undefined;
 }) {
   const {
     attributes,

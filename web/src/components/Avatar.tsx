@@ -21,7 +21,7 @@ export function Avatar({
 }: {
   user: Identity;
   size?: keyof typeof SIZES;
-  className?: string;
+  className?: string | undefined;
 }) {
   const source = avatarSrc(user);
   const shared = cn("shrink-0 rounded-full", SIZES[size], className);

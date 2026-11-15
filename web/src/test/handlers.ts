@@ -33,6 +33,15 @@ export function makeSong(overrides: Partial<Song> = {}): Song {
   };
 }
 
+/**
+ * A song as an API predating migration 000010 sends it: no `slug` key at all.
+ * Typed as a `Song` on purpose, since that is what the client believes it got.
+ */
+export function makeUnaddressedSong(overrides: Partial<Song> = {}): Song {
+  const { slug: _slug, ...unaddressed } = makeSong(overrides);
+  return unaddressed as Song;
+}
+
 /** One recording, with a performer on it, marked `is_first`. */
 export function makeRecording(overrides: Partial<Recording> = {}): Recording {
   return {

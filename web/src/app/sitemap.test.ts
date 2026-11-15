@@ -2,7 +2,7 @@
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { API, list, makeSong } from "@/test/handlers";
+import { API, list, makeSong, makeUnaddressedSong } from "@/test/handlers";
 import { server } from "@/test/server";
 
 import sitemap from "./sitemap";
@@ -75,9 +75,7 @@ describe("sitemap", () => {
     // An API older than migration 000010 omits the field; `songHref` would
     // build `/songs/undefined` for every song.
     server.use(
-      http.get(`${API}/api/v1/songs`, () =>
-        HttpResponse.json(list([makeSong({ slug: undefined })])),
-      ),
+      http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list([makeUnaddressedSong()]))),
     );
 
     await expectStaticRoutesOnly();
