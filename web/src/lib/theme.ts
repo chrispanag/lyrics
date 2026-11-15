@@ -4,22 +4,36 @@ const THEME_KEY = "lyrics:theme";
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
-/** The browser chrome's color per theme, the stone grounds; app/layout.tsx reads them too. */
+/**
+ * The browser chrome's color per theme, the stone grounds; app/layout.tsx reads
+ * them too, and public/manifest.json carries the dark one (theme.test.ts checks).
+ */
 export const THEME_COLORS = { light: "#fafaf9", dark: "#0c0a09" } as const;
 
 /**
  * Our own unscoped `theme-color` meta, present only while the theme is explicit.
  * Prepended to <head>: the browser takes the first match in tree order, so it
  * outranks the media-scoped pair from layout.tsx's `viewport`, and "system"
- * removes it to hand back to them. A new element rather than an edit to those:
- * React rendered them and would report a changed attribute on hydration, while
- * it skips a tag in <head> it never rendered.
+ * removes it to hand back to them.
  */
 const THEME_COLOR_ID = "theme-color-override";
 
 /**
- * Applies the theme by toggling a class on <html>, when the visitor changes it.
- * The first application of a load is `THEME_BOOT_SCRIPT`.
+ * The override's colors, deliberately spelled differently from `THEME_COLORS`.
+ * React hydrates a `<meta>` by adopting the first one in the document with the
+ * same `name` and `content` string, checking neither `media` nor `id` — so an
+ * override spelled like the viewport's becomes React's instance of one of the
+ * media-scoped pair, and React later updating or removing that meta acts on
+ * ours (and throws if "system" has already removed it). Same color, other key.
+ */
+const OVERRIDE_COLORS = {
+  light: THEME_COLORS.light.toUpperCase(),
+  dark: THEME_COLORS.dark.toUpperCase(),
+} as const;
+
+/**
+ * Applies the theme, when the visitor changes it: the class on <html> and the
+ * browser chrome's color. The first application of a load is `THEME_BOOT_SCRIPT`.
  */
 export function applyTheme(theme: Theme): void {
   const dark = theme === "dark" || (theme === "system" && window.matchMedia(DARK_QUERY).matches);
@@ -35,7 +49,7 @@ export function applyTheme(theme: Theme): void {
     meta.name = "theme-color";
     document.head.prepend(meta);
   }
-  meta.content = dark ? THEME_COLORS.dark : THEME_COLORS.light;
+  meta.content = dark ? OVERRIDE_COLORS.dark : OVERRIDE_COLORS.light;
 }
 
 /**
@@ -53,7 +67,7 @@ export const THEME_BOOT_SCRIPT =
   // Nothing renders the override, so at boot there is none to find or remove.
   `if(t!=="system"){` +
   `let m=document.createElement("meta");m.id=${JSON.stringify(THEME_COLOR_ID)};m.name="theme-color";` +
-  `m.content=d?${JSON.stringify(THEME_COLORS.dark)}:${JSON.stringify(THEME_COLORS.light)};` +
+  `m.content=d?${JSON.stringify(OVERRIDE_COLORS.dark)}:${JSON.stringify(OVERRIDE_COLORS.light)};` +
   `document.head.prepend(m)` +
   `}` +
   `}catch(e){}`;

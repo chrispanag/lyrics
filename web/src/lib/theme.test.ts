@@ -1,5 +1,8 @@
+import { act, createElement, Fragment } from "react";
+import { hydrateRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import manifest from "../../public/manifest.json";
 import { THEME_BOOT_SCRIPT, THEME_COLORS, applyTheme, storedTheme } from "./theme";
 
 /**
@@ -26,10 +29,36 @@ const prefersDark = (matches: boolean) =>
     })),
   );
 
-/** The explicit theme's color, or null when the media-scoped pair decides. */
+/**
+ * The explicit theme's color, or null when the media-scoped pair decides. Folded
+ * to lower case: the override spells its colors apart from the pair's on purpose.
+ */
 const themeColorOverride = () =>
-  document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]:not([media])')?.content ??
-  null;
+  document.head
+    .querySelector<HTMLMetaElement>('meta[name="theme-color"]:not([media])')
+    ?.content.toLowerCase() ?? null;
+
+/** The media-scoped pair layout.tsx's `viewport` renders, as server HTML. */
+const mediaPairHtml =
+  `<meta name="theme-color" media="(prefers-color-scheme: dark)" content="${THEME_COLORS.dark}">` +
+  `<meta name="theme-color" media="(prefers-color-scheme: light)" content="${THEME_COLORS.light}">`;
+
+/** The same pair as React elements, to hydrate over that HTML. */
+const MediaPair = () =>
+  createElement(
+    Fragment,
+    null,
+    createElement("meta", {
+      name: "theme-color",
+      media: "(prefers-color-scheme: dark)",
+      content: THEME_COLORS.dark,
+    }),
+    createElement("meta", {
+      name: "theme-color",
+      media: "(prefers-color-scheme: light)",
+      content: THEME_COLORS.light,
+    }),
+  );
 
 /** Undoes what either path writes, leaving storage alone. */
 const resetDom = () => {
@@ -76,9 +105,7 @@ describe("THEME_BOOT_SCRIPT", () => {
   // the media-scoped pair, and a switch must update it rather than add another.
   it("puts the explicit color ahead of the media-scoped pair, and hands back on system", () => {
     prefersDark(false);
-    document.head.innerHTML =
-      `<meta name="theme-color" media="(prefers-color-scheme: dark)" content="${THEME_COLORS.dark}">` +
-      `<meta name="theme-color" media="(prefers-color-scheme: light)" content="${THEME_COLORS.light}">`;
+    document.head.innerHTML = mediaPairHtml;
     localStorage.setItem("lyrics:theme", "dark");
 
     runBootScript();
@@ -88,12 +115,32 @@ describe("THEME_BOOT_SCRIPT", () => {
     const metas = document.head.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
     expect(metas).toHaveLength(3);
     expect(metas[0]?.hasAttribute("media")).toBe(false);
-    expect(metas[0]?.content).toBe(THEME_COLORS.dark);
+    expect(metas[0]?.content.toLowerCase()).toBe(THEME_COLORS.dark);
 
     applyTheme("system");
 
     expect(themeColorOverride()).toBeNull();
     expect(document.head.querySelectorAll('meta[name="theme-color"]')).toHaveLength(2);
+  });
+
+  // React hydrates a <meta> by adopting the first with the same name and content
+  // string, ignoring media and id. Adopted, the override is React's to remove,
+  // and removing it after "system" already has throws.
+  it("is not adopted by React as one of the media-scoped pair", () => {
+    prefersDark(false);
+    document.head.innerHTML = mediaPairHtml;
+    localStorage.setItem("lyrics:theme", "dark");
+    const container = document.body.appendChild(document.createElement("div"));
+
+    runBootScript();
+    let root: Root | undefined;
+    act(() => {
+      root = hydrateRoot(container, createElement(MediaPair));
+    });
+    applyTheme("system");
+
+    expect(() => act(() => root?.unmount())).not.toThrow();
+    container.remove();
   });
 
   // A mismatched key would silently ignore every saved choice.
@@ -130,5 +177,13 @@ describe("THEME_BOOT_SCRIPT", () => {
     expect("t" in globalThis).toBe(false);
     expect("d" in globalThis).toBe(false);
     expect("m" in globalThis).toBe(false);
+  });
+});
+
+describe("THEME_COLORS", () => {
+  // The manifest cannot import a constant, and paints the launch splash dark.
+  it("agrees with the manifest's dark ground", () => {
+    expect(manifest.theme_color).toBe(THEME_COLORS.dark);
+    expect(manifest.background_color).toBe(THEME_COLORS.dark);
   });
 });
