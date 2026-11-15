@@ -128,8 +128,6 @@ describe("Mobile navigation drawer", () => {
     renderShell();
 
     await openDrawer(user);
-    // Past the slide in's two frames, so every scroll from here is a slide out.
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const scrolls = vi.mocked(Element.prototype.scrollTo);
     scrolls.mockClear();
     const dialog = screen.getByRole("dialog");

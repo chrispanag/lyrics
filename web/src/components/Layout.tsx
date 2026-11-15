@@ -224,8 +224,16 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
   useHomeEndInside(open, dialog);
   const slideOut = () => slideOutOf(dialog.current, leaving);
 
-  // Once: the observer that closes the dialog, the dim's fallback, and the
-  // `close()` an open dialog needs before it is unmounted.
+  // An open dialog is closed before it is unmounted, so `close()` can still
+  // hand focus back. A layout cleanup, since that runs before React removes it.
+  useLayoutEffect(() => {
+    const element = dialog.current;
+    return () => {
+      if (element?.open) element.close();
+    };
+  }, []);
+
+  // Once: the observer that closes the dialog, and the dim's fallback.
   useEffect(() => {
     const element = dialog.current;
     const panel = sheet.current;
@@ -240,7 +248,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
         if (ratio >= visible) shown.current = true;
         else if (shown.current && element.open) element.close();
       },
-      { root: element, threshold: [visible, 1] },
+      { root: element, threshold: visible },
     );
     observer.observe(panel);
 
@@ -249,14 +257,13 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
       const progress = 1 - element.scrollLeft / (panel.offsetWidth || 1);
       element.style.setProperty("--drawer-backdrop", String(Math.max(0, progress)));
     };
-    if (!CSS.supports?.("animation-timeline: scroll()")) {
+    if (!CSS.supports("animation-timeline: scroll()")) {
       element.addEventListener("scroll", fade, { passive: true });
     }
 
     return () => {
       observer.disconnect();
       element.removeEventListener("scroll", fade);
-      if (element.open) element.close();
     };
   }, []);
 
@@ -286,7 +293,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
     // `scroll-initial-target` opens the scroller on the closed stop. Without
     // it, it opens on the sheet: jumped to the spacer first, and given two
     // frames to commit, since a scroll in the first would cancel the jump.
-    if (CSS.supports?.("scroll-initial-target", "nearest")) {
+    if (CSS.supports("scroll-initial-target", "nearest")) {
       element.scrollTo({ left: 0, behavior: "auto" });
       return;
     }
@@ -308,10 +315,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
       tabIndex={-1}
       className="nav-drawer outline-none"
       // Every close ends here: the observer's, and an uncancelable Escape's.
-      onClose={() => {
-        shown.current = false;
-        onClose();
-      }}
+      onClose={onClose}
       // Escape slides out rather than vanishing. A repeated Escape with no
       // activation in between is uncancelable and closes at once.
       onCancel={(event) => {
@@ -328,10 +332,7 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
     >
       <div
         ref={sheet}
-        className={cn(
-          "nav-drawer-sheet flex flex-col bg-white shadow-2xl pt-safe pb-safe",
-          "border-r border-stone-200 dark:border-stone-800 dark:bg-stone-900",
-        )}
+        className="nav-drawer-sheet flex flex-col border-r border-stone-200 bg-white shadow-2xl pt-safe pb-safe dark:border-stone-800 dark:bg-stone-900"
       >
         {/* Padding here, not on the sheet, so it cannot collide with the
             safe-area padding. `min-h-0` lets this scroll, and it always does,
