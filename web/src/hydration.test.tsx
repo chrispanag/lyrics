@@ -158,6 +158,28 @@ describe("hydrating over a server render", () => {
     expect(container).toHaveTextContent(catalogSongs[0]?.title ?? "");
   });
 
+  // A shared link: the server hands over a guest's read of a public list, and
+  // the browser remembers the reader. The rows render on both sides.
+  it("agrees about a public list read as a guest", async () => {
+    server.use(listById(catalogList(3)));
+    const state = await dataFor("/lists/list-1", null);
+
+    const { problems, container } = await hydrationProblems(
+      (client) => (
+        <TestProviders queryClient={client} route="/lists/list-1">
+          <AuthProvider>
+            <TestApp />
+          </AuthProvider>
+        </TestProviders>
+      ),
+      { state, seed: () => storeUser(reader) },
+    );
+
+    await waitFor(() => expect(container).toHaveTextContent("Νίκος"));
+    expect(problems).toEqual([]);
+    expect(container).toHaveTextContent(catalogSongs[2]?.title ?? "");
+  });
+
   it("agrees about the profile's theme switch", async () => {
     const state = await dataFor("/profile", reader);
 

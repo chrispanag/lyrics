@@ -1,9 +1,9 @@
 import type { MetadataRoute } from "next";
 
 import { apiFetch, toQuery } from "@/api/client";
-import { songHref } from "@/lib/listContext";
+import { listHref, songHref } from "@/lib/listContext";
 import { SITE_ORIGIN } from "@/lib/site";
-import type { ListResponse, Song } from "@/lib/types";
+import type { ListResponse, PublicList, Song } from "@/lib/types";
 
 // Absolute URLs throughout: `metadataBase` is not read here.
 
@@ -14,44 +14,56 @@ export const dynamic = "force-dynamic";
 // The API clamps `limit` to 100 (httpx.Pagination).
 const PAGE = 100;
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  return [{ url: `${SITE_ORIGIN}/` }, ...(await songEntries())];
-}
+type Entry = MetadataRoute.Sitemap[number];
 
 /**
- * Every song's address, or none at all.
+ * The catalog's address, every song's and every public list's, or the static
+ * routes alone.
  *
- * `sort=oldest` is a total order where new songs append, so pages cannot shift
- * and `meta.total` fixes every offset up front. All or nothing: a truncated
- * sitemap looks like a small catalog. The cause is logged, since nothing else
- * reports it.
+ * All or nothing, across both walks: a sitemap missing half the songs, or
+ * every list, looks exactly like a smaller catalog. The cause is logged, since
+ * nothing else reports it.
  */
-async function songEntries(): Promise<MetadataRoute.Sitemap> {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const home = { url: `${SITE_ORIGIN}/` };
   try {
-    const first = await songPage(0);
-    const rest = await Promise.all(
-      offsetsAfterFirst(first.meta.total).map((offset) => songPage(offset)),
-    );
-
-    return [first, ...rest].flatMap((page) => page.data.map(entry));
+    const [songs, lists] = await Promise.all([
+      walk<Song>("/api/v1/songs", { sort: "oldest" }, songEntry),
+      walk<PublicList>("/api/v1/public-lists", {}, listEntry),
+    ]);
+    return [home, ...songs, ...lists];
   } catch (caught) {
     console.error("sitemap: could not enumerate the catalog", caught);
-    return [];
+    return [home];
   }
 }
 
-/** `[PAGE, 2 * PAGE, …]`, stopping before `total`. Empty for a catalog of one page. */
+/**
+ * Every row of a paginated collection, as sitemap entries. Both collections
+ * walk a total order in which new rows append (`sort=oldest` for songs, the
+ * only order `/public-lists` has), so pages cannot shift and the first
+ * answer's `meta.total` fixes every offset up front.
+ */
+async function walk<T>(
+  path: string,
+  query: Record<string, string>,
+  entry: (row: T) => Entry,
+): Promise<Entry[]> {
+  const page = (offset: number) =>
+    apiFetch<ListResponse<T>>(`${path}${toQuery({ ...query, limit: PAGE, offset })}`, {
+      anonymous: true,
+    });
+
+  const first = await page(0);
+  const rest = await Promise.all(offsetsAfterFirst(first.meta.total).map(page));
+  return [first, ...rest].flatMap(({ data }) => data.map(entry));
+}
+
+/** `[PAGE, 2 * PAGE, …]`, stopping before `total`. Empty for a collection of one page. */
 function offsetsAfterFirst(total: number): number[] {
   const offsets: number[] = [];
   for (let offset = PAGE; offset < total; offset += PAGE) offsets.push(offset);
   return offsets;
-}
-
-function songPage(offset: number): Promise<ListResponse<Song>> {
-  return apiFetch<ListResponse<Song>>(
-    `/api/v1/songs${toQuery({ limit: PAGE, offset, sort: "oldest" })}`,
-    { anonymous: true },
-  );
 }
 
 /**
@@ -59,7 +71,11 @@ function songPage(offset: number): Promise<ListResponse<Song>> {
  * being filtered, so the walk fails whole instead of publishing
  * `/songs/undefined` or a shorter sitemap.
  */
-function entry(song: Song): MetadataRoute.Sitemap[number] {
+function songEntry(song: Song): Entry {
   if (!song.slug) throw new Error(`song ${song.id} has no slug`);
   return { url: `${SITE_ORIGIN}${songHref(song)}`, lastModified: song.updated_at };
+}
+
+function listEntry(list: PublicList): Entry {
+  return { url: `${SITE_ORIGIN}${listHref(list.id)}`, lastModified: list.updated_at };
 }

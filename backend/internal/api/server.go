@@ -76,6 +76,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/people/{id}", httpx.Handler(s.handleGetPerson))
 			r.Get("/genres", httpx.Handler(s.handleListGenres))
 			r.Get("/lists/{id}", httpx.Handler(s.handleGetList))
+			r.Get("/public-lists", httpx.Handler(s.handlePublicLists))
 			// Public: an <img> carries no Authorization header.
 			r.Get("/users/{id}/avatar", httpx.Handler(s.handleGetUserAvatar))
 

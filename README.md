@@ -501,6 +501,8 @@ GET    /songs/{id}                       by slug or by uuid
 GET    /people           ?q=&role=
 GET    /genres
 GET    /lists/{id}                       public lists, or your own
+GET    /public-lists     ?limit=&offset= every public list's id and updated_at,
+                                         oldest first (the sitemap's walk)
 GET    /users/{id}/avatar                a profile picture; 404 when there is none
 POST   /auth/register
 

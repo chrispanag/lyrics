@@ -35,6 +35,21 @@ func (s *Server) handleListLists(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// handlePublicLists enumerates every public list's address, for the sitemap.
+// Guest-readable and identical for every caller: an owner's private lists are
+// no more in it than anyone else's. Not under /lists/, where `public` would be
+// read as a list's id by the app's /lists/[id] route.
+func (s *Server) handlePublicLists(w http.ResponseWriter, r *http.Request) error {
+	limit, offset := httpx.Pagination(r.URL.Query())
+
+	lists, total, err := s.store.PublicLists(r.Context(), limit, offset)
+	if err != nil {
+		return storeError(err, "Lists")
+	}
+	httpx.JSON(w, http.StatusOK, httpx.NewListResponse(lists, total, limit, offset))
+	return nil
+}
+
 // readableList loads a list the caller is allowed to see: a public one, or one
 // of their own. Anything else is 404, not 403, so private lists cannot be
 // probed. It checks the row alone, before loading the songs.

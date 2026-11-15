@@ -33,6 +33,7 @@ import {
 import { BackButton } from "@/components/BackButton";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
+import { listHref } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
 import { Link, useParams, useRouter } from "@/lib/navigation";
 
@@ -122,7 +123,7 @@ export function ListsPage() {
         {data?.data.map((list) => (
           <li key={list.id}>
             <Link
-              href={`/lists/${list.id}`}
+              href={listHref(list.id)}
               className={cn(
                 cardChrome,
                 cardHover,
@@ -202,8 +203,10 @@ export function ListDetailPage() {
   );
 
   // A disabled query is not `isLoading`, so the session wait is spelled out, or
-  // the page reports a list it has not asked for yet as unavailable.
-  if (sessionLoading || isLoading) {
+  // the page reports a list it has not asked for yet as unavailable. A list
+  // already in hand (the server's read of a public one) renders at once: the
+  // wait only exists so a private list is asked for with its owner's token.
+  if (!list && (sessionLoading || isLoading)) {
     return (
       <div className="mx-auto max-w-2xl space-y-3 px-4 py-6">
         {/* Nameless while in flight, rather than "undefined — Songfolio". */}
@@ -234,7 +237,7 @@ export function ListDetailPage() {
   // `variables` outlives its request, so it is held to the flight.
   const pendingRemoval = removeSong.isPending ? removeSong.variables : undefined;
   // From the origin, so no query or hash leaks into the shared link.
-  const shareUrl = `${origin}/lists/${list.id}`;
+  const shareUrl = `${origin}${listHref(list.id)}`;
 
   const copyLink = async () => {
     // Clipboard access can be refused; then the page asks for a manual copy.
@@ -251,7 +254,7 @@ export function ListDetailPage() {
     try {
       const copied = await copyList.mutateAsync({ id: list.id, name });
       setNaming(false);
-      router.push(`/lists/${copied.id}`);
+      router.push(listHref(copied.id));
     } catch (caught) {
       // Names are unique per owner, so a 409 opens the rename step.
       if (caught instanceof ApiError && caught.status === 409) {
@@ -280,10 +283,17 @@ export function ListDetailPage() {
         {list.description && <p className="mt-1 text-sm text-fg-muted">{list.description}</p>}
         <p className="mt-1 text-sm text-fg-muted">{songCount(list.item_count)}</p>
 
-        {/* A non-owner only reaches a public list; guests are sent to sign in. */}
+        {/* A non-owner only reaches a public list; guests are sent to sign in.
+            Inert until the session is known: a server-rendered list is on screen
+            before then, and `!user` would send a signed-in reader to sign in. */}
         {!isOwner && (
           <div className="mt-4">
-            <Button size="sm" onClick={onSave} loading={copyList.isPending}>
+            <Button
+              size="sm"
+              onClick={onSave}
+              loading={copyList.isPending}
+              disabled={sessionLoading}
+            >
               <Copy aria-hidden className="size-4" />
               Save to my lists
             </Button>
@@ -395,8 +405,8 @@ export function ListDetailPage() {
         {list.is_public ? (
           <div className="space-y-4">
             <p className="text-sm text-fg-tertiary">
-              Anyone with this link can read “{list.name}” and save their own copy of it. It is not
-              listed anywhere in the catalog.
+              Anyone with this link can read “{list.name}” and save their own copy of it, and it can
+              show up in search engines.
             </p>
             <Input
               readOnly
@@ -417,8 +427,8 @@ export function ListDetailPage() {
           <div className="space-y-4">
             <p className="text-sm text-fg-tertiary">
               “{list.name}” is private. Publishing it lets anyone holding the link read it and save
-              their own copy — the songs stay yours to change, and their copy is separate from this
-              list.
+              their own copy, and lets search engines find it — the songs stay yours to change, and
+              their copy is separate from this list.
             </p>
             <Button
               className="w-full"
