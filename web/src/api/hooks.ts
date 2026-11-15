@@ -288,12 +288,20 @@ export function useDeleteList() {
 
 /**
  * Unsettles everything a song's membership of a list is visible through. Shared
- * by every mutation that changes membership, so none goes stale.
+ * by every mutation that changes membership, so none goes stale. Returned from
+ * `onSuccess`, it keeps the mutation pending until the refetch lands: a row
+ * read off the old membership cannot be pressed in between.
  */
-function invalidateMembership(queryClient: QueryClient, listId: string, songId: string): void {
-  void queryClient.invalidateQueries({ queryKey: keys.songLists(songId) });
-  void queryClient.invalidateQueries({ queryKey: keys.lists() });
-  void queryClient.invalidateQueries({ queryKey: keys.list(listId) });
+function invalidateMembership(
+  queryClient: QueryClient,
+  listId: string,
+  songId: string,
+): Promise<unknown> {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: keys.songLists(songId) }),
+    queryClient.invalidateQueries({ queryKey: keys.lists() }),
+    queryClient.invalidateQueries({ queryKey: keys.list(listId) }),
+  ]);
 }
 
 /** Adds or removes a song from a list, from the song's page. */

@@ -88,10 +88,6 @@ describe("sitemap", () => {
  */
 async function expectStaticRoutesOnly() {
   const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-  try {
-    expect(await sitemap()).toEqual([{ url: `${ORIGIN}/` }]);
-    expect(logged).toHaveBeenCalled();
-  } finally {
-    logged.mockRestore();
-  }
+  expect(await sitemap()).toEqual([{ url: `${ORIGIN}/` }]);
+  expect(logged).toHaveBeenCalled();
 }

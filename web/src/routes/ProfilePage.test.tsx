@@ -10,7 +10,7 @@ import type { User } from "@/lib/types";
 import { ProfilePage } from "@/routes/ProfilePage";
 import { stubImagePipeline, type ImagePipelineStub } from "@/test/canvas";
 import { deferred } from "@/test/deferred";
-import { API, makeUser } from "@/test/handlers";
+import { API, apiError, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 
@@ -43,6 +43,125 @@ function LiveAccount({ start }: { start: User }) {
     </AuthContext.Provider>
   );
 }
+
+describe("ProfilePage", () => {
+  // The theme switch lives here and nowhere else, so a guest must still reach it.
+  it("offers a guest sign-in, sign-up and the theme switch", () => {
+    renderWithProviders(<ProfilePage />, { user: null });
+
+    expect(screen.getByRole("heading", { name: /browsing as a guest/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("link", { name: "Create an account" })).toHaveAttribute(
+      "href",
+      "/register",
+    );
+    expect(screen.getByRole("radiogroup", { name: "Appearance" })).toBeInTheDocument();
+  });
+
+  // Until the restore settles, `user` may be null for someone who is signed in.
+  it("does not show the guest page while the session is being restored", () => {
+    renderWithProviders(<ProfilePage />, { user: null, auth: { loading: true } });
+
+    expect(screen.queryByRole("heading", { name: /browsing as a guest/i })).not.toBeInTheDocument();
+  });
+
+  it("applies the chosen theme at once and remembers it for the next load", async () => {
+    renderWithProviders(<ProfilePage />, { user: makeUser() });
+
+    await userEvent.click(screen.getByRole("radio", { name: "Dark" }));
+
+    expect(screen.getByRole("radio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
+    expect(document.documentElement).toHaveClass("dark");
+    // The key app/layout.tsx's boot script reads before first paint.
+    expect(localStorage.getItem("lyrics:theme")).toBe("dark");
+
+    await userEvent.click(screen.getByRole("radio", { name: "Light" }));
+
+    expect(document.documentElement).not.toHaveClass("dark");
+    expect(localStorage.getItem("lyrics:theme")).toBe("light");
+  });
+
+  it("saves a trimmed display name and hands the updated account back", async () => {
+    const updated = makeUser({ display_name: "Μαρία" });
+    let sent: unknown;
+    server.use(
+      http.patch(`${API}/api/v1/me`, async ({ request }) => {
+        sent = ((await request.json()) as { display_name: unknown }).display_name;
+        return HttpResponse.json(updated);
+      }),
+    );
+    const reload = vi.fn();
+
+    renderWithProviders(<ProfilePage />, {
+      user: makeUser({ display_name: null }),
+      auth: { reload },
+    });
+    await userEvent.type(screen.getByLabelText("Display name"), "  Μαρία  ");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(sent).toBe("Μαρία"));
+    expect(reload).toHaveBeenCalledWith(updated);
+    expect(await screen.findByRole("button", { name: "Saved" })).toBeInTheDocument();
+  });
+
+  // The field follows the stored name, so it shows what was kept, not what was typed.
+  it("shows the name as stored once a save replaces the account", async () => {
+    server.use(
+      http.patch(`${API}/api/v1/me`, () =>
+        HttpResponse.json(makeUser({ display_name: "Μαρία Κ." })),
+      ),
+    );
+    const start = makeUser({ display_name: null });
+
+    renderWithProviders(<LiveAccount start={start} />, { user: start });
+    const field = screen.getByLabelText("Display name");
+    await userEvent.type(field, "  Μαρία Κ.  ");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(field).toHaveValue("Μαρία Κ."));
+  });
+
+  // An emptied field means "show my email instead", which the API spells null.
+  it("clears the display name with null rather than an empty string", async () => {
+    let sent: unknown = "unset";
+    server.use(
+      http.patch(`${API}/api/v1/me`, async ({ request }) => {
+        sent = ((await request.json()) as { display_name: unknown }).display_name;
+        return HttpResponse.json(makeUser({ display_name: null }));
+      }),
+    );
+
+    renderWithProviders(<ProfilePage />, { user: makeUser({ display_name: "Μαρία" }) });
+    await userEvent.clear(screen.getByLabelText("Display name"));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(sent).toBeNull());
+  });
+
+  it("says so when the display name cannot be saved", async () => {
+    server.use(
+      http.patch(`${API}/api/v1/me`, () => apiError(500, "internal", "Something went wrong.")),
+    );
+    const reload = vi.fn();
+
+    renderWithProviders(<ProfilePage />, { user: makeUser(), auth: { reload } });
+    await userEvent.type(screen.getByLabelText("Display name"), "Μαρία");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong.");
+    expect(reload).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
+  });
+
+  it("signs out from the button at the foot of the page", async () => {
+    const logout = vi.fn(async () => {});
+
+    renderWithProviders(<ProfilePage />, { user: makeUser(), auth: { logout } });
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+
+    expect(logout).toHaveBeenCalledOnce();
+  });
+});
 
 describe("ProfilePage pictures", () => {
   let pipeline: ImagePipelineStub;
@@ -169,16 +288,9 @@ describe("ProfilePage pictures", () => {
   it("says so when the API refuses the picture", async () => {
     server.use(
       http.post(`${API}/api/v1/me/avatar`, () =>
-        HttpResponse.json(
-          {
-            error: {
-              code: "validation_failed",
-              message: "That picture is too large.",
-              details: { image: "Use a picture under 1024 KB." },
-            },
-          },
-          { status: 422 },
-        ),
+        apiError(422, "validation_failed", "That picture is too large.", {
+          image: "Use a picture under 1024 KB.",
+        }),
       ),
     );
 
@@ -190,6 +302,25 @@ describe("ProfilePage pictures", () => {
     expect(
       await screen.findByText("That picture is too large. Use a picture under 1024 KB."),
     ).toBeInTheDocument();
+  });
+
+  it("says so when the picture cannot be removed, and keeps the account as it was", async () => {
+    server.use(
+      http.delete(`${API}/api/v1/me/avatar`, () =>
+        apiError(500, "internal", "Something went wrong."),
+      ),
+    );
+    const reload = vi.fn();
+
+    renderWithProviders(<ProfilePage />, {
+      user: makeUser({ avatar_updated_at: "2026-08-22T20:00:00Z" }),
+      auth: { reload },
+    });
+    await openPictureMenu();
+    await userEvent.click(screen.getByRole("button", { name: "Remove picture" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong.");
+    expect(reload).not.toHaveBeenCalled();
   });
 
   // A picture save replaces the user record; that must not reset a typed name.

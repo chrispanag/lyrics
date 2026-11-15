@@ -134,8 +134,9 @@ install: ## Install frontend dependencies
 	cd web && pnpm install
 
 .PHONY: test-web
-test-web: ## Run frontend unit tests
-	cd web && pnpm run test
+# With coverage, as CI runs it, so a floor in vitest.config.ts fails here too.
+test-web: ## Run frontend unit tests with coverage
+	cd web && pnpm run test:coverage
 
 .PHONY: lint-web
 lint-web: ## Typecheck, lint and check formatting of the frontend

@@ -4,9 +4,35 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { BrowsePage } from "./BrowsePage";
-import { API, apiError, list, makeSong, makeUser } from "@/test/handlers";
+import type { Genre, ListResponse, Song } from "@/lib/types";
+import { API, apiError, list, makeGenre, makeSong, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
+
+/**
+ * Records the parameters each catalog request carried, answering every one
+ * with `songs` (an empty catalog by default). `genres`, when given, replaces
+ * the catalog's genres too.
+ */
+function recordRequests({
+  songs = list([]),
+  genres,
+}: {
+  songs?: ListResponse<Song>;
+  genres?: Genre[];
+} = {}) {
+  const requests: URLSearchParams[] = [];
+  server.use(
+    http.get(`${API}/api/v1/songs`, ({ request }) => {
+      requests.push(new URL(request.url).searchParams);
+      return HttpResponse.json(songs);
+    }),
+  );
+  if (genres) {
+    server.use(http.get(`${API}/api/v1/genres`, () => HttpResponse.json(list(genres))));
+  }
+  return requests;
+}
 
 describe("BrowsePage", () => {
   it("lists songs with their credits", async () => {
@@ -33,20 +59,13 @@ describe("BrowsePage", () => {
   // back button behaves.
   it("puts the typed query into the URL", async () => {
     const user = userEvent.setup();
-    let requestedQuery: string | null = null;
-
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        requestedQuery = new URL(request.url).searchParams.get("q");
-        return HttpResponse.json(list([]));
-      }),
-    );
+    const requests = recordRequests();
 
     renderWithProviders(<BrowsePage />);
 
     await user.type(screen.getByRole("searchbox", { name: /search songs/i }), "αγάπη");
 
-    await waitFor(() => expect(requestedQuery).toBe("αγάπη"), { timeout: 3000 });
+    await waitFor(() => expect(requests.at(-1)?.get("q")).toBe("αγάπη"), { timeout: 3000 });
   });
 
   it("shows an empty state when nothing matches", async () => {
@@ -91,27 +110,20 @@ describe("BrowsePage", () => {
 describe("BrowsePage pagination", () => {
   it("advances to the next page and stays there", async () => {
     const user = userEvent.setup();
-    const offsets: string[] = [];
-
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        offsets.push(new URL(request.url).searchParams.get("offset") ?? "0");
-        // Three pages' worth of results behind a single page of rows.
-        return HttpResponse.json(list([makeSong()], { total: 45 }));
-      }),
-    );
+    // Three pages' worth of results behind a single page of rows.
+    const requests = recordRequests({ songs: list([makeSong()], { total: 45 }) });
 
     renderWithProviders(<BrowsePage />);
 
     await user.click(await screen.findByRole("button", { name: /next/i }));
 
     expect(await screen.findByText("Page 2 of 3")).toBeInTheDocument();
-    await waitFor(() => expect(offsets.at(-1)).toBe("20"));
+    await waitFor(() => expect(requests.at(-1)?.get("offset")).toBe("20"));
 
     // The offset has to survive past the debounce, not just the first render.
     await act(() => new Promise((resolve) => setTimeout(resolve, 500)));
     expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
-    expect(offsets.at(-1)).toBe("20");
+    expect(requests.at(-1)?.get("offset")).toBe("20");
   });
 });
 
@@ -154,21 +166,14 @@ describe("BrowsePage sort picker", () => {
 
   // Relevance without a query orders by newest, so the picker says newest.
   it("falls back to newest when a cleared search leaves sort=relevance behind", async () => {
-    let requestedSort: string | null = null;
-
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        requestedSort = new URL(request.url).searchParams.get("sort");
-        return HttpResponse.json(list([makeSong()]));
-      }),
-    );
+    const requests = recordRequests({ songs: list([makeSong()]) });
 
     renderWithProviders(<BrowsePage />, { route: "/?sort=relevance" });
 
     const sort = await openSortPicker();
 
     expect(sort.value).toBe("newest");
-    await waitFor(() => expect(requestedSort).toBe("newest"));
+    await waitFor(() => expect(requests.at(-1)?.get("sort")).toBe("newest"));
   });
 });
 
@@ -178,18 +183,11 @@ describe("BrowsePage sort picker", () => {
  */
 describe("BrowsePage artist filter", () => {
   it("passes the person parameter through to the API", async () => {
-    let requestedPerson: string | null = null;
-
-    server.use(
-      http.get(`${API}/api/v1/songs`, ({ request }) => {
-        requestedPerson = new URL(request.url).searchParams.get("person");
-        return HttpResponse.json(list([makeSong()]));
-      }),
-    );
+    const requests = recordRequests({ songs: list([makeSong()]) });
 
     renderWithProviders(<BrowsePage />, { route: "/?person=person-1" });
 
-    await waitFor(() => expect(requestedPerson).toBe("person-1"));
+    await waitFor(() => expect(requests.at(-1)?.get("person")).toBe("person-1"));
   });
 
   it("labels the active artist filter with the person's name", async () => {
@@ -203,6 +201,19 @@ describe("BrowsePage artist filter", () => {
     // A chip showing a raw UUID would be worse than showing none at all.
     expect(await screen.findByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /remove filter/i })).toBeInTheDocument();
+  });
+
+  it("returns to the whole catalog when the artist chip is removed", async () => {
+    const requests = recordRequests();
+
+    renderWithProviders(<BrowsePage />, { route: "/?person=person-1" });
+
+    // Named first, so the absence below is the chip going rather than never arriving.
+    expect(await screen.findByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /remove filter/i }));
+
+    await waitFor(() => expect(requests.at(-1)?.get("person")).toBeNull());
+    expect(screen.queryByText("Μίκης Θεοδωράκης")).not.toBeInTheDocument();
   });
 });
 
@@ -241,5 +252,149 @@ describe("BrowsePage filter chips", () => {
     await userEvent.click(screen.getByRole("button", { name: "Remove filter" }));
 
     expect(screen.queryByText("rok")).not.toBeInTheDocument();
+  });
+
+  it("lifts a language filter from its chip, which names the language", async () => {
+    const requests = recordRequests();
+
+    renderWithProviders(<BrowsePage />, { route: "/?language=en" });
+
+    // "English", not the code from the address.
+    expect(await screen.findByText("English")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Remove filter" }));
+
+    await waitFor(() => expect(requests.at(-1)?.get("language")).toBeNull());
+    expect(screen.queryByText("English")).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * Clearing the box must drop `q`, not leave an empty `q=` behind: the title,
+ * the sort default and the empty state all read whether there is a query.
+ */
+describe("BrowsePage clearing a search", () => {
+  it("returns to the unfiltered catalog when the search box is emptied", async () => {
+    const user = userEvent.setup();
+    const requests = recordRequests();
+
+    renderWithProviders(<BrowsePage />, { route: "/?q=αγάπη" });
+
+    expect(await screen.findByText(/no songs matched/i)).toBeInTheDocument();
+
+    await user.clear(screen.getByRole("searchbox", { name: /search songs/i }));
+
+    // The catalog's own empty state, not the search's.
+    expect(await screen.findByText(/no songs yet/i, {}, { timeout: 3000 })).toBeInTheDocument();
+    await waitFor(() => expect(requests.at(-1)?.get("q")).toBeNull());
+  });
+});
+
+describe("BrowsePage pagination backwards", () => {
+  // Page one is the absent parameter, so its address is the bare catalog's.
+  it("steps back to the first page", async () => {
+    const user = userEvent.setup();
+    const requests = recordRequests({ songs: list([makeSong()], { total: 45 }) });
+
+    renderWithProviders(<BrowsePage />, { route: "/?page=1" });
+
+    expect(await screen.findByText("Page 2 of 3")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /previous/i }));
+
+    expect(await screen.findByText("Page 1 of 3")).toBeInTheDocument();
+    await waitFor(() => expect(requests.at(-1)?.get("offset")).toBe("0"));
+    expect(screen.getByRole("button", { name: /previous/i })).toBeDisabled();
+  });
+});
+
+/*
+ * The sheet writes every choice to the URL, and each one resets the page: a
+ * narrower filter left on page three is very often past its last page.
+ */
+describe("BrowsePage filter sheet", () => {
+  /** A catalog past one page, with two genres for the sheet to offer. */
+  const recordSheetRequests = () =>
+    recordRequests({
+      songs: list([makeSong()], { total: 45 }),
+      genres: [
+        makeGenre({ id: "genre-1", name: "Ρεμπέτικο", slug: "rempetiko", song_count: 12 }),
+        makeGenre({ id: "genre-2", name: "Έντεχνο", slug: "entechno", song_count: 3 }),
+      ],
+    });
+
+  const openFilters = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await screen.findByRole("button", { name: /filters/i }));
+    return screen.getByRole("dialog", { name: "Filters" });
+  };
+
+  it("filters by a genre, and a second press on it lifts the filter", async () => {
+    const user = userEvent.setup();
+    const requests = recordSheetRequests();
+
+    renderWithProviders(<BrowsePage />, { route: "/?page=2" });
+    const sheet = await openFilters(user);
+
+    await user.click(await within(sheet).findByRole("button", { name: /Ρεμπέτικο/ }));
+
+    await waitFor(() => expect(requests.at(-1)?.get("genre_slug")).toBe("rempetiko"));
+    expect(requests.at(-1)?.get("offset")).toBe("0");
+    expect(screen.getByRole("button", { name: "Filters (1 active)" })).toBeInTheDocument();
+
+    await user.click(within(sheet).getByRole("button", { name: /Ρεμπέτικο/ }));
+
+    await waitFor(() => expect(requests.at(-1)?.has("genre_slug")).toBe(false));
+    expect(screen.getByRole("button", { name: "Filters" })).toBeInTheDocument();
+  });
+
+  it("filters by language, and 'Any language' lifts it rather than sending it empty", async () => {
+    const user = userEvent.setup();
+    const requests = recordSheetRequests();
+
+    renderWithProviders(<BrowsePage />);
+    const sheet = await openFilters(user);
+    const language = within(sheet).getByRole("combobox", { name: "Language" });
+
+    await user.selectOptions(language, "el");
+    await waitFor(() => expect(requests.at(-1)?.get("language")).toBe("el"));
+
+    await user.selectOptions(language, "");
+    await waitFor(() => expect(requests.at(-1)?.has("language")).toBe(false));
+  });
+
+  it("puts the chosen ordering into the request", async () => {
+    const user = userEvent.setup();
+    const requests = recordSheetRequests();
+
+    renderWithProviders(<BrowsePage />);
+    const sheet = await openFilters(user);
+
+    await user.selectOptions(within(sheet).getByRole("combobox", { name: "Sort by" }), "title");
+
+    await waitFor(() => expect(requests.at(-1)?.get("sort")).toBe("title"));
+  });
+
+  // `filterCount` and "Clear all" each name the filter keys; one missing from
+  // the second leaves a badge that nothing in the sheet can clear.
+  it("clears every filter and the ordering, and keeps the search", async () => {
+    const user = userEvent.setup();
+    const requests = recordSheetRequests();
+
+    renderWithProviders(<BrowsePage />, {
+      route: "/?q=αγάπη&person=person-1&genre_slug=rempetiko&language=el&sort=title&page=1",
+    });
+    const sheet = await openFilters(user);
+
+    await user.click(within(sheet).getByRole("button", { name: "Clear all" }));
+
+    await waitFor(() => {
+      const last = requests.at(-1);
+      expect(last?.get("q")).toBe("αγάπη");
+      expect(last?.has("person")).toBe(false);
+      expect(last?.has("genre_slug")).toBe(false);
+      expect(last?.has("language")).toBe(false);
+      // The default with a query, now the chosen ordering is gone.
+      expect(last?.get("sort")).toBe("relevance");
+      expect(last?.get("offset")).toBe("0");
+    });
+    expect(screen.getByRole("button", { name: "Filters" })).toBeInTheDocument();
   });
 });

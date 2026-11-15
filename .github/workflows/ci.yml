@@ -109,9 +109,10 @@ jobs:
         working-directory: web
         run: pnpm run lint
 
+      # With coverage, so the thresholds in vitest.config.ts are enforced.
       - name: Test
         working-directory: web
-        run: pnpm run test
+        run: pnpm run test:coverage
 
       # A base URL is set only because this is a smoke test of the build; the
       # real production build leaves it unset so the bundle calls its own origin.

@@ -32,11 +32,10 @@ describe("coverRect", () => {
 describe("toSquareJpeg", () => {
   const file = () => new File(["not really an image"], "photo.png", { type: "image/png" });
 
-  // Nothing in the vitest config restores globals, and a spec below leaves a
+  // The vitest config restores spies but not globals, and a spec below leaves a
   // decoder that always rejects.
   afterEach(() => {
     vi.unstubAllGlobals();
-    vi.restoreAllMocks();
   });
 
   it("decodes with the image's own orientation", async () => {

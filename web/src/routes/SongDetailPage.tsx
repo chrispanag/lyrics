@@ -19,7 +19,7 @@ import { PersonLinks } from "@/components/PersonLinks";
 import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { buttonClasses } from "@/components/buttonStyles";
-import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton } from "@/components/ui";
+import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton, Spinner } from "@/components/ui";
 import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_LABELS, groupCredits } from "@/lib/credits";
 import { cn } from "@/lib/cn";
@@ -373,43 +373,61 @@ function AddToListSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const { data: lists } = useLists(open);
-  const { data: membership } = useSongLists(songId, open);
+  const lists = useLists(open);
+  const membership = useSongLists(songId, open);
   const toggle = useToggleSongInList(songId);
 
-  const memberOf = new Set(membership?.list_ids ?? []);
+  // Rows wait for both answers: drawn from the lists alone, every row reads as
+  // unchecked, and pressing one sends an add for a song already on that list.
+  // A failed refetch keeps the answer in hand and says nothing, as the song
+  // page does; only a failure that leaves nothing to show is reported.
+  const failure = (lists.data ? null : lists.error) ?? (membership.data ? null : membership.error);
+  const memberOf = new Set(membership.data?.list_ids ?? []);
 
   return (
     <Sheet open={open} onClose={onClose} title="Save to list">
+      {failure && (
+        <ErrorMessage>{errorMessage(failure, "Your lists could not be loaded.")}</ErrorMessage>
+      )}
+      {toggle.error && (
+        <ErrorMessage>{errorMessage(toggle.error, "That list could not be changed.")}</ErrorMessage>
+      )}
+      {!failure && (!lists.data || !membership.data) && <Spinner />}
       <ul className="space-y-1">
-        {lists?.data.map((list) => {
-          const present = memberOf.has(list.id);
-          return (
-            <li key={list.id}>
-              <button
-                type="button"
-                onClick={() => toggle.mutate({ listId: list.id, present })}
-                aria-pressed={present}
-                className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-stone-100 dark:hover:bg-stone-800"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate font-medium">{list.name}</span>
-                  <span className="block text-xs text-stone-500">{songCount(list.item_count)}</span>
-                </span>
-                <span
-                  className={cn(
-                    "flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                    present
-                      ? "border-brand-600 bg-brand-600 text-white"
-                      : "border-stone-300 dark:border-stone-600",
-                  )}
+        {membership.data &&
+          lists.data?.data.map((list) => {
+            const present = memberOf.has(list.id);
+            return (
+              <li key={list.id}>
+                <button
+                  type="button"
+                  onClick={() => toggle.mutate({ listId: list.id, present })}
+                  // Pending lasts until membership is refetched, so a second
+                  // press cannot act on the stale `present` and re-add.
+                  disabled={toggle.isPending}
+                  aria-pressed={present}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-stone-100 dark:hover:bg-stone-800"
                 >
-                  {present && <Check aria-hidden className="size-4" />}
-                </span>
-              </button>
-            </li>
-          );
-        })}
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{list.name}</span>
+                    <span className="block text-xs text-stone-500">
+                      {songCount(list.item_count)}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                      present
+                        ? "border-brand-600 bg-brand-600 text-white"
+                        : "border-stone-300 dark:border-stone-600",
+                    )}
+                  >
+                    {present && <Check aria-hidden className="size-4" />}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
       </ul>
 
       <Link

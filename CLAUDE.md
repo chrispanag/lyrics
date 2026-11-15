@@ -1816,6 +1816,9 @@ each of them is written down.
   and `PRELUDE_ISSUER` point the app at it.
 - Frontend uses vitest + RTL + MSW, with `onUnhandledFrame: "error"` — an
   unstubbed request is a bug in the test, not something to pass through.
+- **The frontend suite runs with coverage and fails under a floor**, set in
+  `vitest.config.ts` just below what it measures. Raise it as the suite rises;
+  lowering it is a decision, not a fix.
 - `renderWithProviders` stubs the auth context rather than mounting the real
   provider, so tests never touch the Prelude SDK.
 - Playwright's guest specs need only a running seeded stack. The signed-in spec
