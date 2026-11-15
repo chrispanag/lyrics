@@ -40,6 +40,10 @@ beforeAll(() => {
       },
     );
     window.scrollTo = vi.fn();
+    // The navigation drawer opens and closes by scrolling its own scroller.
+    Element.prototype.scrollTo = vi.fn();
+    // And its list takes the vertical scrolling keys from the page.
+    Element.prototype.scrollBy = vi.fn();
     // `Sheet` is a modal `<dialog>`; see src/test/dialog.ts.
     installDialogStub();
   }

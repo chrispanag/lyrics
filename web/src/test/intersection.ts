@@ -44,11 +44,16 @@ class StubIntersectionObserver implements IntersectionObserver {
     return [...this.targets];
   }
 
-  /** Reports every observed element as visible, the way scrolling to it would. */
-  report(): void {
+  /** Reports every observed element as showing `ratio` of itself. */
+  report(ratio: number): void {
     const entries = [...this.targets].map(
-      // Only the two fields the app reads.
-      (target) => ({ target, isIntersecting: true }) as IntersectionObserverEntry,
+      // Only the fields the app reads.
+      (target) =>
+        ({
+          target,
+          isIntersecting: ratio > 0,
+          intersectionRatio: ratio,
+        }) as IntersectionObserverEntry,
     );
     if (entries.length > 0) this.callback(entries, this);
   }
@@ -57,11 +62,12 @@ class StubIntersectionObserver implements IntersectionObserver {
 export { StubIntersectionObserver };
 
 /**
- * Tells everything currently being observed that it has come into view.
- * Unmounting disconnects, so nothing needs resetting between specs.
+ * Tells everything currently being observed that it has come into view, or
+ * with `0`, that it has left it. Unmounting disconnects, so nothing needs
+ * resetting between specs.
  */
-export function intersectAll(): void {
-  for (const observer of [...live]) observer.report();
+export function intersectAll(ratio = 1): void {
+  for (const observer of [...live]) observer.report(ratio);
 }
 
 /**

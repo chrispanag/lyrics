@@ -1205,53 +1205,70 @@ each of them is written down.
   deliberate: lit, the card's name takes the brand color exactly as a label
   does, while at rest the links name a stone the card leaves to inherit. The
   role line names its own either way, so it stays put under both.
-- **The drawer stays mounted while closed, and three things follow from it.**
-  Sliding is the point — a panel that unmounts has nothing to transition from —
-  and everything here is what that costs. It carries `role="dialog"` and
-  `aria-modal` **only while open**: `lib/modal.ts` asks the DOM for exactly that
-  pair and never for anything visible, so a closed drawer wearing them puts a
-  modal on the page for the whole session, and the song page's paging swipe and
-  arrow keys stand down permanently — on phones only, silently, with the drawer
-  itself behaving perfectly. `Layout.test.tsx` asks `modalIsOpen()` of a closed
-  drawer, which is what says so. **The marking is returned by `useModal` rather
-  than written by the drawer**, which is what keeps "write it conditionally"
-  from being a rule an author has to remember. The same hook carries Escape, the
-  scroll lock and the focus — deliberately **two effects with different keys**:
-  `onClose` is an inline closure, so a focus restore living in the first
-  effect's cleanup fires on any render while the drawer is open and pulls focus
-  onto the trigger behind the backdrop. The drawer is the last user of
-  `useModal`; `Sheet` is already a native `<dialog>` (see the sheet bullet
-  below), and moving the drawer is what retires the hook. It is
-  `inert` while closed, so its links
-  are out of the tab order and the accessibility tree rather than being a second
-  copy of the navigation a keyboard reaches through the page, and
-  `pointer-events-none` says the same to a browser that does not know `inert` —
-  without it the invisible backdrop swallows every press on the page behind.
-  The backdrop's **blur is gated on `open` while the element is not**, since
-  `backdrop-filter` is a composited layer the size of the viewport and would
-  otherwise be one on every page for as long as the app is open; it drops at
-  once rather than fading, which is invisible behind 40% black on its way out.
-  And it closes on **the location, not the pathname**: a link to the screen the
-  reader is already on pushes a new entry with the same path, so a drawer
-  watching the path alone is left standing open with nothing having happened.
-  That close is a reset made while rendering, keyed apart from the scroll-to-top
-  effect beside it, whose `pathname` key is deliberate — a filter written into
-  the catalog's query string must not scroll that page back to the top. **A
-  window that grows past `md` closes it too**, which is a `matchMedia`
-  subscription in a codebase that otherwise leaves every breakpoint to CSS, so
-  it needs saying why.
-  The panel and the hamburger are both `md:hidden`, so crossing the breakpoint
-  takes the whole control off the screen while `navOpen` goes on saying it is
-  open — and an open drawer nobody can see still costs everything an open modal
-  costs: the scroll lock freezes a desk's page with no modal on it, and
-  `modalIsOpen()` reads the marking off the DOM without asking what is visible,
-  so the song page's swipe and arrow keys stand down for the rest of the
-  session. A phone turned to landscape is 812px or more, so it is one rotation
-  away. It does not contradict `StickyHeader`'s reason for refusing
+- **The drawer is a modal `<dialog>` that is also a horizontal scroller, and
+  closing it is a scroll.** Two snap stops, the sheet and a viewport-wide spacer
+  after it, so the swipe that dismisses it is the browser's own scrolling and
+  follows the finger; `.nav-drawer` in `index.css` is the mechanism. The browser
+  supplies the modality, exactly as for `Sheet`: inert page, focus in and back,
+  Escape — so it carries no `role`, `aria-modal`, `inert`, Escape listener or
+  focus restore, and `modalIsOpen()` is true precisely while it is open,
+  because a closed dialog is not `:modal`. What follows from the slide:
+  **nothing calls `close()` to dismiss it.** A closed dialog is `display: none`,
+  so closing first cuts the slide; a backdrop tap, a cancelable Escape, a
+  navigation or the breakpoint all scroll to the spacer, and an
+  IntersectionObserver on the sheet calls `close()` once it is off-screen —
+  which is also what closes it after a swipe nobody in the app asked for. The
+  observer ignores "off-screen" until the sheet has been on screen since
+  `showModal()`, since that is where it starts. A backdrop tap is caught on the
+  dialog by `!sheet.contains(target)`, **not `closedby="any"`**: the dialog
+  fills the viewport, so taps never reach `::backdrop`, and light dismiss would
+  close without the slide. It focuses **the dialog itself** on opening, since
+  `showModal()` otherwise picks the first focusable thing and a link there
+  would scroll the sheet open before it could slide. The dim is 40% black faded
+  by `--drawer-backdrop`, which a scroll-driven animation on `scroll(self x)`
+  writes — the dialog is the scroller rather than holding one because WebKit
+  parses `timeline-scope` and resolves no timeline through it, which left the
+  dim permanently off. Two fallbacks: without scroll timelines a scroll
+  listener writes the same property (the `@supports` gate stops the keyframes
+  pinning the dim on), and without `scroll-initial-target` (everything but
+  Chromium) opening jumps to the closed stop and waits two frames before
+  sliding in. **iOS Safari must not scroll the page behind it** — the sheet's
+  problem below, met the same way: the dialog is a scroller that always
+  scrolls, sideways here, so `overscroll-behavior: none` holds. Safari ignores
+  it on a box that cannot scroll the way a swipe goes, so the dialog is `touch-action: pan-x pinch-zoom`
+  (vertical swipes on the dim and the sheet's padding are no pan at all, while
+  a pinch still zooms, as on a sheet's dismiss layer), and
+  the sheet's list is a scroller that always overflows by a pixel with
+  `overscroll-behavior-y: contain` — `-y` only, so a sideways swipe still
+  chains out to the drawer. A scroll container resets `touch-action` for what is
+  inside it, which is why `pan-x` above does not freeze the list. Keys are the
+  other way through: WebKit hands Home and End to the document, and Page
+  Up/Down, Space and the vertical arrows from a link in the list to the page
+  behind, since the dialog scrolls only sideways. So the drawer calls
+  `useHomeEndInside` like `useDialog` does, and takes the rest itself on the
+  document and scrolls the list — a field keeps every key, a button keeps
+  Space. Measured in WebKit with focus on the dialog and on a link. Chromium's
+  touch emulation confirms vertical drags leave `scrollY` alone; mobile WebKit
+  in Playwright cannot drag at all, so on an iPhone this is unconfirmed beyond
+  the computed styles. And it closes on **the location, not the pathname**: a
+  link to the screen the reader is already on pushes a new entry with the same
+  path, so a drawer watching the path alone is left standing open with nothing
+  having happened. That close is a reset made while rendering, keyed apart from
+  the scroll-to-top effect beside it, whose `pathname` key is deliberate — a
+  filter written into the catalog's query string must not scroll that page back
+  to the top. **A window that grows past `md` closes it too**, which is a
+  `matchMedia` subscription in a codebase that otherwise leaves every breakpoint
+  to CSS, so it needs saying why. The hamburger is `md:hidden`, so crossing the
+  breakpoint takes the only control off the screen while the dialog stays
+  modal — the desk's page inert, and the song page's swipe and arrow keys
+  standing down. A phone turned to landscape is 812px or more, so it is one
+  rotation away. It does not contradict `StickyHeader`'s reason for refusing
   `matchMedia`: that one keeps a *class* in step with a window and hands the job
   to CSS, where this is a one-way close of state whose only control has gone.
-  Pinned in `Layout.test.tsx`, which installs a `matchMedia` that can be moved —
-  the suite-wide stub answers `false` forever and registers no listeners.
+  jsdom has no layout, so `Layout.test.tsx` drives the slide through the stub
+  observer (`intersectAll(1)` slid in, `intersectAll(0)` gone), and installs a
+  `matchMedia` that can be moved — the suite-wide stub answers `false` forever
+  and registers no listeners.
 - **`Sheet` is a native `<dialog>` opened with `showModal()`, and three things
   hold it up.** The browser supplies what the `<div>` faked or lacked: an inert
   page, focus moved in and contained, Escape and the back gesture, and focus
@@ -1287,16 +1304,16 @@ each of them is written down.
   outside a dialog that covers the viewport, so `closedby` would do nothing; the
   layer is also `touch-action: pinch-zoom`, so a pan on the dimming is not a
   scroll at all while a pinch still zooms. And **Home and End are taken by
-  `useDialog`**, on the document, since WebKit sends them there wherever focus
+  `useHomeEndInside`**, which `useDialog` and the drawer both call, on the document, since WebKit sends them there wherever focus
   is — including `<body>`, after a press on plain text. Measured with Playwright against `next dev` in
   WebKit and Chromium, desktop and phone-sized: wheel, keys and (Chromium only)
   touch over the dimming, the header and short and long content all leave
   `scrollY` alone, and the panels sit where they did. **Playwright cannot drag a
   finger in WebKit**, so iOS touch is the one path not observed — `touch-action`
   and `overscroll-behavior` on a real scroller are both long supported there, but
-  it wants a real iPhone. The `<body>` lock stays only in `useModal`, for the
-  drawer, which is not a `<dialog>`; a drawer that becomes one should take these
-  three pieces rather than the lock. jsdom has no `showModal()` or working
+  it wants a real iPhone. There is no `<body>` lock anywhere: the drawer is the
+  same idea turned sideways, a dialog that is its own scroller (see the drawer
+  bullet above). jsdom has no `showModal()` or working
   `:modal`, so `src/test/dialog.ts` stubs the part the specs lean on, and
   `modalIsOpen()` asks `matches(":modal")` per element for that reason.
 - **The hamburger is rendered by the app bars, and a screen gets its bar by
@@ -1328,9 +1345,9 @@ each of them is written down.
   bordered box — a hairline across the top of every screen at a desk; wrapping
   it instead breaks the stickiness, a sticky element being confined to its
   parent's box. The trigger and the drawer
-  cannot be one component: `StickyHeader`'s transform and backdrop filter each
-  make it the containing block for anything `fixed` inside it, so a drawer
-  opened from the button would slide off the top of the screen with the header.
+  cannot be one component: every page renders its own header, so a drawer
+  rendered there would unmount with the page a link in it navigates away from
+  instead of sliding out over the next one.
   `lib/navDrawer.ts` is what joins them, and its default is a drawer that cannot
   be opened — every page's own specs render that page with no shell above it,
   and throwing there would make `Layout` something each of them has to mount.
@@ -1417,12 +1434,12 @@ each of them is written down.
   only, clear of the edges, no open sheet, and not starting on a control. "A
   sheet is open" is `lib/modal.ts` — one question for the swipe and the arrow
   keys both, asked of the DOM rather than of a page, so the next sheet is covered
-  without being added to a list. There are two modals, and `modalIsOpen()`
-  recognizes both shapes: `Sheet` is a `<dialog>` opened with `showModal()`, so
-  it asks for one that matches `:modal`, and the phone's navigation drawer gets
-  `role="dialog"` plus `aria-modal` from `useModal` only while open, which is
-  what makes it safe for the drawer to stay mounted while closed; see the Layout
-  bullets above. The control guard is belt
+  without being added to a list. There are two modals, `Sheet` and the phone's
+  navigation drawer, both `<dialog>`s opened with `showModal()`, so it asks for
+  one that matches `:modal` — which a closed dialog never does, and that is what
+  makes it safe for both to stay mounted while closed. The drawer is in the top
+  layer, outside the `<article>` the swipe is read across, so a swipe on the
+  drawer never reaches that listener either. The control guard is belt
   and suspenders and deliberately the safe way round — a swipe over a control does
   nothing, rather than a control being unreachable under the gesture, which is
   precisely how the strips went wrong.
