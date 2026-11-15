@@ -25,6 +25,7 @@ jobs:
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       backend: ${{ steps.diff.outputs.backend }}
       web: ${{ steps.diff.outputs.web }}
@@ -65,6 +66,10 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.backend != 'false' }}
     runs-on: ubuntu-latest
+    # Every job here takes a minute or two warm; the default is six hours,
+    # which is what a hung test or a stuck service container would otherwise
+    # hold a runner for.
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -127,6 +132,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.web != 'false' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v7
@@ -163,7 +169,20 @@ jobs:
         run: pnpm run test:coverage
 
       # Every story is also a test (its play function plus an axe check), run
-      # in a real browser rather than jsdom.
+      # in a real browser rather than jsdom. The browser is cached per
+      # Playwright version, and `install` skips one it finds, so a cache hit
+      # leaves only the system packages `--with-deps` adds, which live outside
+      # the cached directory.
+      - name: Read Playwright version
+        id: playwright
+        working-directory: web
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
       - name: Install Chromium
         working-directory: web
         run: pnpm exec playwright install --with-deps --only-shell chromium
@@ -171,6 +190,17 @@ jobs:
       - name: Story tests
         working-directory: web
         run: pnpm run test:stories
+
+      # Turbopack's build cache, on by default since Next 16.3, is only read
+      # if `.next/cache` survives between runs. An exact hit needs the same
+      # lockfile and sources; the prefix restores the latest build on the same
+      # lockfile, which is still mostly warm after a source change.
+      - uses: actions/cache@v6
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-${{ hashFiles('web/src/**', 'web/next.config.ts') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}-
 
       # A base URL is set only because this is a smoke test of the build; the
       # real production build leaves it unset so the bundle calls its own origin.
@@ -188,6 +218,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.backend != 'false' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v7
@@ -208,6 +239,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.web != 'false' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v7
