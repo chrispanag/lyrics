@@ -432,7 +432,7 @@ function AddToListSheet({
   );
 }
 
-/** One labelled row of the header's credits; the value is names or a year. */
+/** One labeled row of the header's credits; the value is names or a year. */
 function CreditRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex gap-2">

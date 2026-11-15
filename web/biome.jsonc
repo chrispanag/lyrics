@@ -89,7 +89,7 @@
               "level": "error",
               "options": {
                 "allowConstantExport": true,
-                "allowExportNames": ["metadata", "viewport", "generateMetadata", "dynamic"]
+                "allowExportNames": ["metadata", "viewport", "generateMetadata"]
               }
             }
           }
