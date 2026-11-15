@@ -91,12 +91,11 @@ export function Layout() {
   // the screen they are already on would otherwise be left looking at a drawer
   // with nothing having happened. Not keyed with the effect above, whose
   // `pathname` key is deliberate: a filter written into the catalog's query
-  // string must not scroll that page back to the top. Done while rendering
-  // rather than in an effect, so the new screen is never drawn with the drawer
-  // still open over it.
-  const [navLocation, setNavLocation] = useState(location);
-  if (navLocation !== location) {
-    setNavLocation(location);
+  // string must not scroll that page back to the top. Reset while rendering, so
+  // the new screen is never drawn with the drawer still open over it.
+  const [navKey, setNavKey] = useState(location.key);
+  if (navKey !== location.key) {
+    setNavKey(location.key);
     setNavOpen(false);
   }
 

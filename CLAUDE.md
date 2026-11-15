@@ -698,8 +698,10 @@ no application code — but while it stands, these are the parts holding it up.
   initializers that read storage are still safe. Remove the `ssr: false` and
   they are not; that is the first work any server-rendering change has to do,
   and the render *bodies* are now most of the way there rather than all of it.
-  Three reads have been moved off the first render — the reader's font size, the
-  swipe hint's unspent flag and `window.location.origin` on a list page. Two are
+  Three reads no longer decide a server's markup — the reader's font size and the
+  swipe hint's unspent flag, taken in layout effects, and
+  `window.location.origin` on a list page, read through `useSyncExternalStore`
+  with an empty server snapshot. Two are
   knowingly left: `ProfilePage`'s `useState(storedTheme)`, which is wrapped
   rather than moved, and `AuthProvider`'s `useState(storedUser)`, which is the
   larger of the two and the one to do first — a server renders guest chrome
@@ -726,10 +728,14 @@ no application code — but while it stands, these are the parts holding it up.
   spent is what makes both sides agree. Nothing is lost by that — the mark waits
   for an IntersectionObserver before it shows anything, and `md:hidden` still
   denies the box any geometry at a desk, so the single showing cannot be spent
-  there. `storedTheme`/`storeTheme` and `ListsPages`'s share URL are the other
-  two, and needed only the wrap and a mounted flag: nothing renders on a server
-  while `ssr: false` stands, so they are fixed for the module graph rather than
-  for a path anything is on yet. What the wrap does *not* finish is
+  there. Both layout effects carry a `react-hooks/set-state-in-effect` disable
+  saying why, and are the only two that should: the shape suits a value the
+  reader also writes, or one read exactly once. `storedTheme`/`storeTheme` and
+  `ListsPages`'s share URL are the other two. The first needed only the wrap;
+  the second is a `useSyncExternalStore` read whose server snapshot is `""`,
+  the form for a browser value with no writer at all. Nothing renders on a
+  server while `ssr: false` stands, so both are fixed for the module graph
+  rather than for a path anything is on yet. What the wrap does *not* finish is
   `ProfilePage`'s `useState(storedTheme)`, which is still a stored value read
   while rendering and wants the same layout-effect shape — it answers "system"
   there rather than throwing, so it is the mismatch and not the crash, and the
@@ -1211,10 +1217,10 @@ each of them is written down.
   And it closes on **the location, not the pathname**: a link to the screen the
   reader is already on pushes a new entry with the same path, so a drawer
   watching the path alone is left standing open with nothing having happened.
-  That is its own effect rather than a line in the scroll-to-top one beside it,
-  whose `pathname` key is deliberate — a filter written into the catalog's query
-  string must not scroll that page back to the top. **A window that grows past
-  `md` closes it too**, which is a `matchMedia` subscription in a codebase that
+  That close is a reset made while rendering, keyed apart from the scroll-to-top
+  effect beside it, whose `pathname` key is deliberate — a filter written into
+  the catalog's query string must not scroll that page back to the top. **A
+  window that grows past `md` closes it too**, which is a `matchMedia` subscription in a codebase that
   otherwise leaves every breakpoint to CSS, so it needs saying why.
   The panel and the hamburger are both `md:hidden`, so crossing the breakpoint
   takes the whole control off the screen while `navOpen` goes on saying it is

@@ -199,9 +199,8 @@ export function ListDetailPage() {
   // Where this app is being served from. `window` is not there for a render a
   // server performed, so the share link below was the page's one line that
   // could not survive the `ssr: false` coming off. The server snapshot is what
-  // a server render and hydration both use, and the browser's answer follows
-  // — the hydration-safe form, with no effect and no second copy in state. The
-  // origin never changes under a running page, so there is nothing to
+  // a server render and hydration both use, and the browser's answer follows.
+  // The origin never changes under a running page, so there is nothing to
   // subscribe to.
   const origin = useSyncExternalStore(
     subscribeToNothing,

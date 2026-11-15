@@ -84,9 +84,8 @@ export function SongSearch() {
   // history entry rather than on a click, because there are four ways out of the
   // panel — a press, Enter, a middle click, the catalog row — and one of them
   // would have been forgotten. Landing on a song with the box still full of the
-  // search that found it is the failure this avoids. Reset while rendering
-  // rather than in an effect, so the next page is never drawn with the old
-  // search still in the box.
+  // search that found it is the failure this avoids. Reset while rendering, so
+  // the next page is never drawn with the old search still in the box.
   const [searchedAt, setSearchedAt] = useState(location.key);
   if (searchedAt !== location.key) {
     setSearchedAt(location.key);
