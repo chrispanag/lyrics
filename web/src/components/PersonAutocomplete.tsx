@@ -22,21 +22,18 @@ export function PersonAutocomplete({
   value,
   onChange,
   placeholder,
-  id,
   label,
 }: {
   value: PersonSelection;
   onChange: (selection: PersonSelection) => void;
   placeholder?: string;
-  id?: string;
   /**
    * The field's accessible name. Required: it sits in rows with no visible
    * label, and a placeholder is no name, gone once anything is typed.
    */
   label: string;
 }) {
-  const generatedId = useId();
-  const inputId = id ?? generatedId;
+  const inputId = useId();
   const listId = `${inputId}-suggestions`;
 
   const [open, setOpen] = useState(false);
