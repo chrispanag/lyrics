@@ -13,6 +13,8 @@ const config: StorybookConfig = {
   // react-docgen parses the source itself.
   typescript: { reactDocgen: "react-docgen" },
   viteFinal: (config, { configType }) => {
+    // The same alias as vitest.config.ts: `storybook dev` and `build` do not
+    // read that file. Change both.
     config.resolve ??= {};
     config.resolve.alias = {
       ...config.resolve.alias,

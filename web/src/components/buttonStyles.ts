@@ -5,8 +5,11 @@ import { cn } from "@/lib/cn";
  * which exports only components so fast refresh keeps working.
  */
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
-export type ButtonSize = "sm" | "md" | "lg" | "icon";
+// Listed as values so the Primitives stories can offer every one of them.
+export const BUTTON_VARIANTS = ["primary", "secondary", "ghost", "danger"] as const;
+export const BUTTON_SIZES = ["sm", "md", "lg", "icon"] as const;
+export type ButtonVariant = (typeof BUTTON_VARIANTS)[number];
+export type ButtonSize = (typeof BUTTON_SIZES)[number];
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:

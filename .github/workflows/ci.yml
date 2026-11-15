@@ -118,7 +118,7 @@ jobs:
       # in a real browser rather than jsdom.
       - name: Install Chromium
         working-directory: web
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps --only-shell chromium
 
       - name: Story tests
         working-directory: web

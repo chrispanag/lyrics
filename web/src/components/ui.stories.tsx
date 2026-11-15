@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
+import { BUTTON_SIZES, BUTTON_VARIANTS } from "./buttonStyles";
 import { Button, Chip, EmptyState, ErrorMessage, Notice, Spinner } from "./ui";
 
 const meta = {
@@ -9,9 +10,11 @@ const meta = {
   title: "Primitives",
   component: Button,
   args: { children: "Save", onClick: fn() },
+  // Listed explicitly: react-docgen cannot resolve a type imported from
+  // another module, so it would infer no options at all.
   argTypes: {
-    variant: { control: "inline-radio", options: ["primary", "secondary", "ghost", "danger"] },
-    size: { control: "inline-radio", options: ["sm", "md", "lg"] },
+    variant: { control: "inline-radio", options: BUTTON_VARIANTS },
+    size: { control: "inline-radio", options: BUTTON_SIZES },
   },
 } satisfies Meta<typeof Button>;
 
@@ -23,18 +26,11 @@ export const Primary: Story = {};
 export const Variants: Story = {
   render: (args) => (
     <div className="flex flex-wrap gap-2">
-      <Button {...args} variant="primary">
-        Primary
-      </Button>
-      <Button {...args} variant="secondary">
-        Secondary
-      </Button>
-      <Button {...args} variant="ghost">
-        Ghost
-      </Button>
-      <Button {...args} variant="danger">
-        Delete
-      </Button>
+      {BUTTON_VARIANTS.map((variant) => (
+        <Button key={variant} {...args} variant={variant}>
+          {variant}
+        </Button>
+      ))}
     </div>
   ),
 };

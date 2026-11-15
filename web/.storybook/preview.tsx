@@ -44,7 +44,6 @@ const preview: Preview = {
   parameters: {
     // The app paints its own ground on <body>; Storybook's would sit on top.
     backgrounds: { disable: true },
-    controls: { matchers: { color: /(background|color)$/i } },
     // Violations fail the story's test rather than only showing in the panel.
     a11y: { test: "error" },
   },
