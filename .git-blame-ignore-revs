@@ -1,0 +1,7 @@
+# Commits `git blame` should look through: mechanical rewrites whose authorship
+# says nothing about the lines they touched. GitHub reads this file on its own;
+# locally, run once: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Replace ESLint with Biome for linting and formatting (#57). Mostly the first
+# Biome reformat of web/; the squash also holds that PR's few hand edits.
+e7284bde9f52da0a3ca76b7ca4c23089f7b17435
