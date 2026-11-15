@@ -331,7 +331,13 @@ export function Sheet({
       aria-labelledby={titleId}
       // A transparent `.dialog-viewport` over the whole screen, so the page
       // behind cannot scroll (see index.css); the dimming is still `::backdrop`.
-      className="dialog-viewport border-0 p-0 text-inherit backdrop:bg-scrim backdrop:backdrop-blur-sm"
+      // The dim fades in. Entry only, as is the panel's below: a closing sheet
+      // has already dropped its content (`shown`), so there is nothing to
+      // animate out but an empty frame.
+      className={cn(
+        "dialog-viewport border-0 p-0 text-inherit backdrop:bg-scrim backdrop:backdrop-blur-sm",
+        "backdrop:transition-opacity backdrop:duration-200 backdrop:starting:opacity-0",
+      )}
     >
       <div className="dialog-track">
         <div data-dialog-dismiss aria-hidden />
@@ -342,6 +348,11 @@ export function Sheet({
             "sticky bottom-0 mt-auto flex max-h-[85dvh] w-full flex-col",
             "rounded-t-sheet bg-surface shadow-sheet",
             "sm:mx-auto sm:my-auto sm:max-w-lg sm:rounded-sheet",
+            // On opening it rises from the bottom edge, or from `sm` grows into
+            // place. `@starting-style` applies on every `showModal()`, because
+            // the panel has no style while the dialog is `display: none`.
+            "transition-[translate,scale,opacity] duration-250 ease-out",
+            "starting:translate-y-full sm:starting:translate-y-2 sm:starting:scale-95 sm:starting:opacity-0",
           )}
         >
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
