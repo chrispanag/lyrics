@@ -266,7 +266,9 @@ export function MenuButton() {
  * A sticky page header that gets out of the way on a phone.
  *
  * Hides on scroll down and returns on scroll up, below `md` only: the
- * `max-md:` prefix does that in CSS rather than tracking `matchMedia`.
+ * `max-md:` prefix does that in CSS rather than tracking `matchMedia`, whose
+ * answer would have to be kept in step with a window resized across the
+ * breakpoint.
  *
  * `pinned` holds it still, for a header with something anchored to it.
  *

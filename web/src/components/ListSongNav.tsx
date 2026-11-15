@@ -10,7 +10,7 @@ import { startsClearOfEdges, swipeDirection } from "@/lib/swipe";
 
 /*
  * Moving through a list without leaving it: the bar's arrows (links, so a
- * neighbor opens in a new tab), the arrow keys and the swipe.
+ * neighbor can be opened in a new tab), the arrow keys and the swipe.
  *
  * Nothing here builds an address; each step arrives with its href from
  * `lib/listContext`, so `?list=` cannot be dropped.
