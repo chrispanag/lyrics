@@ -115,21 +115,34 @@ describe("Sheet", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("closes on a press and release outside, not on a drag that ends there", async () => {
+  // The dialog covers the viewport, so light dismiss is a click whose target is
+  // the dimmed layer: a press inside released there targets an ancestor.
+  it("closes on a press and release on the dimmed area, not on a drag that ends there", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     render(<Harness onClose={onClose} />);
     await user.click(screen.getByRole("button", { name: "Open" }));
     const dialog = screen.getByRole("dialog");
+    const dim = dialog.querySelector("[data-dialog-dismiss]");
+    if (!dim) throw new Error("no dismiss layer");
 
-    // Pressed inside (the zero rectangle's own point), released outside.
-    fireEvent.pointerDown(dialog, { clientX: 0, clientY: 0 });
-    fireEvent.click(dialog, { clientX: 50, clientY: 50 });
+    fireEvent.click(dim.parentElement as Element);
     expect(onClose).not.toHaveBeenCalled();
 
-    fireEvent.pointerDown(dialog, { clientX: 50, clientY: 50 });
-    fireEvent.click(dialog, { clientX: 50, clientY: 50 });
+    fireEvent.click(dim);
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  // WebKit scrolls the document on Home and End wherever focus is in a dialog.
+  it("keeps Home and End from the page, but not from a text field", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Open" }));
+
+    expect(fireEvent.keyDown(screen.getByRole("button", { name: "Close" }), { key: "End" })).toBe(
+      false,
+    );
+    expect(fireEvent.keyDown(screen.getByLabelText("Name"), { key: "Home" })).toBe(true);
   });
 });

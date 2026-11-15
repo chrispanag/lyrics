@@ -87,6 +87,19 @@ describe("Mobile navigation drawer", () => {
     expect(trigger()).toHaveAttribute("aria-expanded", "true");
   });
 
+  // The drawer is the last user of the `<body>` lock: a `Sheet` is held still
+  // by CSS, so nothing else exercises it.
+  it("locks the page's scroll while open, and releases it on close", async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    await user.click(trigger());
+    expect(document.body.style.overflow).toBe("hidden");
+
+    await user.keyboard("{Escape}");
+    expect(document.body.style.overflow).toBe("");
+  });
+
   it("closes on Escape", async () => {
     const user = userEvent.setup();
     renderShell();
@@ -132,6 +145,8 @@ describe("Mobile navigation drawer", () => {
     crossInto(true);
 
     expect(modalIsOpen()).toBe(false);
+    // Kept, the lock would freeze a desk's page with no modal on it.
+    expect(document.body.style.overflow).toBe("");
   });
 });
 
