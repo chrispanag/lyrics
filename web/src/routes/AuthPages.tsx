@@ -279,7 +279,6 @@ export function RegisterPage() {
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            aria-describedby={fieldErrors.email ? "email-error" : undefined}
           />
         </Field>
 
@@ -292,7 +291,6 @@ export function RegisterPage() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             onBlur={() => passwordHints.check(password)}
-            aria-describedby={fieldErrors.password ? "password-error" : undefined}
           />
         </Field>
 
@@ -381,7 +379,6 @@ function CodeField({
         value={value}
         // Non-digits are stripped, so a pasted "Code: 123456" works.
         onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))}
-        aria-describedby={error ? "code-error" : undefined}
       />
     </Field>
   );

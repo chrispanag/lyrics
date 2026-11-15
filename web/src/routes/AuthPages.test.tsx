@@ -1013,6 +1013,7 @@ describe("sign-in and sign-up screens", () => {
       { route: "/register", auth: { register } },
     );
 
+    expect(screen.getByLabelText("Name")).toHaveAccessibleDescription("Optional");
     await userEvent.type(screen.getByLabelText("Name"), "Μαρίνα");
     await userEvent.type(screen.getByLabelText("Email"), " new@example.com ");
     await userEvent.type(screen.getByLabelText("Password"), "a-better-secret");

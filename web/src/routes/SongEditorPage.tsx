@@ -304,7 +304,6 @@ export function SongEditorPage() {
             required
             value={title}
             onChange={(event) => track(setTitle)(event.target.value)}
-            aria-describedby={fieldErrors.title ? "title-error" : undefined}
           />
         </Field>
 
@@ -317,7 +316,6 @@ export function SongEditorPage() {
             id="alt-title"
             value={altTitle}
             onChange={(event) => track(setAltTitle)(event.target.value)}
-            aria-describedby="alt-title-hint"
           />
         </Field>
 
@@ -327,7 +325,6 @@ export function SongEditorPage() {
             className="w-full"
             value={language}
             onChange={(event) => track(setLanguage)(event.target.value)}
-            aria-describedby={fieldErrors.language ? "language-error" : undefined}
           >
             {Object.entries(LANGUAGE_LABELS).map(([code, label]) => (
               <option key={code} value={code}>
@@ -465,11 +462,6 @@ export function SongEditorPage() {
                     id={`recording-${index}-label`}
                     value={recording.label}
                     // `Field` leaves pointing at its hint or error to the caller.
-                    aria-describedby={
-                      recordingError(index, "label")
-                        ? `recording-${index}-label-error`
-                        : `recording-${index}-label-hint`
-                    }
                     onChange={(event) => editRecording(index, { label: event.target.value })}
                   />
                 </Field>
@@ -486,11 +478,6 @@ export function SongEditorPage() {
                     min={1000}
                     max={2200}
                     value={recording.releaseYear}
-                    aria-describedby={
-                      recordingError(index, "release_year")
-                        ? `recording-${index}-year-error`
-                        : undefined
-                    }
                     onChange={(event) => editRecording(index, { releaseYear: event.target.value })}
                   />
                 </Field>
@@ -507,11 +494,6 @@ export function SongEditorPage() {
                     inputMode="url"
                     value={recording.youtubeUrl}
                     // The hint is the only statement of accepted link shapes.
-                    aria-describedby={
-                      recordingError(index, "youtube_url")
-                        ? `recording-${index}-youtube-error`
-                        : `recording-${index}-youtube-hint`
-                    }
                     onChange={(event) => editRecording(index, { youtubeUrl: event.target.value })}
                   />
                 </Field>
@@ -583,11 +565,6 @@ export function SongEditorPage() {
                     id={`recording-${index}-notes`}
                     rows={2}
                     value={recording.notes}
-                    aria-describedby={
-                      recordingError(index, "notes")
-                        ? `recording-${index}-notes-error`
-                        : `recording-${index}-notes-hint`
-                    }
                     onChange={(event) => editRecording(index, { notes: event.target.value })}
                   />
                 </Field>
@@ -654,7 +631,6 @@ export function SongEditorPage() {
             rows={16}
             value={lyrics}
             onChange={(event) => track(setLyrics)(event.target.value)}
-            aria-describedby={fieldErrors.lyrics ? "lyrics-error" : undefined}
             placeholder="One line per line. Blank lines separate verses."
             // Monospace keeps hand-aligned verses looking the way they were typed.
             className="font-mono text-sm leading-relaxed"
@@ -672,7 +648,6 @@ export function SongEditorPage() {
             rows={3}
             value={notes}
             onChange={(event) => track(setNotes)(event.target.value)}
-            aria-describedby={fieldErrors.notes ? "notes-error" : "notes-hint"}
           />
         </Field>
 

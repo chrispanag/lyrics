@@ -381,6 +381,12 @@ describe("SongEditorPage", () => {
     const title = await screen.findByLabelText("Title");
     await userEvent.clear(title);
     await userEvent.type(title, "  Sea  ");
+    expect(screen.getByLabelText("Alternative title")).toHaveAccessibleDescription(
+      "Optional — a transliteration or a well-known variant",
+    );
+    expect(screen.getByLabelText("Notes")).toHaveAccessibleDescription(
+      "Optional — context, sources, or variations",
+    );
     // Whitespace alone is no alternative title, and no notes.
     await userEvent.clear(screen.getByLabelText("Alternative title"));
     await userEvent.type(screen.getByLabelText("Alternative title"), "   ");

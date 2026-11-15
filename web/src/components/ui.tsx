@@ -1,4 +1,4 @@
-import { type ComponentProps, type ReactNode, useId } from "react";
+import { type ComponentProps, createContext, type ReactNode, useContext, useId } from "react";
 import { ChevronDown, LoaderCircle, X } from "lucide-react";
 
 import { buttonClasses, type ButtonSize, type ButtonVariant } from "./buttonStyles";
@@ -41,9 +41,27 @@ export function Button({
 // primitive, since `cn` cannot override a shared class.
 const fieldLayout = "rounded-xl";
 
+/**
+ * The id of the text a `Field` is showing under its control, error or hint.
+ * Read by the primitives rather than wired by each caller: by hand, nothing
+ * failed when a caller forgot, and several did.
+ */
+const FieldDescription = createContext<string | undefined>(undefined);
+
+/** The field's description, plus any the caller names, without repeats. */
+function useDescribedBy(own: string | undefined): string | undefined {
+  const field = useContext(FieldDescription);
+  const ids = new Set([field, ...(own?.split(/\s+/) ?? [])].filter(Boolean));
+  return ids.size > 0 ? [...ids].join(" ") : undefined;
+}
+
 export function Input({ className, ...props }: ComponentProps<"input">) {
   return (
-    <input className={cn(fieldChrome, fieldLayout, "h-11 w-full px-3", className)} {...props} />
+    <input
+      className={cn(fieldChrome, fieldLayout, "h-11 w-full px-3", className)}
+      {...props}
+      aria-describedby={useDescribedBy(props["aria-describedby"])}
+    />
   );
 }
 
@@ -52,6 +70,7 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
     <textarea
       className={cn(fieldChrome, fieldLayout, "w-full px-3 py-2.5", className)}
       {...props}
+      aria-describedby={useDescribedBy(props["aria-describedby"])}
     />
   );
 }
@@ -72,6 +91,7 @@ export function Select({ className, ...props }: ComponentProps<"select">) {
           "peer h-11 w-full appearance-none pl-3 pr-9 [text-transform:inherit]",
         )}
         {...props}
+        aria-describedby={useDescribedBy(props["aria-describedby"])}
       />
       <ChevronDown
         aria-hidden
@@ -95,6 +115,9 @@ export function Field({
   hint?: string | undefined;
   children: ReactNode;
 }) {
+  // An error replaces the hint, on screen and in what the control announces.
+  const described = error ? `${htmlFor}-error` : hint ? `${htmlFor}-hint` : undefined;
+
   return (
     <div className="space-y-1.5">
       <label
@@ -103,14 +126,13 @@ export function Field({
       >
         {label}
       </label>
-      {children}
+      <FieldDescription value={described}>{children}</FieldDescription>
       {hint && !error && (
         <p id={`${htmlFor}-hint`} className="text-xs text-stone-500 dark:text-stone-400">
           {hint}
         </p>
       )}
       {error && (
-        // Callers point the control at these ids with aria-describedby.
         <p
           id={`${htmlFor}-error`}
           role="alert"
