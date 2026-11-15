@@ -1098,8 +1098,14 @@ scraper rather than by anyone inside the app, which is why each is written down.
   is the same false success one level over, and the spec's lists case pins it.
   The lists come from `GET /public-lists`, the one guest route that enumerates
   them: `id` and `updated_at` only (not the owner, the name or the songs, which
-  are the list's own page's to say), `created_at ASC, id ASC` for the same
-  append-only reason as the songs, and the same answer for every caller — an
+  are the list's own page's to say; adding, removing and reordering songs touch
+  `updated_at`, or a list's `lastModified` would stay at the day it was named
+  while its songs changed under it), `created_at ASC, id ASC` for the same
+  append-only reason as the songs — **true of a list created mid-walk and not
+  of one published mid-walk**, which slots in at its creation date (an
+  unpublish or a delete leaves a gap the same way), so one sitemap can carry a
+  duplicate and an omission until the next crawl; a `published_at` column is
+  what would close it — and the same answer for every caller — an
   owner's token adds none of their private lists, since a sitemap is built as a
   guest and a walk that differed by caller would be a private list one cache
   away from a sitemap. `TestPublicListsNeverEnumeratePrivateOnes` asks as the

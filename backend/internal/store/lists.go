@@ -30,7 +30,11 @@ func (s *Store) ListsForOwner(ctx context.Context, ownerID uuid.UUID) ([]List, e
 // PublicLists returns a page of public lists' addresses, for the sitemap, plus
 // how many public lists there are. Oldest first with the id as tiebreak: a
 // total order in which a list created mid-walk appends rather than shifting a
-// row across a page boundary. Nothing but the address and the last change:
+// row across a page boundary. Not one in which a list *published* mid-walk
+// does: it slots in at its creation date, as an unpublished or deleted one
+// leaves a gap. That costs one sitemap a duplicate and an omission, healed by
+// the next crawl; a `published_at` column would close it, and was judged not
+// worth a migration. Nothing but the address and the last change:
 // whose list it is, and what is in it, are for the list's own page.
 func (s *Store) PublicLists(ctx context.Context, limit, offset int) ([]PublicList, int, error) {
 	total, err := s.count(ctx, "count public lists", `SELECT count(*) FROM lists WHERE is_public`)
@@ -180,21 +184,32 @@ func (s *Store) DeleteList(ctx context.Context, id uuid.UUID) error {
 // AddSongToList appends a song, placing it after the current last entry.
 // Re-adding a song already present is a no-op rather than an error, so the
 // client can treat "add to list" as idempotent.
+//
+// Every change to a list's contents touches the list's `updated_at`, which is
+// the sitemap's `lastModified` for a public list: left alone, a list that
+// gained songs reads to a crawler as unchanged since it was named.
 func (s *Store) AddSongToList(ctx context.Context, listID, songID uuid.UUID) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO list_items (list_id, song_id, position)
-		VALUES ($1, $2, coalesce((SELECT max(position) + 1 FROM list_items WHERE list_id = $1), 0))
-		ON CONFLICT (list_id, song_id) DO NOTHING`, listID, songID)
+		WITH added AS (
+			INSERT INTO list_items (list_id, song_id, position)
+			VALUES ($1, $2, coalesce((SELECT max(position) + 1 FROM list_items WHERE list_id = $1), 0))
+			ON CONFLICT (list_id, song_id) DO NOTHING
+			RETURNING list_id)
+		UPDATE lists SET updated_at = now() WHERE id IN (SELECT list_id FROM added)`, listID, songID)
 	if err != nil {
 		return fmt.Errorf("add song to list: %w", translateErr(err))
 	}
 	return nil
 }
 
-// RemoveSongFromList drops an entry.
+// RemoveSongFromList drops an entry, touching the list's `updated_at` (see
+// AddSongToList). The UPDATE affects a row exactly when the DELETE did.
 func (s *Store) RemoveSongFromList(ctx context.Context, listID, songID uuid.UUID) error {
-	return s.execExpectingRow(ctx, "remove song from list",
-		`DELETE FROM list_items WHERE list_id = $1 AND song_id = $2`, listID, songID)
+	return s.execExpectingRow(ctx, "remove song from list", `
+		WITH removed AS (
+			DELETE FROM list_items WHERE list_id = $1 AND song_id = $2
+			RETURNING list_id)
+		UPDATE lists SET updated_at = now() WHERE id IN (SELECT list_id FROM removed)`, listID, songID)
 }
 
 // ReorderList rewrites entry positions to match the given song order. Songs
@@ -222,6 +237,10 @@ func (s *Store) ReorderList(ctx context.Context, listID uuid.UUID, songIDs []uui
 			WHERE list_id = $1 AND song_id <> ALL($3)`, listID, len(songIDs), songIDs)
 		if err != nil {
 			return fmt.Errorf("reposition remaining list items: %w", translateErr(err))
+		}
+		// The order is the list's content too (see AddSongToList).
+		if _, err := tx.Exec(ctx, `UPDATE lists SET updated_at = now() WHERE id = $1`, listID); err != nil {
+			return fmt.Errorf("touch reordered list: %w", translateErr(err))
 		}
 		return nil
 	})

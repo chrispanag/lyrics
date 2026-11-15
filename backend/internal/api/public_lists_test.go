@@ -129,3 +129,34 @@ func TestPublicListsWalkInAStableOrder(t *testing.T) {
 		t.Errorf("limit = %d, want clamped to %d", page.Meta.Limit, httpx.MaxLimit)
 	}
 }
+
+// The date is the sitemap's lastModified, so it has to move when the songs
+// do, not only when the list is renamed: a crawler reads an unmoved date as
+// nothing to fetch again.
+func TestPublicListDateFollowsItsSongs(t *testing.T) {
+	h := newHarness(t)
+	owner, ownerTok := h.userAndToken("owner@example.com", store.RoleUser)
+	shared := h.seedList(ownerTok, map[string]any{"name": "Shared", "is_public": true})
+	first, second := h.seedSong(owner, "First"), h.seedSong(owner, "Second")
+	path := "/api/v1/lists/" + shared.ID.String()
+
+	last := h.publicListsPage("", "").Data[0].UpdatedAt
+	for _, step := range []struct {
+		name, method, path string
+		body               any
+	}{
+		{"add", "PUT", path + "/songs/" + first, nil},
+		{"add another", "PUT", path + "/songs/" + second, nil},
+		{"reorder", "POST", path + "/reorder", map[string]any{"song_ids": []string{second, first}}},
+		{"remove", "DELETE", path + "/songs/" + first, nil},
+	} {
+		if resp := h.do(step.method, step.path, ownerTok, step.body); resp.StatusCode >= 300 {
+			t.Fatalf("%s: status = %d", step.name, resp.StatusCode)
+		}
+		got := h.publicListsPage("", "").Data[0].UpdatedAt
+		if !got.After(last) {
+			t.Errorf("%s: updated_at = %v, want after %v", step.name, got, last)
+		}
+		last = got
+	}
+}
