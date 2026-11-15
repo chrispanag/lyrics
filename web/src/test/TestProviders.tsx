@@ -25,12 +25,12 @@ export function TestProviders({
   queryClient?: ReturnType<typeof testQueryClient> | undefined;
   children: ReactNode;
 }) {
-  const [own] = useState(testQueryClient);
+  const [client] = useState(() => given ?? testQueryClient());
   // Stable across re-renders, or every consumer of the context re-renders too.
   const authValue = useMemo(() => stubAuth(user, auth), [user, auth]);
 
   return (
-    <QueryClientProvider client={given ?? own}>
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={Array.isArray(route) ? route : [route]}>
         <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
       </MemoryRouter>

@@ -140,8 +140,9 @@ export function SongSearch() {
 
     if (event.key === "Enter") {
       // The highlighted row, else the first, else the catalog. Never a row
-      // from a dismissed panel the reader cannot see.
-      const song = open ? (activeSong ?? results[0]) : undefined;
+      // the reader cannot see: a dismissed panel, or one saying search failed
+      // over rows a failed refetch left held.
+      const song = listShown ? (activeSong ?? results[0]) : undefined;
       if (song) {
         const { href, replace } = step(song);
         navigate(href, { replace });
@@ -266,7 +267,7 @@ export function SongSearch() {
           aria-expanded={listShown}
           aria-controls={listShown ? listboxId : undefined}
           aria-autocomplete="list"
-          aria-activedescendant={activeSong ? optionId(listboxId, active) : undefined}
+          aria-activedescendant={listShown && activeSong ? optionId(listboxId, active) : undefined}
         />
 
         {open && (

@@ -49,6 +49,10 @@ const config: StorybookConfig = {
     config.define = {
       ...config.define,
       ...Object.fromEntries(nextPublic),
+      // Pinned to `API` in src/test/handlers.ts whatever the shell says or the
+      // build mode is: MSW's handlers answer that origin alone, and a production
+      // build would otherwise fall back to same-origin requests nothing answers.
+      "process.env.NEXT_PUBLIC_API_BASE_URL": JSON.stringify("http://localhost:8080"),
       "process.env.NODE_ENV": JSON.stringify(
         configType === "PRODUCTION" ? "production" : "development",
       ),
