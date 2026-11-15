@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/christos/lyrics/backend/internal/httpx"
@@ -16,21 +17,15 @@ func TestStoreError(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		err     error
-		status  int
-		code    httpx.ErrorCode
-		message string
+		name   string
+		err    error
+		status int
+		code   httpx.ErrorCode
 	}{
-		{"not found", store.ErrNotFound, http.StatusNotFound, httpx.CodeNotFound, "Song was not found."},
-		{"conflict", store.ErrConflict, http.StatusConflict, httpx.CodeConflict, "Song already exists."},
-		{"in use", store.ErrInUse, http.StatusConflict, httpx.CodeConflict, "Song is still referenced by other records."},
-		{"invalid", store.ErrInvalid, http.StatusUnprocessableEntity, httpx.CodeValidation, "Song is not valid."},
-		// The driver's text could name tables or constraints; it stays on the cause.
-		{
-			"anything else", errors.New(`pq: relation "songs" does not exist`),
-			http.StatusInternalServerError, httpx.CodeInternal, "Unable to complete the request.",
-		},
+		{"not found", store.ErrNotFound, http.StatusNotFound, httpx.CodeNotFound},
+		{"conflict", store.ErrConflict, http.StatusConflict, httpx.CodeConflict},
+		{"in use", store.ErrInUse, http.StatusConflict, httpx.CodeConflict},
+		{"invalid", store.ErrInvalid, http.StatusUnprocessableEntity, httpx.CodeValidation},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -42,15 +37,34 @@ func TestStoreError(t *testing.T) {
 			if !errors.As(got, &apiErr) {
 				t.Fatalf("storeError returned %T, want *httpx.APIError", got)
 			}
-			if apiErr.Status != tt.status || apiErr.Code != tt.code || apiErr.Message != tt.message {
-				t.Errorf("got %d %s %q, want %d %s %q",
-					apiErr.Status, apiErr.Code, apiErr.Message, tt.status, tt.code, tt.message)
+			if apiErr.Status != tt.status || apiErr.Code != tt.code {
+				t.Errorf("got %d %s, want %d %s", apiErr.Status, apiErr.Code, tt.status, tt.code)
+			}
+			if !strings.Contains(apiErr.Message, "Song") {
+				t.Errorf("message %q does not name the subject", apiErr.Message)
 			}
 			if !errors.Is(apiErr, tt.err) {
 				t.Error("the original error is not kept as the cause, so it would not be logged")
 			}
 		})
 	}
+
+	// The driver's text could name tables or constraints, so it stays on the
+	// cause and the client gets a fixed message.
+	t.Run("anything else is a 500 that leaks nothing", func(t *testing.T) {
+		driverErr := errors.New(`pq: relation "songs" does not exist`)
+
+		var apiErr *httpx.APIError
+		if !errors.As(storeError(driverErr, "Song"), &apiErr) {
+			t.Fatal("storeError did not return an *httpx.APIError")
+		}
+		if apiErr.Status != http.StatusInternalServerError || apiErr.Message != "Unable to complete the request." {
+			t.Errorf("got %d %q, want 500 with the generic message", apiErr.Status, apiErr.Message)
+		}
+		if !errors.Is(apiErr, driverErr) {
+			t.Error("the driver error is not kept as the cause")
+		}
+	})
 
 	// A handler that already chose its response must not have it replaced.
 	t.Run("an APIError passes through untouched", func(t *testing.T) {

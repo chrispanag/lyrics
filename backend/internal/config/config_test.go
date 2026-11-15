@@ -58,9 +58,7 @@ func TestJWKSURLAndIssuerFollowTheSessionDomain(t *testing.T) {
 // A session domain with a scheme is refused at startup, since both derived
 // values add their own.
 func TestLoadRejectsASessionDomainWithAScheme(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://localhost/lyrics")
-	t.Setenv("PRELUDE_APP_ID", "ko8zn4d")
-	t.Setenv("PRELUDE_API_KEY", "sk_test")
+	requiredEnv(t)
 	t.Setenv("PRELUDE_SESSION_DOMAIN", "https://auth.songfolio.live")
 
 	_, err := Load()

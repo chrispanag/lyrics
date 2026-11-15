@@ -173,12 +173,16 @@ func TestDeleteList(t *testing.T) {
 	ownerTok := h.tokenFor("owner@example.com", store.RoleUser)
 	strangerTok := h.tokenFor("stranger@example.com", store.RoleUser)
 
-	list := h.seedList(ownerTok, map[string]any{"name": "Disposable", "is_public": true})
+	list := h.seedList(ownerTok, map[string]any{"name": "Disposable"})
 	path := "/api/v1/lists/" + list.ID.String()
 
-	// Not 403: answering differently would confirm the list exists.
+	// A private list answers a stranger 404 to a write as well as a read, so
+	// neither tells "exists" from "does not".
 	if resp := h.do("DELETE", path, strangerTok, nil); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("stranger delete = %d, want 404", resp.StatusCode)
+	}
+	if resp := h.do("GET", path, strangerTok, nil); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("stranger read = %d, want 404", resp.StatusCode)
 	}
 	if resp := h.do("DELETE", path, ownerTok, nil); resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("owner delete = %d, want 204", resp.StatusCode)

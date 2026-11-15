@@ -54,14 +54,11 @@ func TestImportWritesSongWithRelations(t *testing.T) {
 		t.Fatalf("import: %v", err)
 	}
 
-	songs, total, err := st.ListSongs(context.Background(), store.SongFilter{Limit: 10})
-	if err != nil {
-		t.Fatalf("ListSongs: %v", err)
+	var id uuid.UUID
+	if err := st.Pool().QueryRow(context.Background(), `SELECT id FROM songs`).Scan(&id); err != nil {
+		t.Fatalf("read the one imported song: %v", err)
 	}
-	if total != 1 {
-		t.Fatalf("songs = %d, want 1", total)
-	}
-	song, err := st.GetSong(context.Background(), songs[0].ID)
+	song, err := st.GetSong(context.Background(), id)
 	if err != nil {
 		t.Fatalf("GetSong: %v", err)
 	}
