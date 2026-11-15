@@ -1,12 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 describe("the shared MSW server", () => {
-  // An unstubbed request has to fail the spec that made it — see the
-  // `server.listen` call in vitest.setup.ts. tsc catches a misspelled key
-  // there, but not a strategy that type-checks and does not fail: "warn" or
-  // "bypass" leave every spec green, and this is the one that would notice.
-  // The spy is what tells them apart, since a fetch to a port nothing listens
-  // on rejects under "bypass" too.
+  // tsc catches a misspelled `server.listen` option; nothing else catches a
+  // strategy that type-checks and lets requests through. The spy is what tells
+  // "error" from "bypass", since a fetch to a closed port rejects under both.
   it("refuses a request no handler answers", async () => {
     const report = vi.spyOn(console, "error").mockImplementation(() => {});
 
