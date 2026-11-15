@@ -174,6 +174,12 @@ export interface SongList {
   songs?: Song[];
 }
 
+/** A row of `GET /public-lists`: an address and a date, for the sitemap. */
+export interface PublicList {
+  id: string;
+  updated_at: string;
+}
+
 export interface ListResponse<T> {
   data: T[];
   meta: { total: number; limit: number; offset: number };

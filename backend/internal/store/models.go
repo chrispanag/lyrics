@@ -186,3 +186,10 @@ type List struct {
 	// Songs is populated only when a single list is fetched with its contents.
 	Songs []Song `json:"songs,omitempty"`
 }
+
+// PublicList is what anyone may enumerate about a public list: its address
+// and when it last changed. Deliberately not the owner, the name or the songs.
+type PublicList struct {
+	ID        uuid.UUID `json:"id"`
+	UpdatedAt time.Time `json:"updated_at"`
+}

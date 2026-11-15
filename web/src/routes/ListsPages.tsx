@@ -404,8 +404,8 @@ export function ListDetailPage() {
         {list.is_public ? (
           <div className="space-y-4">
             <p className="text-sm text-fg-tertiary">
-              Anyone with this link can read “{list.name}” and save their own copy of it. It is not
-              listed anywhere in the catalog.
+              Anyone with this link can read “{list.name}” and save their own copy of it, and it can
+              show up in search engines.
             </p>
             <Input
               readOnly
@@ -426,8 +426,8 @@ export function ListDetailPage() {
           <div className="space-y-4">
             <p className="text-sm text-fg-tertiary">
               “{list.name}” is private. Publishing it lets anyone holding the link read it and save
-              their own copy — the songs stay yours to change, and their copy is separate from this
-              list.
+              their own copy, and lets search engines find it — the songs stay yours to change, and
+              their copy is separate from this list.
             </p>
             <Button
               className="w-full"

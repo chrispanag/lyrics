@@ -1091,10 +1091,23 @@ scraper rather than by anyone inside the app, which is why each is written down.
   going unindexed would look exactly like success. `Promise.all` keeps that,
   one rejection being the whole walk's. `app/sitemap.test.ts` runs under
   `@vitest-environment node`, and its fourth case is what pins the
-  all-or-nothing half by failing every page but the first. **Public lists are
-  not in it, and should not be added.** No endpoint enumerates them — `GET
-  /lists` is the caller's own — and the share sheet promises a public list "is
-  not listed anywhere in the catalog": reachable by its link, not advertised.
+  all-or-nothing half by failing every page but the first. **Every public list
+  is in it too, as a second walk under the same rule** — one `walk` for both
+  collections, inside one `try`, so a failed list page drops the songs as well:
+  every song and no list reads as a catalog with nobody's list published, which
+  is the same false success one level over, and the spec's lists case pins it.
+  The lists come from `GET /public-lists`, the one guest route that enumerates
+  them: `id` and `updated_at` only (not the owner, the name or the songs, which
+  are the list's own page's to say), `created_at ASC, id ASC` for the same
+  append-only reason as the songs, and the same answer for every caller — an
+  owner's token adds none of their private lists, since a sitemap is built as a
+  guest and a walk that differed by caller would be a private list one cache
+  away from a sitemap. `TestPublicListsNeverEnumeratePrivateOnes` asks as the
+  owner to say so. It is **not** `/lists/public`: the app's `/lists/[id]` would
+  read `public` as a list's id, and the API would answer that page with an
+  envelope rather than a list. Being listed is now part of what publishing
+  means, and the share sheet says so both before and after — "can show up in
+  search engines" — where it used to promise the opposite.
 - **A payload with no `slug` is a failure, and both server readers treat it as
   one.** It is not corruption and not something `Song` can express: an API
   predating migration 000010 answers with the field simply *not there*, on every

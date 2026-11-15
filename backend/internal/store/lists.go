@@ -27,6 +27,27 @@ func (s *Store) ListsForOwner(ctx context.Context, ownerID uuid.UUID) ([]List, e
 		ORDER BY l.is_default DESC, l.created_at DESC`, scanList, ownerID)
 }
 
+// PublicLists returns a page of public lists' addresses, for the sitemap, plus
+// how many public lists there are. Oldest first with the id as tiebreak: a
+// total order in which a list created mid-walk appends rather than shifting a
+// row across a page boundary. Nothing but the address and the last change:
+// whose list it is, and what is in it, are for the list's own page.
+func (s *Store) PublicLists(ctx context.Context, limit, offset int) ([]PublicList, int, error) {
+	total, err := s.count(ctx, "count public lists", `SELECT count(*) FROM lists WHERE is_public`)
+	if err != nil || total == 0 {
+		return nil, total, err
+	}
+	lists, err := queryAll(ctx, s, "public lists", `
+		SELECT id, updated_at
+		FROM lists
+		WHERE is_public
+		ORDER BY created_at ASC, id ASC
+		LIMIT $1 OFFSET $2`, func(row pgx.Row, l *PublicList) error {
+		return row.Scan(&l.ID, &l.UpdatedAt)
+	}, limit, offset)
+	return lists, total, err
+}
+
 // GetList loads a list without its songs.
 func (s *Store) GetList(ctx context.Context, id uuid.UUID) (*List, error) {
 	var l List
