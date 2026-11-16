@@ -153,6 +153,21 @@ describe("auth/session", () => {
     expect(await getAccessToken()).not.toBeNull();
   });
 
+  // A full quota reads but refuses writes; the session just opened is still one.
+  it("keeps a session it could not record", async () => {
+    const { getAccessToken, markSession } = await import("./session");
+    localStorage.removeItem(HINT);
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
+
+    markSession(true);
+    setItem.mockRestore();
+
+    expect(await getAccessToken()).not.toBeNull();
+    markSession(false);
+  });
+
   it("records a session opened and closed", async () => {
     const { markSession } = await import("./session");
 

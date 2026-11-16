@@ -38,6 +38,15 @@ export function storedUser(): User | null {
   }
 }
 
+/** Whether a snapshot is stored at all, valid or not, as the boot script reads it. */
+export function hasStoredUser(): boolean {
+  try {
+    return localStorage.getItem(KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
 /** Records the profile, or forgets it once there is no session behind it. */
 export function storeUser(user: User | null): void {
   try {

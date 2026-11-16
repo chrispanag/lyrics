@@ -1,7 +1,7 @@
 import type { PrldSessionClient } from "@prelude.so/js-sdk/session";
 
 import { setTokenProvider } from "@/api/client";
-import { storedUser } from "./storedUser";
+import { hasStoredUser } from "./storedUser";
 
 const APP_ID = process.env.NEXT_PUBLIC_PRELUDE_APP_ID ?? "";
 // Optional, and publishable: safe in the bundle (unlike the Management API key).
@@ -30,17 +30,25 @@ export const OTP_LOGIN_CONFIG_ID = (
  */
 const SESSION_HINT = "lyrics:session";
 
+/**
+ * The hint this tab could not store. Storage that reads but refuses writes (a
+ * full quota) would otherwise answer the session just opened as a guest's.
+ */
+let unstoredSession = false;
+
 /** Records that a session was opened, or that there is none behind the hint. */
 export function markSession(open: boolean): void {
+  unstoredSession = false;
   try {
     if (open) localStorage.setItem(SESSION_HINT, "");
     else localStorage.removeItem(SESSION_HINT);
   } catch {
-    // Unwritable storage reads as a possible session below, so nothing is lost.
+    unstoredSession = open;
   }
 }
 
 function mayHaveSession(): boolean {
+  if (unstoredSession) return true;
   try {
     return localStorage.getItem(SESSION_HINT) !== null;
   } catch {
@@ -50,8 +58,9 @@ function mayHaveSession(): boolean {
 }
 
 // Sessions opened before the hint existed left only the profile snapshot.
-// Read at import, before `AuthProvider`'s first commit erases it.
-if (typeof window !== "undefined" && storedUser()) markSession(true);
+// Read at import, before `AuthProvider`'s first commit erases it. Presence,
+// not a valid profile: an older release's shape still means a session.
+if (typeof window !== "undefined" && hasStoredUser()) markSession(true);
 
 let client: Promise<PrldSessionClient> | undefined;
 
@@ -71,9 +80,10 @@ if (typeof window !== "undefined") {
  *
  * The SDK is a dynamic import: it inlines its WASM core as base64, about
  * 330 kB that would otherwise sit in the first chunk of every page. Every
- * page still downloads it, since the first query asks for a token, but beside
- * hydration rather than ahead of it. A failed chunk load or construction is
- * not kept, so the next call tries again.
+ * page still prefetches it beside hydration rather than ahead of it: a
+ * returning reader's first query asks for a token, and a guest's sign-in needs
+ * it. A failed chunk load or construction is not kept, so the next call tries
+ * again.
  */
 export function sessionClient(): Promise<PrldSessionClient> {
   if (typeof window === "undefined") {
