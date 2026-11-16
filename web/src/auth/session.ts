@@ -1,6 +1,7 @@
 import type { PrldSessionClient } from "@prelude.so/js-sdk/session";
 
 import { setTokenProvider } from "@/api/client";
+import { hasStoredUser } from "./storedUser";
 
 const APP_ID = process.env.NEXT_PUBLIC_PRELUDE_APP_ID ?? "";
 // Optional, and publishable: safe in the bundle (unlike the Management API key).
@@ -21,6 +22,46 @@ export const OTP_LOGIN_CONFIG_ID = (
   process.env.NEXT_PUBLIC_PRELUDE_OTP_LOGIN_CONFIG_ID ?? ""
 ).trim();
 
+/**
+ * Present while this browser may hold a session. The SDK cannot tell: its
+ * refresh token is a cookie on the session domain, so `refresh()` always asks,
+ * and a guest's 401 lands in the console on every page. Without the hint a
+ * guest is answered here. No token is kept in it.
+ */
+const SESSION_HINT = "lyrics:session";
+
+/**
+ * The hint this tab could not store. Storage that reads but refuses writes (a
+ * full quota) would otherwise answer the session just opened as a guest's.
+ */
+let unstoredSession = false;
+
+/** Records that a session was opened, or that there is none behind the hint. */
+export function markSession(open: boolean): void {
+  unstoredSession = false;
+  try {
+    if (open) localStorage.setItem(SESSION_HINT, "");
+    else localStorage.removeItem(SESSION_HINT);
+  } catch {
+    unstoredSession = open;
+  }
+}
+
+function mayHaveSession(): boolean {
+  if (unstoredSession) return true;
+  try {
+    return localStorage.getItem(SESSION_HINT) !== null;
+  } catch {
+    // Blocked storage: ask the SDK, as before the hint existed.
+    return true;
+  }
+}
+
+// Sessions opened before the hint existed left only the profile snapshot.
+// Read at import, before `AuthProvider`'s first commit erases it. Presence,
+// not a valid profile: an older release's shape still means a session.
+if (typeof window !== "undefined" && hasStoredUser()) markSession(true);
+
 let client: Promise<PrldSessionClient> | undefined;
 
 const loadSdk = () => import("@prelude.so/js-sdk/session");
@@ -39,9 +80,10 @@ if (typeof window !== "undefined") {
  *
  * The SDK is a dynamic import: it inlines its WASM core as base64, about
  * 330 kB that would otherwise sit in the first chunk of every page. Every
- * page still downloads it, since the first query asks for a token, but beside
- * hydration rather than ahead of it. A failed chunk load or construction is
- * not kept, so the next call tries again.
+ * page still prefetches it beside hydration rather than ahead of it: a
+ * returning reader's first query asks for a token, and a guest's sign-in needs
+ * it. A failed chunk load or construction is not kept, so the next call tries
+ * again.
  */
 export function sessionClient(): Promise<PrldSessionClient> {
   if (typeof window === "undefined") {
@@ -74,6 +116,8 @@ export function sessionClient(): Promise<PrldSessionClient> {
 export async function getAccessToken(forceRefresh?: boolean): Promise<string | null> {
   // A server render is a guest.
   if (typeof window === "undefined") return null;
+  // A guest, answered without loading the SDK or asking the session domain.
+  if (!mayHaveSession()) return null;
 
   // Outside the try: an SDK that failed to load says nothing about the
   // session. Read as signed out, it would turn a signed-in visitor into a guest
@@ -86,8 +130,10 @@ export async function getAccessToken(forceRefresh?: boolean): Promise<string | n
     }
     const { user: session } = await sdk.refresh();
     return session?.accessToken ?? null;
-  } catch {
-    // No session, or the refresh token has been revoked.
+  } catch (error) {
+    // No session, or the refresh token has been revoked. Only the session
+    // domain's 401 says so: a network failure keeps the hint for the next try.
+    if (error instanceof Error && error.name === "UnauthorizedError") markSession(false);
     return null;
   }
 }

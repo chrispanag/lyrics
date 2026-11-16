@@ -25,6 +25,7 @@ const session = vi.hoisted(() => ({
   // Mutable so one spec can build without an OTP login configuration.
   otpConfigId: "otp-config",
   getAccessToken: vi.fn(async (_force?: boolean): Promise<string | null> => null),
+  markSession: vi.fn((_open: boolean) => {}),
   logout: vi.fn(async () => {}),
   invalidateCache: vi.fn(async () => {}),
   loginWithPassword: vi.fn(async (_input: { identifier: string; password: string }) => {}),
@@ -57,6 +58,7 @@ vi.mock("./session", () => ({
     return session.otpConfigId;
   },
   getAccessToken: session.getAccessToken,
+  markSession: session.markSession,
   sessionClient: async () => ({
     logout: session.logout,
     invalidateCache: session.invalidateCache,
@@ -285,6 +287,7 @@ describe("AuthProvider sessions", () => {
       identifier: "singer@example.com",
       password: "hunter22",
     });
+    expect(session.markSession).toHaveBeenCalledWith(true);
     expect(session.invalidateCache).toHaveBeenCalled();
     expect(invalidate).toHaveBeenCalled();
     expect(screen.getByText("singer@example.com")).toBeInTheDocument();
@@ -349,6 +352,7 @@ describe("AuthProvider sessions", () => {
 
     expect((await failure(() => auth.logout())).message).toBe("network down");
 
+    expect(session.markSession).toHaveBeenLastCalledWith(false);
     expect(screen.getByText("guest")).toBeInTheDocument();
     expect(queryClient.getQueryData(["lists"])).toBeUndefined();
     expect((await failure(() => auth.confirmPasswordWriteCode("123456"))).message).toBe(

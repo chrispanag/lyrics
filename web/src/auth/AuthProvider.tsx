@@ -17,7 +17,7 @@ import {
   namedError,
   type AuthContextValue,
 } from "./context";
-import { OTP_LOGIN_CONFIG_ID, getAccessToken, sessionClient } from "./session";
+import { OTP_LOGIN_CONFIG_ID, getAccessToken, markSession, sessionClient } from "./session";
 import { SESSION_ATTRIBUTE, storeUser, storedUser } from "./storedUser";
 import type { User } from "@/lib/types";
 
@@ -149,6 +149,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Everything after Prelude mints a session, whichever credential opened it
   // (password reset's code included); skipping a step leaves it half signed in.
   const completeSignIn = useCallback(async () => {
+    // Before the profile load, whose token would otherwise be answered as a guest's.
+    markSession(true);
     // The cache still holds the signed-out state until it is dropped.
     await (await sessionClient()).invalidateCache();
 
@@ -290,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await (await sessionClient()).logout();
     } finally {
       // Clear local state even if the revocation call failed.
+      markSession(false);
       setUser(null);
       queryClient.clear();
       // Every scope's challenge: a leftover would show the next user a code
