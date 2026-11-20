@@ -169,6 +169,25 @@ type Song struct {
 	Snippet *string `json:"snippet,omitempty"`
 	// Score is the blended relevance score, present only on search results.
 	Score *float64 `json:"score,omitempty"`
+
+	// Popularity is how often the song is opened and how widely it is saved.
+	// Zero until something is recorded. The tally is maintained in SQL
+	// (migration 000012); nothing in this package writes the columns.
+	Popularity SongPopularity `json:"popularity"`
+}
+
+// SongPopularity is the tally behind sort=popularity. Score is
+// clicks + 3*list placements + 10*people who currently have it saved;
+// song_popularity_score is the authority, and this struct only carries it.
+type SongPopularity struct {
+	AnonymousClicks     int `json:"anonymous_clicks"`
+	AuthenticatedClicks int `json:"authenticated_clicks"`
+	// ListAdds is how many times the song has been placed in a list. Removing
+	// it does not reduce the count.
+	ListAdds int `json:"list_adds"`
+	// ListUsers is how many people currently have the song in at least one list.
+	ListUsers int `json:"list_users"`
+	Score     int `json:"score"`
 }
 
 // List is a user-curated collection of songs.

@@ -491,13 +491,33 @@ naming them at the top level is a 400 rather than a silently ignored field.
 Credits are authorship only — `composer` and `lyricist` — since performing
 belongs to a recording.
 
+Every song carries a `popularity` object: `anonymous_clicks`,
+`authenticated_clicks`, `list_adds`, `list_users` and `score`. A click is an
+opening of the song page, recorded by `POST /songs/{id}/clicks` with
+`{"visitor_id": "<uuid>"}`. The response is the song's `popularity` after the
+call. A signed-in caller counts as an authenticated
+click and the visitor id is ignored; a guest must send one, which the browser
+keeps so a refresh is not a second opening. The same actor opening the same
+song again within 30 minutes counts once. `list_adds` is how many times the
+song has been placed in a list (removing it does not take that back, and
+putting it back counts again) and `list_users` is how many people currently
+have it in at least one of their lists. `sort=popularity` orders by
+
+```
+anonymous_clicks + authenticated_clicks + 3 * list_adds + 10 * list_users
+```
+
+then by title. A song nobody has opened or saved sorts as zero.
+
 ```
 GET    /health
 GET    /songs            ?q=&person=&performer=&composer=&lyricist=&genre_slug=
                           &language=&year_from=&year_to=&sort=&limit=&offset=
+                          sort: relevance | title | newest | oldest | popularity
                           (?artist= is kept as an alias of ?performer=; both
                            at once is a 400)
 GET    /songs/{id}                       by slug or by uuid
+POST   /songs/{id}/clicks                record one opening; guest or signed in
 GET    /people           ?q=&role=
 GET    /credited-people  ?limit=&offset= the id of every person on at least one
                                          song, oldest first (the sitemap's walk)

@@ -159,6 +159,21 @@ export interface Song {
   snippet?: string;
   /** Blended relevance score, present only on search results. */
   score?: number;
+  /**
+   * Opens and saves. Zeros until anything is recorded. `list_adds` counts
+   * every placement and does not fall when a song is removed; `list_users`
+   * is how many people have it in a list right now.
+   */
+  popularity: SongPopularity;
+}
+
+/** The tally behind the popularity ordering. */
+export interface SongPopularity {
+  anonymous_clicks: number;
+  authenticated_clicks: number;
+  list_adds: number;
+  list_users: number;
+  score: number;
 }
 
 export interface SongList {
@@ -258,7 +273,7 @@ export interface SongFilters {
   language?: string | undefined;
   year_from?: number;
   year_to?: number;
-  sort?: "relevance" | "title" | "newest" | "oldest";
+  sort?: "relevance" | "title" | "newest" | "oldest" | "popularity";
   limit?: number;
   offset?: number;
 }

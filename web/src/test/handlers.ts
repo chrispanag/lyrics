@@ -30,6 +30,13 @@ export function makeSong(overrides: Partial<Song> = {}): Song {
     updated_by: null,
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
+    popularity: {
+      anonymous_clicks: 0,
+      authenticated_clicks: 0,
+      list_adds: 0,
+      list_users: 0,
+      score: 0,
+    },
     ...overrides,
   };
 }
@@ -175,4 +182,6 @@ export const handlers = [
   http.get(`${API}/api/v1/lists`, () => HttpResponse.json(list([]))),
   // Asked for by the save sheet, to mark the lists a song is already in.
   http.get(`${API}/api/v1/songs/:id/lists`, () => HttpResponse.json({ list_ids: [] })),
+  // The song page records an opening once it has loaded. Nothing reads the body.
+  http.post(`${API}/api/v1/songs/:id/clicks`, () => new HttpResponse(null, { status: 204 })),
 ];

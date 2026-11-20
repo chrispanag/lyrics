@@ -12,6 +12,7 @@ import {
   useSongLists,
   useToggleSongInList,
 } from "@/api/hooks";
+import { useRecordSongClick } from "@/api/recordSongClick";
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongSwipe } from "@/components/ListSongNav";
@@ -37,6 +38,7 @@ import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { PageBar } from "@/components/PageBar";
 import { sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
+import { popularitySummary } from "@/lib/popularity";
 import { Link, useParams, useRouter, useSearchParams } from "@/lib/navigation";
 import { useStoredState } from "@/lib/useStoredState";
 import { RecordingsSheet } from "@/components/RecordingsSheet";
@@ -94,6 +96,8 @@ function SongArticle() {
 
   // No `isError`, deliberately; see the guard below.
   const { data: song, isLoading, error } = useSong(id);
+  // After the session settles, so a signed-in reader is not an anonymous click.
+  useRecordSongClick(id, !sessionLoading && Boolean(song));
   const deleteSong = useDeleteSong();
 
   // The list this song is read from, if any. A failure just leaves the page
@@ -304,6 +308,7 @@ function SongArticle() {
  */
 function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: () => void }) {
   const creditsByRole = groupCredits(song.credits);
+  const popularity = popularitySummary(song.popularity);
 
   // Performers come from the first recording; the year and video from the
   // song's columns, which are the trigger's copy of that same row. No `??`
@@ -343,6 +348,8 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
           Show all {recordingCount(song.recordings.length)}
         </button>
       )}
+
+      {popularity && <p className="mt-3 text-sm text-fg-muted">{popularity}</p>}
 
       {song.genres.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">

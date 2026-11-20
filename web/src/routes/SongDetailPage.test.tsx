@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SongDetailPage } from "./SongDetailPage";
+import { setTokenProvider } from "@/api/client";
 import { keys } from "@/api/hooks";
 import { returnDestination } from "@/auth/returnTo";
 import { BackButton } from "@/components/BackButton";
@@ -88,6 +89,74 @@ function swipe(
   });
   fireEvent.touchEnd(target, { changedTouches: [moved] });
 }
+
+describe("SongDetailPage popularity", () => {
+  it("shows how the song has been opened and saved, and records one click", async () => {
+    const bodies: unknown[] = [];
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(
+          makeSong({
+            popularity: {
+              anonymous_clicks: 3,
+              authenticated_clicks: 1,
+              list_adds: 4,
+              list_users: 2,
+              score: 27,
+            },
+          }),
+        ),
+      ),
+      http.post(`${API}/api/v1/songs/:id/clicks`, async ({ request }) => {
+        bodies.push(await request.json());
+        // This opening counts, so the line moves as soon as the tally comes back.
+        return HttpResponse.json({
+          anonymous_clicks: 4,
+          authenticated_clicks: 1,
+          list_adds: 4,
+          list_users: 2,
+          score: 28,
+        });
+      }),
+    );
+
+    renderDetail();
+
+    expect(
+      await screen.findByText("5 clicks — 4 anonymous, 1 signed in · Saved 4 times by 2 people"),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toEqual({ visitor_id: expect.stringMatching(/^[0-9a-f-]{36}$/i) });
+    expect(bodies).toHaveLength(1);
+  });
+
+  it("sends the session when the reader is signed in", async () => {
+    let authorization: string | null = null;
+    server.use(
+      http.post(`${API}/api/v1/songs/:id/clicks`, ({ request }) => {
+        authorization = request.headers.get("Authorization");
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    setTokenProvider(async () => "listener-token");
+
+    try {
+      renderDetail({ user: makeUser() });
+      await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+      await waitFor(() => expect(authorization).toBe("Bearer listener-token"));
+    } finally {
+      setTokenProvider(async () => null);
+    }
+  });
+
+  it("says nothing when a song has not been opened or saved", async () => {
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(screen.queryByText(/click/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
+  });
+});
 
 describe("SongDetailPage", () => {
   it("renders the title, credits, and lyrics", async () => {

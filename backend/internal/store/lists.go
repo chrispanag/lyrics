@@ -183,7 +183,8 @@ func (s *Store) DeleteList(ctx context.Context, id uuid.UUID) error {
 
 // AddSongToList appends a song, placing it after the current last entry.
 // Re-adding a song already present is a no-op rather than an error, so the
-// client can treat "add to list" as idempotent.
+// client can treat "add to list" as idempotent. The no-op also leaves the
+// popularity tally unchanged: that trigger fires only when a row is created.
 //
 // Every change to a list's contents touches the list's `updated_at`, which is
 // the sitemap's `lastModified` for a public list: left alone, a list that

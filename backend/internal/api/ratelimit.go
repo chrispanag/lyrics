@@ -25,7 +25,10 @@ type bucket struct {
 	windowStart time.Time
 }
 
-func newRateLimiter(limit int, window time.Duration) *rateLimiter {
+// The window stays a parameter so a limiter can use something other than a
+// minute. Every caller currently passes a minute, which unparam reads as the
+// parameter being unused.
+func newRateLimiter(limit int, window time.Duration) *rateLimiter { //nolint:unparam // see above
 	return &rateLimiter{
 		limit:     limit,
 		window:    window,

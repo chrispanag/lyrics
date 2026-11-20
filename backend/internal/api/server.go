@@ -31,6 +31,9 @@ type Server struct {
 	// avatarLimiter throttles picture uploads, keyed on the user's id, which
 	// the token proves and a NAT does not share.
 	avatarLimiter *rateLimiter
+	// clickLimiter throttles song-click recording. A click is cheap, but the
+	// endpoint is open and it moves a ranking, so it has to be bounded.
+	clickLimiter *rateLimiter
 }
 
 // NewServer wires the HTTP layer.
@@ -44,6 +47,8 @@ func NewServer(cfg config.Config, st *store.Store, pc prelude.Client, authn *aut
 		registerLimiter: newRateLimiter(5, time.Minute),
 		// An upload is the costliest request in the API (decode + re-encode).
 		avatarLimiter: newRateLimiter(10, time.Minute),
+		// One a second, sustained. Enough to browse, not enough to mint a ranking.
+		clickLimiter: newRateLimiter(clickRateLimit, time.Minute),
 	}
 }
 
@@ -72,6 +77,9 @@ func (s *Server) Routes() http.Handler {
 
 			r.Get("/songs", httpx.Handler(s.handleListSongs))
 			r.Get("/songs/{id}", httpx.Handler(s.handleGetSong))
+			// Optional auth: a token counts as a signed-in click, its absence as
+			// an anonymous one. A bad token is still a 401, not a guest click.
+			r.Post("/songs/{id}/clicks", httpx.Handler(s.handleRecordSongClick))
 			r.Get("/people", httpx.Handler(s.handleListPeople))
 			r.Get("/people/{id}", httpx.Handler(s.handleGetPerson))
 			r.Get("/credited-people", httpx.Handler(s.handleCreditedPeople))
