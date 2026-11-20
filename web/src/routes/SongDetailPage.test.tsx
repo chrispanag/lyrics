@@ -167,7 +167,7 @@ describe("SongDetailPage", () => {
 
     const title = await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
 
-    expect(title.parentElement).toHaveClass("lg:sticky");
+    expect(title.parentElement?.parentElement).toHaveClass("lg:sticky");
     expect(screen.getByRole("button", { name: "Back" })).toHaveClass("lg:hidden");
   });
 

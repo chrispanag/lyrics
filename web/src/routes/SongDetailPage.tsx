@@ -36,6 +36,7 @@ import {
 import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
+import { headerBarPadding } from "@/components/SearchHeader";
 import { sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
 import { Link, useParams, useRouter, useSearchParams } from "@/lib/navigation";
@@ -150,55 +151,68 @@ function SongArticle() {
       <PageTitle name={song?.title} />
       {/* On a wide screen the list is beside this pane, so Back is only for
           the phone. The title takes its place and the bar sticks while the
-          lyrics scroll. */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-3 px-4 py-4 lg:sticky lg:top-0 lg:z-sticky lg:flex-nowrap lg:gap-3 lg:border-b lg:border-line lg:bg-canvas/95 lg:px-3 lg:py-3 lg:backdrop-blur">
-        <BackButton className="lg:hidden" />
-        {song ? (
-          <h1
-            lang={song.language}
-            className="order-last w-full text-3xl font-bold leading-tight tracking-tight text-balance lg:order-none lg:min-w-0 lg:flex-1 lg:truncate"
-          >
-            {song.title}
-          </h1>
-        ) : (
-          <Skeleton className="order-last h-9 w-2/3 lg:order-none lg:h-8 lg:w-72" />
+          lyrics scroll. Its height follows the search header, chips included,
+          so the two borders stay one line. */}
+      <div
+        className={cn(
+          "lg:sticky lg:top-0 lg:z-sticky lg:border-b lg:border-line lg:bg-canvas/95 lg:pt-safe lg:backdrop-blur",
+          "lg:min-h-[var(--sticky-header-height,0px)]",
         )}
-        <div className="ml-auto flex items-center gap-1 lg:ml-0">
-          {/* Shown to guests too, who are sent to sign in. Labeled because "Save"
-              alone does not say where to. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Save to a list"
-            // `user` is only a snapshot until the restore settles; neither branch
-            // may be decided on it.
-            disabled={sessionLoading}
-            onClick={() => (user ? setListSheetOpen(true) : router.push(signIn))}
-          >
-            <ListPlus aria-hidden className="size-4" />
-            <span className={actionLabel}>Save</span>
-          </Button>
-          {canEdit && (
-            <Link href={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
-              <Pencil aria-hidden className="size-4" />
-              <span className={actionLabel}>Edit</span>
-            </Link>
+      >
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-x-2 gap-y-3 max-lg:py-4 lg:flex-nowrap lg:gap-3",
+            headerBarPadding,
           )}
-          {hasRole(user?.role, "admin") && (
+        >
+          <BackButton className="lg:hidden" />
+          {song ? (
+            <h1
+              lang={song.language}
+              className="order-last w-full text-3xl font-bold leading-tight tracking-tight text-balance lg:order-none lg:flex lg:min-h-12 lg:min-w-0 lg:flex-1 lg:items-center lg:truncate"
+            >
+              {song.title}
+            </h1>
+          ) : (
+            <Skeleton className="order-last h-9 w-2/3 lg:order-none lg:h-12 lg:w-72" />
+          )}
+          <div className="ml-auto flex items-center gap-1 lg:ml-0">
+            {/* Shown to guests too, who are sent to sign in. Labeled because "Save"
+              alone does not say where to. */}
             <Button
               variant="ghost"
               size="sm"
-              aria-label="Delete song"
-              // Waits for the song: the confirmation names it.
-              disabled={!song}
-              onClick={() => setConfirmDelete(true)}
+              aria-label="Save to a list"
+              // `user` is only a snapshot until the restore settles; neither branch
+              // may be decided on it.
+              disabled={sessionLoading}
+              onClick={() => (user ? setListSheetOpen(true) : router.push(signIn))}
             >
-              <Trash aria-hidden className="size-4 text-fg-danger" />
+              <ListPlus aria-hidden className="size-4" />
+              <span className={actionLabel}>Save</span>
             </Button>
-          )}
+            {canEdit && (
+              <Link href={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
+                <Pencil aria-hidden className="size-4" />
+                <span className={actionLabel}>Edit</span>
+              </Link>
+            )}
+            {hasRole(user?.role, "admin") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Delete song"
+                // Waits for the song: the confirmation names it.
+                disabled={!song}
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Trash aria-hidden className="size-4 text-fg-danger" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
-      <div className="px-4 pb-4 lg:px-3 lg:pb-3">
+      <div className="px-4 pb-4">
         {position && (
           <>
             <ListSongNavBar position={position} />
