@@ -124,7 +124,7 @@ describe("BrowsePage sort picker", () => {
       within(sort)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["Title (A–Z)", "Newest first", "Oldest first"]);
+    ).toEqual(["Most popular", "Title (A–Z)", "Newest first", "Oldest first"]);
     expect(sort.value).toBe("newest");
   });
 
@@ -137,7 +137,7 @@ describe("BrowsePage sort picker", () => {
       within(sort)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["Relevance", "Title (A–Z)", "Newest first", "Oldest first"]);
+    ).toEqual(["Relevance", "Most popular", "Title (A–Z)", "Newest first", "Oldest first"]);
     expect(sort.value).toBe("relevance");
   });
 
@@ -416,6 +416,21 @@ describe("BrowsePage filter sheet", () => {
     await user.selectOptions(within(sheet).getByRole("combobox", { name: "Sort by" }), "title");
 
     await waitFor(() => expect(requests.at(-1)?.get("sort")).toBe("title"));
+  });
+
+  it("can order the catalog by popularity", async () => {
+    const user = userEvent.setup();
+    const requests = recordSheetRequests();
+
+    renderWithProviders(<BrowsePage />);
+    const sheet = await openFilters(user);
+
+    await user.selectOptions(
+      within(sheet).getByRole("combobox", { name: "Sort by" }),
+      "popularity",
+    );
+
+    await waitFor(() => expect(requests.at(-1)?.get("sort")).toBe("popularity"));
   });
 
   // `filterCount` and "Clear all" each name the filter keys; one missing from

@@ -18,6 +18,9 @@ const (
 	SortTitle     SongSort = "title"
 	SortNewest    SongSort = "newest"
 	SortOldest    SongSort = "oldest"
+	// SortPopularity orders by song_popularity.score, then title. A song with
+	// no tally yet sorts as zero.
+	SortPopularity SongSort = "popularity"
 )
 
 // SongFilter describes a song listing request. A zero value lists everything,
@@ -161,25 +164,32 @@ func matchClause(a *args, query string) (clause, tsqParam, rawParam string) {
 // is valid and means "the default for this mode".
 func (s SongSort) Valid() bool {
 	switch s {
-	case "", SortRelevance, SortTitle, SortNewest, SortOldest:
+	case "", SortRelevance, SortTitle, SortNewest, SortOldest, SortPopularity:
 		return true
 	default:
 		return false
 	}
 }
 
-func orderClause(sort SongSort) string {
+// ordering is the FROM-join and the ORDER BY for a browse. The join is empty
+// unless the ordering reads song_popularity; the two have to stay together or
+// the ORDER BY names a relation the query never joined.
+func ordering(sort SongSort) (join, order string) {
 	switch sort {
 	case SortTitle:
-		return "app_norm(s.title) ASC, s.id ASC"
+		return "", "app_norm(s.title) ASC, s.id ASC"
 	case SortOldest:
-		return "s.created_at ASC, s.id ASC"
+		return "", "s.created_at ASC, s.id ASC"
+	case SortPopularity:
+		// Title, then id, so a tie is a total order and pages cannot overlap.
+		return "LEFT JOIN song_popularity pop ON pop.song_id = s.id",
+			"COALESCE(pop.score, 0) DESC, app_norm(s.title) ASC, s.id ASC"
 	default:
-		return "s.created_at DESC, s.id ASC"
+		return "", "s.created_at DESC, s.id ASC"
 	}
 }
 
-// searchOrderClause is orderClause for relevance mode, over the `scored`/`hits`
+// searchOrderClause is ordering for relevance mode, over the `scored`/`hits`
 // CTE columns. The prefix lets one ordering be written in the CTE that applies
 // LIMIT and on the outer join; the two must agree.
 func searchOrderClause(sort SongSort, prefix string) string {
@@ -191,6 +201,9 @@ func searchOrderClause(sort SongSort, prefix string) string {
 		return col("created_at") + " DESC, " + col("id") + " ASC"
 	case SortOldest:
 		return col("created_at") + " ASC, " + col("id") + " ASC"
+	case SortPopularity:
+		// Same tie-break as ordering: title, then id.
+		return col("popularity") + " DESC, " + col("sort_title") + " ASC, " + col("id") + " ASC"
 	default:
 		return col("score") + " DESC, " + col("sort_title") + " ASC, " + col("id") + " ASC"
 	}
@@ -225,13 +238,15 @@ func (s *Store) browseSongs(ctx context.Context, f SongFilter) ([]Song, int, err
 		return nil, 0, nil
 	}
 
+	join, order := ordering(f.Sort)
 	query := fmt.Sprintf(`
 		SELECT %s
 		FROM songs s
+		%s
 		WHERE %s
 		ORDER BY %s
 		LIMIT %s OFFSET %s`,
-		songSummaryColumns, where, orderClause(f.Sort), a.next(f.Limit), a.next(f.Offset))
+		songSummaryColumns, join, where, order, a.next(f.Limit), a.next(f.Offset))
 
 	songs, err := s.collectSongs(ctx, query, a.values, false)
 	if err != nil {
@@ -256,6 +271,16 @@ func (s *Store) searchSongs(ctx context.Context, f SongFilter) ([]Song, int, err
 		return nil, 0, nil
 	}
 
+	// Present only for the popularity ordering: the other orderings never read
+	// the column, and the join would be work they do not use. Both pieces have
+	// to be set together, the way ordering keeps its join and its ORDER BY.
+	popularitySelect, popularityJoin, hitsPopularity := "", "", ""
+	if f.Sort == SortPopularity {
+		popularityJoin = "LEFT JOIN song_popularity pop ON pop.song_id = s.id"
+		popularitySelect = ", COALESCE(pop.score, 0) AS popularity"
+		hitsPopularity = ", popularity"
+	}
+
 	query := fmt.Sprintf(`
 		WITH scored AS (
 			SELECT s.id,
@@ -267,12 +292,15 @@ func (s *Store) searchSongs(ctx context.Context, f SongFilter) ([]Song, int, err
 			       ) AS trgm_score,
 			       app_norm(s.title) AS sort_title,
 			       s.created_at
+			       %[13]s
 			FROM songs s
+			%[14]s
 			WHERE %[4]s
 		),
 		hits AS (
 			SELECT id, sort_title, created_at,
 			       (%[5]v * text_rank + %[6]v * trgm_score) AS score
+			       %[15]s
 			FROM scored
 			ORDER BY %[7]s
 			LIMIT %[8]s OFFSET %[9]s
@@ -287,7 +315,8 @@ func (s *Store) searchSongs(ctx context.Context, f SongFilter) ([]Song, int, err
 		textRankWeight, trgmWeight,
 		searchOrderClause(f.Sort, ""),
 		a.next(f.Limit), a.next(f.Offset), songSummaryColumns, a.next(headlineOptions),
-		searchOrderClause(f.Sort, "h."))
+		searchOrderClause(f.Sort, "h."),
+		popularitySelect, popularityJoin, hitsPopularity)
 
 	songs, err := s.collectSongs(ctx, query, a.values, true)
 	if err != nil {
@@ -404,6 +433,9 @@ func (s *Store) attachRelations(ctx context.Context, songs []Song) error {
 	genreRows.Close()
 
 	if err := s.attachRecordings(ctx, songs, ids, index); err != nil {
+		return err
+	}
+	if err := s.attachPopularity(ctx, ids, index); err != nil {
 		return err
 	}
 

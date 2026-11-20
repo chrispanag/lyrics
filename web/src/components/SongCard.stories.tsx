@@ -31,6 +31,13 @@ export const Complete: Story = {
       recordings: [makeRecording({ youtube_video_id: "dQw4w9WgXcQ" })],
       genres: [makeGenre(), makeGenre({ id: "genre-2", name: "Λαϊκό", slug: "laiko" })],
       snippet: "Στης ⟦θάλασσας⟧ τα βάθη\nη αγάπη μου κοιμάται",
+      popularity: {
+        anonymous_clicks: 6,
+        authenticated_clicks: 1,
+        list_adds: 3,
+        list_users: 2,
+        score: 29,
+      },
     }),
   },
   play: async ({ canvas }) => {
@@ -38,6 +45,9 @@ export const Complete: Story = {
     await expect(canvas.getByText("Γιώργος Νταλάρας · Μίκης Θεοδωράκης")).toBeVisible();
     await expect(canvas.getByRole("img", { name: "Has a video" })).toBeVisible();
     await expect(canvas.getByText("θάλασσας").tagName).toBe("MARK");
+    // The badge is the times it was saved. Clicks stay off the card.
+    await expect(canvas.getByText("Saved 3 times")).toBeVisible();
+    await expect(canvas.queryByText("6")).toBeNull();
   },
 };
 

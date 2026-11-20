@@ -38,7 +38,7 @@ export function genrePageHref(slug: string): string {
 /** How many songs each step of the infinite list fetches. */
 const PAGE_SIZE = 20;
 
-const SORTS = ["relevance", "title", "newest", "oldest"] as const;
+const SORTS = ["relevance", "title", "newest", "oldest", "popularity"] as const;
 
 /** What reading the address needs: the seam's search params and `URLSearchParams` both fit. */
 interface SearchReader {

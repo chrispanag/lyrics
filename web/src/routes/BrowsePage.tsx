@@ -285,6 +285,7 @@ export function BrowsePage() {
                 onChange={(event) => setParam("sort", event.target.value || null)}
               >
                 {query ? <option value="relevance">Relevance</option> : null}
+                <option value="popularity">Most popular</option>
                 <option value="title">Title (A–Z)</option>
                 <option value="newest">Newest first</option>
                 <option value="oldest">Oldest first</option>

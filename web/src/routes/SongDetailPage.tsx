@@ -12,6 +12,7 @@ import {
   useSongLists,
   useToggleSongInList,
 } from "@/api/hooks";
+import { useRecordSongClick } from "@/api/recordSongClick";
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongSwipe } from "@/components/ListSongNav";
@@ -94,6 +95,8 @@ function SongArticle() {
 
   // No `isError`, deliberately; see the guard below.
   const { data: song, isLoading, error } = useSong(id);
+  // After the session settles, so a signed-in reader is not an anonymous click.
+  useRecordSongClick(id, !sessionLoading && Boolean(song));
   const deleteSong = useDeleteSong();
 
   // The list this song is read from, if any. A failure just leaves the page

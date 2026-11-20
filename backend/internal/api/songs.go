@@ -454,10 +454,10 @@ func (s *Server) handleListSongs(w http.ResponseWriter, r *http.Request) error {
 	q := r.URL.Query()
 	limit, offset := httpx.Pagination(q)
 
-	// Rejected rather than ignored: orderClause silently falls back to newest.
+	// Rejected rather than ignored: an unknown sort would otherwise list as newest.
 	sort := store.SongSort(strings.ToLower(strings.TrimSpace(q.Get("sort"))))
 	if !sort.Valid() {
-		return httpx.BadRequest("Sort must be relevance, title, newest, or oldest.")
+		return httpx.BadRequest("Sort must be relevance, title, newest, oldest, or popularity.")
 	}
 
 	filter := store.SongFilter{
