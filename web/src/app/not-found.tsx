@@ -9,7 +9,7 @@ import ShellLayout from "./(shell)/layout";
  * root's not-found renders inside the root layout alone, outside the route
  * groups, so it mounts the two group layouts itself: a reader who followed a
  * dead link still needs a way off it on a phone. A song the API says does not
- * exist has its own, under `(shell)/songs/[id]`.
+ * exist has its own, under `(shell)/(reader)/songs/[id]`.
  */
 export default function NotFound() {
   return (

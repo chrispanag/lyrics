@@ -102,6 +102,19 @@ describe("BrowsePage", () => {
 
     expect(await screen.findByRole("link", { name: /add song/i })).toBeInTheDocument();
   });
+
+  // The list stays beside the lyrics, so the song's address has to carry the
+  // filters or opening one would show a different list.
+  it("keeps the catalog filters on a song it opens", async () => {
+    renderWithProviders(<BrowsePage />, { route: "/?q=θάλασσα&language=el" });
+
+    const link = await screen.findByRole("link", { name: /Θάλασσα Πλατιά/ });
+    const params = new URLSearchParams(link.getAttribute("href")?.split("?")[1]);
+
+    expect(link.getAttribute("href")).toMatch(/^\/songs\/thalassa-platia\?/);
+    expect(params.get("q")).toBe("θάλασσα");
+    expect(params.get("language")).toBe("el");
+  });
 });
 
 /*

@@ -11,7 +11,7 @@ import { storeUser } from "@/auth/storedUser";
 import { storeFontSize } from "@/lib/fontSize";
 import type { User } from "@/lib/types";
 import { storeTheme } from "@/lib/theme";
-import CatalogPage from "@/app/(shell)/page";
+import CatalogPage from "@/app/(shell)/(reader)/catalogPage";
 import { catalogGenres, catalogList, catalogSongs } from "@/test/catalog";
 import { API, list, listById, makePerson, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";

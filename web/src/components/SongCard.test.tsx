@@ -92,6 +92,15 @@ describe("SongCard", () => {
     expect(screen.queryByText(/people/i)).not.toBeInTheDocument();
   });
 
+  it("marks the song the address has open", () => {
+    renderWithProviders(<SongCard song={makeSong()} />, { route: "/songs/thalassa-platia" });
+
+    expect(screen.getByRole("link", { name: /Θάλασσα Πλατιά/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
   it("shows no save badge when the song has never been added to a list", () => {
     renderWithProviders(<SongCard song={makeSong()} />);
 

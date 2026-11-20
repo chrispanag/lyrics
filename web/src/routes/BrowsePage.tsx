@@ -24,9 +24,10 @@ import {
 } from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
 import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
-import { catalogName, catalogView, viewGenre } from "@/lib/browse";
+import { catalogName, catalogQuery, catalogView, viewGenre } from "@/lib/browse";
 import { songCount } from "@/lib/format";
-import { Link, useSearchParams, useSetSearchParams } from "@/lib/navigation";
+import { songRefFromPath } from "@/lib/listContext";
+import { Link, usePathname, useSearchParams, useSetSearchParams } from "@/lib/navigation";
 
 /** Browse and search. Filter state lives in the URL, so it is shareable. */
 export function BrowsePage() {
@@ -35,7 +36,7 @@ export function BrowsePage() {
   const { user } = useAuth();
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  // Derived as the server route derives it (`app/(shell)/page.tsx`), so the
+  // Derived as the server route derives it (`app/(shell)/(reader)/catalogPage.tsx`), so the
   // query it read ahead is the query asked for here. Not memoized:
   // react-query hashes query keys structurally.
   const view = catalogView(params);
@@ -103,13 +104,16 @@ export function BrowsePage() {
   // Named by the query or the landing filter, since each is a history entry
   // and a bookmark; `generateMetadata`'s `og:title` is the same name.
   const name = catalogName(view, { person: activePerson, genre: activeGenre }) ?? "Browse";
+  // Beside an open song the song names the tab and the page, and this column
+  // is the list. On its own it is the page.
+  const besideSong = songRefFromPath(usePathname()) !== null;
 
   return (
     <>
-      <PageTitle name={name} />
+      {!besideSong && <PageTitle name={name} />}
       {/* Hidden: the search box is the page's visible heading in all but name.
           What it holds is the outline's root, which each card's h2 sits under. */}
-      <h1 className="sr-only">{name}</h1>
+      {!besideSong && <h1 className="sr-only">{name}</h1>}
       <SearchHeader
         trailing={
           <Button
@@ -195,7 +199,7 @@ export function BrowsePage() {
 
         <div className="space-y-3">
           {songs.map((song) => (
-            <SongCard key={song.id} song={song} />
+            <SongCard key={song.id} song={song} search={catalogQuery(params)} />
           ))}
         </div>
 

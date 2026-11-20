@@ -43,14 +43,17 @@ import { useStoredState } from "@/lib/useStoredState";
 import { RecordingsSheet } from "@/components/RecordingsSheet";
 
 /**
- * A song, with the catalog's search box above it. Siblings: the box shows in
- * every state of the song, and must sit outside the `<article>` the paging
- * swipe is read across.
+ * A song. Below `lg` the catalog's search box sits above it, which is the way
+ * to another song while the list is put away; from `lg` up the list is on
+ * screen and the box would be a second one. The box stays outside the
+ * `<article>` the paging swipe is read across.
  */
 export function SongDetailPage() {
   return (
     <>
-      <SongSearch />
+      <div className="lg:hidden">
+        <SongSearch />
+      </div>
       <SongArticle />
     </>
   );
@@ -64,7 +67,9 @@ export function SongDetailPage() {
 export function SongNotFound() {
   return (
     <>
-      <SongSearch />
+      <div className="lg:hidden">
+        <SongSearch />
+      </div>
       <SongUnavailable message="No song has this address." />
     </>
   );

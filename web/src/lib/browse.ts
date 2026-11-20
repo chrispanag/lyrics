@@ -10,6 +10,22 @@ import type { Genre, Person, SongFilters } from "@/lib/types";
  * drifting apart is a page that silently fetches everything twice.
  */
 
+/** The filters a catalog address carries, in the order `catalogView` reads them. */
+const CATALOG_KEYS = ["q", "person", "genre_slug", "language", "sort"] as const;
+
+/**
+ * Those filters as a query string. A song opened from the list keeps them, so
+ * the column beside the lyrics is the list the reader was on.
+ */
+export function catalogQuery(params: SearchReader): string {
+  const query = new URLSearchParams();
+  for (const key of CATALOG_KEYS) {
+    const value = params.get(key);
+    if (value) query.set(key, value);
+  }
+  return query.toString();
+}
+
 /** The catalog, filtered by whatever is given. */
 export function browseHref(filters: Pick<SongFilters, "q" | "person" | "genre_slug">): string {
   const params = new URLSearchParams();

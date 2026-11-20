@@ -6,7 +6,7 @@ import type { CreditedPerson, Genre, PublicList } from "@/lib/types";
 import { API, list, makeGenre, makePerson, makeSong, makeUnaddressedSong } from "@/test/handlers";
 import { server } from "@/test/server";
 
-import { generateMetadata } from "./(shell)/page";
+import { generateMetadata } from "./(shell)/(reader)/page";
 import sitemap from "./sitemap";
 
 // The node environment exercises `api/client.ts`'s server branch, which jsdom

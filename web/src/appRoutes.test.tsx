@@ -43,7 +43,10 @@ describe("Reaching the navigation from every screen", () => {
 
     renderWithProviders(<TestApp />, { route, user });
 
-    expect(await screen.findByRole("button", { name: "Open menu" })).toBeInTheDocument();
+    // The reader mounts the list and the song together, and each carries the
+    // button. jsdom has no breakpoints, so the one a phone would hide is here
+    // too; either one is the way to the drawer.
+    expect(await screen.findAllByRole("button", { name: "Open menu" })).not.toHaveLength(0);
   });
 
   // The credential screens have no navigation by design.
@@ -52,6 +55,27 @@ describe("Reaching the navigation from every screen", () => {
 
     expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open menu" })).not.toBeInTheDocument();
+  });
+
+  it("puts the catalog beside the lyrics, and an empty pane where no song is open", async () => {
+    const { unmount } = renderWithProviders(<TestApp />, { route: "/" });
+
+    expect(await screen.findByRole("searchbox", { name: /search songs/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Select a song" })).toBeInTheDocument();
+    unmount();
+
+    renderWithProviders(<TestApp />, { route: "/songs/thalassa-platia" });
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Θάλασσα Πλατιά" }),
+    ).toBeInTheDocument();
+    // The list is still there: its search box, with the open song marked in it.
+    expect(screen.getByRole("searchbox", { name: /search songs/i })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /Θάλασσα Πλατιά/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.queryByRole("heading", { name: "Select a song" })).not.toBeInTheDocument();
   });
 
   it("names a dead link as one", async () => {

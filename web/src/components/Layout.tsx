@@ -99,8 +99,10 @@ export function Layout({ children }: { children?: ReactNode }) {
         <DesktopSidebar />
         <MobileNavDrawer open={navOpen} onClose={() => setNavOpen(false)} />
 
-        {/* Extra bottom room on a phone to clear the home indicator. */}
-        <main className="min-w-0 flex-1 pb-12 md:pb-8">
+        {/* Extra bottom room on a phone to clear the home indicator. From `lg`
+            the reader fills the viewport and scrolls inside its panes, so the
+            padding would only make the window scroll past them. */}
+        <main className="min-w-0 flex-1 pb-12 md:pb-8 lg:pb-0">
           {/* No Suspense boundary here: a server streams the shell the moment
               one sits above a page, so a page's `notFound()` or redirect
               arrives as a 200 with a meta tag rather than a 404 or a 308. */}
@@ -458,14 +460,23 @@ export function StickyHeader({
     if (!header) return;
     const root = document.documentElement.style;
     // `offsetHeight` is the border box, so the safe-area padding counts too.
+    // A header the layout has put away (`display: none`) measures 0. Publishing
+    // that would clear the height of the header that is actually showing: the
+    // list and the song each have one, and only one is on screen at a time.
+    let published = "";
     const observer = new ResizeObserver(() => {
-      root.setProperty("--sticky-header-height", `${header.offsetHeight}px`);
+      const height = header.offsetHeight;
+      if (height === 0) return;
+      published = `${height}px`;
+      root.setProperty("--sticky-header-height", published);
     });
     // Border box here too, or a rotation that changes only the inset is missed.
     observer.observe(header, { box: "border-box" });
     return () => {
       observer.disconnect();
-      root.removeProperty("--sticky-header-height");
+      if (published !== "" && root.getPropertyValue("--sticky-header-height") === published) {
+        root.removeProperty("--sticky-header-height");
+      }
     };
   }, []);
 
