@@ -45,8 +45,13 @@ export const Complete: Story = {
     await expect(canvas.getByText("Γιώργος Νταλάρας · Μίκης Θεοδωράκης")).toBeVisible();
     await expect(canvas.getByRole("img", { name: "Has a video" })).toBeVisible();
     await expect(canvas.getByText("θάλασσας").tagName).toBe("MARK");
-    // The badge is the times it was saved. Clicks stay off the card.
-    await expect(canvas.getByText("Saved 3 times")).toBeVisible();
+    // The badge is the times it was saved. Clicks stay off the card, and the
+    // explanation stays hidden until the pointer is on the badge.
+    const label = "Saved to a list 3 times";
+    const copies = canvas.getAllByText(label);
+    await expect(copies).toHaveLength(2);
+    const tip = copies.find((node) => node.closest("[aria-hidden='true']"));
+    await expect(tip).not.toBeVisible();
     await expect(canvas.queryByText("6")).toBeNull();
   },
 };

@@ -22,6 +22,8 @@ import type { Song } from "@/lib/types";
 export const SongCard = memo(function SongCard({ song, listId }: { song: Song; listId?: string }) {
   const credits = songByline(song);
   const saves = song.popularity.list_adds;
+  // Null when there is nothing to explain: a zero is not a badge.
+  const savesLabel = saves > 0 ? listAddsLabel(saves) : null;
 
   return (
     <Link
@@ -38,14 +40,28 @@ export const SongCard = memo(function SongCard({ song, listId }: { song: Song; l
         </div>
         {(saves > 0 || song.youtube_video_id) && (
           <div className="flex shrink-0 items-center gap-2">
-            {saves > 0 && (
+            {savesLabel && (
               // The number is the times it was placed in a list. Clicks and how
-              // many people saved it stay off the card. Spoken in full; the
-              // digits stay visible for someone scanning the row.
-              <span className={cn(tagChrome, "inline-flex items-center gap-1 font-medium")}>
-                <ListPlus aria-hidden className="size-3" />
-                <span aria-hidden>{saves}</span>
-                <span className="sr-only">{listAddsLabel(saves)}</span>
+              // many people saved it stay off the card. The digits stay visible
+              // for scanning; the words are spoken, and repeated under the pointer.
+              <span className="group/saves relative inline-flex">
+                <span className={cn(tagChrome, "inline-flex items-center gap-1 font-medium")}>
+                  <ListPlus aria-hidden className="size-3" />
+                  <span aria-hidden>{saves}</span>
+                  <span className="sr-only">{savesLabel}</span>
+                </span>
+                {/* Hidden from assistive tech: the same words are already in the
+                    link's name. Above the badge, so the byline under it stays
+                    readable. The padding is the bridge, so the tip stays up
+                    while the pointer crosses onto it. */}
+                <span
+                  aria-hidden
+                  className="invisible absolute right-0 bottom-full z-dropdown pb-1 group-hover/saves:visible"
+                >
+                  <span className="block whitespace-nowrap rounded-control bg-inverse px-2 py-1 text-xs font-medium text-fg-inverse shadow-popover">
+                    {savesLabel}
+                  </span>
+                </span>
               </span>
             )}
             {song.youtube_video_id && (
