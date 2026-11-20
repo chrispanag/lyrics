@@ -1,6 +1,6 @@
 import { groupCredits } from "./credits";
 import { listHref, songHref } from "./listContext";
-import { SITE_NAME, SITE_ORIGIN } from "./site";
+import { SITE_NAME, SITE_ORIGIN, SITE_SUMMARY } from "./site";
 import type { Recording, Song, SongList } from "./types";
 import { watchUrl } from "./youtube";
 
@@ -19,6 +19,36 @@ const TAG_OPENER = /</g;
  */
 function scriptBody(value: unknown): string {
   return JSON.stringify(value).replace(TAG_OPENER, "\\u003c");
+}
+
+/**
+ * The product, as schema.org `SoftwareApplication`. `WebSite` alone does not
+ * say what the site is; this is the identity block on the catalog home.
+ * `applicationJsonLd` is emitted beside `websiteJsonLd`, which search engines
+ * still read the site name from.
+ */
+export function applicationJsonLd(): string {
+  return scriptBody({
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: SITE_NAME,
+    description: SITE_SUMMARY,
+    url: `${SITE_ORIGIN}/`,
+    applicationCategory: "EntertainmentApplication",
+    operatingSystem: "Web",
+    isAccessibleForFree: true,
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+    author: {
+      "@type": "Organization",
+      name: SITE_NAME,
+      url: `${SITE_ORIGIN}/`,
+    },
+    inLanguage: ["el", "en"],
+  });
 }
 
 /**

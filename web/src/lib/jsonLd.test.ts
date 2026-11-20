@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { makeList, makeRecording, makeSong } from "@/test/handlers";
 
-import { listJsonLd, songJsonLd, websiteJsonLd } from "./jsonLd";
+import { applicationJsonLd, listJsonLd, songJsonLd, websiteJsonLd } from "./jsonLd";
 
 // A hostile site name, so the WebSite case can show its escaping: the real one
 // has no `<` in it, and a constant is exactly what a later edit makes not one.
@@ -126,6 +126,28 @@ describe("listJsonLd", () => {
         { "@type": "ListItem", position: 1, url: `${ORIGIN}/songs/first`, name: "A" },
         { "@type": "ListItem", position: 2, url: `${ORIGIN}/songs/second`, name: "B" },
       ],
+    });
+  });
+});
+
+describe("applicationJsonLd", () => {
+  it("identifies the product, escaped like every script body", () => {
+    const body = applicationJsonLd();
+
+    expect(body).not.toContain("<");
+    expect(JSON.parse(body)).toMatchObject({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "Songfolio</script><script>alert(1)</script>",
+      url: "https://songfolio.live/",
+      applicationCategory: "EntertainmentApplication",
+      operatingSystem: "Web",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      author: {
+        "@type": "Organization",
+        name: "Songfolio</script><script>alert(1)</script>",
+        url: "https://songfolio.live/",
+      },
     });
   });
 });

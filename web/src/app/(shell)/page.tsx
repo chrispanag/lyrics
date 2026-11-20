@@ -4,6 +4,7 @@ import { cache } from "react";
 
 import { guestRead, isNotFound } from "@/api/client";
 import { queries } from "@/api/hooks";
+import { CatalogAbout } from "@/components/CatalogAbout";
 import {
   type CatalogView,
   catalogName,
@@ -13,7 +14,7 @@ import {
   viewGenre,
 } from "@/lib/browse";
 import { songCount } from "@/lib/format";
-import { websiteJsonLd } from "@/lib/jsonLd";
+import { applicationJsonLd, websiteJsonLd } from "@/lib/jsonLd";
 import { type NextSearchParams, isUuid, searchFrom } from "@/lib/listContext";
 import { OG_BASE, SITE_NAME, SITE_SUMMARY } from "@/lib/site";
 import { BrowsePage } from "@/routes/BrowsePage";
@@ -199,6 +200,11 @@ export default async function CatalogPage({ searchParams }: Props) {
     <>
       <script
         type="application/ld+json"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: `applicationJsonLd` returns its text already escaped.
+        dangerouslySetInnerHTML={{ __html: applicationJsonLd() }}
+      />
+      <script
+        type="application/ld+json"
         // biome-ignore lint/security/noDangerouslySetInnerHtml: `websiteJsonLd` returns its text already escaped.
         dangerouslySetInnerHTML={{ __html: websiteJsonLd() }}
       />
@@ -208,6 +214,9 @@ export default async function CatalogPage({ searchParams }: Props) {
       <HydrationBoundary state={dehydrate(client)}>
         <BrowsePage />
       </HydrationBoundary>
+      {/* On the home catalog only: a search or a person's page is the list,
+          and this prose would sit under every one of them. */}
+      {view.subject === "catalog" && !view.language && <CatalogAbout />}
     </>
   );
 }

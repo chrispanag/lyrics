@@ -130,13 +130,15 @@ services:
       failure_threshold: 3
 
     envs:
-      # Where the Node process reaches the API for server-render fetches.
-      # RUN_TIME and not NEXT_PUBLIC_, so it is never inlined into the bundle.
-      # A platform value, not filled by scripts/deploy-do.sh; see CLAUDE.md,
-      # "Environment". ${APP_URL} round-trips through the public ingress.
+      # Where the Node process reaches the API while rendering a document.
+      # RUN_TIME only. The web client reads it off a `process.env` binding so
+      # Next does not inline it at `next build`, before this value exists; an
+      # inlined read requests localhost and the catalog HTML ships with no songs.
+      # The private URL stays on the app network and calls /api/v1 on the port
+      # the API listens on.
       - key: API_ORIGIN
         scope: RUN_TIME
-        value: ${APP_URL}
+        value: ${api.PRIVATE_URL}
 
       # Leave NEXT_PUBLIC_API_BASE_URL unset: Next inlines it at build time, and
       # unset means the bundle calls its own origin.

@@ -5,12 +5,13 @@ import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { keys } from "@/api/hooks";
+import { CATALOG_PROGRAMS, catalogText } from "@/lib/catalogCopy";
 import { BrowsePage } from "@/routes/BrowsePage";
 import { catalogGenres, catalogSongs } from "@/test/catalog";
 import { API, apiError, list, makePerson, notFound } from "@/test/handlers";
 import { server } from "@/test/server";
 import { hanging, shortenReadBudget } from "@/test/readBudget";
-import { handover, structuredData } from "@/test/serverTree";
+import { handover, topLevel } from "@/test/serverTree";
 import { TestProviders } from "@/test/TestProviders";
 
 import CatalogPage, { generateMetadata } from "./page";
@@ -37,6 +38,24 @@ function entries(tree: ReactElement) {
     data: state.data,
     updatedAt: state.dataUpdatedAt,
   }));
+}
+
+/** The JSON-LD blocks, in document order. */
+function jsonLd(tree: ReactElement): unknown[] {
+  return topLevel(tree)
+    .filter((node) => node.props.type === "application/ld+json")
+    .map((node) =>
+      JSON.parse((node.props.dangerouslySetInnerHTML as { __html: string }).__html as string),
+    );
+}
+
+/** Visible-ish text: scripts removed, tags removed. */
+function textOf(page: string): string {
+  return page
+    .replace(/<script[\s\S]*?<\/script>/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** Renders the route's tree at an address, as the server sends it. */
@@ -158,12 +177,54 @@ describe("the catalog's server render", () => {
     expect(metadata.alternates?.canonical).toBe(`/?person=${PERSON.id}`);
   });
 
-  it("describes the site as the WebSite a search engine names results by", async () => {
-    const body = structuredData(await CatalogPage(props())) ?? "";
+  it("names the catalog in the raw HTML, with its songs linked", async () => {
+    const page = await html({});
 
-    expect(JSON.parse(body)).toMatchObject({ "@type": "WebSite", url: "https://songfolio.live/" });
+    expect(page).toMatch(/<h1[^>]*>Greek and English song lyrics<\/h1>/);
+    expect(page).toContain("<title>Browse — Songfolio</title>");
+    for (const song of catalogSongs) {
+      expect(page).toContain(song.title);
+      expect(page).toContain(`href="/songs/${song.slug}"`);
+    }
+    expect(page).toContain("About the catalog");
+    expect(page).toContain('href="/llms.txt"');
+    expect(page).toContain('href="/sitemap.xml"');
+    expect(page).toContain('href="/openapi.json"');
+    expect(textOf(page)).toContain(CATALOG_PROGRAMS);
+    expect(textOf(page).length).toBeGreaterThanOrEqual(500);
+    expect(catalogText().length).toBeGreaterThanOrEqual(500);
+  });
+
+  it("still describes the catalog when the API cannot answer", async () => {
+    server.use(http.get(`${API}/api/v1/songs`, () => HttpResponse.error()));
+
+    const page = await html({});
+
+    expect(textOf(page)).toContain("Songfolio is a catalog of Greek and English song lyrics");
+    expect(textOf(page).length).toBeGreaterThanOrEqual(500);
+    expect(page).toContain('href="/openapi.json"');
+  });
+
+  it("leaves the catalog essay off a search, which is the list itself", async () => {
+    const page = await html({ q: "θάλασσα" });
+
+    expect(page).not.toContain("About the catalog");
+    expect(page).toContain("<title>Search: θάλασσα — Songfolio</title>");
+  });
+
+  it("describes the product as a SoftwareApplication and the site as a WebSite", async () => {
+    const bodies = jsonLd(await CatalogPage(props()));
+
+    expect(bodies[0]).toMatchObject({
+      "@type": "SoftwareApplication",
+      name: "Songfolio",
+      url: "https://songfolio.live/",
+      offers: { "@type": "Offer", price: "0" },
+      author: { "@type": "Organization", name: "Songfolio" },
+    });
+    expect(bodies[1]).toMatchObject({ "@type": "WebSite", url: "https://songfolio.live/" });
     // jsonLd.test.ts pins the escaping; this pins that the page uses it.
-    expect(body).not.toContain("<");
+    expect(JSON.stringify(bodies)).not.toContain("<");
   });
 });
 
