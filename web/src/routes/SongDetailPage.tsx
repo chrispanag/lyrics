@@ -38,7 +38,6 @@ import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { PageBar } from "@/components/PageBar";
 import { sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
-import { popularitySummary } from "@/lib/popularity";
 import { Link, useParams, useRouter, useSearchParams } from "@/lib/navigation";
 import { useStoredState } from "@/lib/useStoredState";
 import { RecordingsSheet } from "@/components/RecordingsSheet";
@@ -308,7 +307,6 @@ function SongArticle() {
  */
 function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: () => void }) {
   const creditsByRole = groupCredits(song.credits);
-  const popularity = popularitySummary(song.popularity);
 
   // Performers come from the first recording; the year and video from the
   // song's columns, which are the trigger's copy of that same row. No `??`
@@ -348,8 +346,6 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
           Show all {recordingCount(song.recordings.length)}
         </button>
       )}
-
-      {popularity && <p className="mt-3 text-sm text-fg-muted">{popularity}</p>}
 
       {song.genres.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">

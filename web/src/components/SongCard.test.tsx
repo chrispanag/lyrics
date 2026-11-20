@@ -58,6 +58,34 @@ describe("SongCard", () => {
     expect(screen.queryByRole("img", { name: "Has a video" })).toBeNull();
   });
 
+  it("badges how many times the song was added to a list, and nothing else", () => {
+    renderWithProviders(
+      <SongCard
+        song={makeSong({
+          popularity: {
+            anonymous_clicks: 9,
+            authenticated_clicks: 2,
+            list_adds: 4,
+            list_users: 2,
+            score: 39,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(screen.getByText("Saved 4 times")).toBeInTheDocument();
+    expect(screen.queryByText("9")).not.toBeInTheDocument();
+    expect(screen.queryByText(/click/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/people/i)).not.toBeInTheDocument();
+  });
+
+  it("shows no save badge when the song has never been added to a list", () => {
+    renderWithProviders(<SongCard song={makeSong()} />);
+
+    expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
+  });
+
   // Compared against a real chip's classes, the nearest jsdom gets to its box.
   it("holds the genre row open with a chip's box when a song has none", () => {
     const genre = makeGenre();

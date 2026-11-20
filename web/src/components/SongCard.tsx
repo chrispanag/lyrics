@@ -1,11 +1,12 @@
 import { memo } from "react";
-import { SquarePlay } from "lucide-react";
+import { ListPlus, SquarePlay } from "lucide-react";
 
 import { Snippet } from "./Snippet";
 import { cardChrome, cardHover, tagChrome } from "./cardStyles";
 import { cn } from "@/lib/cn";
 import { songByline } from "@/lib/credits";
 import { songHref } from "@/lib/listContext";
+import { listAddsLabel } from "@/lib/popularity";
 import { Link } from "@/lib/navigation";
 import type { Song } from "@/lib/types";
 
@@ -20,6 +21,7 @@ import type { Song } from "@/lib/types";
  */
 export const SongCard = memo(function SongCard({ song, listId }: { song: Song; listId?: string }) {
   const credits = songByline(song);
+  const saves = song.popularity.list_adds;
 
   return (
     <Link
@@ -34,12 +36,26 @@ export const SongCard = memo(function SongCard({ song, listId }: { song: Song; l
           {/* Always rendered; `min-h-lh` gives an empty <p> its line box. */}
           <p className="mt-0.5 min-h-lh truncate text-sm text-fg-muted">{credits}</p>
         </div>
-        {song.youtube_video_id && (
-          <SquarePlay
-            role="img"
-            aria-label="Has a video"
-            className="size-5 shrink-0 text-fg-subtle"
-          />
+        {(saves > 0 || song.youtube_video_id) && (
+          <div className="flex shrink-0 items-center gap-2">
+            {saves > 0 && (
+              // The number is the times it was placed in a list. Clicks and how
+              // many people saved it stay off the card. Spoken in full; the
+              // digits stay visible for someone scanning the row.
+              <span className={cn(tagChrome, "inline-flex items-center gap-1 font-medium")}>
+                <ListPlus aria-hidden className="size-3" />
+                <span aria-hidden>{saves}</span>
+                <span className="sr-only">{listAddsLabel(saves)}</span>
+              </span>
+            )}
+            {song.youtube_video_id && (
+              <SquarePlay
+                role="img"
+                aria-label="Has a video"
+                className="size-5 shrink-0 text-fg-subtle"
+              />
+            )}
+          </div>
         )}
       </div>
 

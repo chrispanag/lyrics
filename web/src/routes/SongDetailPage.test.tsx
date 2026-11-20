@@ -91,7 +91,7 @@ function swipe(
 }
 
 describe("SongDetailPage popularity", () => {
-  it("shows how the song has been opened and saved, and records one click", async () => {
+  it("records one click and leaves the tally off the page", async () => {
     const bodies: unknown[] = [];
     server.use(
       http.get(`${API}/api/v1/songs/:id`, () =>
@@ -109,7 +109,6 @@ describe("SongDetailPage popularity", () => {
       ),
       http.post(`${API}/api/v1/songs/:id/clicks`, async ({ request }) => {
         bodies.push(await request.json());
-        // This opening counts, so the line moves as soon as the tally comes back.
         return HttpResponse.json({
           anonymous_clicks: 4,
           authenticated_clicks: 1,
@@ -122,12 +121,14 @@ describe("SongDetailPage popularity", () => {
 
     renderDetail();
 
-    expect(
-      await screen.findByText("5 clicks — 4 anonymous, 1 signed in · Saved 4 times by 2 people"),
-    ).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(screen.queryByText(/click/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
     await waitFor(() => expect(bodies).toHaveLength(1));
     expect(bodies[0]).toEqual({ visitor_id: expect.stringMatching(/^[0-9a-f-]{36}$/i) });
     expect(bodies).toHaveLength(1);
+    expect(screen.queryByText(/click/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
   });
 
   it("sends the session when the reader is signed in", async () => {
@@ -147,14 +148,6 @@ describe("SongDetailPage popularity", () => {
     } finally {
       setTokenProvider(async () => null);
     }
-  });
-
-  it("says nothing when a song has not been opened or saved", async () => {
-    renderDetail();
-
-    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
-    expect(screen.queryByText(/click/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
   });
 });
 

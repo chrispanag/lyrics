@@ -1,6 +1,3 @@
-import { pluralize } from "@/lib/format";
-import type { SongPopularity } from "@/lib/types";
-
 const VISITOR_KEY = "songfolio.visitor";
 
 /** uuid.Parse's shape, both cases. A nil id is refused: it would merge every broken client into one actor. */
@@ -28,35 +25,9 @@ function isNilUuid(value: string): boolean {
 }
 
 /**
- * One line for the song page, or null when nothing has been recorded. Clicks
- * stay split between anonymous and signed-in; saves name the people who have
- * it now and, when that is fewer than the placements, how many times it was saved.
+ * Spoken form of the card badge: how many times the song has been placed in a
+ * list. Zero is not a badge, so this is only called for a positive count.
  */
-export function popularitySummary(popularity: SongPopularity | undefined): string | null {
-  if (!popularity) return null;
-
-  const parts: string[] = [];
-  const clicks = clickSummary(popularity.anonymous_clicks, popularity.authenticated_clicks);
-  if (clicks) parts.push(clicks);
-  const saves = saveSummary(popularity.list_adds, popularity.list_users);
-  if (saves) parts.push(saves);
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-function clickSummary(anonymous: number, signedIn: number): string | null {
-  if (anonymous === 0 && signedIn === 0) return null;
-  if (signedIn === 0) return pluralize(anonymous, "anonymous click");
-  if (anonymous === 0) return pluralize(signedIn, "signed-in click");
-  return `${pluralize(anonymous + signedIn, "click")} — ${anonymous} anonymous, ${signedIn} signed in`;
-}
-
-function saveSummary(adds: number, people: number): string | null {
-  if (adds === 0 && people === 0) return null;
-  if (people === 0) return adds === 1 ? "Saved once" : `Saved ${adds} times`;
-
-  const who = people === 1 ? "1 person" : `${people} people`;
-  // One placement per person needs no separate "times".
-  if (adds <= people) return `Saved by ${who}`;
-  const times = adds === 1 ? "once" : `${adds} times`;
-  return `Saved ${times} by ${who}`;
+export function listAddsLabel(adds: number): string {
+  return adds === 1 ? "Saved once" : `Saved ${adds} times`;
 }
