@@ -384,8 +384,12 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
             by the extra pixel inside: iOS Safari honors `overscroll-behavior`
             only on a box that actually scrolls, and a vertical swipe here
             would otherwise scroll the page behind. `-y` only, so a sideways
-            swipe still reaches the drawer. */}
-        <div ref={list} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-6">
+            swipe still reaches the drawer. That pixel is real overflow, so
+            the scrollbar it would paint is hidden on `.nav-drawer-list`. */}
+        <div
+          ref={list}
+          className="nav-drawer-list min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-6"
+        >
           <div className="flex min-h-[calc(100%+1px)] flex-col">
             <NavPanel />
           </div>

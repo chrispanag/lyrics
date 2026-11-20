@@ -415,6 +415,16 @@
   .nav-drawer::-webkit-scrollbar {
     display: none;
   }
+  /* The list inside the sheet is a pixel taller than its box, so iOS treats
+     it as a scroller and a vertical swipe stays here (see MobileNavDrawer).
+     That pixel paints a scrollbar down the sheet whenever the drawer is
+     open. Scrolling stays; the bar is hidden. */
+  .nav-drawer-list {
+    scrollbar-width: none;
+  }
+  .nav-drawer-list::-webkit-scrollbar {
+    display: none;
+  }
   /* Only while open: a `display` on the class would beat the UA's
      `display: none` for a closed dialog. */
   .nav-drawer[open] {
