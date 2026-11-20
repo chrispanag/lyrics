@@ -77,7 +77,7 @@ export function SongNotFound() {
 
 function SongUnavailable({ message }: { message: string }) {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6">
+    <div className="mx-auto max-w-3xl px-4 py-6 lg:mx-0 lg:max-w-none lg:px-3">
       <PageTitle name="Song not available" />
       <ErrorMessage>{message}</ErrorMessage>
       <Link href="/" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
@@ -141,7 +141,11 @@ function SongArticle() {
 
   return (
     // The search header's column; every state of the page must carry it.
-    <article ref={surface} aria-busy={isLoading} className="mx-auto max-w-3xl px-4 py-4">
+    <article
+      ref={surface}
+      aria-busy={isLoading}
+      className="mx-auto max-w-3xl px-4 py-4 lg:mx-0 lg:max-w-none lg:px-3 lg:py-3"
+    >
       {/* The title alone; nameless while in flight. */}
       <PageTitle name={song?.title} />
       <PageBar>
