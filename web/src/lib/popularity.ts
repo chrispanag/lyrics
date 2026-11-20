@@ -25,9 +25,9 @@ function isNilUuid(value: string): boolean {
 }
 
 /**
- * Spoken form of the card badge: how many times the song has been placed in a
- * list. Zero is not a badge, so this is only called for a positive count.
+ * What the card badge counts, spoken in the link and shown in its hover
+ * tooltip. Zero is not a badge, so this is only called for a positive count.
  */
 export function listAddsLabel(adds: number): string {
-  return adds === 1 ? "Saved once" : `Saved ${adds} times`;
+  return adds === 1 ? "Saved to a list once" : `Saved to a list ${adds} times`;
 }

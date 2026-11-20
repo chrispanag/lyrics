@@ -19,7 +19,7 @@ describe("visitorId", () => {
 
 describe("listAddsLabel", () => {
   it("names one placement and many", () => {
-    expect(listAddsLabel(1)).toBe("Saved once");
-    expect(listAddsLabel(4)).toBe("Saved 4 times");
+    expect(listAddsLabel(1)).toBe("Saved to a list once");
+    expect(listAddsLabel(4)).toBe("Saved to a list 4 times");
   });
 });

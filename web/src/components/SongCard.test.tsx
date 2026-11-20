@@ -74,7 +74,19 @@ describe("SongCard", () => {
     );
 
     expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getByText("Saved 4 times")).toBeInTheDocument();
+    const label = "Saved to a list 4 times";
+    // Spoken in the link, and again in the hover tip. The tip is aria-hidden so
+    // a screen reader does not hear it twice.
+    const copies = screen.getAllByText(label);
+    expect(copies).toHaveLength(2);
+    expect(copies.filter((node) => node.classList.contains("sr-only"))).toHaveLength(1);
+    const tip = copies.find((node) => node.closest("[aria-hidden='true']"));
+    // Above the badge: below it, the tip sat on the byline.
+    expect(tip?.closest("[aria-hidden='true']")).toHaveClass(
+      "invisible",
+      "bottom-full",
+      "group-hover/saves:visible",
+    );
     expect(screen.queryByText("9")).not.toBeInTheDocument();
     expect(screen.queryByText(/click/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/people/i)).not.toBeInTheDocument();
