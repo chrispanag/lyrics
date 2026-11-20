@@ -43,14 +43,17 @@ import { useStoredState } from "@/lib/useStoredState";
 import { RecordingsSheet } from "@/components/RecordingsSheet";
 
 /**
- * A song, with the catalog's search box above it. Siblings: the box shows in
- * every state of the song, and must sit outside the `<article>` the paging
- * swipe is read across.
+ * A song. Below `lg` the catalog's search box sits above it, which is the way
+ * to another song while the list is put away; from `lg` up the list is on
+ * screen and the box would be a second one. The box stays outside the
+ * `<article>` the paging swipe is read across.
  */
 export function SongDetailPage() {
   return (
     <>
-      <SongSearch />
+      <div className="lg:hidden">
+        <SongSearch />
+      </div>
       <SongArticle />
     </>
   );
@@ -64,7 +67,9 @@ export function SongDetailPage() {
 export function SongNotFound() {
   return (
     <>
-      <SongSearch />
+      <div className="lg:hidden">
+        <SongSearch />
+      </div>
       <SongUnavailable message="No song has this address." />
     </>
   );
@@ -72,7 +77,7 @@ export function SongNotFound() {
 
 function SongUnavailable({ message }: { message: string }) {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6">
+    <div className="mx-auto max-w-3xl px-4 py-6 lg:mx-0 lg:max-w-none lg:px-3">
       <PageTitle name="Song not available" />
       <ErrorMessage>{message}</ErrorMessage>
       <Link href="/" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
@@ -136,7 +141,11 @@ function SongArticle() {
 
   return (
     // The search header's column; every state of the page must carry it.
-    <article ref={surface} aria-busy={isLoading} className="mx-auto max-w-3xl px-4 py-4">
+    <article
+      ref={surface}
+      aria-busy={isLoading}
+      className="mx-auto max-w-3xl px-4 py-4 lg:mx-0 lg:max-w-none lg:px-3 lg:py-3"
+    >
       {/* The title alone; nameless while in flight. */}
       <PageTitle name={song?.title} />
       <PageBar>

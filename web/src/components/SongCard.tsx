@@ -5,9 +5,9 @@ import { Snippet } from "./Snippet";
 import { cardChrome, cardHover, tagChrome } from "./cardStyles";
 import { cn } from "@/lib/cn";
 import { songByline } from "@/lib/credits";
-import { songHref } from "@/lib/listContext";
+import { songHref, songMatchesRef, songRefFromPath } from "@/lib/listContext";
 import { listAddsLabel } from "@/lib/popularity";
-import { Link } from "@/lib/navigation";
+import { Link, usePathname } from "@/lib/navigation";
 import type { Song } from "@/lib/types";
 
 /**
@@ -19,16 +19,33 @@ import type { Song } from "@/lib/types";
  * The subtitle and genre row keep their box when empty so cards stay level; the
  * snippet varies in height and is not reserved.
  */
-export const SongCard = memo(function SongCard({ song, listId }: { song: Song; listId?: string }) {
+export const SongCard = memo(function SongCard({
+  song,
+  listId,
+  search,
+}: {
+  song: Song;
+  listId?: string;
+  /** Catalog filters to keep on the song's address, as a query string. */
+  search?: string;
+}) {
   const credits = songByline(song);
   const saves = song.popularity.list_adds;
   // Null when there is nothing to explain: a zero is not a badge.
   const savesLabel = saves > 0 ? listAddsLabel(saves) : null;
+  const open = songRefFromPath(usePathname());
+  const current = open !== null && songMatchesRef(song, open);
 
   return (
     <Link
-      href={songHref(song, listId)}
-      className={cn(cardChrome, cardHover, "block bg-surface p-4 active:bg-accent-subtle")}
+      href={withQuery(songHref(song, listId), search)}
+      aria-current={current ? "page" : undefined}
+      className={cn(
+        cardChrome,
+        cardHover,
+        "block bg-surface p-4 active:bg-accent-subtle",
+        current && "border-line-accent bg-accent-subtle",
+      )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -101,3 +118,13 @@ export const SongCard = memo(function SongCard({ song, listId }: { song: Song; l
     </Link>
   );
 });
+
+/** `search` merged onto `href`, which may already carry a query of its own. */
+function withQuery(href: string, search: string | undefined): string {
+  if (!search) return href;
+  const [path = href, existing] = href.split("?");
+  const params = new URLSearchParams(existing ?? "");
+  for (const [key, value] of new URLSearchParams(search)) params.set(key, value);
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}

@@ -22,6 +22,9 @@ import { BrowsePage } from "@/routes/BrowsePage";
  * The catalog, rendered on the server from the reads `BrowsePage` would make
  * on its first render, plus what only a server can say: which views are pages
  * worth indexing, and the site's own JSON-LD.
+ *
+ * The `@catalog` slot renders this beside the reading pane. The route's own
+ * page re-exports `generateMetadata` and, when no song is open, the empty pane.
  */
 
 interface Props {

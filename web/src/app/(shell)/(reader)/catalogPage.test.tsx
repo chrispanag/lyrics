@@ -13,7 +13,7 @@ import { hanging, shortenReadBudget } from "@/test/readBudget";
 import { handover, structuredData } from "@/test/serverTree";
 import { TestProviders } from "@/test/TestProviders";
 
-import CatalogPage, { generateMetadata } from "./page";
+import CatalogPage, { generateMetadata } from "./catalogPage";
 
 /*
  * Pins the catalog route's wiring: the reads handed to the page under the keys
@@ -103,7 +103,8 @@ describe("the catalog's server render", () => {
     expect(page).toContain(`<title>Songs by ${PERSON.name} — Songfolio</title>`);
     for (const song of catalogSongs) {
       expect(page).toContain(song.title);
-      expect(page).toContain(`href="/songs/${song.slug}"`);
+      // The person's filter stays on the song, so the list beside it is still theirs.
+      expect(page).toContain(`href="/songs/${song.slug}?person=${PERSON.id}"`);
     }
     // The chip names the person rather than standing in with "Artist".
     expect(page).toMatch(new RegExp(`>${PERSON.name}<`));

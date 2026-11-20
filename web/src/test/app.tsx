@@ -12,9 +12,10 @@ import { bestMatch } from "./match";
 /*
  * The real route table, for specs: the app directory's own pages and layouts,
  * composed by where their files sit — route groups, nested layouts and all —
- * the way Next composes them. So a spec that walks addresses through this sees
- * exactly what position gives each screen (the shell, the app bar, the admin
- * guard), and a page moved to the wrong folder fails it.
+ * the way Next composes them, parallel slots included. So a spec that walks
+ * addresses through this sees exactly what position gives each screen (the
+ * shell, the app bar, the admin guard), and a page moved to the wrong folder
+ * fails it.
  *
  * Three things a server does are stood in for. The root layout is not mounted
  * (it is the document, and loads a font from Google); its providers are what
@@ -25,9 +26,12 @@ import { bestMatch } from "./match";
  * with a client `Redirect`.
  */
 
-type Module = { default: ComponentType<{ children?: ReactNode }> };
+type Module = {
+  default: ComponentType<{ children?: ReactNode; catalog?: ReactNode }>;
+};
 
 const pages = import.meta.glob<Module>("/src/app/**/page.tsx", { eager: true });
+const defaults = import.meta.glob<Module>("/src/app/**/@*/default.tsx", { eager: true });
 const layouts = import.meta.glob<Module>(["/src/app/**/layout.tsx", "!/src/app/layout.tsx"], {
   eager: true,
 });
@@ -39,12 +43,17 @@ const SERVER_PAGES: Record<string, ReactNode> = {
   "/songs/:id": <SongDetailPage />,
 };
 
-/** `/src/app/(shell)/songs/[id]/page.tsx` → its folders, `["(shell)", "songs", "[id]"]`. */
+/** `/src/app/(shell)/(reader)/songs/[id]/page.tsx` → its folders. */
 function folders(file: string): string[] {
   return file
     .replace(/^\/src\/app\//, "")
     .split("/")
     .slice(0, -1);
+}
+
+/** A parallel-route slot: its folder is `@name`, which is not part of the URL. */
+function isSlot(file: string): boolean {
+  return file.includes("/@");
 }
 
 /** The URL pattern of a folder chain: groups dropped, `[id]` as `:id`. */
@@ -56,17 +65,78 @@ function patternOf(dirs: string[]): string {
 }
 
 const routes = Object.fromEntries(
-  Object.entries(pages).map(([file, module]) => [patternOf(folders(file)), { file, module }]),
+  Object.entries(pages)
+    .filter(([file]) => !isSlot(file))
+    .map(([file, module]) => [patternOf(folders(file)), { file, module }]),
 );
 
+interface LayoutMatch {
+  file: string;
+  module: Module;
+  dirs: string[];
+}
+
 /** The layouts above a page, outermost first. */
-function layoutsFor(file: string): Module[] {
+function layoutsFor(file: string): LayoutMatch[] {
   const page = folders(file);
   return Object.entries(layouts)
-    .map(([path, module]) => ({ dirs: folders(path), module }))
+    .map(([path, module]) => ({ file: path, dirs: folders(path), module }))
     .filter(({ dirs }) => dirs.every((dir, index) => page[index] === dir))
-    .sort((a, b) => a.dirs.length - b.dirs.length)
-    .map(({ module }) => module);
+    .sort((a, b) => a.dirs.length - b.dirs.length);
+}
+
+/**
+ * The slot props a layout takes at `pathname`. A slot page whose pattern is the
+ * address renders; otherwise the slot's `default.tsx` does, which is what a
+ * fresh load of an address the slot has no page for shows. Soft navigations
+ * that keep a slot mounted are the router's, and a spec renders one address.
+ */
+function slotsFor(layout: LayoutMatch, pathname: string): Record<string, ReactNode> {
+  const prefix = patternOf(layout.dirs);
+  const pagesFor = (name: string) =>
+    Object.entries(pages).flatMap(([file, module]) => {
+      if (!isSlot(file)) return [];
+      const dirs = folders(file);
+      if (dirs[layout.dirs.length] !== `@${name}`) return [];
+      if (!layout.dirs.every((dir, index) => dirs[index] === dir)) return [];
+      const rest = patternOf(dirs.slice(layout.dirs.length + 1));
+      const pattern = prefix === "/" ? rest : `${prefix}${rest === "/" ? "" : rest}`;
+      return [{ pattern, module }];
+    });
+
+  const names = new Set<string>();
+  for (const file of [...Object.keys(pages), ...Object.keys(defaults)]) {
+    if (!isSlot(file)) continue;
+    const dirs = folders(file);
+    const slot = dirs[layout.dirs.length];
+    if (!slot?.startsWith("@")) continue;
+    if (!layout.dirs.every((dir, index) => dirs[index] === dir)) continue;
+    names.add(slot.slice(1));
+  }
+
+  const props: Record<string, ReactNode> = {};
+  for (const name of names) {
+    const candidates = pagesFor(name);
+    const match = bestMatch(
+      candidates.map((candidate) => candidate.pattern),
+      pathname,
+    );
+    const chosen = match && candidates.find((candidate) => candidate.pattern === match.pattern);
+    if (chosen && match) {
+      props[name] = render(match.pattern, chosen.module.default);
+      continue;
+    }
+    const fallback = Object.entries(defaults).find(([file]) => {
+      const dirs = folders(file);
+      return (
+        dirs[layout.dirs.length] === `@${name}` &&
+        layout.dirs.every((dir, index) => dirs[index] === dir)
+      );
+    });
+    if (!fallback) throw new Error(`No default for @${name} under ${layout.file}`);
+    props[name] = render(prefix, fallback[1].default);
+  }
+  return props;
 }
 
 function isAsync(component: unknown): boolean {
@@ -105,7 +175,10 @@ function Route({ pathname }: { pathname: string }) {
   if (!match || !route) return <NotFound />;
 
   const tree = layoutsFor(route.file).reduceRight<ReactNode>(
-    (children, { default: Layout }) => <Layout>{children}</Layout>,
+    (children, layout) => {
+      const Layout = layout.module.default;
+      return <Layout {...slotsFor(layout, pathname)}>{children}</Layout>;
+    },
     render(match.pattern, route.module.default),
   );
   return (
