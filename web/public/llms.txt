@@ -12,6 +12,12 @@ Everything below is readable by a guest, with no key and no sign-in. Please fetc
 - Other catalog filters: `/?genre_slug=<slug>`, `/?language=el` (a two-letter code), `/?sort=title|newest|oldest`.
 - A shared list: `/lists/<uuid>`. Only lists their owner made public can be read; any other answers as not found.
 - [Sitemap](https://songfolio.live/sitemap.xml): every song's address.
+- [OpenAPI specification](https://songfolio.live/openapi.json): the JSON API, including OAuth scopes.
+- [OAuth protected resource metadata](https://songfolio.live/.well-known/oauth-protected-resource): RFC 9728, with `scopes_supported`. The API's own document is `/.well-known/oauth-protected-resource/api/v1`.
+
+## Markdown
+
+Send `Accept: text/markdown` to a page. The response is `Content-Type: text/markdown; charset=utf-8` and `Vary: Accept`. The same URL with `Accept: text/html` is still HTML. An address nothing is published at answers HTTP 404 with a Markdown body and links back to this file, the sitemap, and the OpenAPI specification. A client that accepts neither HTML nor Markdown receives HTTP 406.
 
 ## JSON API
 

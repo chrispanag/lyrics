@@ -1,24 +1,38 @@
 import type { ApiErrorBody } from "@/lib/types";
 
-// Browser: production uses its own origin (never bake in a hostname); other
-// modes, vitest's "test" included, fall back to :8080. An explicit
-// NEXT_PUBLIC_API_BASE_URL wins, even "" (`make mobile`), hence `??`.
-//
-// Server: "" is not a URL, so Node reads API_ORIGIN, a run-time platform value
-// that is never NEXT_PUBLIC_. It must not fall back through
+// See `apiBase`. The server must not fall back through
 // NEXT_PUBLIC_API_BASE_URL, which `make mobile` empties. See CLAUDE.md, "What
 // the server says while the app is still client-only".
 const LOCAL_API = "http://localhost:8080";
 
-const API_BASE =
-  typeof window === "undefined"
-    ? (process.env.API_ORIGIN ?? LOCAL_API)
-    : (process.env.NEXT_PUBLIC_API_BASE_URL ??
-      (process.env.NODE_ENV !== "production" ? LOCAL_API : ""));
+/**
+ * The API origin for this environment, read when a request is made.
+ *
+ * On the server, `API_ORIGIN` is a run-time platform value. Reading it through
+ * a `process.env` binding keeps Next from inlining it at `next build`, when
+ * that value does not exist yet — an inlined read requests localhost and the
+ * catalog HTML ships with no songs. A trailing slash is stripped so joining a
+ * path does not produce `//`.
+ *
+ * In the browser, production uses its own origin. An explicit
+ * `NEXT_PUBLIC_API_BASE_URL` wins, even `""` (`make mobile`).
+ */
+function apiBase(): string {
+  if (typeof window === "undefined") {
+    // Indirect on purpose: Next inlines a direct `process.env.API_ORIGIN` at
+    // build time, when the run-time value does not exist yet.
+    const env = process.env;
+    const configured = env.API_ORIGIN?.trim().replace(/\/$/, "");
+    return configured || LOCAL_API;
+  }
+  return (
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? (process.env.NODE_ENV !== "production" ? LOCAL_API : "")
+  );
+}
 
 /** The absolute URL of an API path, for what bypasses `apiFetch` (an `<img src>`). */
 export function apiUrl(path: string): string {
-  return `${API_BASE}${path}`;
+  return `${apiBase()}${path}`;
 }
 
 /** Error carrying the API's structured failure body. */

@@ -25,6 +25,7 @@ import {
 import { useDebounced } from "@/lib/useDebounced";
 import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
 import { catalogName, catalogView, viewGenre } from "@/lib/browse";
+import { CATALOG_HEADING } from "@/lib/catalogCopy";
 import { songCount } from "@/lib/format";
 import { Link, useSearchParams, useSetSearchParams } from "@/lib/navigation";
 
@@ -103,13 +104,16 @@ export function BrowsePage() {
   // Named by the query or the landing filter, since each is a history entry
   // and a bookmark; `generateMetadata`'s `og:title` is the same name.
   const name = catalogName(view, { person: activePerson, genre: activeGenre }) ?? "Browse";
+  // The tab stays "Browse". The heading names the catalog, which is what a
+  // document outline and an agent read. Other views already name themselves.
+  const heading = name === "Browse" ? CATALOG_HEADING : name;
 
   return (
     <>
       <PageTitle name={name} />
       {/* Hidden: the search box is the page's visible heading in all but name.
           What it holds is the outline's root, which each card's h2 sits under. */}
-      <h1 className="sr-only">{name}</h1>
+      <h1 className="sr-only">{heading}</h1>
       <SearchHeader
         trailing={
           <Button

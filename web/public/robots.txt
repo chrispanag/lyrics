@@ -21,7 +21,11 @@
 #
 # Agents: https://songfolio.live/llms.txt describes the site's addresses and its
 # public JSON API under /api/v1, which `Allow: /` covers and which is cheaper to
-# read than the pages. No standard directive names that file, hence a comment.
+# read than the pages. The API description is https://songfolio.live/openapi.json
+# and the OAuth scopes are https://songfolio.live/.well-known/oauth-protected-resource.
+# A client that sends `Accept: text/markdown` receives Markdown for a document
+# and a Markdown 404 for an unknown address. No standard directive names those
+# files, hence a comment.
 
 User-agent: *
 Allow: /
