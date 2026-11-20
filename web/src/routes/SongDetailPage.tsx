@@ -35,7 +35,8 @@ import {
 } from "@/lib/fontSize";
 import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
-import { PageBar } from "@/components/PageBar";
+import { BackButton } from "@/components/BackButton";
+import { headerBarPadding } from "@/components/SearchHeader";
 import { sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
 import { Link, useParams, useRouter, useSearchParams } from "@/lib/navigation";
@@ -140,172 +141,205 @@ function SongArticle() {
   const position = contextList && id ? listPosition(contextList, id) : null;
 
   return (
-    // The search header's column; every state of the page must carry it.
+    // Full width of the reading pane from `lg` up. The phone keeps the column.
     <article
       ref={surface}
       aria-busy={isLoading}
-      className="mx-auto max-w-3xl px-4 py-4 lg:mx-0 lg:max-w-none lg:px-3 lg:py-3"
+      className="mx-auto max-w-3xl lg:mx-0 lg:max-w-none"
     >
       {/* The title alone; nameless while in flight. */}
       <PageTitle name={song?.title} />
-      <PageBar>
-        {/* Shown to guests too, who are sent to sign in. Labeled because "Save"
-            alone does not say where to. */}
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="Save to a list"
-          // `user` is only a snapshot until the restore settles; neither branch
-          // may be decided on it.
-          disabled={sessionLoading}
-          onClick={() => (user ? setListSheetOpen(true) : router.push(signIn))}
+      {/* On a wide screen the list is beside this pane, so Back is only for
+          the phone. The title takes its place and the bar sticks while the
+          lyrics scroll. Its height follows the search header, chips included,
+          so the two borders stay one line. */}
+      <div
+        className={cn(
+          "lg:sticky lg:top-0 lg:z-sticky lg:border-b lg:border-line lg:bg-canvas/95 lg:pt-safe lg:backdrop-blur",
+          "lg:min-h-[var(--sticky-header-height,0px)]",
+        )}
+      >
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-x-2 gap-y-3 max-lg:py-4 lg:flex-nowrap lg:gap-3",
+            headerBarPadding,
+          )}
         >
-          <ListPlus aria-hidden className="size-4" />
-          <span className={actionLabel}>Save</span>
-        </Button>
-        {canEdit && (
-          <Link href={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
-            <Pencil aria-hidden className="size-4" />
-            <span className={actionLabel}>Edit</span>
-          </Link>
-        )}
-        {hasRole(user?.role, "admin") && (
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Delete song"
-            // Waits for the song: the confirmation names it.
-            disabled={!song}
-            onClick={() => setConfirmDelete(true)}
-          >
-            <Trash aria-hidden className="size-4 text-fg-danger" />
-          </Button>
-        )}
-      </PageBar>
-
-      {position && (
-        <>
-          <ListSongNavBar position={position} />
-          {/* The swipe waits for the song: its once-per-device hint must not be
-              spent on a song that fails to load. */}
-          {song && <ListSongSwipe position={position} surface={surface} />}
-        </>
-      )}
-
-      {song ? (
-        <SongHeader song={song} onShowRecordings={() => setRecordingsOpen(true)} />
-      ) : (
-        // Shaped like `SongHeader` so the text-size controls below do not move
-        // as the song arrives; change the two together. The plain wrapper stops
-        // `space-y-*`'s margin collapsing the recordings line's `mt-2`. No
-        // `rounded-full` on the chip: `cn` is a plain join.
-        <div className="mb-5 space-y-3">
-          <Skeleton className="h-9 w-2/3" />
-          <div>
-            <div className="space-y-1">
-              <Skeleton className="h-5 w-1/2" />
-              <Skeleton className="h-5 w-1/3" />
-            </div>
-            <Skeleton className="mt-2 h-5 w-36" />
+          <BackButton className="lg:hidden" />
+          {song ? (
+            <h1
+              lang={song.language}
+              className="order-last w-full text-3xl font-bold leading-tight tracking-tight text-balance lg:order-none lg:flex lg:min-h-12 lg:min-w-0 lg:flex-1 lg:items-center lg:truncate"
+            >
+              {song.title}
+            </h1>
+          ) : (
+            <Skeleton className="order-last h-9 w-2/3 lg:order-none lg:h-12 lg:w-72" />
+          )}
+          <div className="ml-auto flex items-center gap-1 lg:ml-0">
+            {/* Shown to guests too, who are sent to sign in. Labeled because "Save"
+              alone does not say where to. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Save to a list"
+              // `user` is only a snapshot until the restore settles; neither branch
+              // may be decided on it.
+              disabled={sessionLoading}
+              onClick={() => (user ? setListSheetOpen(true) : router.push(signIn))}
+            >
+              <ListPlus aria-hidden className="size-4" />
+              <span className={actionLabel}>Save</span>
+            </Button>
+            {canEdit && (
+              <Link href={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
+                <Pencil aria-hidden className="size-4" />
+                <span className={actionLabel}>Edit</span>
+              </Link>
+            )}
+            {hasRole(user?.role, "admin") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Delete song"
+                // Waits for the song: the confirmation names it.
+                disabled={!song}
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Trash aria-hidden className="size-4 text-fg-danger" />
+              </Button>
+            )}
           </div>
-          <Skeleton className="h-6 w-20" />
         </div>
-      )}
+      </div>
+      <div className="px-4 pb-4">
+        {position && (
+          <>
+            <ListSongNavBar position={position} />
+            {/* The swipe waits for the song: its once-per-device hint must not be
+              spent on a song that fails to load. */}
+            {song && <ListSongSwipe position={position} surface={surface} />}
+          </>
+        )}
 
-      <section aria-label="Lyrics">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className={sectionLabel}>Lyrics</h2>
-          {/* A fieldset is the native group; preflight zeroes its border, margin
+        {song ? (
+          <SongHeader song={song} onShowRecordings={() => setRecordingsOpen(true)} />
+        ) : (
+          // Shaped like `SongHeader` so the text-size controls below do not move
+          // as the song arrives; change the two together. The plain wrapper stops
+          // `space-y-*`'s margin collapsing the recordings line's `mt-2`. No
+          // `rounded-full` on the chip: `cn` is a plain join.
+          <div className="mb-5 space-y-3">
+            <div>
+              <div className="space-y-1">
+                <Skeleton className="h-5 w-1/2" />
+                <Skeleton className="h-5 w-1/3" />
+              </div>
+              <Skeleton className="mt-2 h-5 w-36" />
+            </div>
+            <Skeleton className="h-6 w-20" />
+          </div>
+        )}
+
+        <section aria-label="Lyrics">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className={sectionLabel}>Lyrics</h2>
+            {/* A fieldset is the native group; preflight zeroes its border, margin
               and padding. Named by `aria-label`, not a <legend>: the controls
               are icons, and a visible "Text size" would crowd the heading row. */}
-          <fieldset className="flex items-center gap-1" aria-label="Text size">
-            <Type aria-hidden className="mr-1 size-4 text-fg-subtle" />
-            <button
-              type="button"
-              onClick={() => setFontSize(fontSizeIndex - 1)}
-              disabled={fontSizeIndex === 0}
-              aria-label="Decrease text size"
-              className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
+            <fieldset className="flex items-center gap-1" aria-label="Text size">
+              <Type aria-hidden className="mr-1 size-4 text-fg-subtle" />
+              <button
+                type="button"
+                onClick={() => setFontSize(fontSizeIndex - 1)}
+                disabled={fontSizeIndex === 0}
+                aria-label="Decrease text size"
+                className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
+              >
+                <Minus aria-hidden className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setFontSize(fontSizeIndex + 1)}
+                disabled={fontSizeIndex === FONT_SIZES.length - 1}
+                aria-label="Increase text size"
+                className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
+              >
+                <Plus aria-hidden className="size-4" />
+              </button>
+            </fieldset>
+          </div>
+
+          {!song ? (
+            <Skeleton className="h-64 w-full" />
+          ) : song.lyrics?.trim() ? (
+            // whitespace-pre-line keeps the stored line and verse breaks.
+            // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
+            <p
+              lang={song.language}
+              className="lyrics-size whitespace-pre-line leading-loose text-fg"
+              style={{ fontFamily: "var(--font-lyrics)" }}
             >
-              <Minus aria-hidden className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setFontSize(fontSizeIndex + 1)}
-              disabled={fontSizeIndex === FONT_SIZES.length - 1}
-              aria-label="Increase text size"
-              className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
-            >
-              <Plus aria-hidden className="size-4" />
-            </button>
-          </fieldset>
-        </div>
-
-        {!song ? (
-          <Skeleton className="h-64 w-full" />
-        ) : song.lyrics?.trim() ? (
-          // whitespace-pre-line keeps the stored line and verse breaks.
-          // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
-          <p
-            lang={song.language}
-            className="lyrics-size whitespace-pre-line leading-loose text-fg"
-            style={{ fontFamily: "var(--font-lyrics)" }}
-          >
-            {song.lyrics}
-          </p>
-        ) : (
-          <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>
-        )}
-      </section>
-
-      {/* Gated on the id, never the URL; see WatchOnYouTube. */}
-      {song?.youtube_video_id && (
-        <WatchOnYouTube videoId={song.youtube_video_id} className="mt-6" />
-      )}
-
-      {song?.notes && (
-        <section className={cn(panelChrome, "mt-8")}>
-          <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
-          <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
+              {song.lyrics}
+            </p>
+          ) : (
+            <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>
+          )}
         </section>
-      )}
 
-      {/* Needs only the id, so Save works while the song is loading. */}
-      {user && id && (
-        <AddToListSheet songId={id} open={listSheetOpen} onClose={() => setListSheetOpen(false)} />
-      )}
+        {/* Gated on the id, never the URL; see WatchOnYouTube. */}
+        {song?.youtube_video_id && (
+          <WatchOnYouTube videoId={song.youtube_video_id} className="mt-6" />
+        )}
 
-      {song && (
-        <RecordingsSheet
-          recordings={song.recordings}
-          language={song.language}
-          open={recordingsOpen}
-          onClose={() => setRecordingsOpen(false)}
-        />
-      )}
+        {song?.notes && (
+          <section className={cn(panelChrome, "mt-8")}>
+            <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
+            <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
+          </section>
+        )}
 
-      {song && (
-        <ConfirmSheet
-          open={confirmDelete}
-          onClose={() => {
-            setConfirmDelete(false);
-            // The sheet stays mounted, so a stale refusal would show on reopen.
-            deleteSong.reset();
-          }}
-          title="Delete this song?"
-          pending={deleteSong.isPending}
-          // A refused delete is otherwise silent.
-          error={
-            deleteSong.isError
-              ? errorMessage(deleteSong.error, "This song could not be deleted.")
-              : undefined
-          }
-          onConfirm={() => deleteSong.mutate(song.id, { onSuccess: () => router.push("/") })}
-        >
-          “{song.title}” will be removed for everyone, along with its place in any lists. This
-          cannot be undone.
-        </ConfirmSheet>
-      )}
+        {/* Needs only the id, so Save works while the song is loading. */}
+        {user && id && (
+          <AddToListSheet
+            songId={id}
+            open={listSheetOpen}
+            onClose={() => setListSheetOpen(false)}
+          />
+        )}
+
+        {song && (
+          <RecordingsSheet
+            recordings={song.recordings}
+            language={song.language}
+            open={recordingsOpen}
+            onClose={() => setRecordingsOpen(false)}
+          />
+        )}
+
+        {song && (
+          <ConfirmSheet
+            open={confirmDelete}
+            onClose={() => {
+              setConfirmDelete(false);
+              // The sheet stays mounted, so a stale refusal would show on reopen.
+              deleteSong.reset();
+            }}
+            title="Delete this song?"
+            pending={deleteSong.isPending}
+            // A refused delete is otherwise silent.
+            error={
+              deleteSong.isError
+                ? errorMessage(deleteSong.error, "This song could not be deleted.")
+                : undefined
+            }
+            onConfirm={() => deleteSong.mutate(song.id, { onSuccess: () => router.push("/") })}
+          >
+            “{song.title}” will be removed for everyone, along with its place in any lists. This
+            cannot be undone.
+          </ConfirmSheet>
+        )}
+      </div>
     </article>
   );
 }
@@ -324,10 +358,9 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
   const year = song.release_year;
 
   return (
-    /* The song's own language: the title is content too. */
+    /* The title itself is the sticky bar. This is the rest of the header. */
     <header className="mb-5" lang={song.language}>
-      <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">{song.title}</h1>
-      {song.alt_title && <p className="mt-1 text-lg text-fg-muted">{song.alt_title}</p>}
+      {song.alt_title && <p className="text-lg text-fg-muted">{song.alt_title}</p>}
 
       <dl className="mt-3 space-y-1 text-sm">
         {/* Performers lead; the row is conditional, since most recordings
