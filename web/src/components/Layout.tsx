@@ -182,8 +182,17 @@ function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
 
   return (
     <>
-      <div className="mb-8 flex items-center gap-1 px-2">
-        <Link href="/" className="min-w-0">
+      <div
+        className={cn(
+          "mb-8 flex items-center gap-1 px-2",
+          // The desktop row is as tall as the search field and the song title,
+          // so the collapse control shares their center. The link is a flex
+          // item: an inline one keeps a line box under the wordmark and the
+          // control then sits below the title.
+          wordmarkTrailing && "min-h-12",
+        )}
+      >
+        <Link href="/" className="flex min-w-0 items-center">
           <Wordmark />
         </Link>
         {wordmarkTrailing}
@@ -248,7 +257,9 @@ function DesktopSidebar() {
   return (
     <aside
       id={NAV_SIDEBAR_ID}
-      className="nav-sidebar sticky top-0 h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface px-4 py-6"
+      // `pt-3` is the search header's padding. With the wordmark row at
+      // `min-h-12`, the collapse control centers on that field and the title.
+      className="nav-sidebar sticky top-0 h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface px-4 pt-3 pb-6"
     >
       <NavPanel
         wordmarkTrailing={
