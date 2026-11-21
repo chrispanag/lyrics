@@ -71,6 +71,9 @@ describe("Reaching the navigation from every screen", () => {
     ).toBeInTheDocument();
     // The list is still there: its search box, with the open song marked in it.
     expect(screen.getByRole("searchbox", { name: /search songs/i })).toBeInTheDocument();
+    // jsdom has no container width; the class is what draws the line once the
+    // panes sit side by side.
+    expect(screen.getByRole("region", { name: "Songs" })).toHaveClass("@3xl/app:border-r");
     expect(await screen.findByRole("link", { name: /Θάλασσα Πλατιά/ })).toHaveAttribute(
       "aria-current",
       "page",
