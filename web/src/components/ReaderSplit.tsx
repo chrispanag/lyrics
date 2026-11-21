@@ -36,7 +36,7 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
       <section
         aria-label="Songs"
         className={cn(
-          "@3xl/app:min-h-0 @3xl/app:w-80 @3xl/app:shrink-0 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain @3xl/app:border-r @3xl/app:border-line @3xl/app:bg-surface @5xl/app:w-96",
+          "@3xl/app:min-h-0 @3xl/app:w-80 @3xl/app:shrink-0 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain @3xl/app:bg-surface @5xl/app:w-96",
           onSong && "@max-3xl/app:hidden",
         )}
       >
