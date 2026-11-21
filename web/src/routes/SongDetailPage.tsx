@@ -151,7 +151,7 @@ function SongArticle() {
       {/* The title alone; nameless while in flight. */}
       <PageTitle name={song?.title} />
       {/* On a wide screen the list is beside this pane, so Back is only for
-          the phone. The title takes its place and the bar sticks while the
+          the phone. The bar keeps this song's tools and sticks while the
           lyrics scroll. Its height follows the search header, chips included,
           so the two borders stay one line. */}
       <div
@@ -160,24 +160,10 @@ function SongArticle() {
           "lg:min-h-[var(--sticky-header-height,0px)]",
         )}
       >
-        <div
-          className={cn(
-            "flex flex-wrap items-center gap-x-2 gap-y-3 max-lg:py-4 lg:flex-nowrap lg:gap-3",
-            headerBarPadding,
-          )}
-        >
+        <div className={cn("flex items-center gap-2 max-lg:py-4", headerBarPadding)}>
           <BackButton className="lg:hidden" />
-          {song ? (
-            <h1
-              lang={song.language}
-              className="order-last w-full text-3xl font-bold leading-tight tracking-tight text-balance lg:order-none lg:flex lg:min-h-12 lg:min-w-0 lg:flex-1 lg:items-center lg:truncate"
-            >
-              {song.title}
-            </h1>
-          ) : (
-            <Skeleton className="order-last h-9 w-2/3 lg:order-none lg:h-12 lg:w-72" />
-          )}
-          <div className="ml-auto flex items-center gap-1 lg:ml-0">
+          {/* As tall as the search field from `lg` up, so the tools share its center. */}
+          <div className="ml-auto flex items-center gap-1 lg:h-12">
             {/* Shown to guests too, who are sent to sign in. Labeled because "Save"
               alone does not say where to. */}
             <Button
@@ -213,7 +199,7 @@ function SongArticle() {
           </div>
         </div>
       </div>
-      <div className="px-4 pb-4">
+      <div className="p-4">
         {position && (
           <>
             <ListSongNavBar position={position} />
@@ -231,6 +217,7 @@ function SongArticle() {
           // `space-y-*`'s margin collapsing the recordings line's `mt-2`. No
           // `rounded-full` on the chip: `cn` is a plain join.
           <div className="mb-5 space-y-3">
+            <Skeleton className="h-9 w-2/3" />
             <div>
               <div className="space-y-1">
                 <Skeleton className="h-5 w-1/2" />
@@ -359,9 +346,10 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
   const year = song.release_year;
 
   return (
-    /* The title itself is the sticky bar. This is the rest of the header. */
+    /* The song's own language: the title is content too. */
     <header className="mb-5" lang={song.language}>
-      {song.alt_title && <p className="text-lg text-fg-muted">{song.alt_title}</p>}
+      <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">{song.title}</h1>
+      {song.alt_title && <p className="mt-1 text-lg text-fg-muted">{song.alt_title}</p>}
 
       <dl className="mt-3 space-y-1 text-sm">
         {/* Performers lead; the row is conditional, since most recordings

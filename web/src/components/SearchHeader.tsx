@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import { MenuButton, StickyHeader } from "./Layout";
 
 /**
- * Inset of every sticky bar. The catalog's search and a song's title are
+ * Inset of every sticky bar. The catalog's search and a song's tools are
  * neighbors from `lg` up, and this is what keeps their edges on one line.
  */
 export const headerBarPadding = "px-4 py-3";
