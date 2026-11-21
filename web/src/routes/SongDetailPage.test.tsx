@@ -160,14 +160,21 @@ describe("SongDetailPage", () => {
     expect(screen.getByText(/Στης θάλασσας τα βάθη/)).toBeInTheDocument();
   });
 
-  // The list is beside the lyrics on a wide screen, so Back leaves and the
-  // title is the bar that sticks. jsdom has no breakpoint; the classes say it.
-  it("sticks the title in place of Back on a wide screen", async () => {
+  // The list is beside the lyrics on a wide screen, so Back leaves. The bar
+  // keeps the song's tools and sticks; the title scrolls with the lyrics.
+  // jsdom has no breakpoint; the classes say it.
+  it("sticks the song's tools and keeps the title with the lyrics", async () => {
     renderDetail();
 
     const title = await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    const save = screen.getByRole("button", { name: /save to a list/i });
+    // Back, then the tools, inside the bar.
+    const bar = save.parentElement?.parentElement?.parentElement;
 
-    expect(title.parentElement?.parentElement).toHaveClass("lg:sticky");
+    expect(title.closest("header")).toHaveAttribute("lang", "el");
+    expect(title.closest("header")).toContainElement(screen.getByText("Μίκης Θεοδωράκης"));
+    expect(bar).toHaveClass("lg:sticky");
+    expect(bar).not.toContainElement(title);
     expect(screen.getByRole("button", { name: "Back" })).toHaveClass("lg:hidden");
   });
 
