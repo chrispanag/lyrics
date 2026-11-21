@@ -189,7 +189,7 @@ function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
           // so the collapse control shares their center. The link is a flex
           // item: an inline one keeps a line box under the wordmark and the
           // control then sits below the title.
-          wordmarkTrailing && "min-h-12",
+          wordmarkTrailing ? "min-h-12" : undefined,
         )}
       >
         <Link href="/" className="flex min-w-0 items-center">
