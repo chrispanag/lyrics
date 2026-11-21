@@ -2,10 +2,17 @@
 
 import type { ReactNode } from "react";
 
+import { cn } from "@/lib/cn";
 import { MenuButton, StickyHeader } from "./Layout";
 
+/**
+ * Inset of every sticky bar. The catalog's search and a song's title are
+ * neighbors from `lg` up, and this is what keeps their edges on one line.
+ */
+export const headerBarPadding = "px-4 py-3";
+
 /** The column both bars share, so the hamburger never moves between screens. */
-const headerColumn = "mx-auto max-w-3xl px-4 py-3";
+const headerColumn = cn("mx-auto max-w-3xl", headerBarPadding);
 
 /**
  * The header a search box sits in, shared by the catalog and a song page.

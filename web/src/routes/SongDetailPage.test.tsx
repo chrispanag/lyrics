@@ -160,6 +160,17 @@ describe("SongDetailPage", () => {
     expect(screen.getByText(/Στης θάλασσας τα βάθη/)).toBeInTheDocument();
   });
 
+  // The list is beside the lyrics on a wide screen, so Back leaves and the
+  // title is the bar that sticks. jsdom has no breakpoint; the classes say it.
+  it("sticks the title in place of Back on a wide screen", async () => {
+    renderDetail();
+
+    const title = await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+
+    expect(title.parentElement?.parentElement).toHaveClass("lg:sticky");
+    expect(screen.getByRole("button", { name: "Back" })).toHaveClass("lg:hidden");
+  });
+
   // Lyrics are plain text whose line breaks carry the verses.
   it("preserves line breaks in the lyrics", async () => {
     renderDetail();
