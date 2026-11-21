@@ -1,6 +1,6 @@
 "use client";
 
-import { ListMusic, Menu, Search, Shield, User as UserIcon } from "lucide-react";
+import { ListMusic, Menu, PanelLeftClose, Search, Shield, User as UserIcon } from "lucide-react";
 import {
   type ReactNode,
   type RefObject,
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { FIELDS, useHomeEndInside } from "@/lib/modal";
+import { applyNavCollapsed, storeNavCollapsed, storedNavCollapsed } from "@/lib/navCollapsed";
 import { Link, NavLink, useNavigationKey, usePathname } from "@/lib/navigation";
 import { NAV_DRAWER_ID, NavDrawerContext, useNavDrawer } from "@/lib/navDrawer";
 import { hasRole } from "@/lib/types";
@@ -52,9 +53,48 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/admin", label: "Admin", icon: Shield, adminOnly: true },
 ];
 
+/** The column's id, so opening it can move focus onto its first link. */
+const NAV_SIDEBAR_ID = "nav-sidebar";
+
+/** Tailwind's `md`. The column is part of the layout from here up; below it, the drawer is. */
+const NAV_COLUMN_QUERY = "(min-width: 768px)";
+
 /**
- * App shell: a fixed sidebar from `md` up, and the same navigation behind a
- * hamburger on a phone.
+ * Focuses the first element `selector` matches that has a box, or the first
+ * match when nothing does — jsdom lays nothing out, and a control that is
+ * `display: none` has no box in a browser either.
+ */
+function focusFirst(selector: string) {
+  const nodes = [...document.querySelectorAll<HTMLElement>(selector)];
+  const visible = nodes.find((node) => node.getClientRects().length > 0);
+  (visible ?? nodes[0])?.focus({ preventScroll: true });
+}
+
+/** Puts the column away and moves focus to the button that brings it back. */
+function hideNavigation() {
+  applyNavCollapsed(true);
+  storeNavCollapsed(true);
+  focusFirst(".nav-menu-button");
+}
+
+/**
+ * Brings the navigation back. From `md` up that is the column; below it the
+ * column is not in the layout, and the drawer is what opens.
+ */
+function showNavigation(openDrawer: () => void) {
+  if (window.matchMedia(NAV_COLUMN_QUERY).matches) {
+    applyNavCollapsed(false);
+    storeNavCollapsed(false);
+    focusFirst(`#${NAV_SIDEBAR_ID} a`);
+    return;
+  }
+  openDrawer();
+}
+
+/**
+ * App shell: a navigation column from `md` up, which the reader can collapse,
+ * and the same navigation behind a hamburger on a phone — and on a desk, once
+ * the column is collapsed.
  */
 export function Layout({ children }: { children?: ReactNode }) {
   const pathname = usePathname();
@@ -77,11 +117,18 @@ export function Layout({ children }: { children?: ReactNode }) {
     setNavOpen(false);
   }
 
-  // Growing past `md` (768px) closes the drawer. The hamburger is `md:hidden`,
-  // so an open drawer would keep the page inert, and the song page's swipe and
-  // arrow keys standing down, with the only control that opened it gone.
+  // The boot script paints the stored choice. A tree mounted without that
+  // script — a story, a spec — applies it here, before paint.
+  useLayoutEffect(() => {
+    applyNavCollapsed(storedNavCollapsed());
+  }, []);
+
+  // Growing past `md` (768px) closes the drawer. The button that opened it is
+  // hidden while the column is on screen, so an open drawer would keep the
+  // page inert, and the song page's swipe and arrow keys standing down, with
+  // the only control that opened it gone.
   useEffect(() => {
-    const desk = window.matchMedia("(min-width: 768px)");
+    const desk = window.matchMedia(NAV_COLUMN_QUERY);
     const close = (event: MediaQueryListEvent) => {
       if (event.matches) setNavOpen(false);
     };
@@ -99,14 +146,16 @@ export function Layout({ children }: { children?: ReactNode }) {
         <DesktopSidebar />
         <MobileNavDrawer open={navOpen} onClose={() => setNavOpen(false)} />
 
-        {/* Extra bottom room on a phone to clear the home indicator. From `lg`
-            the reader fills the viewport and scrolls inside its panes, so the
-            padding would only make the window scroll past them. */}
-        <main className="min-w-0 flex-1 pb-12 md:pb-8 lg:pb-0">
+        {/* `app` is the content column. The list and the lyrics become two
+            panes once it is wide enough, which collapsing the navigation is
+            what makes true on a narrower window. Extra bottom room clears the
+            home indicator; index.css takes it off once the panes are up, or
+            the window would scroll past them. */}
+        <main className="@container/app min-w-0 flex-1">
           {/* No Suspense boundary here: a server streams the shell the moment
               one sits above a page, so a page's `notFound()` or redirect
               arrives as a 200 with a meta tag rather than a 404 or a 308. */}
-          {children}
+          <div className="app-column pb-12 md:pb-8">{children}</div>
         </main>
       </div>
     </NavDrawerContext.Provider>
@@ -120,7 +169,7 @@ export function Layout({ children }: { children?: ReactNode }) {
  * Shared by the sidebar and the drawer. Every visibility rule is answered here,
  * not at either call site.
  */
-function NavPanel() {
+function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
   const { user } = useAuth();
 
   const links = NAV_ITEMS.filter((item) => {
@@ -133,9 +182,12 @@ function NavPanel() {
 
   return (
     <>
-      <Link href="/" className="mb-8 flex px-2">
-        <Wordmark />
-      </Link>
+      <div className="mb-8 flex items-center gap-1 px-2">
+        <Link href="/" className="min-w-0">
+          <Wordmark />
+        </Link>
+        {wordmarkTrailing}
+      </div>
 
       {/* The card stays inside the <nav> landmark: it is the way to
           `/profile`. `flex-1` gives the `mt-auto` below room to reach the
@@ -194,8 +246,27 @@ function NavPanel() {
 
 function DesktopSidebar() {
   return (
-    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface px-4 py-6 md:flex">
-      <NavPanel />
+    <aside
+      id={NAV_SIDEBAR_ID}
+      className="nav-sidebar sticky top-0 h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface px-4 py-6"
+    >
+      <NavPanel
+        wordmarkTrailing={
+          // Into the row's padding, so the wordmark keeps the room it had
+          // before the button sat beside it. Desktop only: the column is not
+          // on screen below `md`.
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={hideNavigation}
+            aria-label="Hide navigation"
+            className="-mr-2 shrink-0"
+          >
+            <PanelLeftClose aria-hidden className="size-5" />
+          </Button>
+        }
+      />
     </aside>
   );
 }
@@ -402,8 +473,12 @@ function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void
 }
 
 /**
- * Opens the phone's navigation drawer. Rendered by the page's own header bar,
- * since the shell has no row on a phone.
+ * Opens the navigation. Rendered by the page's own header bar, since the shell
+ * has no row of its own.
+ *
+ * On a phone it opens the drawer. From `md` up the column is the navigation, so
+ * the button is hidden (index.css) until the reader collapses the column, and
+ * then it opens the column again.
  */
 export function MenuButton() {
   const { open, setOpen } = useNavDrawer();
@@ -413,11 +488,11 @@ export function MenuButton() {
       type="button"
       variant="ghost"
       size="icon"
-      onClick={() => setOpen(true)}
+      onClick={() => showNavigation(() => setOpen(true))}
       aria-label="Open menu"
       aria-expanded={open}
       aria-controls={NAV_DRAWER_ID}
-      className="shrink-0 md:hidden"
+      className="nav-menu-button shrink-0"
     >
       <Menu aria-hidden className="size-5" />
     </Button>
@@ -435,7 +510,9 @@ export function MenuButton() {
  * `pinned` holds it still, for a header with something anchored to it.
  *
  * `mobileOnly` goes on the `<header>` itself, since a bordered box with a
- * hidden child still draws a hairline at a desk.
+ * hidden child still draws a hairline at a desk. Hidden from `md` up while the
+ * column is open; when the column is collapsed the bar comes back, which is
+ * the way to the navigation on a screen that has no search box.
  *
  * Its height is published as `--sticky-header-height` on `<html>`, which the
  * root's `scroll-padding-top` reads, so a control reached by Tab is scrolled
@@ -510,7 +587,7 @@ export function StickyHeader({
       className={cn(
         "sticky top-0 z-sticky border-b border-line bg-canvas/90 backdrop-blur transition-transform duration-200 pt-safe",
         hidden && !pinned && "max-md:-translate-y-full",
-        mobileOnly && "md:hidden",
+        mobileOnly && "nav-menu-header",
       )}
     >
       {children}

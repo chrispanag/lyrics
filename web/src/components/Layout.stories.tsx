@@ -3,17 +3,26 @@ import { expect, userEvent, within } from "storybook/test";
 
 import { Layout } from "./Layout";
 import { MenuHeader } from "./SearchHeader";
+import { applyNavCollapsed, storeNavCollapsed } from "@/lib/navCollapsed";
 import { makeUser } from "@/test/handlers";
 
 /**
  * The app's shell: the sidebar from `md` up, and below it the drawer the
- * hamburger opens. Story tests run at 1200×900 unless a story names a viewport,
- * which `DrawerOpen` does.
+ * hamburger opens. The sidebar collapses on a desk too, and the hamburger is
+ * what opens it again. Story tests run at 1200×900 unless a story names a
+ * viewport, which `DrawerOpen` does.
  */
+
+/** Stories start with the column open, whatever an earlier one stored. */
+const openNavigation = () => {
+  storeNavCollapsed(false);
+  applyNavCollapsed(false);
+};
 const meta = {
   title: "Shell/Layout",
   component: Layout,
   parameters: { layout: "fullscreen" },
+  loaders: [openNavigation],
   render: () => (
     <Layout>
       <MenuHeader />
@@ -52,7 +61,8 @@ export const Admin: Story = {
  */
 export const DrawerOpen: Story = {
   parameters: { user: makeUser({ display_name: "Christos" }) },
-  // The hamburger is `md:hidden`; the addon sizes the test browser from this.
+  // The hamburger is hidden while the column is open at a desk; the addon
+  // sizes the test browser from this.
   globals: { viewport: { value: "mobile1", isRotated: false } },
   play: async ({ canvas }) => {
     const trigger = canvas.getByRole("button", { name: "Open menu" });
@@ -62,5 +72,32 @@ export const DrawerOpen: Story = {
     await expect(drawer).toBeVisible();
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await expect(within(drawer).getByRole("link", { name: /Christos/ })).toBeVisible();
+  },
+};
+
+/** Collapsed, the column leaves the layout and the hamburger brings it back. */
+export const Collapsed: Story = {
+  parameters: { user: makeUser({ display_name: "Christos" }) },
+  loaders: [
+    () => {
+      storeNavCollapsed(true);
+      applyNavCollapsed(true);
+    },
+  ],
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("complementary")).toBeNull();
+    const open = canvas.getByRole("button", { name: "Open menu" });
+    await expect(open).toBeVisible();
+
+    await userEvent.click(open);
+
+    const sidebar = canvas.getByRole("complementary");
+    await expect(sidebar).toBeVisible();
+    await expect(within(sidebar).getByRole("link", { name: /Christos/ })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Hide navigation" }));
+
+    await expect(canvas.queryByRole("complementary")).toBeNull();
+    await expect(canvas.getByRole("button", { name: "Open menu" })).toBeVisible();
   },
 };
