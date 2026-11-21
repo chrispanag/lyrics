@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Layout, StickyHeader } from "./Layout";
 import { MenuHeader } from "./SearchHeader";
+import { NAV_COLLAPSED_ATTRIBUTE } from "@/lib/navCollapsed";
 import { modalIsOpen } from "@/lib/modal";
 import { makeUser } from "@/test/handlers";
 import { intersectAll } from "@/test/intersection";
@@ -233,6 +234,50 @@ describe("Mobile navigation drawer", () => {
     slidOut();
 
     expect(modalIsOpen()).toBe(false);
+  });
+});
+
+describe("Collapsible navigation", () => {
+  const renderShell = () =>
+    renderWithProviders(
+      <Layout>
+        <MenuHeader />
+      </Layout>,
+      { user: makeUser({ display_name: "Christos" }) },
+    );
+  const sidebar = () => screen.getByRole("complementary");
+  const collapsed = () => document.documentElement.hasAttribute(NAV_COLLAPSED_ATTRIBUTE);
+
+  it("starts open, and applies a choice already stored", () => {
+    const { unmount } = renderShell();
+    expect(collapsed()).toBe(false);
+    unmount();
+
+    localStorage.setItem("lyrics:nav-collapsed", "1");
+    renderShell();
+    expect(collapsed()).toBe(true);
+  });
+
+  // jsdom has no width, so the desk is the stubbed `matchMedia`. Below it the
+  // same button opens the drawer, which the suite above already holds.
+  it("hides the column from its own button and opens it again from the menu", async () => {
+    const user = userEvent.setup();
+    const crossInto = stubBreakpoint();
+    renderShell();
+    crossInto(true);
+
+    await user.click(screen.getByRole("button", { name: "Hide navigation" }));
+
+    expect(collapsed()).toBe(true);
+    expect(localStorage.getItem("lyrics:nav-collapsed")).toBe("1");
+    expect(screen.getByRole("button", { name: "Open menu" })).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "Open menu" }));
+
+    expect(collapsed()).toBe(false);
+    expect(localStorage.getItem("lyrics:nav-collapsed")).toBeNull();
+    expect(modalIsOpen()).toBe(false);
+    expect(sidebar().contains(document.activeElement)).toBe(true);
   });
 });
 

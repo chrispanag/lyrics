@@ -57,7 +57,8 @@ export function SearchHeader({
 /**
  * The same bar for a screen with no search box of its own: the hamburger, in
  * the place every other screen keeps it. `mobileOnly`, since at a desk the
- * sidebar is the navigation.
+ * sidebar is the navigation until the reader collapses it, and then this bar
+ * is the way back.
  *
  * Applied by the `(menu)` route group's layout, not per page, so no screen or state
  * can forget it.

@@ -497,6 +497,37 @@
   }
 }
 
+/* The navigation column, and the button that brings it back.
+   From `md` (48rem) up the column is part of the layout, unless the reader has
+   collapsed it: `data-nav-collapsed` on <html>, set before first paint by
+   `NAV_COLLAPSED_BOOT_SCRIPT`. Collapsed, the header's menu button — the same
+   one a phone uses to open the drawer — is the way to open the column again,
+   and a screen whose only header was that button gets the bar back too.
+   Unlayered, so these beat the button's `inline-flex` utility. */
+.nav-sidebar {
+  display: none;
+}
+@media (min-width: 48rem) {
+  html:not([data-nav-collapsed]) .nav-sidebar {
+    display: flex;
+  }
+  html:not([data-nav-collapsed]) .nav-menu-button,
+  html:not([data-nav-collapsed]) .nav-menu-header {
+    display: none;
+  }
+}
+
+/* The shell's bottom padding (`pb-12`, and `pb-8` from `md`). Once the content
+   column is wide enough for the list and the lyrics — `@3xl`, the same 48rem —
+   the reader fills the viewport and scrolls inside its panes, and the padding
+   would only make the window scroll past them. Unlayered so it wins over those
+   utilities. The column is `main`; a container cannot query itself. */
+@container app (width >= 48rem) {
+  .app-column {
+    padding-bottom: 0;
+  }
+}
+
 /* Guest chrome, hidden until hydration while the last session's profile is on
    its way (`SESSION_BOOT_SCRIPT`, auth/storedUser.ts). Hidden rather than
    removed, so the profile card takes the Sign in button's place without
