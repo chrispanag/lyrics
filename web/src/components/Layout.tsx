@@ -255,29 +255,32 @@ function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
 
 function DesktopSidebar() {
   return (
-    <aside
-      id={NAV_SIDEBAR_ID}
-      // `pt-3` is the search header's padding. With the wordmark row at
-      // `min-h-12`, the collapse control centers on that field and the title.
-      className="nav-sidebar sticky top-0 h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface px-4 pt-3 pb-6"
-    >
-      <NavPanel
-        wordmarkTrailing={
-          // Into the row's padding, so the wordmark keeps the room it had
-          // before the button sat beside it. Desktop only: the column is not
-          // on screen below `md`.
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={hideNavigation}
-            aria-label="Hide navigation"
-            className="-mr-2 shrink-0"
-          >
-            <PanelLeftClose aria-hidden className="size-5" />
-          </Button>
-        }
-      />
+    <aside id={NAV_SIDEBAR_ID} className="nav-sidebar sticky top-0 h-dvh shrink-0">
+      {/* The width lives on the column, which is what slides. This panel stays
+          at that open width, so the links do not reflow as it clips away. */}
+      <div
+        // `pt-3` is the search header's padding. With the wordmark row at
+        // `min-h-12`, the collapse control centers on that field and the title.
+        className="nav-sidebar-panel flex h-full shrink-0 flex-col border-r border-line bg-surface px-4 pt-3 pb-6"
+      >
+        <NavPanel
+          wordmarkTrailing={
+            // Into the row's padding, so the wordmark keeps the room it had
+            // before the button sat beside it. Desktop only: the column is not
+            // on screen below `md`.
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={hideNavigation}
+              aria-label="Hide navigation"
+              className="-mr-2 shrink-0"
+            >
+              <PanelLeftClose aria-hidden className="size-5" />
+            </Button>
+          }
+        />
+      </div>
     </aside>
   );
 }

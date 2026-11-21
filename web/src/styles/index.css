@@ -273,6 +273,8 @@
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+      /* A delay would hold a closing column in the tab order after it had snapped shut. */
+      transition-delay: 0s !important;
       /* biome-ignore-end lint/complexity/noImportantStyles: see above. */
     }
   }
@@ -503,15 +505,74 @@
    `NAV_COLLAPSED_BOOT_SCRIPT`. Collapsed, the header's menu button — the same
    one a phone uses to open the drawer — is the way to open the column again,
    and a screen whose only header was that button gets the bar back too.
-   Unlayered, so these beat the button's `inline-flex` utility. */
+   Unlayered, so these beat the button's `inline-flex`.
+
+   `display` cannot move, so the phone keeps the column at `display: none` and
+   a desk slides its width. The panel inside stays at `--nav-width` (the old
+   `w-60`) and the column clips it, which is the same 250ms ease-out as a
+   sheet. Visibility waits out the slide, then leaves the tab order; opening
+   drops the attribute, so it returns at once. The first paint already has the
+   attribute, and a transition does not run for a style that was never
+   something else. Reduced motion zeroes the delay above. */
 .nav-sidebar {
+  --nav-width: 15rem;
   display: none;
 }
+.nav-sidebar-panel {
+  width: var(--nav-width);
+}
 @media (min-width: 48rem) {
-  html:not([data-nav-collapsed]) .nav-sidebar {
+  .nav-sidebar {
     display: flex;
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      width 250ms ease-out,
+      visibility 0s linear 250ms;
   }
-  html:not([data-nav-collapsed]) .nav-menu-button,
+  html:not([data-nav-collapsed]) .nav-sidebar {
+    width: var(--nav-width);
+    visibility: visible;
+    pointer-events: auto;
+    transition: width 250ms ease-out;
+  }
+
+  /* `size-11` is 2.75rem. Width, rather than `display`, so the button eases
+     into the search row. The closed margin cancels that row's `gap-2`.
+     The shorthand stands in for `transition-colors` from `md` up. */
+  .nav-menu-button {
+    width: 2.75rem;
+    min-width: 0;
+    margin-inline-end: 0;
+    opacity: 1;
+    visibility: visible;
+    transition:
+      width 250ms ease-out,
+      margin-inline-end 250ms ease-out,
+      opacity 200ms ease-out,
+      color 150ms,
+      background-color 150ms,
+      border-color 150ms;
+  }
+  html:not([data-nav-collapsed]) .nav-menu-button {
+    width: 0;
+    margin-inline-end: -0.5rem;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      width 250ms ease-out,
+      margin-inline-end 250ms ease-out,
+      opacity 200ms ease-out,
+      color 150ms,
+      background-color 150ms,
+      border-color 150ms,
+      visibility 0s linear 250ms;
+  }
   html:not([data-nav-collapsed]) .nav-menu-header {
     display: none;
   }

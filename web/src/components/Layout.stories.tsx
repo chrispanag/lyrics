@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { Layout } from "./Layout";
 import { MenuHeader } from "./SearchHeader";
@@ -97,7 +97,12 @@ export const Collapsed: Story = {
 
     await userEvent.click(canvas.getByRole("button", { name: "Hide navigation" }));
 
-    await expect(canvas.queryByRole("complementary")).toBeNull();
+    // The column stays in the tree until the slide ends, then drops out of it.
+    await waitFor(() => {
+      if (canvas.queryByRole("complementary") !== null) {
+        throw new Error("The column is still in the accessibility tree.");
+      }
+    });
     await expect(canvas.getByRole("button", { name: "Open menu" })).toBeVisible();
   },
 };

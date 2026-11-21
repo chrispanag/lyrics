@@ -95,10 +95,15 @@ describe("the stylesheet", () => {
   // jsdom applies no Tailwind, so the rules themselves are what can be read.
   const css = readFileSync(path.join(import.meta.dirname, "../styles/index.css"), "utf8");
 
-  it("hides the column and brings the menu button back while the attribute is set", () => {
+  it("slides the column shut, and the menu button back, while the attribute is set", () => {
     expect(css).toContain("html:not([data-nav-collapsed]) .nav-sidebar");
     expect(css).toContain("html:not([data-nav-collapsed]) .nav-menu-button");
     expect(css).toContain("html:not([data-nav-collapsed]) .nav-menu-header");
+    // The same 250ms ease-out as a sheet. Width, because `display` cannot move.
+    expect(css).toContain("--nav-width: 15rem");
+    expect(css).toContain("width: var(--nav-width)");
+    expect(css).toContain("width: 0");
+    expect(css).toContain("width 250ms ease-out");
   });
 
   // 48rem is Tailwind's `md` and `@3xl`: the width the content column has from
