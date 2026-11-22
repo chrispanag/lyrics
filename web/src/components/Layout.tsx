@@ -1,9 +1,11 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { ListMusic, Menu, PanelLeftClose, Search, Shield, User as UserIcon } from "lucide-react";
 import {
   type ReactNode,
   type RefObject,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -11,6 +13,7 @@ import {
   useState,
 } from "react";
 
+import { listsQuery } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { buttonClasses } from "@/components/buttonStyles";
@@ -22,6 +25,7 @@ import { applyNavCollapsed, storeNavCollapsed, storedNavCollapsed } from "@/lib/
 import { Link, NavLink, useNavigationKey, usePathname } from "@/lib/navigation";
 import { NAV_DRAWER_ID, NavDrawerContext, useNavDrawer } from "@/lib/navDrawer";
 import { hasRole } from "@/lib/types";
+import { useIntentPrefetch } from "@/lib/useIntentPrefetch";
 
 interface NavItem {
   to: string;
@@ -35,6 +39,8 @@ interface NavItem {
    * `/profile` is the only home of the theme switch.
    */
   identityCard?: boolean;
+  /** Loads the reader's lists on intent, so the screen opens with them. */
+  warmsLists?: boolean;
 }
 
 /**
@@ -46,7 +52,7 @@ const SIDEBAR_HOVER = "hover:bg-subtle";
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Browse", icon: Search },
-  { to: "/lists", label: "Lists", icon: ListMusic, authOnly: true },
+  { to: "/lists", label: "Lists", icon: ListMusic, authOnly: true, warmsLists: true },
   { to: "/profile", label: "Profile", icon: UserIcon, identityCard: true },
   // The section, not a screen: NavLink matches on prefix, so it stays lit
   // across the console's screens.
@@ -163,6 +169,38 @@ export function Layout({ children }: { children?: ReactNode }) {
 }
 
 /**
+ * One of the navigation's links. The Lists link starts loading the lists on
+ * hover, press or focus, which otherwise wait for the click and show
+ * placeholders until they land.
+ */
+function NavEntry({ item }: { item: NavItem }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const signedIn = Boolean(user);
+  const prefetch = useCallback(() => {
+    if (item.warmsLists && signedIn) void queryClient.prefetchQuery(listsQuery());
+  }, [queryClient, item.warmsLists, signedIn]);
+  const intent = useIntentPrefetch(prefetch);
+
+  return (
+    <NavLink
+      href={item.to}
+      data-guest-only={item.identityCard || undefined}
+      {...(item.warmsLists ? { ...intent, onFocus: prefetch } : undefined)}
+      className={({ isActive }) =>
+        cn(
+          "flex items-center gap-3 rounded-control px-3 py-2.5 text-sm font-medium transition-colors",
+          isActive ? SIDEBAR_ACTIVE : cn(SIDEBAR_HOVER, "text-fg-tertiary"),
+        )
+      }
+    >
+      <item.icon aria-hidden className="size-5" />
+      {item.label}
+    </NavLink>
+  );
+}
+
+/**
  * The navigation itself: the wordmark, the links, and the identity card or the
  * Sign in button at its foot.
  *
@@ -203,20 +241,7 @@ function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
           bottom. */}
       <nav className="flex flex-1 flex-col gap-1">
         {links.map((item) => (
-          <NavLink
-            key={item.to}
-            href={item.to}
-            data-guest-only={item.identityCard || undefined}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 rounded-control px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive ? SIDEBAR_ACTIVE : cn(SIDEBAR_HOVER, "text-fg-tertiary"),
-              )
-            }
-          >
-            <item.icon aria-hidden className="size-5" />
-            {item.label}
-          </NavLink>
+          <NavEntry key={item.to} item={item} />
         ))}
 
         <div className="mt-auto px-2 pt-6">

@@ -1,6 +1,8 @@
-import { memo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { memo, useCallback } from "react";
 import { ListPlus, SquarePlay } from "lucide-react";
 
+import { songQuery } from "@/api/hooks";
 import { Snippet } from "./Snippet";
 import { cardChrome, cardHover, tagChrome } from "./cardStyles";
 import { cn } from "@/lib/cn";
@@ -8,6 +10,7 @@ import { songByline } from "@/lib/credits";
 import { songHref, songMatchesRef, songRefFromPath } from "@/lib/listContext";
 import { listAddsLabel } from "@/lib/popularity";
 import { Link, usePathname } from "@/lib/navigation";
+import { useIntentPrefetch } from "@/lib/useIntentPrefetch";
 import type { Song } from "@/lib/types";
 
 /**
@@ -36,10 +39,20 @@ export const SongCard = memo(function SongCard({
   const open = songRefFromPath(usePathname());
   const current = open !== null && songMatchesRef(song, open);
 
+  // Keyed by the slug, which is what the song's address (and so `useSong`)
+  // reads it by. The song already open has nothing left to load.
+  const queryClient = useQueryClient();
+  const slug = song.slug;
+  const prefetch = useCallback(() => {
+    if (!current) void queryClient.prefetchQuery(songQuery(slug));
+  }, [queryClient, slug, current]);
+  const intent = useIntentPrefetch(prefetch);
+
   return (
     <Link
       href={songHref(song, listId, search)}
       aria-current={current ? "page" : undefined}
+      {...intent}
       className={cn(
         cardChrome,
         cardHover,

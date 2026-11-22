@@ -144,12 +144,21 @@ function uniqueById(songs: Song[]): Song[] {
   });
 }
 
-export function useSong(id: string | undefined) {
-  return useQuery({
-    queryKey: keys.song(id ?? ""),
-    queryFn: () => apiFetch<Song>(`/api/v1/songs/${id}`),
-    enabled: Boolean(id),
+/**
+ * A song's read by either of its addresses, as `useSong` asks it and as a
+ * prefetch on intent asks it: one definition, so the entry a hover warms is the
+ * one the page finds. It sets no `staleTime`, so both follow the client's
+ * default and a prefetch skips a song that is still fresh.
+ */
+export function songQuery(ref: string) {
+  return queryOptions({
+    queryKey: keys.song(ref),
+    queryFn: () => apiFetch<Song>(`/api/v1/songs/${ref}`),
   });
+}
+
+export function useSong(id: string | undefined) {
+  return useQuery({ ...songQuery(id ?? ""), enabled: Boolean(id) });
 }
 
 export function usePeople(query: string, options?: Partial<UseQueryOptions<ListResponse<Person>>>) {
@@ -217,12 +226,16 @@ export function useDeleteGenre() {
   });
 }
 
-export function useLists(enabled: boolean) {
-  return useQuery({
+/** The signed-in reader's lists, shared by `useLists` and the sidebar's prefetch. */
+export function listsQuery() {
+  return queryOptions({
     queryKey: keys.lists(),
     queryFn: () => apiFetch<ListResponse<SongList>>("/api/v1/lists"),
-    enabled,
   });
+}
+
+export function useLists(enabled: boolean) {
+  return useQuery({ ...listsQuery(), enabled });
 }
 
 /**
