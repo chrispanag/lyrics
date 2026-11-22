@@ -589,6 +589,16 @@
   }
 }
 
+/* `ReaderSplit` adds this while those panes are up. The frame is `h-dvh`, and
+   a fractional device pixel makes that a pixel taller than the window, which
+   paints a scrollbar down the screen, through both headers. The window does
+   not scroll then, so the reserved gutter would only leave an empty track
+   beside the lyrics. Unlayered so it wins over `scrollbar-gutter: stable`. */
+html.reader-panes {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
 /* Guest chrome, hidden until hydration while the last session's profile is on
    its way (`SESSION_BOOT_SCRIPT`, auth/storedUser.ts). Hidden rather than
    removed, so the profile card takes the Sign in button's place without

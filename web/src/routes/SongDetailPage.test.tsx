@@ -161,21 +161,26 @@ describe("SongDetailPage", () => {
   });
 
   // The list is beside the lyrics on a wide screen, so Back leaves. The bar
-  // keeps the song's tools and sticks; the title scrolls with the lyrics.
-  // jsdom has no breakpoint; the classes say it.
-  it("sticks the song's tools and keeps the title with the lyrics", async () => {
+  // keeps the song's tools and stays above the scrolling lyrics; the title
+  // scrolls with them, and the scrollbar is theirs. jsdom has no breakpoint;
+  // the classes say it.
+  it("keeps the song's tools above the scrolling lyrics", async () => {
     renderDetail();
 
     const title = await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
     const save = screen.getByRole("button", { name: /save to a list/i });
     // Back, then the tools, inside the bar.
     const bar = save.parentElement?.parentElement?.parentElement;
+    const scroller = title.closest("header")?.parentElement?.parentElement;
 
     expect(title.closest("header")).toHaveAttribute("lang", "el");
     expect(title.closest("header")).toContainElement(screen.getByText("Μίκης Θεοδωράκης"));
-    expect(bar).toHaveClass("lg:sticky");
+    expect(bar).toHaveClass("@3xl/app:shrink-0");
     expect(bar).not.toContainElement(title);
-    expect(screen.getByRole("button", { name: "Back" })).toHaveClass("lg:hidden");
+    expect(scroller).toHaveClass("@3xl/app:overflow-y-auto");
+    expect(scroller).toContainElement(title);
+    expect(scroller).not.toContainElement(save);
+    expect(screen.getByRole("button", { name: "Back" })).toHaveClass("@3xl/app:hidden");
   });
 
   // Lyrics are plain text whose line breaks carry the verses.

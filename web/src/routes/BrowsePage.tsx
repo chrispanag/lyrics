@@ -109,124 +109,130 @@ export function BrowsePage() {
   const besideSong = songRefFromPath(usePathname()) !== null;
 
   return (
-    <>
+    // Beside the lyrics the pane is a fixed column. The search stays put and
+    // only the songs scroll, so the scrollbar starts under the header.
+    <div className="@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:flex-col">
       {!besideSong && <PageTitle name={name} />}
       {/* Hidden: the search box is the page's visible heading in all but name.
           What it holds is the outline's root, which each card's h2 sits under. */}
       {!besideSong && <h1 className="sr-only">{name}</h1>}
-      <SearchHeader
-        trailing={
-          <Button
-            // Square with a corner badge, so a filter count never resizes the field.
-            size="icon"
-            variant={hasFilters ? "primary" : "secondary"}
-            onClick={() => setFiltersOpen(true)}
-            // The count is in the label: `aria-label` hides the badge from AT.
-            // A bare number, not "(1", so the label holds the badge's visible
-            // text as a word, which voice control matches on.
-            aria-label={hasFilters ? `Filters, ${filterCount} active` : "Filters"}
-            className="relative"
-          >
-            <SlidersHorizontal aria-hidden className="size-5" />
-            {hasFilters && (
-              <span
-                aria-hidden
-                className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-surface text-[10px] font-semibold text-fg-accent-subtle"
-              >
-                {filterCount}
-              </span>
-            )}
-          </Button>
-        }
-        below={
-          hasFilters && (
-            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-              {personId && (
-                <Chip onRemove={() => setParam("person", null)}>
-                  {activePerson?.name ?? "Artist"}
-                </Chip>
+      <div className="@3xl/app:shrink-0">
+        <SearchHeader
+          trailing={
+            <Button
+              // Square with a corner badge, so a filter count never resizes the field.
+              size="icon"
+              variant={hasFilters ? "primary" : "secondary"}
+              onClick={() => setFiltersOpen(true)}
+              // The count is in the label: `aria-label` hides the badge from AT.
+              // A bare number, not "(1", so the label holds the badge's visible
+              // text as a word, which voice control matches on.
+              aria-label={hasFilters ? `Filters, ${filterCount} active` : "Filters"}
+              className="relative"
+            >
+              <SlidersHorizontal aria-hidden className="size-5" />
+              {hasFilters && (
+                <span
+                  aria-hidden
+                  className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-surface text-[10px] font-semibold text-fg-accent-subtle"
+                >
+                  {filterCount}
+                </span>
               )}
-              {/* Keyed on the URL, not on the genre resolving: a deleted genre
+            </Button>
+          }
+          below={
+            hasFilters && (
+              <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                {personId && (
+                  <Chip onRemove={() => setParam("person", null)}>
+                    {activePerson?.name ?? "Artist"}
+                  </Chip>
+                )}
+                {/* Keyed on the URL, not on the genre resolving: a deleted genre
                   must still leave a chip to clear. */}
-              {genreSlug && (
-                <Chip onRemove={() => setParam("genre_slug", null)}>
-                  {activeGenre?.name ?? genreSlug}
-                </Chip>
-              )}
-              {language && (
-                <Chip onRemove={() => setParam("language", null)}>
-                  {LANGUAGE_LABELS[language] ?? language}
-                </Chip>
-              )}
-            </div>
-          )
-        }
-      >
-        <SearchField value={draft} onChange={setDraft} />
-      </SearchHeader>
+                {genreSlug && (
+                  <Chip onRemove={() => setParam("genre_slug", null)}>
+                    {activeGenre?.name ?? genreSlug}
+                  </Chip>
+                )}
+                {language && (
+                  <Chip onRemove={() => setParam("language", null)}>
+                    {LANGUAGE_LABELS[language] ?? language}
+                  </Chip>
+                )}
+              </div>
+            )
+          }
+        >
+          <SearchField value={draft} onChange={setDraft} />
+        </SearchHeader>
+      </div>
 
-      <div className="mx-auto max-w-3xl px-4 py-4">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <Tally>{isLoading ? "Searching…" : songCount(total)}</Tally>
-          {hasRole(user?.role, "contributor") && (
-            // A styled Link: an anchor nested in a button is invalid.
-            <Link href="/songs/new" className={buttonClasses("secondary", "sm")}>
-              <Plus aria-hidden className="size-4" />
-              Add song
-            </Link>
+      <div className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain">
+        <div className="mx-auto max-w-3xl px-4 py-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <Tally>{isLoading ? "Searching…" : songCount(total)}</Tally>
+            {hasRole(user?.role, "contributor") && (
+              // A styled Link: an anchor nested in a button is invalid.
+              <Link href="/songs/new" className={buttonClasses("secondary", "sm")}>
+                <Plus aria-hidden className="size-4" />
+                Add song
+              </Link>
+            )}
+          </div>
+
+          {/* A later page's failure is said where it happened, below the list. */}
+          {isError && !isFetchNextPageError && (
+            <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
+          )}
+
+          {/* `h-28` restates a song card's height; update it if cards change. */}
+          {isLoading && <Skeletons count={5} className="h-28 w-full" />}
+
+          {!isLoading && data && songs.length === 0 && (
+            <EmptyState
+              icon={<SixteenthNotes className="size-12" />}
+              title={query ? "No songs matched" : "No songs yet"}
+              description={
+                query
+                  ? "Try fewer words, or check the spelling."
+                  : "Songs added to the catalog will appear here."
+              }
+            />
+          )}
+
+          <div className="space-y-3">
+            {songs.map((song) => (
+              <SongCard key={song.id} song={song} search={catalogQuery(params)} />
+            ))}
+          </div>
+
+          {isFetchingNextPage && (
+            <Skeletons count={2} className="h-28 w-full" stackClassName="mt-3 space-y-3" />
+          )}
+
+          {isFetchNextPageError && (
+            // Not retried by scrolling: a failing API would be asked on every pixel.
+            <div className="mt-4 space-y-3">
+              <ErrorMessage>{errorMessage(error, "More songs could not be loaded.")}</ErrorMessage>
+              <Button
+                variant="secondary"
+                size="sm"
+                // Waits out a refetch rather than cancelling it, as the trigger does.
+                onClick={() => fetchNextPage({ cancelRefetch: false })}
+              >
+                Try again
+              </Button>
+            </div>
+          )}
+
+          {/* Not while a refetch runs either: `fetchNextPage` would cancel it and
+            append to the stale pages it was replacing. */}
+          {hasNextPage && !isFetching && !isFetchNextPageError && (
+            <InfiniteScrollTrigger onLoadMore={() => fetchNextPage()} />
           )}
         </div>
-
-        {/* A later page's failure is said where it happened, below the list. */}
-        {isError && !isFetchNextPageError && (
-          <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
-        )}
-
-        {/* `h-28` restates a song card's height; update it if cards change. */}
-        {isLoading && <Skeletons count={5} className="h-28 w-full" />}
-
-        {!isLoading && data && songs.length === 0 && (
-          <EmptyState
-            icon={<SixteenthNotes className="size-12" />}
-            title={query ? "No songs matched" : "No songs yet"}
-            description={
-              query
-                ? "Try fewer words, or check the spelling."
-                : "Songs added to the catalog will appear here."
-            }
-          />
-        )}
-
-        <div className="space-y-3">
-          {songs.map((song) => (
-            <SongCard key={song.id} song={song} search={catalogQuery(params)} />
-          ))}
-        </div>
-
-        {isFetchingNextPage && (
-          <Skeletons count={2} className="h-28 w-full" stackClassName="mt-3 space-y-3" />
-        )}
-
-        {isFetchNextPageError && (
-          // Not retried by scrolling: a failing API would be asked on every pixel.
-          <div className="mt-4 space-y-3">
-            <ErrorMessage>{errorMessage(error, "More songs could not be loaded.")}</ErrorMessage>
-            <Button
-              variant="secondary"
-              size="sm"
-              // Waits out a refetch rather than cancelling it, as the trigger does.
-              onClick={() => fetchNextPage({ cancelRefetch: false })}
-            >
-              Try again
-            </Button>
-          </div>
-        )}
-
-        {/* Not while a refetch runs either: `fetchNextPage` would cancel it and
-            append to the stale pages it was replacing. */}
-        {hasNextPage && !isFetching && !isFetchNextPageError && (
-          <InfiniteScrollTrigger onLoadMore={() => fetchNextPage()} />
-        )}
       </div>
 
       {/* Gated so the sheet body is not built on every keystroke while closed. */}
@@ -319,6 +325,6 @@ export function BrowsePage() {
           </div>
         </Sheet>
       )}
-    </>
+    </div>
   );
 }

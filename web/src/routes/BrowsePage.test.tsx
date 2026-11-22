@@ -43,6 +43,22 @@ describe("BrowsePage", () => {
     expect(screen.getByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
   });
 
+  // Beside the lyrics the pane is a fixed height. The search stays put and the
+  // scrollbar belongs to the songs. jsdom has no breakpoint; the classes say it.
+  it("scrolls the songs under the search header", async () => {
+    renderWithProviders(<BrowsePage />);
+
+    const search = await screen.findByRole("searchbox", { name: /search songs/i });
+    const song = await screen.findByRole("link", { name: /Θάλασσα Πλατιά/ });
+    let scroller = song.parentElement;
+    while (scroller && !scroller.classList.contains("@3xl/app:overflow-y-auto")) {
+      scroller = scroller.parentElement;
+    }
+
+    expect(scroller).not.toBeNull();
+    expect(scroller).not.toContainElement(search);
+  });
+
   it("renders search snippets with the matched term highlighted", async () => {
     server.use(
       http.get(`${API}/api/v1/songs`, () =>
