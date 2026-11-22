@@ -30,6 +30,8 @@ export type ReadonlySearchParams = Omit<URLSearchParams, "append" | "delete" | "
 export type BackendLinkProps = Omit<ComponentPropsWithoutRef<"a">, "href"> & {
   href: string;
   replace: boolean;
+  /** Only ever `false`: a router that prefetches by default is told not to. */
+  prefetch?: false | undefined;
 };
 
 /**
@@ -139,7 +141,7 @@ export interface Router {
   /**
    * Loads `href` ahead of a navigation to it. On Next that is a server render
    * of a page nobody may open, so it is for the few places a reader is about
-   * to go: today a list's neighbors. See "The routing seam" in CLAUDE.md.
+   * to go: a list's neighbors, and a song card the reader rests on or presses. See "The routing seam" in CLAUDE.md.
    */
   prefetch(href: string): void;
 }
@@ -187,6 +189,12 @@ type LinkProps = Omit<ComponentPropsWithoutRef<"a">, "href"> & {
   href: string;
   /** Replace this history entry rather than push one. */
   replace?: boolean | undefined;
+  /**
+   * `false` for a screen few readers open, such as the editor: Next fetches
+   * every visible link's page ahead of time, which on each song is a request
+   * for nothing. Left out, the router decides, as it does for ordinary links.
+   */
+  prefetch?: false | undefined;
 };
 
 /** A link inside the app. `href` is a path, with a search string if it needs one. */
@@ -449,7 +457,7 @@ export function TestRouter({ entries, children }: { entries: string[]; children:
 }
 
 /** A plain anchor whose plain clicks move the memory history instead. */
-function MemoryLink({ href, replace, onClick, ...rest }: BackendLinkProps) {
+function MemoryLink({ href, replace, prefetch: _prefetch, onClick, ...rest }: BackendLinkProps) {
   const backend = useBackend();
   return (
     <a

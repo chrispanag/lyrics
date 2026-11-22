@@ -1,9 +1,12 @@
-import { screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SongCard } from "./SongCard";
+import { NavigationProvider } from "@/lib/navigation";
+import { recordingBackend } from "@/test/backend";
 import { makeGenre, makeRecording, makeSong } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
+import { recordRequests } from "@/test/requests";
 
 // jsdom computes no layout, so reserved slots are pinned by what holds them open.
 describe("SongCard", () => {
@@ -121,5 +124,143 @@ describe("SongCard", () => {
 
     expect(placeholder).toHaveClass(`${chip.className} invisible`, { exact: true });
     expect(placeholder?.textContent).toBe("\u00A0");
+  });
+});
+
+// Only the wait is on fake timers: the request itself needs the real ones.
+describe("SongCard prefetch on intent", () => {
+  const song = makeSong({ slug: "to-kalo-pedi" });
+  const detail = "/api/v1/songs/to-kalo-pedi";
+  const mouse = { pointerType: "mouse" };
+
+  afterEach(() => vi.useRealTimers());
+
+  /** Runs `act` on the fake clock, then hands the real one back and lets requests land. */
+  async function settle(advanceMs: number) {
+    await act(() => vi.advanceTimersByTimeAsync(advanceMs));
+    vi.useRealTimers();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  it("loads the song once the pointer has rested on the card", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const requests = recordRequests((path) => path === detail);
+    try {
+      renderWithProviders(<SongCard song={song} />);
+      fireEvent.pointerEnter(screen.getByRole("link"), mouse);
+      await settle(200);
+
+      await waitFor(() => expect(requests.paths).toEqual([detail]));
+    } finally {
+      requests.stop();
+    }
+  });
+
+  it("loads nothing when the pointer only passes over", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const requests = recordRequests((path) => path === detail);
+    try {
+      renderWithProviders(<SongCard song={song} />);
+      const card = screen.getByRole("link");
+      fireEvent.pointerEnter(card, mouse);
+      await act(() => vi.advanceTimersByTimeAsync(20));
+      fireEvent.pointerLeave(card, mouse);
+      await settle(500);
+
+      expect(requests.paths).toEqual([]);
+    } finally {
+      requests.stop();
+    }
+  });
+
+  it("loads the song at once on a mouse press", async () => {
+    const requests = recordRequests((path) => path === detail);
+    try {
+      renderWithProviders(<SongCard song={song} />);
+      fireEvent.pointerDown(screen.getByRole("link"), mouse);
+
+      await waitFor(() => expect(requests.paths).toEqual([detail]));
+    } finally {
+      requests.stop();
+    }
+  });
+
+  it("loads the song once a touch has been held, which has no hover before it", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const requests = recordRequests((path) => path === detail);
+    try {
+      renderWithProviders(<SongCard song={song} />);
+      fireEvent.pointerDown(screen.getByRole("link"), { pointerType: "touch" });
+      await settle(200);
+
+      await waitFor(() => expect(requests.paths).toEqual([detail]));
+    } finally {
+      requests.stop();
+    }
+  });
+
+  // The browser cancels a touch it takes for a scroll: a finger flicking down
+  // the list must not load every card it lands on.
+  it("loads nothing for a touch that turns into a scroll", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const requests = recordRequests((path) => path === detail);
+    try {
+      renderWithProviders(<SongCard song={song} />);
+      const card = screen.getByRole("link");
+      fireEvent.pointerDown(card, { pointerType: "touch" });
+      await act(() => vi.advanceTimersByTimeAsync(20));
+      fireEvent.pointerCancel(card, { pointerType: "touch" });
+      await settle(500);
+
+      expect(requests.paths).toEqual([]);
+    } finally {
+      requests.stop();
+    }
+  });
+
+  it("loads the song once keyboard focus has rested on the card", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const requests = recordRequests((path) => path === detail);
+    try {
+      renderWithProviders(<SongCard song={song} />);
+      act(() => screen.getByRole("link").focus());
+      await settle(200);
+
+      await waitFor(() => expect(requests.paths).toEqual([detail]));
+    } finally {
+      requests.stop();
+    }
+  });
+
+  it("loads the song's page with the song, at the address the card opens", async () => {
+    const requests = recordRequests((path) => path === detail);
+    const backend = recordingBackend();
+    try {
+      renderWithProviders(
+        <NavigationProvider backend={backend}>
+          <SongCard song={song} listId="l" />
+        </NavigationProvider>,
+      );
+      fireEvent.pointerDown(screen.getByRole("link"), mouse);
+
+      expect(backend.prefetch).toHaveBeenCalledExactlyOnceWith("/songs/to-kalo-pedi?list=l");
+      // Waited out, or the song's read lands in the next spec's recording.
+      await waitFor(() => expect(requests.paths).toEqual([detail]));
+    } finally {
+      requests.stop();
+    }
+  });
+
+  it("leaves the song already open alone", async () => {
+    const requests = recordRequests((path) => path === detail);
+    try {
+      renderWithProviders(<SongCard song={song} />, { route: "/songs/to-kalo-pedi" });
+      fireEvent.pointerDown(screen.getByRole("link"));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(requests.paths).toEqual([]);
+    } finally {
+      requests.stop();
+    }
   });
 });

@@ -184,7 +184,7 @@ export function BrowsePage() {
             <Tally>{isPending ? "Searching…" : songCount(total)}</Tally>
             {hasRole(user?.role, "contributor") && (
               // A styled Link: an anchor nested in a button is invalid.
-              <Link href="/songs/new" className={buttonClasses("secondary", "sm")}>
+              <Link href="/songs/new" prefetch={false} className={buttonClasses("secondary", "sm")}>
                 <Plus aria-hidden className="size-4" />
                 Add song
               </Link>

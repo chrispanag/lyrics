@@ -15,6 +15,7 @@ import {
   apiError,
   list,
   listById,
+  makeGenre,
   makeList,
   makeRecording,
   makeSong,
@@ -24,6 +25,7 @@ import {
 import { intersectAll, observedElements } from "@/test/intersection";
 import { songMatchesRef } from "@/lib/listContext";
 import type { Recording } from "@/lib/types";
+import { testQueryClient } from "@/test/providers";
 import { renderWithProviders } from "@/test/render";
 import { TestRoutes } from "@/test/routes";
 import { scrollDown, setScrollY } from "@/test/scroll";
@@ -388,6 +390,87 @@ describe("SongDetailPage while the song loads", () => {
     release();
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
     expect(screen.getByRole("button", { name: "Delete song" })).toBeEnabled();
+  });
+});
+
+/*
+ * Opening a song from a catalog or list already in the cache: the card stands
+ * in for the song until the full read, which alone has the lyrics.
+ */
+describe("SongDetailPage from a cached card", () => {
+  /** What a list read returns for the song: no lyrics. */
+  const card = () => {
+    const { lyrics: _lyrics, ...rest } = makeSong({ genres: [makeGenre()] });
+    return rest;
+  };
+
+  /** A client whose catalog already holds the card, as after browsing. */
+  function warmClient() {
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(keys.songs({}), {
+      data: [card()],
+      meta: { total: 1, limit: 20, offset: 0 },
+    });
+    return queryClient;
+  }
+
+  it("paints the header from the card before the song arrives", async () => {
+    const [held, release] = deferred();
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, async () => {
+        await held;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+
+    // By slug, the address a card links to.
+    renderDetail({ route: "/songs/thalassa-platia", queryClient: warmClient() });
+
+    expect(screen.getByRole("heading", { name: "Θάλασσα Πλατιά" })).toBeInTheDocument();
+    expect(screen.getByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
+    expect(screen.getByText("Ρεμπέτικο")).toBeInTheDocument();
+
+    release();
+    expect(await screen.findByText(/Στης θάλασσας τα βάθη/)).toBeInTheDocument();
+  });
+
+  it("matches the card by id as well", () => {
+    server.use(http.get(`${API}/api/v1/songs/:id`, () => new Promise(() => {})));
+
+    renderDetail({ route: "/songs/song-1", queryClient: warmClient() });
+
+    expect(screen.getByRole("heading", { name: "Θάλασσα Πλατιά" })).toBeInTheDocument();
+  });
+
+  // The card has no lyrics because the list leaves them out, not because the
+  // song has none.
+  it("shows no empty-lyrics message while on the card", async () => {
+    const [held, release] = deferred();
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, async () => {
+        await held;
+        return HttpResponse.json(makeSong());
+      }),
+    );
+
+    renderDetail({ route: "/songs/thalassa-platia", queryClient: warmClient() });
+
+    expect(screen.queryByText("No lyrics have been added yet.")).not.toBeInTheDocument();
+    expect(screen.getByRole("article")).toHaveAttribute("aria-busy", "true");
+
+    release();
+    await screen.findByText(/Στης θάλασσας τα βάθη/);
+    expect(screen.getByRole("article")).toHaveAttribute("aria-busy", "false");
+  });
+
+  it("still reports a song with no lyrics once the full read says so", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () => HttpResponse.json(makeSong({ lyrics: "" }))),
+    );
+
+    renderDetail({ route: "/songs/thalassa-platia", queryClient: warmClient() });
+
+    expect(await screen.findByText("No lyrics have been added yet.")).toBeInTheDocument();
   });
 });
 
@@ -766,8 +849,8 @@ describe("SongDetailPage inside a list", () => {
     expect(localStorage.getItem("lyrics:swipe-hint-seen")).toBeNull();
 
     release();
-    await screen.findByRole("heading", { name: "Second" });
-    expect(observedElements()).toHaveLength(1);
+    // The list's card stands in for the song meanwhile, so wait on the swipe.
+    await waitFor(() => expect(observedElements()).toHaveLength(1));
   });
 
   it("steps back with the left arrow key", async () => {

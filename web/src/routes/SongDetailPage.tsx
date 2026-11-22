@@ -106,9 +106,13 @@ function SongArticle() {
   const { user, loading: sessionLoading } = useAuth();
 
   // No `isError`, deliberately; see the guard below.
-  const { data: song, isLoading, error } = useSong(id);
-  // After the session settles, so a signed-in reader is not an anonymous click.
-  useRecordSongClick(id, !sessionLoading && Boolean(song));
+  const { data: song, isLoading, isPlaceholderData, error } = useSong(id, { fromCachedCard: true });
+  // The song read in full. A placeholder is the catalog's card, which carries
+  // no lyrics: that is not "no lyrics", and not a song that has loaded.
+  const fullSong = isPlaceholderData ? undefined : song;
+  // After the session settles, so a signed-in reader is not an anonymous click,
+  // and after the full read: a cached card is not a song that has loaded.
+  useRecordSongClick(id, !sessionLoading && Boolean(fullSong));
   const deleteSong = useDeleteSong();
 
   // The list this song is read from, if any. A failure just leaves the page
@@ -158,7 +162,7 @@ function SongArticle() {
     // the column.
     <article
       ref={surface}
-      aria-busy={isLoading}
+      aria-busy={isLoading || isPlaceholderData}
       className="mx-auto max-w-3xl @3xl/app:mx-0 @3xl/app:flex @3xl/app:min-h-0 @3xl/app:max-w-none @3xl/app:flex-1 @3xl/app:flex-col"
     >
       {/* The title alone; nameless while in flight. */}
@@ -193,7 +197,11 @@ function SongArticle() {
               <span className={actionLabel}>Save</span>
             </Button>
             {canEdit && (
-              <Link href={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
+              <Link
+                href={`${songRefHref(id ?? "")}/edit`}
+                prefetch={false}
+                className={buttonClasses("ghost", "sm")}
+              >
                 <Pencil aria-hidden className="size-4" />
                 <span className={actionLabel}>Edit</span>
               </Link>
@@ -223,7 +231,7 @@ function SongArticle() {
               <ListSongNavBar position={position} />
               {/* The swipe waits for the song: its once-per-device hint must not be
               spent on a song that fails to load. */}
-              {song && <ListSongSwipe position={position} surface={surface} />}
+              {fullSong && <ListSongSwipe position={position} surface={surface} />}
             </>
           )}
 
@@ -276,17 +284,17 @@ function SongArticle() {
               </fieldset>
             </div>
 
-            {!song ? (
+            {!fullSong ? (
               <Skeleton className="h-64 w-full" />
-            ) : song.lyrics?.trim() ? (
+            ) : fullSong.lyrics?.trim() ? (
               // whitespace-pre-line keeps the stored line and verse breaks.
               // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
               <p
-                lang={song.language}
+                lang={fullSong.language}
                 className="lyrics-size whitespace-pre-line leading-loose text-fg"
                 style={{ fontFamily: "var(--font-lyrics)" }}
               >
-                {song.lyrics}
+                {fullSong.lyrics}
               </p>
             ) : (
               <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>

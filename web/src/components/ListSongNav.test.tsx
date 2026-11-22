@@ -1,30 +1,17 @@
 import { render } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { ListSongNavBar } from "./ListSongNav";
 import type { ListPosition } from "@/lib/listContext";
 import { type NavigationBackend, NavigationProvider } from "@/lib/navigation";
+import { recordingBackend } from "@/test/backend";
 
 /*
- * What a list position loads ahead of a step. The test router's `prefetch`
- * does nothing, so a backend that records it is what can see it. The history
- * the steps keep is pinned in SongDetailPage.test.tsx.
+ * What a list position loads ahead of a step, seen through a backend that
+ * records it. The history the steps keep is pinned in SongDetailPage.test.tsx.
  */
 
-function recordingBackend() {
-  return {
-    pathname: "/songs/b",
-    searchParams: new URLSearchParams("list=l"),
-    params: {},
-    push: () => {},
-    replace: () => {},
-    back: () => {},
-    liveHref: () => "/songs/b?list=l",
-    writeSearch: () => {},
-    prefetch: vi.fn<(href: string) => void>(),
-    Link: ({ href, replace: _replace, ...rest }) => <a href={href} {...rest} />,
-  } satisfies NavigationBackend;
-}
+const atSong = { pathname: "/songs/b", search: "list=l" };
 
 const position: ListPosition = {
   listName: "Summer",
@@ -45,7 +32,7 @@ function renderBar(backend: NavigationBackend, at: ListPosition) {
 
 describe("ListSongNavBar", () => {
   it("loads both neighbors, and nothing else, as soon as it knows where it is", () => {
-    const backend = recordingBackend();
+    const backend = recordingBackend(atSong);
     renderBar(backend, position);
 
     // `?list=` included: a step is answered only from an entry for its own href.
@@ -56,7 +43,7 @@ describe("ListSongNavBar", () => {
   });
 
   it("loads only the neighbor there is at the end of a list", () => {
-    const backend = recordingBackend();
+    const backend = recordingBackend(atSong);
     renderBar(backend, { ...position, index: 2, nextHref: undefined });
 
     expect(backend.prefetch).toHaveBeenCalledTimes(1);

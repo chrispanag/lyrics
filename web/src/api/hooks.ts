@@ -11,7 +11,10 @@ import {
   type UseQueryOptions,
 } from "@tanstack/react-query";
 
+import { useMemo } from "react";
+
 import { type RequestOptions, apiFetch, toQuery } from "./client";
+import { songMatchesRef } from "@/lib/listContext";
 import type {
   Genre,
   ListResponse,
@@ -88,6 +91,22 @@ export const queries = {
       queryFn: () => apiFetch<ListResponse<Genre>>("/api/v1/genres", request),
       staleTime: 5 * 60_000,
     }),
+  /**
+   * A song by either of its addresses. No `staleTime`: the client's default
+   * lets a prefetch on intent skip a song that is still fresh.
+   */
+  song: (ref: string, request?: RequestOptions) =>
+    queryOptions({
+      queryKey: keys.song(ref),
+      // Encoded: the ref comes straight from the address bar.
+      queryFn: () => apiFetch<Song>(`/api/v1/songs/${encodeURIComponent(ref)}`, request),
+    }),
+  /** The signed-in reader's lists. */
+  lists: () =>
+    queryOptions({
+      queryKey: keys.lists(),
+      queryFn: () => apiFetch<ListResponse<SongList>>("/api/v1/lists"),
+    }),
 };
 
 /**
@@ -144,11 +163,51 @@ function uniqueById(songs: Song[]): Song[] {
   });
 }
 
-export function useSong(id: string | undefined) {
+/**
+ * The song at this address as a catalog page or a list already holds it, minus
+ * its lyrics (`Song.lyrics`: list reads leave them out). Matched by slug or id,
+ * since the address may be either. Undefined when no cached page has it.
+ */
+function cachedSummary(queryClient: QueryClient, ref: string): Song | undefined {
+  const matches = (song: Song) => songMatchesRef(song, ref);
+  const pages = queryClient.getQueriesData<
+    ListResponse<Song> | InfiniteData<ListResponse<Song>, number>
+  >({ queryKey: ["songs"] });
+  for (const [, data] of pages) {
+    // Page by page rather than flattened: the first match ends it.
+    for (const page of data && "pages" in data ? data.pages : data ? [data] : []) {
+      const found = page.data.find(matches);
+      if (found) return found;
+    }
+  }
+  for (const [, list] of queryClient.getQueriesData<SongList>({ queryKey: ["list"] })) {
+    const found = list?.songs?.find(matches);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * A song by address. With `fromCachedCard`, until the full read arrives `data`
+ * may be the card the reader just clicked, from the catalog or a list in the
+ * cache: everything but the lyrics, so a header can paint at once.
+ * `isPlaceholderData` is then true, and whoever reads `lyrics` must wait rather
+ * than take it as absent. Opt-in, because a reader that copies the song once
+ * (the editor's form) would copy the card and never see the lyrics.
+ */
+export function useSong(id: string | undefined, { fromCachedCard = false } = {}) {
+  const queryClient = useQueryClient();
+  // Looked up once per address: a function placeholder is only reused while it
+  // matched, so a miss would scan the cache again on every render.
+  const placeholder = useMemo(
+    () => (fromCachedCard && id ? cachedSummary(queryClient, id) : undefined),
+    [queryClient, id, fromCachedCard],
+  );
   return useQuery({
-    queryKey: keys.song(id ?? ""),
-    queryFn: () => apiFetch<Song>(`/api/v1/songs/${id}`),
+    ...queries.song(id ?? ""),
     enabled: Boolean(id),
+    // Not `keepPreviousData`: the last song must never stand in for the next.
+    ...(placeholder && { placeholderData: placeholder }),
   });
 }
 
@@ -218,11 +277,7 @@ export function useDeleteGenre() {
 }
 
 export function useLists(enabled: boolean) {
-  return useQuery({
-    queryKey: keys.lists(),
-    queryFn: () => apiFetch<ListResponse<SongList>>("/api/v1/lists"),
-    enabled,
-  });
+  return useQuery({ ...queries.lists(), enabled });
 }
 
 /**

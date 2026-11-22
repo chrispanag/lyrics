@@ -83,6 +83,19 @@ describe("useNavigationKey", () => {
   });
 });
 
+describe("Link's prefetch", () => {
+  // The prop is for the router; a plain anchor must not carry it to the DOM.
+  it("is taken by the router and does not reach the anchor", () => {
+    renderWithProviders(
+      <Link href="/songs/a/edit" prefetch={false}>
+        Edit
+      </Link>,
+    );
+
+    expect(screen.getByRole("link", { name: "Edit" })).not.toHaveAttribute("prefetch");
+  });
+});
+
 describe("push", () => {
   // Two identical entries in a row make Back appear to do nothing.
   it("replaces rather than pushes the address already showing", async () => {

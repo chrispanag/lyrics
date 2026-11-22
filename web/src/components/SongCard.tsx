@@ -1,13 +1,16 @@
-import { memo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { memo, useCallback } from "react";
 import { ListPlus, SquarePlay } from "lucide-react";
 
+import { queries } from "@/api/hooks";
 import { Snippet } from "./Snippet";
 import { cardChrome, cardHover, tagChrome } from "./cardStyles";
 import { cn } from "@/lib/cn";
 import { songByline } from "@/lib/credits";
 import { songHref, songMatchesRef, songRefFromPath } from "@/lib/listContext";
 import { listAddsLabel } from "@/lib/popularity";
-import { Link, usePathname } from "@/lib/navigation";
+import { Link, usePathname, useRouter } from "@/lib/navigation";
+import { useIntentPrefetch } from "@/lib/useIntentPrefetch";
 import type { Song } from "@/lib/types";
 
 /**
@@ -36,10 +39,26 @@ export const SongCard = memo(function SongCard({
   const open = songRefFromPath(usePathname());
   const current = open !== null && songMatchesRef(song, open);
 
+  // Both halves of the step: the page, which the router otherwise fetches only
+  // on the click and holds the old song until it lands, and the song itself,
+  // keyed by the slug the page's `useSong` reads it by. The song already open
+  // has nothing left to load.
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const slug = song.slug;
+  const href = songHref(song, listId, search);
+  const prefetch = useCallback(() => {
+    if (current) return;
+    router.prefetch(href);
+    void queryClient.prefetchQuery(queries.song(slug));
+  }, [queryClient, router, href, slug, current]);
+  const intent = useIntentPrefetch(prefetch);
+
   return (
     <Link
-      href={songHref(song, listId, search)}
+      href={href}
       aria-current={current ? "page" : undefined}
+      {...intent}
       className={cn(
         cardChrome,
         cardHover,

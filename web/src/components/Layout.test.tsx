@@ -7,6 +7,7 @@ import { MenuHeader } from "./SearchHeader";
 import { NAV_COLLAPSED_ATTRIBUTE } from "@/lib/navCollapsed";
 import { modalIsOpen } from "@/lib/modal";
 import { makeUser } from "@/test/handlers";
+import { recordRequests } from "@/test/requests";
 import { intersectAll } from "@/test/intersection";
 import { renderWithProviders } from "@/test/render";
 import { scrollDown, scrollUp, setScrollY } from "@/test/scroll";
@@ -52,6 +53,53 @@ describe("Layout navigation", () => {
     expect(
       within(drawer()).getByRole("link", { name: "Sign in", hidden: true }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("Lists link prefetch", () => {
+  const listsLink = () =>
+    within(screen.getByRole("complementary")).getByRole("link", { name: "Lists" });
+
+  it("loads the lists on a press when signed in", async () => {
+    const requests = recordRequests((path) => path === "/api/v1/lists");
+    try {
+      renderWithProviders(<Layout />, { user: makeUser() });
+      fireEvent.pointerDown(listsLink());
+
+      await waitFor(() => expect(requests.paths).toEqual(["/api/v1/lists"]));
+    } finally {
+      requests.stop();
+    }
+  });
+
+  it("loads the lists on focus when signed in", async () => {
+    const requests = recordRequests((path) => path === "/api/v1/lists");
+    try {
+      renderWithProviders(<Layout />, { user: makeUser() });
+      act(() => listsLink().focus());
+
+      await waitFor(() => expect(requests.paths).toEqual(["/api/v1/lists"]));
+    } finally {
+      requests.stop();
+    }
+  });
+
+  // A guest has no Lists link; what is left must not ask for lists either.
+  it("loads nothing for a guest", async () => {
+    const requests = recordRequests((path) => path === "/api/v1/lists");
+    try {
+      renderWithProviders(<Layout />, { user: null });
+      expect(screen.queryByRole("link", { name: "Lists", hidden: true })).toBeNull();
+      for (const link of screen.getAllByRole("link", { hidden: true })) {
+        fireEvent.pointerDown(link);
+        act(() => link.focus());
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(requests.paths).toEqual([]);
+    } finally {
+      requests.stop();
+    }
   });
 });
 

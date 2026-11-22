@@ -65,14 +65,16 @@ const loadSong = cache(async (ref: string): Promise<Song | null> => {
 /**
  * The song as the app's query cache holds it, for `HydrationBoundary`.
  *
- * Stamped as old as possible: the read may be minutes stale (Next's data
- * cache), so the app draws it and refetches at once. Fresh, a reader who
- * reloads after an edit would see the version before it. Keyed by the address,
- * as `useSong` keys it.
+ * Stamped all but as old as possible: the read may be minutes stale (Next's
+ * data cache), so the app draws it and refetches at once. Fresh, a reader who
+ * reloads after an edit would see the version before it. One millisecond, not
+ * zero: hydration replaces only an older entry, and a card's prefetch that
+ * failed or is still in flight leaves one stamped zero, which must not turn
+ * this song away. Keyed by the address, as `useSong` keys it.
  */
 function cacheEntry(ref: string, song: Song): DehydratedState {
   const client = new QueryClient();
-  client.setQueryData(keys.song(ref), song, { updatedAt: 0 });
+  client.setQueryData(keys.song(ref), song, { updatedAt: 1 });
   return dehydrate(client);
 }
 

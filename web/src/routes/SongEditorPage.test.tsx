@@ -4,9 +4,11 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { SongEditorPage } from "./SongEditorPage";
+import { keys } from "@/api/hooks";
 import { BackButton } from "@/components/BackButton";
 import type { Song, SongInput } from "@/lib/types";
 import { API, apiError, list, makeGenre, makeRecording, makeSong, makeUser } from "@/test/handlers";
+import { testQueryClient } from "@/test/providers";
 import { renderWithProviders } from "@/test/render";
 import { CurrentAddress, TestRoutes } from "@/test/routes";
 import { server } from "@/test/server";
@@ -378,6 +380,22 @@ describe("SongEditorPage", () => {
         },
       ],
     });
+  });
+
+  // The catalog's card has no lyrics. The form fills once per song, so taking
+  // the card would leave the lyrics blank and a save would erase them.
+  it("fills the form from the song itself, not the card the catalog holds", async () => {
+    const { lyrics: _lyrics, ...card } = makeSong();
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(keys.songs({}), {
+      data: [card],
+      meta: { total: 1, limit: 20, offset: 0 },
+    });
+    renderEditor({ route: "/songs/song-1/edit", queryClient });
+
+    expect(await screen.findByLabelText("Lyrics")).toHaveValue(
+      "Στης θάλασσας τα βάθη\nη αγάπη μου κοιμάται",
+    );
   });
 
   it("sends the song's own fields as edited, blanks as null", async () => {
