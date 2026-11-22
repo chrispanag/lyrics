@@ -193,7 +193,11 @@ function SongArticle() {
               <span className={actionLabel}>Save</span>
             </Button>
             {canEdit && (
-              <Link href={`${songRefHref(id ?? "")}/edit`} className={buttonClasses("ghost", "sm")}>
+              <Link
+                href={`${songRefHref(id ?? "")}/edit`}
+                prefetch={false}
+                className={buttonClasses("ghost", "sm")}
+              >
                 <Pencil aria-hidden className="size-4" />
                 <span className={actionLabel}>Edit</span>
               </Link>
