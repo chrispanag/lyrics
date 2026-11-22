@@ -13,7 +13,7 @@ import {
   useState,
 } from "react";
 
-import { listsQuery } from "@/api/hooks";
+import { queries } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { buttonClasses } from "@/components/buttonStyles";
@@ -178,8 +178,9 @@ function NavEntry({ item }: { item: NavItem }) {
   const queryClient = useQueryClient();
   const signedIn = Boolean(user);
   const prefetch = useCallback(() => {
-    if (item.warmsLists && signedIn) void queryClient.prefetchQuery(listsQuery());
-  }, [queryClient, item.warmsLists, signedIn]);
+    // Only the Lists link carries the handlers; see the spread below.
+    if (signedIn) void queryClient.prefetchQuery(queries.lists());
+  }, [queryClient, signedIn]);
   const intent = useIntentPrefetch(prefetch);
 
   return (

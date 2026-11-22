@@ -5,39 +5,44 @@ const HOVER_DELAY_MS = 75;
 
 /**
  * Handlers that start `prefetch` when the reader shows intent: a mouse resting
- * on the element for a moment, or a press (touch has no hover, and its press
- * lands before the click does). Leaving first cancels the wait.
+ * on the element for a moment, a mouse press, or a touch held as long without
+ * turning into a scroll (touch has no hover). Leaving first cancels the wait,
+ * and so does the `pointercancel` a touch sends once the browser takes it for a
+ * scroll, so a finger flicking down a list loads nothing.
  *
- * `prefetch` should be cheap and deduplicated (a query prefetch, a router
- * prefetch); the handlers keep
- * their identity while it does, so a memoized element is not re-rendered by
- * them. Only a mouse hovers: a touch's synthesized enter would start the
- * request a press already starts.
+ * `prefetch` should be cheap and deduplicated, as a query prefetch and a router
+ * prefetch are; the handlers keep their identity while it does, so a memoized
+ * element is not re-rendered by them. Only a mouse hovers: a touch's
+ * synthesized enter would start the wait a press already starts.
  */
 export function useIntentPrefetch(prefetch: () => void) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const cancel = useCallback(() => {
-    clearTimeout(timer.current);
-    timer.current = undefined;
-  }, []);
+  const cancel = useCallback(() => clearTimeout(timer.current), []);
 
   // A card can unmount with its wait pending, as a filter replaces the list.
   useEffect(() => cancel, [cancel]);
 
-  const onPointerEnter = useCallback(
-    (event: PointerEvent) => {
-      if (event.pointerType !== "mouse") return;
-      cancel();
-      timer.current = setTimeout(prefetch, HOVER_DELAY_MS);
-    },
-    [cancel, prefetch],
-  );
-
-  const onPointerDown = useCallback(() => {
+  const wait = useCallback(() => {
     cancel();
-    prefetch();
+    timer.current = setTimeout(prefetch, HOVER_DELAY_MS);
   }, [cancel, prefetch]);
 
-  return { onPointerEnter, onPointerLeave: cancel, onPointerDown };
+  const onPointerEnter = useCallback(
+    (event: PointerEvent) => {
+      if (event.pointerType === "mouse") wait();
+    },
+    [wait],
+  );
+
+  const onPointerDown = useCallback(
+    (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") return wait();
+      cancel();
+      prefetch();
+    },
+    [cancel, wait, prefetch],
+  );
+
+  return { onPointerEnter, onPointerLeave: cancel, onPointerCancel: cancel, onPointerDown };
 }

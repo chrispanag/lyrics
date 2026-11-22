@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { memo, useCallback } from "react";
 import { ListPlus, SquarePlay } from "lucide-react";
 
-import { songQuery } from "@/api/hooks";
+import { queries } from "@/api/hooks";
 import { Snippet } from "./Snippet";
 import { cardChrome, cardHover, tagChrome } from "./cardStyles";
 import { cn } from "@/lib/cn";
@@ -50,7 +50,7 @@ export const SongCard = memo(function SongCard({
   const prefetch = useCallback(() => {
     if (current) return;
     router.prefetch(href);
-    void queryClient.prefetchQuery(songQuery(slug));
+    void queryClient.prefetchQuery(queries.song(slug));
   }, [queryClient, router, href, slug, current]);
   const intent = useIntentPrefetch(prefetch);
 

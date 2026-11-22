@@ -2,7 +2,8 @@ import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SongCard } from "./SongCard";
-import { type NavigationBackend, NavigationProvider } from "@/lib/navigation";
+import { NavigationProvider } from "@/lib/navigation";
+import { recordingBackend } from "@/test/backend";
 import { makeGenre, makeRecording, makeSong } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { recordRequests } from "@/test/requests";
@@ -172,11 +173,11 @@ describe("SongCard prefetch on intent", () => {
     }
   });
 
-  it("loads the song at once on a press, which a touch has no hover before", async () => {
+  it("loads the song at once on a mouse press", async () => {
     const requests = recordRequests((path) => path === detail);
     try {
       renderWithProviders(<SongCard song={song} />);
-      fireEvent.pointerDown(screen.getByRole("link"), { pointerType: "touch" });
+      fireEvent.pointerDown(screen.getByRole("link"), mouse);
 
       await waitFor(() => expect(requests.paths).toEqual([detail]));
     } finally {
@@ -184,34 +185,51 @@ describe("SongCard prefetch on intent", () => {
     }
   });
 
-  // The test router's `prefetch` does nothing, so a backend that records it is
-  // what can see the page being loaded alongside the song.
+  it("loads the song once a touch has been held, which has no hover before it", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const requests = recordRequests((path) => path === detail);
+    try {
+      renderWithProviders(<SongCard song={song} />);
+      fireEvent.pointerDown(screen.getByRole("link"), { pointerType: "touch" });
+      await settle(200);
+
+      await waitFor(() => expect(requests.paths).toEqual([detail]));
+    } finally {
+      requests.stop();
+    }
+  });
+
+  // The browser cancels a touch it takes for a scroll: a finger flicking down
+  // the list must not load every card it lands on.
+  it("loads nothing for a touch that turns into a scroll", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const requests = recordRequests((path) => path === detail);
+    try {
+      renderWithProviders(<SongCard song={song} />);
+      const card = screen.getByRole("link");
+      fireEvent.pointerDown(card, { pointerType: "touch" });
+      await act(() => vi.advanceTimersByTimeAsync(20));
+      fireEvent.pointerCancel(card, { pointerType: "touch" });
+      await settle(500);
+
+      expect(requests.paths).toEqual([]);
+    } finally {
+      requests.stop();
+    }
+  });
+
   it("loads the song's page with the song, at the address the card opens", async () => {
     const requests = recordRequests((path) => path === detail);
-    const prefetch = vi.fn<(href: string) => void>();
-    const backend = {
-      pathname: "/",
-      searchParams: new URLSearchParams(),
-      params: {},
-      push: () => {},
-      replace: () => {},
-      back: () => {},
-      liveHref: () => "/",
-      writeSearch: () => {},
-      prefetch,
-      Link: ({ href, replace: _replace, prefetch: _prefetch, ...rest }) => (
-        <a href={href} {...rest} />
-      ),
-    } satisfies NavigationBackend;
+    const backend = recordingBackend();
     try {
       renderWithProviders(
         <NavigationProvider backend={backend}>
           <SongCard song={song} listId="l" />
         </NavigationProvider>,
       );
-      fireEvent.pointerDown(screen.getByRole("link"), { pointerType: "touch" });
+      fireEvent.pointerDown(screen.getByRole("link"), mouse);
 
-      expect(prefetch).toHaveBeenCalledExactlyOnceWith("/songs/to-kalo-pedi?list=l");
+      expect(backend.prefetch).toHaveBeenCalledExactlyOnceWith("/songs/to-kalo-pedi?list=l");
       // Waited out, or the song's read lands in the next spec's recording.
       await waitFor(() => expect(requests.paths).toEqual([detail]));
     } finally {
