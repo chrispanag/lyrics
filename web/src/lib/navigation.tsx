@@ -141,7 +141,7 @@ export interface Router {
   /**
    * Loads `href` ahead of a navigation to it. On Next that is a server render
    * of a page nobody may open, so it is for the few places a reader is about
-   * to go: today a list's neighbors. See "The routing seam" in CLAUDE.md.
+   * to go: a list's neighbors, and a song card the reader rests on or presses. See "The routing seam" in CLAUDE.md.
    */
   prefetch(href: string): void;
 }

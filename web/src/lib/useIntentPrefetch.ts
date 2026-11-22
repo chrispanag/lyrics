@@ -8,7 +8,8 @@ const HOVER_DELAY_MS = 75;
  * on the element for a moment, or a press (touch has no hover, and its press
  * lands before the click does). Leaving first cancels the wait.
  *
- * `prefetch` should be a cheap, deduplicated query prefetch; the handlers keep
+ * `prefetch` should be cheap and deduplicated (a query prefetch, a router
+ * prefetch); the handlers keep
  * their identity while it does, so a memoized element is not re-rendered by
  * them. Only a mouse hovers: a touch's synthesized enter would start the
  * request a press already starts.

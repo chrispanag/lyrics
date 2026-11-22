@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SongCard } from "./SongCard";
+import { type NavigationBackend, NavigationProvider } from "@/lib/navigation";
 import { makeGenre, makeRecording, makeSong } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { recordRequests } from "@/test/requests";
@@ -177,6 +178,41 @@ describe("SongCard prefetch on intent", () => {
       renderWithProviders(<SongCard song={song} />);
       fireEvent.pointerDown(screen.getByRole("link"), { pointerType: "touch" });
 
+      await waitFor(() => expect(requests.paths).toEqual([detail]));
+    } finally {
+      requests.stop();
+    }
+  });
+
+  // The test router's `prefetch` does nothing, so a backend that records it is
+  // what can see the page being loaded alongside the song.
+  it("loads the song's page with the song, at the address the card opens", async () => {
+    const requests = recordRequests((path) => path === detail);
+    const prefetch = vi.fn<(href: string) => void>();
+    const backend = {
+      pathname: "/",
+      searchParams: new URLSearchParams(),
+      params: {},
+      push: () => {},
+      replace: () => {},
+      back: () => {},
+      liveHref: () => "/",
+      writeSearch: () => {},
+      prefetch,
+      Link: ({ href, replace: _replace, prefetch: _prefetch, ...rest }) => (
+        <a href={href} {...rest} />
+      ),
+    } satisfies NavigationBackend;
+    try {
+      renderWithProviders(
+        <NavigationProvider backend={backend}>
+          <SongCard song={song} listId="l" />
+        </NavigationProvider>,
+      );
+      fireEvent.pointerDown(screen.getByRole("link"), { pointerType: "touch" });
+
+      expect(prefetch).toHaveBeenCalledExactlyOnceWith("/songs/to-kalo-pedi?list=l");
+      // Waited out, or the song's read lands in the next spec's recording.
       await waitFor(() => expect(requests.paths).toEqual([detail]));
     } finally {
       requests.stop();
