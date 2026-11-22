@@ -13,6 +13,9 @@ import { useEffect, useEffectEvent, useRef } from "react";
  * that scroller, which is what "a screen ahead" means once the page itself
  * no longer scrolls.
  */
+/** How long the column's width holds still before the scroller is looked for again. */
+const SETTLE_MS = 100;
+
 export function InfiniteScrollTrigger({ onLoadMore }: { onLoadMore: () => void }) {
   const target = useRef<HTMLDivElement>(null);
   // An event, so a new callback each render does not restart the observer.
@@ -44,11 +47,26 @@ export function InfiniteScrollTrigger({ onLoadMore }: { onLoadMore: () => void }
 
     connect();
     // The content column's width is what decides whether the list scrolls
-    // inside itself. Collapsing the navigation changes it without a remount.
+    // inside itself. Collapsing the navigation changes it without a remount,
+    // over a transition that resizes the column every frame, so the walk waits
+    // for the width to settle. A height change, such as a page loading, is not
+    // a reason to look again.
     const box = element.closest("main") ?? document.documentElement;
-    const watch = new ResizeObserver(connect);
+    let width: number | undefined;
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const watch = new ResizeObserver(([entry]) => {
+      const next = entry?.contentRect.width;
+      if (next === undefined || next === width) return;
+      // The first report is the size `connect` above already walked at.
+      const first = width === undefined;
+      width = next;
+      if (first) return;
+      clearTimeout(settle);
+      settle = setTimeout(connect, SETTLE_MS);
+    });
     watch.observe(box);
     return () => {
+      clearTimeout(settle);
       observer?.disconnect();
       watch.disconnect();
     };

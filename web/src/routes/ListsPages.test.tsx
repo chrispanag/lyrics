@@ -32,6 +32,16 @@ function renderDetail(route: string, options: Parameters<typeof renderWithProvid
   );
 }
 
+/**
+ * A song's drag handle, once the owner's page has loaded the drag machinery.
+ * That is a `lazy` chunk: importing the module it names first resolves when the
+ * page's own import does, which under a loaded suite outlasts findBy's second.
+ */
+async function findHandle(title: string): Promise<HTMLElement> {
+  await import("@/components/SortableSongList");
+  return screen.findByRole("button", { name: `Reorder ${title}` });
+}
+
 describe("ListsPage", () => {
   it("lists the reader's lists, each marked public or private, with its song count", async () => {
     server.use(
@@ -300,8 +310,7 @@ describe("ListDetailPage sharing", () => {
 
     const { container } = renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
 
-    // The drag machinery is a lazy chunk, so the handle appears a tick late.
-    const handle = await screen.findByRole("button", { name: "Reorder First" });
+    const handle = await findHandle("First");
     stubRowRects(container);
 
     handle.focus();
@@ -334,7 +343,7 @@ describe("ListDetailPage sharing", () => {
     );
 
     const { container } = renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
-    await screen.findByRole("button", { name: "Reorder First" });
+    await findHandle("First");
 
     const drag = async (title: string) => {
       // Re-measured before each drag: a real browser reads live layout, while
@@ -535,7 +544,7 @@ describe("ListDetailPage reorder failure", () => {
 
     const { container } = renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
 
-    const handle = await screen.findByRole("button", { name: "Reorder First" });
+    const handle = await findHandle("First");
     stubRowRects(container);
     handle.focus();
     await user.keyboard("{ }");
