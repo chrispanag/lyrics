@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { User } from "@/lib/types";
 import { API, list, listById, makeList, makeUser } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
+import { recordRequests } from "@/test/requests";
 import { server } from "@/test/server";
 import { TestApp } from "@/test/app";
 import { CurrentAddress } from "@/test/routes";
@@ -104,15 +105,9 @@ describe("Reaching the navigation from every screen", () => {
   // A phone opening a song by its address: the list is in the page, hidden, and
   // reads nothing until it shows.
   it("reads no catalog for the list hidden beside a song", async () => {
-    const catalogReads: string[] = [];
-    const record = ({ request }: { request: Request }) => {
-      const { pathname } = new URL(request.url);
-      if (pathname === "/api/v1/songs" || pathname === "/api/v1/genres") {
-        catalogReads.push(pathname);
-      }
-    };
-    server.events.on("request:start", record);
-    // Removed even when an assertion fails, so it cannot record the next test.
+    const catalog = recordRequests(
+      (pathname) => pathname === "/api/v1/songs" || pathname === "/api/v1/genres",
+    );
     try {
       renderWithProviders(<TestApp />, { route: "/songs/thalassa-platia" });
 
@@ -121,9 +116,9 @@ describe("Reaching the navigation from every screen", () => {
       ).toBeInTheDocument();
       expect(screen.getByRole("searchbox", { name: /search songs/i })).toBeInTheDocument();
     } finally {
-      server.events.removeListener("request:start", record);
+      catalog.stop();
     }
-    expect(catalogReads).toEqual([]);
+    expect(catalog.paths).toEqual([]);
   });
 
   it("names a dead link as one", async () => {
