@@ -14,10 +14,20 @@ export const LIST_PARAM = "list";
 /**
  * A song's URL, carrying the list it is being read from if there is one. Takes
  * the song so no call site has to know the slug is the address.
+ *
+ * `catalogSearch` is the catalog's filters as a query string, kept so the list
+ * beside the lyrics is the one the song was opened from.
  */
-export function songHref(song: Pick<Song, "slug">, listId?: string): string {
+export function songHref(
+  song: Pick<Song, "slug">,
+  listId?: string,
+  catalogSearch?: string,
+): string {
   const path = `/songs/${song.slug}`;
-  return listId ? `${path}?${LIST_PARAM}=${encodeURIComponent(listId)}` : path;
+  const params = new URLSearchParams(catalogSearch);
+  if (listId) params.set(LIST_PARAM, listId);
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
 }
 
 /**

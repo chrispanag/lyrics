@@ -581,10 +581,12 @@
 /* The shell's bottom padding (`pb-12`, and `pb-8` from `md`). Once the content
    column is wide enough for the list and the lyrics — `@3xl`, the same 48rem —
    the reader fills the viewport and scrolls inside its panes, and the padding
-   would only make the window scroll past them. Unlayered so it wins over those
-   utilities. The column is `main`; a container cannot query itself. */
+   would only make the window scroll past them. Only around the reader: every
+   other page still scrolls the window and keeps its room at the bottom.
+   Unlayered so it wins over those utilities. The column is `main`; a container
+   cannot query itself. */
 @container app (width >= 48rem) {
-  .app-column {
+  .app-column:has(.reader-frame) {
     padding-bottom: 0;
   }
 }

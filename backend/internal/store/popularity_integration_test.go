@@ -142,6 +142,37 @@ func TestListPlacementsCountTimesAndPeople(t *testing.T) {
 	}
 }
 
+func TestConcurrentPlacementsAreAllCounted(t *testing.T) {
+	st := testutil.NewStore(t)
+	song := mustSong(t, st, "Crowded")
+
+	const savers = 8
+	lists := make([]uuid.UUID, savers)
+	for i := range lists {
+		user := seedUser(t, st, uuid.NewString()+"@example.com", store.RoleUser)
+		lists[i] = mustList(t, st, user.ID, "Mine").ID
+	}
+
+	// Side by side, so each placement's trigger runs while another's is open.
+	errs := make(chan error, savers)
+	for _, listID := range lists {
+		go func() { errs <- st.AddSongToList(context.Background(), listID, song.ID) }()
+	}
+	for range savers {
+		if err := <-errs; err != nil {
+			t.Fatalf("AddSongToList: %v", err)
+		}
+	}
+
+	got := popularity(t, st, song.ID)
+	if got.ListAdds != savers || got.ListUsers != savers {
+		t.Fatalf("adds=%d users=%d, want %d and %d", got.ListAdds, got.ListUsers, savers, savers)
+	}
+	if got.Score != popularityScore(0, 0, savers, savers) {
+		t.Fatalf("score = %d, want %d", got.Score, popularityScore(0, 0, savers, savers))
+	}
+}
+
 func TestCopyingAListCountsForTheNewOwner(t *testing.T) {
 	st := testutil.NewStore(t)
 	ctx := context.Background()

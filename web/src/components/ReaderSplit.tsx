@@ -53,7 +53,11 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
   }, []);
 
   return (
-    <div ref={frame} className="@3xl/app:flex @3xl/app:h-dvh @3xl/app:overflow-hidden">
+    <div
+      ref={frame}
+      // `reader-frame`: index.css drops the shell's bottom padding around it.
+      className="reader-frame @3xl/app:flex @3xl/app:h-dvh @3xl/app:overflow-hidden"
+    >
       {/* The line is the edge between the search and the lyrics. Both header
           bands are the page color, so the list's surface alone does not draw it. */}
       <section
