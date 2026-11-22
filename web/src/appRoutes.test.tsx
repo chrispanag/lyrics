@@ -72,8 +72,11 @@ describe("Reaching the navigation from every screen", () => {
     // The list is still there: its search box, with the open song marked in it.
     expect(screen.getByRole("searchbox", { name: /search songs/i })).toBeInTheDocument();
     // jsdom has no container width; the class is what draws the line once the
-    // panes sit side by side.
-    expect(screen.getByRole("region", { name: "Songs" })).toHaveClass("@3xl/app:border-r");
+    // panes sit side by side. The region itself does not scroll: the scrollbar
+    // belongs to the songs under the search.
+    const songs = screen.getByRole("region", { name: "Songs" });
+    expect(songs).toHaveClass("@3xl/app:border-r");
+    expect(songs).not.toHaveClass("@3xl/app:overflow-y-auto");
     expect(await screen.findByRole("link", { name: /Θάλασσα Πλατιά/ })).toHaveAttribute(
       "aria-current",
       "page",

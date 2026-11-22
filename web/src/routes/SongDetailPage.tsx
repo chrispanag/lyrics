@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
@@ -51,12 +51,14 @@ import { RecordingsSheet } from "@/components/RecordingsSheet";
  */
 export function SongDetailPage() {
   return (
-    <>
+    // Fills the reading pane once the list is beside it, so the tools can stay
+    // put and the lyrics scroll under them.
+    <div className="@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:flex-col">
       <div className="@3xl/app:hidden">
         <SongSearch />
       </div>
       <SongArticle />
-    </>
+    </div>
   );
 }
 
@@ -112,6 +114,13 @@ function SongArticle() {
 
   // The whole article is the surface the paging swipe is read across.
   const surface = useRef<HTMLElement>(null);
+  // The lyrics, under the tools. A new song opens at the top; the list beside
+  // it keeps its own place.
+  const lyrics = useRef<HTMLDivElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: id is the trigger.
+  useLayoutEffect(() => {
+    lyrics.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [id]);
 
   const [listSheetOpen, setListSheetOpen] = useState(false);
   const [recordingsOpen, setRecordingsOpen] = useState(false);
@@ -146,24 +155,25 @@ function SongArticle() {
     <article
       ref={surface}
       aria-busy={isLoading}
-      className="mx-auto max-w-3xl @3xl/app:mx-0 @3xl/app:max-w-none"
+      className="mx-auto max-w-3xl @3xl/app:mx-0 @3xl/app:flex @3xl/app:min-h-0 @3xl/app:max-w-none @3xl/app:flex-1 @3xl/app:flex-col"
     >
       {/* The title alone; nameless while in flight. */}
       <PageTitle name={song?.title} />
-      {/* On a wide screen the list is beside this pane, so Back is only for
-          the phone. The bar keeps this song's tools and sticks while the
-          lyrics scroll. Its height follows the search header, chips included,
-          so the two borders stay one line. */}
+      {/* Beside the list, Back leaves and this bar is the header: it stays
+          put, and the lyrics scroll under it, so the scrollbar starts at the
+          title. Its height follows the search header, chips included, so the
+          two borders stay one line. */}
       <div
         className={cn(
-          "lg:sticky lg:top-0 lg:z-sticky lg:border-b lg:border-line lg:bg-canvas/95 lg:pt-safe lg:backdrop-blur",
-          "lg:min-h-[var(--sticky-header-height,0px)]",
+          "@3xl/app:shrink-0 @3xl/app:border-b @3xl/app:border-line @3xl/app:bg-canvas @3xl/app:pt-safe",
+          "@3xl/app:min-h-[var(--sticky-header-height,0px)]",
         )}
       >
-        <div className={cn("flex items-center gap-2 max-lg:py-4", headerBarPadding)}>
-          <BackButton className="lg:hidden" />
-          {/* As tall as the search field from `lg` up, so the tools share its center. */}
-          <div className="ml-auto flex items-center gap-1 lg:h-12">
+        <div className={cn("flex items-center gap-2 @max-3xl/app:py-4", headerBarPadding)}>
+          <BackButton className="@3xl/app:hidden" />
+          {/* As tall as the search field once the list is beside the song, so
+              the tools share its center. */}
+          <div className="ml-auto flex items-center gap-1 @3xl/app:h-12">
             {/* Shown to guests too, who are sent to sign in. Labeled because "Save"
               alone does not say where to. */}
             <Button
@@ -199,134 +209,139 @@ function SongArticle() {
           </div>
         </div>
       </div>
-      <div className="p-4">
-        {position && (
-          <>
-            <ListSongNavBar position={position} />
-            {/* The swipe waits for the song: its once-per-device hint must not be
+      <div
+        ref={lyrics}
+        className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain"
+      >
+        <div className="p-4">
+          {position && (
+            <>
+              <ListSongNavBar position={position} />
+              {/* The swipe waits for the song: its once-per-device hint must not be
               spent on a song that fails to load. */}
-            {song && <ListSongSwipe position={position} surface={surface} />}
-          </>
-        )}
+              {song && <ListSongSwipe position={position} surface={surface} />}
+            </>
+          )}
 
-        {song ? (
-          <SongHeader song={song} onShowRecordings={() => setRecordingsOpen(true)} />
-        ) : (
-          // Shaped like `SongHeader` so the text-size controls below do not move
-          // as the song arrives; change the two together. The plain wrapper stops
-          // `space-y-*`'s margin collapsing the recordings line's `mt-2`. No
-          // `rounded-full` on the chip: `cn` is a plain join.
-          <div className="mb-5 space-y-3">
-            <Skeleton className="h-9 w-2/3" />
-            <div>
-              <div className="space-y-1">
-                <Skeleton className="h-5 w-1/2" />
-                <Skeleton className="h-5 w-1/3" />
+          {song ? (
+            <SongHeader song={song} onShowRecordings={() => setRecordingsOpen(true)} />
+          ) : (
+            // Shaped like `SongHeader` so the text-size controls below do not move
+            // as the song arrives; change the two together. The plain wrapper stops
+            // `space-y-*`'s margin collapsing the recordings line's `mt-2`. No
+            // `rounded-full` on the chip: `cn` is a plain join.
+            <div className="mb-5 space-y-3">
+              <Skeleton className="h-9 w-2/3" />
+              <div>
+                <div className="space-y-1">
+                  <Skeleton className="h-5 w-1/2" />
+                  <Skeleton className="h-5 w-1/3" />
+                </div>
+                <Skeleton className="mt-2 h-5 w-36" />
               </div>
-              <Skeleton className="mt-2 h-5 w-36" />
+              <Skeleton className="h-6 w-20" />
             </div>
-            <Skeleton className="h-6 w-20" />
-          </div>
-        )}
+          )}
 
-        <section aria-label="Lyrics">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className={sectionLabel}>Lyrics</h2>
-            {/* A fieldset is the native group; preflight zeroes its border, margin
+          <section aria-label="Lyrics">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className={sectionLabel}>Lyrics</h2>
+              {/* A fieldset is the native group; preflight zeroes its border, margin
               and padding. Named by `aria-label`, not a <legend>: the controls
               are icons, and a visible "Text size" would crowd the heading row. */}
-            <fieldset className="flex items-center gap-1" aria-label="Text size">
-              <Type aria-hidden className="mr-1 size-4 text-fg-subtle" />
-              <button
-                type="button"
-                onClick={() => setFontSize(fontSizeIndex - 1)}
-                disabled={fontSizeIndex === 0}
-                aria-label="Decrease text size"
-                className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
+              <fieldset className="flex items-center gap-1" aria-label="Text size">
+                <Type aria-hidden className="mr-1 size-4 text-fg-subtle" />
+                <button
+                  type="button"
+                  onClick={() => setFontSize(fontSizeIndex - 1)}
+                  disabled={fontSizeIndex === 0}
+                  aria-label="Decrease text size"
+                  className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
+                >
+                  <Minus aria-hidden className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFontSize(fontSizeIndex + 1)}
+                  disabled={fontSizeIndex === FONT_SIZES.length - 1}
+                  aria-label="Increase text size"
+                  className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
+                >
+                  <Plus aria-hidden className="size-4" />
+                </button>
+              </fieldset>
+            </div>
+
+            {!song ? (
+              <Skeleton className="h-64 w-full" />
+            ) : song.lyrics?.trim() ? (
+              // whitespace-pre-line keeps the stored line and verse breaks.
+              // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
+              <p
+                lang={song.language}
+                className="lyrics-size whitespace-pre-line leading-loose text-fg"
+                style={{ fontFamily: "var(--font-lyrics)" }}
               >
-                <Minus aria-hidden className="size-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setFontSize(fontSizeIndex + 1)}
-                disabled={fontSizeIndex === FONT_SIZES.length - 1}
-                aria-label="Increase text size"
-                className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
-              >
-                <Plus aria-hidden className="size-4" />
-              </button>
-            </fieldset>
-          </div>
-
-          {!song ? (
-            <Skeleton className="h-64 w-full" />
-          ) : song.lyrics?.trim() ? (
-            // whitespace-pre-line keeps the stored line and verse breaks.
-            // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
-            <p
-              lang={song.language}
-              className="lyrics-size whitespace-pre-line leading-loose text-fg"
-              style={{ fontFamily: "var(--font-lyrics)" }}
-            >
-              {song.lyrics}
-            </p>
-          ) : (
-            <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>
-          )}
-        </section>
-
-        {/* Gated on the id, never the URL; see WatchOnYouTube. */}
-        {song?.youtube_video_id && (
-          <WatchOnYouTube videoId={song.youtube_video_id} className="mt-6" />
-        )}
-
-        {song?.notes && (
-          <section className={cn(panelChrome, "mt-8")}>
-            <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
-            <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
+                {song.lyrics}
+              </p>
+            ) : (
+              <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>
+            )}
           </section>
-        )}
 
-        {/* Needs only the id, so Save works while the song is loading. */}
-        {user && id && (
-          <AddToListSheet
-            songId={id}
-            open={listSheetOpen}
-            onClose={() => setListSheetOpen(false)}
-          />
-        )}
+          {/* Gated on the id, never the URL; see WatchOnYouTube. */}
+          {song?.youtube_video_id && (
+            <WatchOnYouTube videoId={song.youtube_video_id} className="mt-6" />
+          )}
 
-        {song && (
-          <RecordingsSheet
-            recordings={song.recordings}
-            language={song.language}
-            open={recordingsOpen}
-            onClose={() => setRecordingsOpen(false)}
-          />
-        )}
+          {song?.notes && (
+            <section className={cn(panelChrome, "mt-8")}>
+              <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
+              <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
+            </section>
+          )}
 
-        {song && (
-          <ConfirmSheet
-            open={confirmDelete}
-            onClose={() => {
-              setConfirmDelete(false);
-              // The sheet stays mounted, so a stale refusal would show on reopen.
-              deleteSong.reset();
-            }}
-            title="Delete this song?"
-            pending={deleteSong.isPending}
-            // A refused delete is otherwise silent.
-            error={
-              deleteSong.isError
-                ? errorMessage(deleteSong.error, "This song could not be deleted.")
-                : undefined
-            }
-            onConfirm={() => deleteSong.mutate(song.id, { onSuccess: () => router.push("/") })}
-          >
-            “{song.title}” will be removed for everyone, along with its place in any lists. This
-            cannot be undone.
-          </ConfirmSheet>
-        )}
+          {/* Needs only the id, so Save works while the song is loading. */}
+          {user && id && (
+            <AddToListSheet
+              songId={id}
+              open={listSheetOpen}
+              onClose={() => setListSheetOpen(false)}
+            />
+          )}
+
+          {song && (
+            <RecordingsSheet
+              recordings={song.recordings}
+              language={song.language}
+              open={recordingsOpen}
+              onClose={() => setRecordingsOpen(false)}
+            />
+          )}
+
+          {song && (
+            <ConfirmSheet
+              open={confirmDelete}
+              onClose={() => {
+                setConfirmDelete(false);
+                // The sheet stays mounted, so a stale refusal would show on reopen.
+                deleteSong.reset();
+              }}
+              title="Delete this song?"
+              pending={deleteSong.isPending}
+              // A refused delete is otherwise silent.
+              error={
+                deleteSong.isError
+                  ? errorMessage(deleteSong.error, "This song could not be deleted.")
+                  : undefined
+              }
+              onConfirm={() => deleteSong.mutate(song.id, { onSuccess: () => router.push("/") })}
+            >
+              “{song.title}” will be removed for everyone, along with its place in any lists. This
+              cannot be undone.
+            </ConfirmSheet>
+          )}
+        </div>
       </div>
     </article>
   );

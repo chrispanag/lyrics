@@ -3,10 +3,15 @@
 import { useEffect, useEffectEvent, useRef } from "react";
 
 /**
- * Asks for more as the end of a list nears the viewport. Render it after the
- * list only while there is more to load and nothing is loading: it is
- * remounted after each page, and a fresh observer reports at once, so a screen
- * tall enough to show the whole page keeps loading until it is filled.
+ * Asks for more as the end of a list nears. Render it after the list only
+ * while there is more to load and nothing is loading: it is remounted after
+ * each page, and a fresh observer reports at once, so a screen tall enough to
+ * show the whole page keeps loading until it is filled.
+ *
+ * The root is the list's own scroller when it has one — the catalog beside
+ * the lyrics — and the viewport otherwise. The margin is then a screen of
+ * that scroller, which is what "a screen ahead" means once the page itself
+ * no longer scrolls.
  */
 export function InfiniteScrollTrigger({ onLoadMore }: { onLoadMore: () => void }) {
   const target = useRef<HTMLDivElement>(null);
@@ -17,16 +22,46 @@ export function InfiniteScrollTrigger({ onLoadMore }: { onLoadMore: () => void }
     const element = target.current;
     if (!element) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) load();
-      },
-      // A screen ahead, so the next page is usually there before it is reached.
-      { rootMargin: "100% 0px" },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
+    let observer: IntersectionObserver | null = null;
+    let root: Element | null = null;
+    let watching = false;
+
+    const connect = () => {
+      const next = scrollRoot(element);
+      if (watching && next === root) return;
+      watching = true;
+      root = next;
+      observer?.disconnect();
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) load();
+        },
+        // A screen ahead, so the next page is usually there before it is reached.
+        { root, rootMargin: "100% 0px" },
+      );
+      observer.observe(element);
+    };
+
+    connect();
+    // The content column's width is what decides whether the list scrolls
+    // inside itself. Collapsing the navigation changes it without a remount.
+    const box = element.closest("main") ?? document.documentElement;
+    const watch = new ResizeObserver(connect);
+    watch.observe(box);
+    return () => {
+      observer?.disconnect();
+      watch.disconnect();
+    };
   }, []);
 
   return <div ref={target} aria-hidden className="h-px" />;
+}
+
+/** The nearest ancestor that scrolls, or none when the page itself does. */
+function scrollRoot(element: HTMLElement): Element | null {
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    const { overflowY } = getComputedStyle(parent);
+    if (overflowY === "auto" || overflowY === "scroll") return parent;
+  }
+  return null;
 }
