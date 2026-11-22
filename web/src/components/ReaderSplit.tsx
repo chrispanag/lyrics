@@ -1,7 +1,8 @@
 "use client";
 
-import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 
+import { CatalogPaneContext } from "@/lib/catalogPane";
 import { cn } from "@/lib/cn";
 import { songRefFromPath } from "@/lib/listContext";
 import { usePathname } from "@/lib/navigation";
@@ -28,11 +29,15 @@ import { usePathname } from "@/lib/navigation";
  * taller than the window, which paints a scrollbar down the screen, through
  * both headers. While the panes are up the window does not scroll
  * (`html.reader-panes` in index.css).
+ *
+ * The catalog is hidden beside a song until the panes split, and the list
+ * reads nothing while it is (`lib/catalogPane.ts`).
  */
 export function ReaderSplit({ catalog, children }: { catalog: ReactNode; children: ReactNode }) {
   const pathname = usePathname();
   const onSong = songRefFromPath(pathname) !== null;
   const frame = useRef<HTMLDivElement>(null);
+  const [split, setSplit] = useState(false);
 
   useLayoutEffect(() => {
     const frameEl = frame.current;
@@ -41,7 +46,9 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
     // The content column. Its width is what the `@3xl/app` queries answer.
     const column = frameEl.closest("main") ?? frameEl.parentElement;
     const apply = () => {
-      root.classList.toggle("reader-panes", getComputedStyle(frameEl).overflowY === "hidden");
+      const panes = getComputedStyle(frameEl).overflowY === "hidden";
+      root.classList.toggle("reader-panes", panes);
+      setSplit(panes);
     };
     apply();
     const observer = new ResizeObserver(apply);
@@ -67,7 +74,7 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
           onSong && "@max-3xl/app:hidden",
         )}
       >
-        {catalog}
+        <CatalogPaneContext value={!onSong || split}>{catalog}</CatalogPaneContext>
       </section>
       <div
         className={cn(

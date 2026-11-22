@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { User } from "@/lib/types";
 import { API, list, listById, makeList, makeUser } from "@/test/handlers";
@@ -8,6 +8,27 @@ import { renderWithProviders } from "@/test/render";
 import { server } from "@/test/server";
 import { TestApp } from "@/test/app";
 import { CurrentAddress } from "@/test/routes";
+
+/**
+ * Has the reader's frame answer as the panes do side by side. jsdom has no
+ * container width, so without this the catalog beside a song stays hidden and
+ * reads nothing (`lib/catalogPane.ts`).
+ */
+function splitPanes(): void {
+  const real = window.getComputedStyle.bind(window);
+  vi.spyOn(window, "getComputedStyle").mockImplementation((element, pseudo) => {
+    const style = real(element, pseudo);
+    const isFrame = element.querySelector(':scope > section[aria-label="Songs"]') !== null;
+    if (!isFrame) return style;
+    return new Proxy(style, {
+      get: (target, key) => {
+        if (key === "overflowY") return "hidden";
+        const value = Reflect.get(target, key, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  });
+}
 
 /*
  * Every screen inside the shell offers the hamburger. `SearchHeader` and the
@@ -64,6 +85,7 @@ describe("Reaching the navigation from every screen", () => {
     expect(screen.getByRole("heading", { name: "Select a song" })).toBeInTheDocument();
     unmount();
 
+    splitPanes();
     renderWithProviders(<TestApp />, { route: "/songs/thalassa-platia" });
 
     expect(
@@ -82,6 +104,28 @@ describe("Reaching the navigation from every screen", () => {
       "page",
     );
     expect(screen.queryByRole("heading", { name: "Select a song" })).not.toBeInTheDocument();
+  });
+
+  // A phone opening a song by its address: the list is in the page, hidden, and
+  // reads nothing until it shows.
+  it("reads no catalog for the list hidden beside a song", async () => {
+    const catalogReads: string[] = [];
+    const record = ({ request }: { request: Request }) => {
+      const { pathname } = new URL(request.url);
+      if (pathname === "/api/v1/songs" || pathname === "/api/v1/genres") {
+        catalogReads.push(pathname);
+      }
+    };
+    server.events.on("request:start", record);
+
+    renderWithProviders(<TestApp />, { route: "/songs/thalassa-platia" });
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Θάλασσα Πλατιά" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: /search songs/i })).toBeInTheDocument();
+    server.events.removeListener("request:start", record);
+    expect(catalogReads).toEqual([]);
   });
 
   it("names a dead link as one", async () => {
