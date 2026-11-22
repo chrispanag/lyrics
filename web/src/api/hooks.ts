@@ -12,6 +12,7 @@ import {
 } from "@tanstack/react-query";
 
 import { type RequestOptions, apiFetch, toQuery } from "./client";
+import { songMatchesRef } from "@/lib/listContext";
 import type {
   Genre,
   ListResponse,
@@ -145,6 +146,7 @@ function uniqueById(songs: Song[]): Song[] {
 }
 
 /**
+<<<<<<< HEAD
  * A song's read by either of its addresses, as `useSong` asks it and as a
  * prefetch on intent asks it: one definition, so the entry a hover warms is the
  * one the page finds. It sets no `staleTime`, so both follow the client's
@@ -157,8 +159,41 @@ export function songQuery(ref: string) {
   });
 }
 
+/**
+ * The song at this address as a catalog page or a list already holds it, minus
+ * its lyrics (`Song.lyrics`: list reads leave them out). Matched by slug or id,
+ * since the address may be either. Undefined when no cached page has it.
+ */
+function cachedSummary(queryClient: QueryClient, ref: string): Song | undefined {
+  const pages = queryClient.getQueriesData<
+    ListResponse<Song> | InfiniteData<ListResponse<Song>, number>
+  >({ queryKey: ["songs"] });
+  for (const [, data] of pages) {
+    const songs = data && "pages" in data ? data.pages.flatMap((page) => page.data) : data?.data;
+    const found = songs?.find((song) => songMatchesRef(song, ref));
+    if (found) return found;
+  }
+  for (const [, list] of queryClient.getQueriesData<SongList>({ queryKey: ["list"] })) {
+    const found = list?.songs?.find((song) => songMatchesRef(song, ref));
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * A song by address. Until the full read arrives, `data` may be the card the
+ * reader just clicked, from the catalog or a list in the cache: everything but
+ * the lyrics, so the header can paint at once. `isPlaceholderData` is then
+ * true, and whoever reads `lyrics` must wait rather than take it as absent.
+ */
 export function useSong(id: string | undefined) {
-  return useQuery({ ...songQuery(id ?? ""), enabled: Boolean(id) });
+  const queryClient = useQueryClient();
+  return useQuery({
+    ...songQuery(id ?? ""),
+    enabled: Boolean(id),
+    // Not `keepPreviousData`: the last song must never stand in for the next.
+    placeholderData: () => (id ? cachedSummary(queryClient, id) : undefined),
+  });
 }
 
 export function usePeople(query: string, options?: Partial<UseQueryOptions<ListResponse<Person>>>) {

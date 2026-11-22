@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { render, type RenderOptions } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 
@@ -20,10 +21,11 @@ export function renderWithProviders(
      */
     route?: string | string[];
     auth?: Partial<AuthContextValue>;
+    /** A client already holding data, for specs that start from a warm cache. */
+    queryClient?: QueryClient;
   } & Omit<RenderOptions, "wrapper"> = {},
 ) {
-  const { user = null, route = "/", auth, ...rest } = options;
-  const queryClient = testQueryClient();
+  const { user = null, route = "/", auth, queryClient = testQueryClient(), ...rest } = options;
 
   function Wrapper({ children }: { children: ReactNode }) {
     return (
