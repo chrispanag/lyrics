@@ -38,7 +38,7 @@ export const SongCard = memo(function SongCard({
 
   return (
     <Link
-      href={withQuery(songHref(song, listId), search)}
+      href={songHref(song, listId, search)}
       aria-current={current ? "page" : undefined}
       className={cn(
         cardChrome,
@@ -118,13 +118,3 @@ export const SongCard = memo(function SongCard({
     </Link>
   );
 });
-
-/** `search` merged onto `href`, which may already carry a query of its own. */
-function withQuery(href: string, search: string | undefined): string {
-  if (!search) return href;
-  const [path = href, existing] = href.split("?");
-  const params = new URLSearchParams(existing ?? "");
-  for (const [key, value] of new URLSearchParams(search)) params.set(key, value);
-  const query = params.toString();
-  return query ? `${path}?${query}` : path;
-}

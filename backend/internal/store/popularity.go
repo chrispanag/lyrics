@@ -47,24 +47,16 @@ func (s *Store) RecordSongClick(ctx context.Context, songID uuid.UUID, actorKey 
 // itself does not exist, so a caller cannot mistake a missing song for a
 // song nobody has touched.
 func (s *Store) SongPopularity(ctx context.Context, songID uuid.UUID) (SongPopularity, error) {
-	var exists bool
-	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM songs WHERE id = $1)`, songID).Scan(&exists); err != nil {
-		return SongPopularity{}, fmt.Errorf("check song: %w", translateErr(err))
-	}
-	if !exists {
-		return SongPopularity{}, ErrNotFound
-	}
-
 	var p SongPopularity
 	err := s.pool.QueryRow(ctx, `
-		SELECT anon_clicks, user_clicks, list_adds, list_users, score
-		FROM song_popularity
-		WHERE song_id = $1`, songID).Scan(
+		SELECT COALESCE(sp.anon_clicks, 0), COALESCE(sp.user_clicks, 0),
+		       COALESCE(sp.list_adds, 0), COALESCE(sp.list_users, 0),
+		       COALESCE(sp.score, 0)
+		FROM songs s
+		LEFT JOIN song_popularity sp ON sp.song_id = s.id
+		WHERE s.id = $1`, songID).Scan(
 		&p.AnonymousClicks, &p.AuthenticatedClicks, &p.ListAdds, &p.ListUsers, &p.Score)
 	if err != nil {
-		if IsNotFound(translateErr(err)) {
-			return SongPopularity{}, nil
-		}
 		return SongPopularity{}, fmt.Errorf("read song popularity: %w", translateErr(err))
 	}
 	return p, nil

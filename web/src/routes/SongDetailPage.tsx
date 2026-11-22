@@ -54,7 +54,9 @@ export function SongDetailPage() {
     // Fills the reading pane once the list is beside it, so the tools can stay
     // put and the lyrics scroll under them.
     <div className="@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:flex-col">
-      <div className="@3xl/app:hidden">
+      {/* `contents` until it is hidden: a box only as tall as the header
+          would be its whole sticky range, and it would scroll away. */}
+      <div className="contents @3xl/app:hidden">
         <SongSearch />
       </div>
       <SongArticle />
@@ -70,7 +72,9 @@ export function SongDetailPage() {
 export function SongNotFound() {
   return (
     <>
-      <div className="@3xl/app:hidden">
+      {/* `contents` until it is hidden: a box only as tall as the header
+          would be its whole sticky range, and it would scroll away. */}
+      <div className="contents @3xl/app:hidden">
         <SongSearch />
       </div>
       <SongUnavailable message="No song has this address." />

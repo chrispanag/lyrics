@@ -107,6 +107,8 @@ export function BrowsePage() {
   // Beside an open song the song names the tab and the page, and this column
   // is the list. On its own it is the page.
   const besideSong = songRefFromPath(usePathname()) !== null;
+  // The filters each card's link keeps, so the list beside the song is this one.
+  const cardSearch = catalogQuery(params);
 
   return (
     // Beside the lyrics the pane is a fixed column. The search stays put and
@@ -116,7 +118,9 @@ export function BrowsePage() {
       {/* Hidden: the search box is the page's visible heading in all but name.
           What it holds is the outline's root, which each card's h2 sits under. */}
       {!besideSong && <h1 className="sr-only">{name}</h1>}
-      <div className="@3xl/app:shrink-0">
+      {/* `contents` below `@3xl`: a box only as tall as the header would be
+          the sticky header's whole scroll range, and it would scroll away. */}
+      <div className="contents @3xl/app:block @3xl/app:shrink-0">
         <SearchHeader
           trailing={
             <Button
@@ -204,7 +208,7 @@ export function BrowsePage() {
 
           <div className="space-y-3">
             {songs.map((song) => (
-              <SongCard key={song.id} song={song} search={catalogQuery(params)} />
+              <SongCard key={song.id} song={song} search={cardSearch} />
             ))}
           </div>
 
