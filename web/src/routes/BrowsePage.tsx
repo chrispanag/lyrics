@@ -73,7 +73,7 @@ export function BrowsePage() {
     );
   }, [debounced, draft, query, setParams]);
 
-  // Every read here takes it, so a hidden list asks for nothing.
+  // Every read here takes it, so a list not yet shown asks for nothing.
   const shown = useCatalogPaneShown();
   const {
     data,

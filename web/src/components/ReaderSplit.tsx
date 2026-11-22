@@ -39,6 +39,11 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
   // render, so both render the same unloaded list; the layout effect measures
   // before the first paint.
   const [split, setSplit] = useState(false);
+  // Latched: once the list has shown it keeps reading while hidden, so coming
+  // back from a song does not refetch every page it had loaded.
+  const shown = !onSong || split;
+  const [seen, setSeen] = useState(shown);
+  if (shown && !seen) setSeen(true);
 
   useLayoutEffect(() => {
     const frameEl = frame.current;
@@ -75,7 +80,7 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
           onSong && "@max-3xl/app:hidden",
         )}
       >
-        <CatalogPaneContext value={!onSong || split}>{catalog}</CatalogPaneContext>
+        <CatalogPaneContext value={seen}>{catalog}</CatalogPaneContext>
       </section>
       <div
         className={cn(

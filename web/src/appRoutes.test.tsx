@@ -112,14 +112,17 @@ describe("Reaching the navigation from every screen", () => {
       }
     };
     server.events.on("request:start", record);
+    // Removed even when an assertion fails, so it cannot record the next test.
+    try {
+      renderWithProviders(<TestApp />, { route: "/songs/thalassa-platia" });
 
-    renderWithProviders(<TestApp />, { route: "/songs/thalassa-platia" });
-
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Θάλασσα Πλατιά" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("searchbox", { name: /search songs/i })).toBeInTheDocument();
-    server.events.removeListener("request:start", record);
+      expect(
+        await screen.findByRole("heading", { level: 1, name: "Θάλασσα Πλατιά" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("searchbox", { name: /search songs/i })).toBeInTheDocument();
+    } finally {
+      server.events.removeListener("request:start", record);
+    }
     expect(catalogReads).toEqual([]);
   });
 
