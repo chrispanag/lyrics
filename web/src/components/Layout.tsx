@@ -174,20 +174,19 @@ export function Layout({ children }: { children?: ReactNode }) {
  * placeholders until they land.
  */
 function NavEntry({ item }: { item: NavItem }) {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
-  const signedIn = Boolean(user);
+  // Only the Lists link carries the handlers (see the spread below), and
+  // `NavPanel` shows it only to a signed-in reader.
   const prefetch = useCallback(() => {
-    // Only the Lists link carries the handlers; see the spread below.
-    if (signedIn) void queryClient.prefetchQuery(queries.lists());
-  }, [queryClient, signedIn]);
+    void queryClient.prefetchQuery(queries.lists());
+  }, [queryClient]);
   const intent = useIntentPrefetch(prefetch);
 
   return (
     <NavLink
       href={item.to}
       data-guest-only={item.identityCard || undefined}
-      {...(item.warmsLists ? { ...intent, onFocus: prefetch } : undefined)}
+      {...(item.warmsLists ? intent : undefined)}
       className={({ isActive }) =>
         cn(
           "flex items-center gap-3 rounded-control px-3 py-2.5 text-sm font-medium transition-colors",

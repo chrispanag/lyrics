@@ -4,8 +4,9 @@ import { type PointerEvent, useCallback, useEffect, useRef } from "react";
 const HOVER_DELAY_MS = 75;
 
 /**
- * Handlers that start `prefetch` when the reader shows intent: a mouse resting
- * on the element for a moment, a mouse press, or a touch held as long without
+ * Handlers that start `prefetch` when the reader shows intent: a mouse or the
+ * keyboard's focus resting on the element for a moment, a mouse press, or a
+ * touch held as long without
  * turning into a scroll (touch has no hover). Leaving first cancels the wait,
  * and so does the `pointercancel` a touch sends once the browser takes it for a
  * scroll, so a finger flicking down a list loads nothing.
@@ -44,5 +45,13 @@ export function useIntentPrefetch(prefetch: () => void) {
     [cancel, wait, prefetch],
   );
 
-  return { onPointerEnter, onPointerLeave: cancel, onPointerCancel: cancel, onPointerDown };
+  return {
+    onPointerEnter,
+    onPointerLeave: cancel,
+    onPointerCancel: cancel,
+    onPointerDown,
+    // Keyboard focus waits like a hover, so tabbing past starts nothing.
+    onFocus: wait,
+    onBlur: cancel,
+  };
 }

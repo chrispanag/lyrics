@@ -110,8 +110,9 @@ function SongArticle() {
   // The song read in full. A placeholder is the catalog's card, which carries
   // no lyrics: that is not "no lyrics", and not a song that has loaded.
   const fullSong = isPlaceholderData ? undefined : song;
-  // After the session settles, so a signed-in reader is not an anonymous click.
-  useRecordSongClick(id, !sessionLoading && Boolean(song));
+  // After the session settles, so a signed-in reader is not an anonymous click,
+  // and after the full read: a cached card is not a song that has loaded.
+  useRecordSongClick(id, !sessionLoading && Boolean(fullSong));
   const deleteSong = useDeleteSong();
 
   // The list this song is read from, if any. A failure just leaves the page

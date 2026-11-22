@@ -218,6 +218,20 @@ describe("SongCard prefetch on intent", () => {
     }
   });
 
+  it("loads the song once keyboard focus has rested on the card", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const requests = recordRequests((path) => path === detail);
+    try {
+      renderWithProviders(<SongCard song={song} />);
+      act(() => screen.getByRole("link").focus());
+      await settle(200);
+
+      await waitFor(() => expect(requests.paths).toEqual([detail]));
+    } finally {
+      requests.stop();
+    }
+  });
+
   it("loads the song's page with the song, at the address the card opens", async () => {
     const requests = recordRequests((path) => path === detail);
     const backend = recordingBackend();

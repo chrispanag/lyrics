@@ -11,7 +11,7 @@ import {
   type UseQueryOptions,
 } from "@tanstack/react-query";
 
-import { useCallback } from "react";
+import { useMemo } from "react";
 
 import { type RequestOptions, apiFetch, toQuery } from "./client";
 import { songMatchesRef } from "@/lib/listContext";
@@ -98,7 +98,8 @@ export const queries = {
   song: (ref: string, request?: RequestOptions) =>
     queryOptions({
       queryKey: keys.song(ref),
-      queryFn: () => apiFetch<Song>(`/api/v1/songs/${ref}`, request),
+      // Encoded: the ref comes straight from the address bar.
+      queryFn: () => apiFetch<Song>(`/api/v1/songs/${encodeURIComponent(ref)}`, request),
     }),
   /** The signed-in reader's lists. */
   lists: () =>
@@ -173,8 +174,7 @@ function cachedSummary(queryClient: QueryClient, ref: string): Song | undefined 
     ListResponse<Song> | InfiniteData<ListResponse<Song>, number>
   >({ queryKey: ["songs"] });
   for (const [, data] of pages) {
-    // Page by page rather than flattened: this runs on every render until the
-    // song arrives, and the first match ends it.
+    // Page by page rather than flattened: the first match ends it.
     for (const page of data && "pages" in data ? data.pages : data ? [data] : []) {
       const found = page.data.find(matches);
       if (found) return found;
@@ -197,17 +197,17 @@ function cachedSummary(queryClient: QueryClient, ref: string): Song | undefined 
  */
 export function useSong(id: string | undefined, { fromCachedCard = false } = {}) {
   const queryClient = useQueryClient();
-  // Stable, so React Query reuses the placeholder rather than scanning the
-  // cache again on every render.
-  const placeholder = useCallback(
-    () => (id ? cachedSummary(queryClient, id) : undefined),
-    [queryClient, id],
+  // Looked up once per address: a function placeholder is only reused while it
+  // matched, so a miss would scan the cache again on every render.
+  const placeholder = useMemo(
+    () => (fromCachedCard && id ? cachedSummary(queryClient, id) : undefined),
+    [queryClient, id, fromCachedCard],
   );
   return useQuery({
     ...queries.song(id ?? ""),
     enabled: Boolean(id),
     // Not `keepPreviousData`: the last song must never stand in for the next.
-    ...(fromCachedCard && { placeholderData: placeholder }),
+    ...(placeholder && { placeholderData: placeholder }),
   });
 }
 

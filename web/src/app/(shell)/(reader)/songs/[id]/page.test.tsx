@@ -109,8 +109,9 @@ describe("a song's server-rendered document", () => {
     // Keyed as `useSong` keys it: the address, not the id.
     expect(queryKey).toEqual(keys.song(SLUG));
     expect((state.data as { id: string }).id).toBe(UUID);
-    // The read may be minutes old, so the page must refetch it at once.
-    expect(state.dataUpdatedAt).toBe(0);
+    // The read may be minutes old, so the page must refetch it at once; newer
+    // than an entry a failed prefetch left, so hydration still takes it.
+    expect(state.dataUpdatedAt).toBe(1);
   });
 
   // What a crawler, an agent or a screen reader gets before any JavaScript:
