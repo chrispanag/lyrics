@@ -109,12 +109,13 @@ export function useSongs(filters: SongFilters, enabled = true) {
  * loaded so far and the latest page's count, which sees songs added or removed
  * since the first.
  */
-export function useSongPages(filters: SongFilters) {
+export function useSongPages(filters: SongFilters, enabled = true) {
   return useInfiniteQuery({
     ...queries.songPages(filters),
     // Keeps the previous results on screen while a new filter's first page loads.
     placeholderData: keepPreviousData,
     select: loadedSongs,
+    enabled,
   });
 }
 
@@ -162,12 +163,12 @@ export function usePeople(query: string, options?: Partial<UseQueryOptions<ListR
 }
 
 /** A single person, used to label an active artist filter with their name. */
-export function usePerson(id: string | undefined) {
-  return useQuery({ ...queries.person(id ?? ""), enabled: Boolean(id) });
+export function usePerson(id: string | undefined, enabled = true) {
+  return useQuery({ ...queries.person(id ?? ""), enabled: Boolean(id) && enabled });
 }
 
-export function useGenres() {
-  return useQuery(queries.genres());
+export function useGenres(enabled = true) {
+  return useQuery({ ...queries.genres(), enabled });
 }
 
 /** The chips themselves, which is all a brand new genre can be seen in. */

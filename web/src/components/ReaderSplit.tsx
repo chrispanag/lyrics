@@ -1,7 +1,8 @@
 "use client";
 
-import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 
+import { CatalogPaneContext } from "@/lib/catalogPane";
 import { cn } from "@/lib/cn";
 import { songRefFromPath } from "@/lib/listContext";
 import { usePathname } from "@/lib/navigation";
@@ -33,6 +34,16 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
   const pathname = usePathname();
   const onSong = songRefFromPath(pathname) !== null;
   const frame = useRef<HTMLDivElement>(null);
+  // Whether the panes sit side by side, which decides if the catalog beside a
+  // song is shown (`lib/catalogPane.ts`). False on the server and the first
+  // render, so both render the same unloaded list; the layout effect measures
+  // before the first paint.
+  const [split, setSplit] = useState(false);
+  // Latched: once the list has shown it keeps reading while hidden, so coming
+  // back from a song does not refetch every page it had loaded.
+  const shown = !onSong || split;
+  const [seen, setSeen] = useState(shown);
+  if (shown && !seen) setSeen(true);
 
   useLayoutEffect(() => {
     const frameEl = frame.current;
@@ -41,7 +52,9 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
     // The content column. Its width is what the `@3xl/app` queries answer.
     const column = frameEl.closest("main") ?? frameEl.parentElement;
     const apply = () => {
-      root.classList.toggle("reader-panes", getComputedStyle(frameEl).overflowY === "hidden");
+      const panes = getComputedStyle(frameEl).overflowY === "hidden";
+      root.classList.toggle("reader-panes", panes);
+      setSplit(panes);
     };
     apply();
     const observer = new ResizeObserver(apply);
@@ -67,7 +80,7 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
           onSong && "@max-3xl/app:hidden",
         )}
       >
-        {catalog}
+        <CatalogPaneContext value={seen}>{catalog}</CatalogPaneContext>
       </section>
       <div
         className={cn(

@@ -25,6 +25,7 @@ import {
 import { useDebounced } from "@/lib/useDebounced";
 import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
 import { catalogName, catalogQuery, catalogView, viewGenre } from "@/lib/browse";
+import { useCatalogPaneShown } from "@/lib/catalogPane";
 import { songCount } from "@/lib/format";
 import { songRefFromPath } from "@/lib/listContext";
 import { Link, usePathname, useSearchParams, useSetSearchParams } from "@/lib/navigation";
@@ -72,9 +73,13 @@ export function BrowsePage() {
     );
   }, [debounced, draft, query, setParams]);
 
+  // Every read here takes it, so a list not yet shown asks for nothing.
+  const shown = useCatalogPaneShown();
   const {
     data,
-    isLoading,
+    // Not `isLoading`: a list held back while hidden has nothing loading, but
+    // when it shows it must show the skeletons, not "0 songs".
+    isPending,
     isError,
     error,
     hasNextPage,
@@ -82,8 +87,8 @@ export function BrowsePage() {
     isFetching,
     isFetchingNextPage,
     isFetchNextPageError,
-  } = useSongPages(filters);
-  const { data: genres } = useGenres();
+  } = useSongPages(filters, shown);
+  const { data: genres } = useGenres(shown);
 
   const setParam = (key: string, value: string | null) => {
     setParams((next) => {
@@ -94,7 +99,7 @@ export function BrowsePage() {
 
   const activeGenre = viewGenre(view, genres?.data);
   // Fetched by id so the chip can show a name rather than a UUID.
-  const { data: activePerson } = usePerson(personId);
+  const { data: activePerson } = usePerson(personId, shown);
   // The one list of what counts as a filter; the button and badge both read it.
   const filterCount = [personId, genreSlug, language].filter(Boolean).length;
   const hasFilters = filterCount > 0;
@@ -176,7 +181,7 @@ export function BrowsePage() {
       <div className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain">
         <div className="mx-auto max-w-3xl px-4 py-4">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <Tally>{isLoading ? "Searching…" : songCount(total)}</Tally>
+            <Tally>{isPending ? "Searching…" : songCount(total)}</Tally>
             {hasRole(user?.role, "contributor") && (
               // A styled Link: an anchor nested in a button is invalid.
               <Link href="/songs/new" className={buttonClasses("secondary", "sm")}>
@@ -192,9 +197,9 @@ export function BrowsePage() {
           )}
 
           {/* `h-28` restates a song card's height; update it if cards change. */}
-          {isLoading && <Skeletons count={5} className="h-28 w-full" />}
+          {isPending && <Skeletons count={5} className="h-28 w-full" />}
 
-          {!isLoading && data && songs.length === 0 && (
+          {!isPending && data && songs.length === 0 && (
             <EmptyState
               icon={<SixteenthNotes className="size-12" />}
               title={query ? "No songs matched" : "No songs yet"}
