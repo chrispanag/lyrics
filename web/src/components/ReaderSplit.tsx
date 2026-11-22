@@ -29,14 +29,15 @@ import { usePathname } from "@/lib/navigation";
  * taller than the window, which paints a scrollbar down the screen, through
  * both headers. While the panes are up the window does not scroll
  * (`html.reader-panes` in index.css).
- *
- * The catalog is hidden beside a song until the panes split, and the list
- * reads nothing while it is (`lib/catalogPane.ts`).
  */
 export function ReaderSplit({ catalog, children }: { catalog: ReactNode; children: ReactNode }) {
   const pathname = usePathname();
   const onSong = songRefFromPath(pathname) !== null;
   const frame = useRef<HTMLDivElement>(null);
+  // Whether the panes sit side by side, which decides if the catalog beside a
+  // song is shown (`lib/catalogPane.ts`). False on the server and the first
+  // render, so both render the same unloaded list; the layout effect measures
+  // before the first paint.
   const [split, setSplit] = useState(false);
 
   useLayoutEffect(() => {

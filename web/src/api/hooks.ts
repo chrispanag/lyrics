@@ -107,7 +107,7 @@ export function useSongs(filters: SongFilters, enabled = true) {
 /**
  * The catalog as an infinite list (`queries.songPages`), read as the songs
  * loaded so far and the latest page's count, which sees songs added or removed
- * since the first. `enabled` holds it back while its pane is hidden.
+ * since the first.
  */
 export function useSongPages(filters: SongFilters, enabled = true) {
   return useInfiniteQuery({

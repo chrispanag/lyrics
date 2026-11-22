@@ -18,15 +18,10 @@ function splitPanes(): void {
   const real = window.getComputedStyle.bind(window);
   vi.spyOn(window, "getComputedStyle").mockImplementation((element, pseudo) => {
     const style = real(element, pseudo);
-    const isFrame = element.querySelector(':scope > section[aria-label="Songs"]') !== null;
-    if (!isFrame) return style;
-    return new Proxy(style, {
-      get: (target, key) => {
-        if (key === "overflowY") return "hidden";
-        const value = Reflect.get(target, key, target);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-    });
+    if (element.classList.contains("reader-frame")) {
+      Object.defineProperty(style, "overflowY", { value: "hidden" });
+    }
+    return style;
   });
 }
 

@@ -73,7 +73,7 @@ export function BrowsePage() {
     );
   }, [debounced, draft, query, setParams]);
 
-  // Hidden beside a song on a narrow column, where nothing here is seen.
+  // Every read here takes it, so a hidden list asks for nothing.
   const shown = useCatalogPaneShown();
   const {
     data,
