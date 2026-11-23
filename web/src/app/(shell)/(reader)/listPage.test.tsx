@@ -7,7 +7,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { setTokenProvider } from "@/api/client";
 import { keys } from "@/api/hooks";
-import { RouteParams } from "@/lib/navigation";
 import { SongsPane } from "@/routes/SongsPane";
 import { catalogList, catalogSongs } from "@/test/catalog";
 import { API, apiError, listById, makeUnaddressedSong } from "@/test/handlers";
@@ -56,11 +55,7 @@ function boundary(tree: ReactElement) {
 
 /** The document a server would send for `tree`, as a guest. */
 function html(tree: ReactElement, id: string): string {
-  return renderToString(
-    <TestProviders route={`/lists/${id}`}>
-      <RouteParams params={{ listId: id }}>{tree}</RouteParams>
-    </TestProviders>,
-  );
+  return renderToString(<TestProviders route={`/lists/${id}`}>{tree}</TestProviders>);
 }
 
 // `listById` answers any id it was not given as the API answers a private

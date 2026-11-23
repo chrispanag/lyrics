@@ -4,36 +4,32 @@ import { describe, expect, it } from "vitest";
 
 /*
  * The reader keeps a segment of its `@catalog` slot (a list) mounted beside a
- * song, and Next merges the params of every active segment. Two routes with a
- * dynamic segment of one name would hand the song page the list's id, which the
- * test router, answering for one page at a time, never shows. So the names are
- * kept apart here. One route in both the slot and the page (`lists/[listId]`)
- * is one address, and one value, so it may repeat its name.
+ * song, and Next merges the params of every active segment into `useParams`.
+ * Two routes with a dynamic segment of one name would hand a page the other's
+ * value, which the test router, answering for one page at a time, never shows.
+ * The song page reads the address instead, but the names are kept apart here
+ * too. One route in both the slot and the page (`lists/[listId]`) is one
+ * address, so it counts once.
  */
 
-/** Each dynamic segment under `dir`: its name, and the address it sits at. */
-function dynamicSegments(dir: string, at = ""): { name: string; route: string }[] {
+/** The address of each dynamic segment under `dir`, e.g. `/lists/[listId]`. */
+function dynamicRoutes(dir: string, at = ""): string[] {
   return readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .flatMap((entry) => {
       // Slots and groups are not part of the address.
-      const part = /^[@(]/.test(entry.name) ? "" : `/${entry.name}`;
-      const route = `${at}${part}`;
-      const name = /^\[+\.{0,3}([^\]]+)\]+$/.exec(entry.name)?.[1];
-      const nested = dynamicSegments(path.join(dir, entry.name), route);
-      return name ? [{ name, route }, ...nested] : nested;
+      const route = /^[@(]/.test(entry.name) ? at : `${at}/${entry.name}`;
+      const nested = dynamicRoutes(path.join(dir, entry.name), route);
+      return entry.name.startsWith("[") ? [route, ...nested] : nested;
     });
 }
 
 describe("the reader's routes", () => {
   it("give each route's dynamic segment a name no other route uses", () => {
-    const routesByName = new Map<string, Set<string>>();
-    for (const { name, route } of dynamicSegments(import.meta.dirname)) {
-      routesByName.set(name, (routesByName.get(name) ?? new Set()).add(route));
-    }
+    const routes = new Set(dynamicRoutes(import.meta.dirname));
+    const names = [...routes].map((route) => route.slice(route.lastIndexOf("/") + 1));
 
-    expect(routesByName.get("listId")).toEqual(new Set(["/lists/[listId]"]));
-    const shared = [...routesByName].filter(([, routes]) => routes.size > 1);
-    expect(shared).toEqual([]);
+    expect(routes).toContain("/lists/[listId]");
+    expect(names).toEqual([...new Set(names)]);
   });
 });

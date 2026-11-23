@@ -8,7 +8,7 @@ import { setTokenProvider } from "@/api/client";
 import { keys } from "@/api/hooks";
 import { returnDestination } from "@/auth/returnTo";
 import { BackButton } from "@/components/BackButton";
-import { useSearchParams } from "@/lib/navigation";
+import { RouteParams, useSearchParams } from "@/lib/navigation";
 import { deferred } from "@/test/deferred";
 import {
   API,
@@ -154,6 +154,25 @@ describe("SongDetailPage popularity", () => {
 });
 
 describe("SongDetailPage", () => {
+  // Next merges every active segment's params, and the list kept beside the
+  // song is one: a param named like the song's would carry the list's id.
+  it("reads the song from the address, whatever the params hold", async () => {
+    // Only the song's own address answers, as the API does.
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, ({ params }) =>
+        params.id === "song-1" ? HttpResponse.json(makeSong()) : notFound("Song was not found."),
+      ),
+    );
+    renderWithProviders(
+      <RouteParams params={{ id: "8b6d3d33-ed96-4ff4-a65e-72834d909075" }}>
+        <SongDetailPage />
+      </RouteParams>,
+      { route: "/songs/song-1?list=8b6d3d33-ed96-4ff4-a65e-72834d909075" },
+    );
+
+    expect(await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" })).toBeInTheDocument();
+  });
+
   it("renders the title, credits, and lyrics", async () => {
     renderDetail();
 
