@@ -28,10 +28,13 @@ export function useRecordSongClick(songRef: string | undefined, enabled: boolean
       method: "POST",
       body: { visitor_id: visitorId() },
     })
-      .then((popularity) => {
+      .then(async (popularity) => {
         // The response is the tally including this opening. Fold it into the
         // song already on screen; a 204 (no tally) leaves that song as it was.
         if (!popularity) return;
+        // A refetch already in flight read the tally before this opening and
+        // would land over it; the song is on screen, so nothing is lost.
+        await queryClient.cancelQueries({ queryKey: keys.song(songRef) });
         queryClient.setQueryData<Song>(keys.song(songRef), (song) =>
           song ? { ...song, popularity } : song,
         );

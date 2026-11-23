@@ -145,6 +145,17 @@ function SongArticle() {
   const [recordingsOpen, setRecordingsOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // A sheet belongs to the song it was opened on. Stepping to another (Back,
+  // Forward, a list's arrows) closes them, rather than showing the next song's
+  // counts or recordings under the same title.
+  const [sheetsFor, setSheetsFor] = useState(id);
+  if (sheetsFor !== id) {
+    setSheetsFor(id);
+    setListSheetOpen(false);
+    setRecordingsOpen(false);
+    setStatsOpen(false);
+    setConfirmDelete(false);
+  }
   // Only the buttons' limits read this: the lyrics are sized by CSS from the
   // attribute the boot script set before first paint (lib/fontSize).
   const [fontSizeIndex, setFontSizeIndex] = useStoredState(DEFAULT_FONT_SIZE, drawnFontSize);
