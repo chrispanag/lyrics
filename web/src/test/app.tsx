@@ -39,7 +39,7 @@ const layouts = import.meta.glob<Module>(["/src/app/**/layout.tsx", "!/src/app/l
 /** The screen each async page renders, by route pattern. */
 const SERVER_PAGES: Record<string, ReactNode> = {
   "/": <SongsPane />,
-  "/lists/:id": <SongsPane list={<ListDetailPage />} />,
+  "/lists/:listId": <SongsPane list={<ListDetailPage />} />,
   "/songs/:id": <SongDetailPage />,
 };
 

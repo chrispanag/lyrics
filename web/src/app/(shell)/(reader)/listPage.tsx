@@ -92,9 +92,9 @@ function cacheEntry(id: string, list: SongList): DehydratedState {
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ listId: string }>;
 }): Promise<Metadata> {
-  const { id } = await params;
+  const { listId: id } = await params;
   const list = await loadList(id);
   if (list === "hidden") return { robots: { index: false } };
   if (!list) return {};
@@ -118,8 +118,13 @@ export async function generateMetadata({
   };
 }
 
-export default async function ListPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+/*
+ * `listId`, not `id`: the slot keeps this segment beside a song, and Next
+ * merges every active segment's params, so a shared name would hand the song
+ * page the list's id. `routeParams.test.ts` keeps the reader's names apart.
+ */
+export default async function ListPage({ params }: { params: Promise<{ listId: string }> }) {
+  const { listId: id } = await params;
   const read = await loadList(id);
   const list = read === "hidden" ? null : read;
 

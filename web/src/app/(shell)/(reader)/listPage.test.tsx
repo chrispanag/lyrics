@@ -33,7 +33,7 @@ const publicList = catalogList(2, {
   description: "Songs for August",
 });
 
-const props = (id: string) => ({ params: Promise.resolve({ id }) });
+const props = (id: string) => ({ params: Promise.resolve({ listId: id }) });
 
 /** The page's top-level elements, a `false` from each `&&` left out. */
 function topLevel(tree: ReactElement): ReactElement<Record<string, unknown>>[] {
@@ -58,7 +58,7 @@ function boundary(tree: ReactElement) {
 function html(tree: ReactElement, id: string): string {
   return renderToString(
     <TestProviders route={`/lists/${id}`}>
-      <RouteParams params={{ id }}>{tree}</RouteParams>
+      <RouteParams params={{ listId: id }}>{tree}</RouteParams>
     </TestProviders>,
   );
 }
