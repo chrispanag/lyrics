@@ -975,7 +975,7 @@ describe("sign-in and sign-up screens", () => {
         routes={{
           "/start": <SentToSignIn />,
           "/login": <LoginPage />,
-          "/lists/:id": <CurrentAddress />,
+          "/lists/:listId": <CurrentAddress />,
         }}
       />,
       { route: "/start", auth: { login } },

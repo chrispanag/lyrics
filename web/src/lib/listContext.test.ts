@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { listInView, songCanonicalHref, songRefIsId, songSection } from "./listContext";
+import {
+  listInView,
+  songCanonicalHref,
+  songRefFromPath,
+  songRefIsId,
+  songSection,
+} from "./listContext";
 
 /*
  * The two halves of the id-to-slug redirect, pinned from both sides: too narrow
@@ -50,6 +56,20 @@ describe("songCanonicalHref", () => {
     expect(songCanonicalHref("thalassa-platia", { tag: ["a", "b"] })).toBe(
       "/songs/thalassa-platia?tag=a&tag=b",
     );
+  });
+});
+
+describe("songRefFromPath", () => {
+  it("is the song an address names, decoded as the route's params are", () => {
+    expect(songRefFromPath("/songs/thalassa-platia")).toBe("thalassa-platia");
+    expect(songRefFromPath("/songs/thalassa%2Dplatia")).toBe("thalassa-platia");
+    expect(songRefFromPath("/songs/bad%E0%A4%A")).toBe("bad%E0%A4%A");
+  });
+
+  it("is no song off a song's own address", () => {
+    expect(songRefFromPath("/songs/new")).toBeNull();
+    expect(songRefFromPath("/songs/thalassa-platia/edit")).toBeNull();
+    expect(songRefFromPath("/lists/list-1")).toBeNull();
   });
 });
 

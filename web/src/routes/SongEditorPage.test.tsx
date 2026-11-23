@@ -35,7 +35,7 @@ function renderEditor(options: Parameters<typeof renderWithProviders>[1] = {}) {
         "/songs/new": <SongEditorPage />,
         "/songs/:id/edit": <SongEditorPage />,
         "/songs/:id": <SongStub />,
-        "/lists/:id": <h1>List page</h1>,
+        "/lists/:listId": <h1>List page</h1>,
         "/": <h1>Catalog</h1>,
       }}
     />,

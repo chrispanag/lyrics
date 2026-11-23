@@ -27,7 +27,10 @@ function dynamicRoutes(dir: string, at = ""): string[] {
 describe("the reader's routes", () => {
   it("give each route's dynamic segment a name no other route uses", () => {
     const routes = new Set(dynamicRoutes(import.meta.dirname));
-    const names = [...routes].map((route) => route.slice(route.lastIndexOf("/") + 1));
+    // The param's name, so `[...id]` and `[[...id]]` collide with `[id]`.
+    const names = [...routes].map((route) =>
+      route.slice(route.lastIndexOf("/") + 1).replace(/^\[{1,2}(?:\.{3})?|\]{1,2}$/g, ""),
+    );
 
     expect(routes).toContain("/lists/[listId]");
     expect(names).toEqual([...new Set(names)]);

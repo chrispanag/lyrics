@@ -57,7 +57,7 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
         "/login": <SignInStub />,
         // The list page Back has to reach again, with the real `BackButton`:
         // push versus replace is only visible by pressing Back.
-        "/lists/:id": (
+        "/lists/:listId": (
           <div>
             <h1>List page</h1>
             <BackButton />
