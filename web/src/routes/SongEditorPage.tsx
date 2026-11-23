@@ -7,6 +7,7 @@ import { errorDetails, errorMessage } from "@/api/client";
 import { useCreateSong, useGenres, useSong, useUpdateSong } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { cardChrome } from "@/components/cardStyles";
+import { PageHeader } from "@/components/PageHeader";
 import { PageTitle } from "@/components/PageTitle";
 import { Page } from "@/components/Page";
 import { Waiting } from "@/routes/guards";
@@ -353,7 +354,7 @@ export function SongEditorPage() {
   return (
     <Page width="form">
       <PageTitle name={heading} />
-      <h1 className="mb-6 text-2xl font-bold tracking-tight">{heading}</h1>
+      <PageHeader title={heading} className="mb-6" />
 
       <form onSubmit={onSubmit} className="space-y-5" noValidate>
         {error && <ErrorMessage>{error}</ErrorMessage>}
