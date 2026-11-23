@@ -299,14 +299,13 @@ function SongArticle() {
             {!fullSong ? (
               <Skeleton className="h-64 w-full" />
             ) : fullSong.lyrics?.trim() ? (
-              // whitespace-pre-line keeps the stored line and verse breaks.
               // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
               <p
                 lang={fullSong.language}
-                className="lyrics-size whitespace-pre-line leading-loose text-fg"
+                className="lyrics-size leading-loose text-fg"
                 style={{ fontFamily: "var(--font-lyrics)" }}
               >
-                {fullSong.lyrics}
+                <LyricsLines lyrics={fullSong.lyrics} />
               </p>
             ) : (
               <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>
@@ -537,6 +536,30 @@ function OnlyRecording({ recording }: { recording: Recording }) {
       {recording.notes && <RecordingNotes notes={recording.notes} />}
     </div>
   );
+}
+
+/**
+ * The lyrics, one block per stored line, each with a hanging indent: on a
+ * narrow screen a line too long to fit wraps with its remainder indented, so a
+ * continuation never reads as the next line. `text-indent` reaches only a
+ * block's first line, hence a block per line. Plain text throughout: lyrics are
+ * user input.
+ *
+ * A blank line is a `<br>`, not an empty block held open: an empty block adds
+ * nothing to a copied selection, which would run the verses together. A line
+ * of only spaces is blank too, since its spaces collapse to nothing. Leading
+ * and trailing breaks, which a pasted textarea often stores, are dropped.
+ */
+function LyricsLines({ lyrics }: { lyrics: string }) {
+  return lyrics
+    .trim()
+    .split(/\r?\n/)
+    .map((line, index) => (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one string's lines, never reordered.
+      <span key={index} className="block pl-[1em] -indent-[1em]">
+        {line.trim() ? line : <br />}
+      </span>
+    ));
 }
 
 /** One labeled row of the header's credits; the value is names or a year. */

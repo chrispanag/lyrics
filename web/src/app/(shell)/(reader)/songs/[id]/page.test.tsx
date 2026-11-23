@@ -129,7 +129,8 @@ describe("a song's server-rendered document", () => {
     expect(html).toMatch(/<h1[^>]*>Θάλασσα Πλατιά<\/h1>/);
     expect(html).toMatch(/<header[^>]*lang="el"/);
     expect(html).toContain("Μίκης Θεοδωράκης");
-    expect(html).toMatch(/<p[^>]*lang="el"[^>]*>Στης θάλασσας τα βάθη/);
+    // A block per line, inside the paragraph that carries the language.
+    expect(html).toMatch(/<p[^>]*lang="el"[^>]*><span[^>]*>Στης θάλασσας τα βάθη<\/span>/);
   });
 
   it("answers 404 when the API says no such song exists", async () => {
