@@ -605,7 +605,8 @@ describe("SongDetailPage recordings", () => {
 
     renderDetail();
 
-    expect(await screen.findByText("Columbia · First recording")).toBeInTheDocument();
+    expect(await screen.findByText("Columbia")).toBeInTheDocument();
+    expect(screen.getByText("First recording")).toBeInTheDocument();
     expect(screen.getByText("Recorded in Athens.")).toBeInTheDocument();
     expect(screen.getAllByText("1964")).toHaveLength(1);
     expect(screen.getAllByText("Γιώργος Νταλάρας")).toHaveLength(1);

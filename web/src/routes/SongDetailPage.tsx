@@ -42,7 +42,7 @@ import { sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
 import { Link, usePathname, useRouter, useSearchParams } from "@/lib/navigation";
 import { useStoredState } from "@/lib/useStoredState";
-import { RecordingsSheet } from "@/components/RecordingsSheet";
+import { FirstRecordingBadge, RecordingNotes, RecordingsSheet } from "@/components/RecordingsSheet";
 
 /**
  * A song. While the list is put away, the catalog's search box sits above the
@@ -408,15 +408,18 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
         {year && <CreditRow label="Year">{year}</CreditRow>}
       </dl>
 
-      {onlyRecording && <OnlyRecording recording={onlyRecording} />}
-      {song.recordings.length > 1 && (
-        <button
-          type="button"
-          onClick={onShowRecordings}
-          className="mt-2 text-sm font-medium text-fg-accent hover:underline"
-        >
-          Show all {recordingCount(song.recordings.length)}
-        </button>
+      {onlyRecording ? (
+        <OnlyRecording recording={onlyRecording} />
+      ) : (
+        song.recordings.length > 0 && (
+          <button
+            type="button"
+            onClick={onShowRecordings}
+            className="mt-2 text-sm font-medium text-fg-accent hover:underline"
+          >
+            Show all {recordingCount(song.recordings.length)}
+          </button>
+        )
       )}
 
       {song.genres.length > 0 && (
@@ -518,14 +521,18 @@ function AddToListSheet({
  * notes remain. Nothing at all when the row has none of them.
  */
 function OnlyRecording({ recording }: { recording: Recording }) {
-  // Keyed on the flag, as in the sheet: being the only one makes no claim.
-  const facts = [recording.label, recording.is_first ? "First recording" : null].filter(Boolean);
-  if (facts.length === 0 && !recording.notes) return null;
+  if (!recording.label && !recording.is_first && !recording.notes) return null;
 
   return (
-    <div className="mt-2 text-sm text-fg-muted">
-      {facts.length > 0 && <p>{facts.join(" · ")}</p>}
-      {recording.notes && <p className="mt-1 whitespace-pre-line">{recording.notes}</p>}
+    <div className="mt-2">
+      {(recording.label || recording.is_first) && (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
+          {recording.label}
+          {/* Keyed on the flag, as in the sheet: being the only one makes no claim. */}
+          {recording.is_first && <FirstRecordingBadge />}
+        </p>
+      )}
+      {recording.notes && <RecordingNotes notes={recording.notes} />}
     </div>
   );
 }

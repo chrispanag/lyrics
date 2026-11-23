@@ -26,6 +26,11 @@ import { Link } from "@/lib/navigation";
 import { applyTheme, storeTheme, storedTheme, type Theme } from "@/lib/theme";
 import { useStoredState } from "@/lib/useStoredState";
 
+/** A display name as the API should hold it: trimmed, and null when blank. */
+function normalizedName(name: string | null): string | null {
+  return name?.trim() || null;
+}
+
 const THEME_OPTIONS: { value: Theme; label: string; icon?: typeof Sun }[] = [
   { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
@@ -89,8 +94,10 @@ export function ProfilePage() {
   // The name as the save would send it, so a save that would change nothing,
   // padding included, is not offered. A successful save moves the stored name
   // to match, which disables the button again.
-  const nameToSend = displayName.trim() || null;
-  const nameUnchanged = nameToSend === user.display_name;
+  // The stored name is normalized too: one saved by another client with
+  // padding must not offer a save on load.
+  const nameToSend = normalizedName(displayName);
+  const nameUnchanged = nameToSend === normalizedName(user.display_name);
 
   const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
