@@ -26,6 +26,11 @@ import { Link } from "@/lib/navigation";
 import { applyTheme, storeTheme, storedTheme, type Theme } from "@/lib/theme";
 import { useStoredState } from "@/lib/useStoredState";
 
+/** A display name as the API should hold it: trimmed, and null when blank. */
+function normalizedName(name: string | null): string | null {
+  return name?.trim() || null;
+}
+
 const THEME_OPTIONS: { value: Theme; label: string; icon?: typeof Sun }[] = [
   { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
@@ -86,14 +91,20 @@ export function ProfilePage() {
     );
   }
 
+  // The name as the save would send it, so a save that would change nothing,
+  // padding included, is not offered. A successful save moves the stored name
+  // to match, which disables the button again.
+  // The stored name is normalized too: one saved by another client with
+  // padding must not offer a save on load.
+  const nameToSend = normalizedName(displayName);
+  const nameUnchanged = nameToSend === normalizedName(user.display_name);
+
   const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     try {
       // The PATCH returns the updated user, saving a GET /me.
-      const updated = await updateProfile.mutateAsync({
-        display_name: displayName.trim() || null,
-      });
+      const updated = await updateProfile.mutateAsync({ display_name: nameToSend });
       await reload(updated);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -182,10 +193,15 @@ export function ProfilePage() {
           <Input
             id="display-name"
             value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
+            onChange={(event) => {
+              setDisplayName(event.target.value);
+              // A failed save's error belongs to the name it tried; once the
+              // name is back to the stored one there is nothing to retry.
+              setError("");
+            }}
           />
         </Field>
-        <Button type="submit" loading={updateProfile.isPending}>
+        <Button type="submit" loading={updateProfile.isPending} disabled={nameUnchanged}>
           {saved ? "Saved" : "Save changes"}
         </Button>
       </form>

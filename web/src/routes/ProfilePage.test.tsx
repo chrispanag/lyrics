@@ -141,6 +141,38 @@ describe("ProfilePage", () => {
     await waitFor(() => expect(sent).toBeNull());
   });
 
+  // Compared as the save would send it, so padding alone changes nothing.
+  it("offers a save only while the name differs from the stored one", async () => {
+    renderWithProviders(<ProfilePage />, { user: makeUser({ display_name: "Μαρία" }) });
+    const field = screen.getByLabelText("Display name");
+    const save = screen.getByRole("button", { name: "Save changes" });
+
+    expect(save).toBeDisabled();
+
+    await userEvent.type(field, "  ");
+    expect(save).toBeDisabled();
+
+    await userEvent.type(field, " Κ.");
+    expect(save).toBeEnabled();
+
+    await userEvent.clear(field);
+    await userEvent.type(field, "Μαρία");
+    expect(save).toBeDisabled();
+  });
+
+  it("offers no save again once the name is stored", async () => {
+    server.use(
+      http.patch(`${API}/api/v1/me`, () => HttpResponse.json(makeUser({ display_name: "Μαρία" }))),
+    );
+    const start = makeUser({ display_name: null });
+
+    renderWithProviders(<LiveAccount start={start} />, { user: start });
+    await userEvent.type(screen.getByLabelText("Display name"), "Μαρία");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByRole("button", { name: "Saved" })).toBeDisabled();
+  });
+
   it("says so when the display name cannot be saved", async () => {
     server.use(
       http.patch(`${API}/api/v1/me`, () => apiError(500, "internal", "Something went wrong.")),
@@ -154,6 +186,25 @@ describe("ProfilePage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong.");
     expect(reload).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
+  });
+
+  // The button turns off once the name is back to the stored one, so an error
+  // left up would point at a save there is no way to retry.
+  it("clears a failed save's error once the name is edited", async () => {
+    server.use(
+      http.patch(`${API}/api/v1/me`, () => apiError(500, "internal", "Something went wrong.")),
+    );
+
+    renderWithProviders(<ProfilePage />, { user: makeUser() });
+    const field = screen.getByLabelText("Display name");
+    await userEvent.type(field, "Μαρία");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByRole("alert");
+
+    await userEvent.clear(field);
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 
   it("signs out from the button at the foot of the page", async () => {

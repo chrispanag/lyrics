@@ -4,6 +4,27 @@ import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import type { Recording } from "@/lib/types";
 
 /**
+ * The mark a recording carries when it is the first, in the sheet and on a song
+ * with only one. The brand ramp stops at 900, so no `brand-950` here. English
+ * even inside the song's `lang`, where the lone recording places it.
+ */
+export function FirstRecordingBadge() {
+  return (
+    <span
+      lang="en"
+      className="rounded-full bg-accent-subtle px-2 py-0.5 text-xs font-medium text-fg-accent-subtle"
+    >
+      First recording
+    </span>
+  );
+}
+
+/** A recording's notes, with the contributor's own line breaks. */
+export function RecordingNotes({ notes }: { notes: string }) {
+  return <p className="mt-1 whitespace-pre-line text-sm text-fg-muted">{notes}</p>;
+}
+
+/**
  * Every recording of a song, in the order the server sent them. Not re-sorted:
  * the server owns the "first recording" order.
  */
@@ -46,21 +67,12 @@ export function RecordingsSheet({
                   {recording.label && hasPerformers && (
                     <p className="text-sm text-fg-muted">{recording.label}</p>
                   )}
-                  {recording.notes && (
-                    <p className="mt-1 whitespace-pre-line text-sm text-fg-muted">
-                      {recording.notes}
-                    </p>
-                  )}
+                  {recording.notes && <RecordingNotes notes={recording.notes} />}
                 </div>
 
                 <div className="shrink-0 text-right text-sm">
-                  {/* Keyed on the flag, never on index 0. The brand ramp stops
-                      at 900, so no `brand-950` here. */}
-                  {recording.is_first && (
-                    <span className="rounded-full bg-accent-subtle px-2 py-0.5 text-xs font-medium text-fg-accent-subtle">
-                      First recording
-                    </span>
-                  )}
+                  {/* Keyed on the flag, never on index 0. */}
+                  {recording.is_first && <FirstRecordingBadge />}
                   {recording.release_year !== null && hasOwnText && (
                     <p className="mt-1 text-fg-muted">{recording.release_year}</p>
                   )}

@@ -35,14 +35,14 @@ import {
   storeFontSize,
 } from "@/lib/fontSize";
 import { listInView, listPosition, songRefFromPath, songRefHref } from "@/lib/listContext";
-import { canEditSong, hasRole, type Song } from "@/lib/types";
+import { canEditSong, hasRole, type Recording, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { headerBarPadding } from "@/components/SearchHeader";
 import { sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
 import { Link, usePathname, useRouter, useSearchParams } from "@/lib/navigation";
 import { useStoredState } from "@/lib/useStoredState";
-import { RecordingsSheet } from "@/components/RecordingsSheet";
+import { FirstRecordingBadge, RecordingNotes, RecordingsSheet } from "@/components/RecordingsSheet";
 
 /**
  * A song. While the list is put away, the catalog's search box sits above the
@@ -338,7 +338,9 @@ function SongArticle() {
             <RecordingsSheet
               recordings={song.recordings}
               language={song.language}
-              open={recordingsOpen}
+              // Only reachable past one recording: a refetch that leaves one
+              // closes it rather than stranding it with nothing to return to.
+              open={recordingsOpen && song.recordings.length > 1}
               onClose={() => setRecordingsOpen(false)}
             />
           )}
@@ -372,8 +374,9 @@ function SongArticle() {
 }
 
 /**
- * A song's title, credits, genres and the way into its recordings. The
- * skeleton in `SongArticle` mirrors its spacing; change both together.
+ * A song's title, credits, genres and its recordings: a lone one inline, or the
+ * way into several. The skeleton in `SongArticle` mirrors its spacing; change
+ * both together.
  */
 function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: () => void }) {
   const creditsByRole = groupCredits(song.credits);
@@ -383,6 +386,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
   // hedge between them. See CLAUDE.md, "Recordings".
   const performers = songPerformers(song);
   const year = song.release_year;
+  const onlyRecording = song.recordings.length === 1 ? song.recordings[0] : undefined;
 
   return (
     /* The song's own language: the title is content too. */
@@ -406,15 +410,18 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
         {year && <CreditRow label="Year">{year}</CreditRow>}
       </dl>
 
-      {/* Offered for one recording too: only the sheet shows labels and notes. */}
-      {song.recordings.length > 0 && (
-        <button
-          type="button"
-          onClick={onShowRecordings}
-          className="mt-2 text-sm font-medium text-fg-accent hover:underline"
-        >
-          Show all {recordingCount(song.recordings.length)}
-        </button>
+      {onlyRecording ? (
+        <OnlyRecording recording={onlyRecording} />
+      ) : (
+        song.recordings.length > 0 && (
+          <button
+            type="button"
+            onClick={onShowRecordings}
+            className="mt-2 text-sm font-medium text-fg-accent hover:underline"
+          >
+            Show all {recordingCount(song.recordings.length)}
+          </button>
+        )
       )}
 
       {song.genres.length > 0 && (
@@ -506,6 +513,29 @@ function AddToListSheet({
         Manage lists
       </Link>
     </Sheet>
+  );
+}
+
+/**
+ * What the recordings sheet would add about a song's only recording, in its
+ * place. Its performers, year and video are already on the page, as the song's
+ * copies of this same row, so only the label, the first-recording mark and the
+ * notes remain. Nothing at all when the row has none of them.
+ */
+function OnlyRecording({ recording }: { recording: Recording }) {
+  if (!recording.label && !recording.is_first && !recording.notes) return null;
+
+  return (
+    <div className="mt-2">
+      {(recording.label || recording.is_first) && (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
+          {recording.label}
+          {/* Keyed on the flag, as in the sheet: being the only one makes no claim. */}
+          {recording.is_first && <FirstRecordingBadge />}
+        </p>
+      )}
+      {recording.notes && <RecordingNotes notes={recording.notes} />}
+    </div>
   );
 }
 
