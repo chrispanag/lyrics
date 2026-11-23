@@ -318,7 +318,7 @@ describe("SongDetailPage", () => {
     expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
   });
 
-  // A guest is offered Save and sent to sign in.
+  // A guest is offered Add to list and sent to sign in.
   it("offers Add to list to a guest and sends them to sign in", async () => {
     const user = userEvent.setup();
 

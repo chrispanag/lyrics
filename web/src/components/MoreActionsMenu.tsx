@@ -103,7 +103,10 @@ export function MoreActionsMenu({
   useLayoutEffect(() => {
     const panel = menu.current;
     if (!open || !panel || !trigger.current) return;
-    panel.showPopover();
+    // Optional: the default browserslist reaches engines without the Popover
+    // API (Safari 16.4, Firefox 111). There the panel opens in the flow,
+    // possibly clipped by the pane, rather than the press throwing.
+    panel.showPopover?.();
     if (!anchorsSupported()) placeUnanchored(panel, trigger.current);
     const list = itemsOf(panel);
     const target = enterAt.current === "last" ? list.at(-1) : list[0];
@@ -130,19 +133,32 @@ export function MoreActionsMenu({
     // On the document, so Escape also closes a menu opened by pointer, where
     // focus is still on the trigger.
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      // Left and Right page through a list on the window, which would change
+      // the song under an open menu. Held here, before the window hears them.
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.stopPropagation();
+        return;
+      }
       if (event.key !== "Escape") return;
       event.preventDefault();
       // `close`, spelled out: from the keyboard, so the ring shows.
       trigger.current?.focus();
       setOpen(false);
     };
+    // Placed once by `placeUnanchored`, so a scroll would leave it behind.
+    const anchored = anchorsSupported();
+    const onScroll = (event: Event) => {
+      if (!(event.target instanceof Node && menu.current?.contains(event.target))) setOpen(false);
+    };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("focusin", onFocusIn);
     document.addEventListener("keydown", onKeyDown);
+    if (!anchored) document.addEventListener("scroll", onScroll, { capture: true, passive: true });
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("keydown", onKeyDown);
+      if (!anchored) document.removeEventListener("scroll", onScroll, { capture: true });
     };
   }, [open]);
 
@@ -185,7 +201,13 @@ export function MoreActionsMenu({
     list[next]?.focus();
   };
 
-  if (Children.toArray(children).length === 0) return null;
+  const hasItems = Children.toArray(children).length > 0;
+  // Shut, not merely hidden, once it can no longer act: an `open` left behind
+  // would keep the document listeners (Escape among them) and, on coming back,
+  // mount a panel the layout effect never shows.
+  if (open && (disabled || !hasItems)) setOpen(false);
+
+  if (!hasItems) return null;
 
   return (
     <Menu.Provider value={{ close }}>
@@ -216,7 +238,7 @@ export function MoreActionsMenu({
           aria-labelledby={triggerId}
           onKeyDown={onMenuKeyDown}
           className={cn(
-            "action-menu z-dropdown min-w-44 max-w-[calc(100vw-2rem)]",
+            "action-menu min-w-44 max-w-[calc(100vw-2rem)]",
             "rounded-control border border-line bg-surface p-1 text-fg shadow-popover",
           )}
           style={{ positionAnchor: anchor }}
