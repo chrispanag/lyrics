@@ -16,6 +16,7 @@ import { Avatar } from "@/components/Avatar";
 import { actionLabel, segmentClasses, segmentedTrack } from "@/components/buttonStyles";
 import { cardChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
+import { Page } from "@/components/Page";
 import { sectionLabel } from "@/components/textStyles";
 import {
   Button,
@@ -68,7 +69,7 @@ export function AdminConsole({ children }: { children: ReactNode }) {
   const current = ADMIN_TABS.find((tab) => pathMatches(pathname, tab.to));
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6">
+    <Page width="content">
       <PageTitle name={current ? `Admin · ${current.label}` : "Admin"} />
       {/* The section's name above the screen's, in the song page's label style. */}
       <p className={sectionLabel}>Admin</p>
@@ -89,7 +90,7 @@ export function AdminConsole({ children }: { children: ReactNode }) {
       </nav>
 
       {children}
-    </div>
+    </Page>
   );
 }
 

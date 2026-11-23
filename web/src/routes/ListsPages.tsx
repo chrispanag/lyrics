@@ -30,6 +30,7 @@ import { paneActionLabel } from "@/components/buttonStyles";
 import { cardChrome, cardHover, tagChrome } from "@/components/cardStyles";
 import { ListBar, ListSkeleton } from "@/components/ListBar";
 import { PageTitle } from "@/components/PageTitle";
+import { Page } from "@/components/Page";
 import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { SongRow } from "@/components/SongRow";
 import {
@@ -120,7 +121,7 @@ export function ListsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6">
+    <Page width="content">
       <PageTitle name="Your lists" />
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Your lists</h1>
@@ -192,7 +193,7 @@ export function ListsPage() {
           </Button>
         </form>
       </Sheet>
-    </div>
+    </Page>
   );
 }
 

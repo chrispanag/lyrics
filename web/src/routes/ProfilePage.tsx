@@ -10,6 +10,7 @@ import { Avatar } from "@/components/Avatar";
 import { Button, ErrorMessage, Field, Input, Sheet } from "@/components/ui";
 import { buttonClasses, segmentClasses, segmentedTrack } from "@/components/buttonStyles";
 import { panelChrome } from "@/components/cardStyles";
+import { Page } from "@/components/Page";
 import { PageTitle } from "@/components/PageTitle";
 import { Waiting } from "@/routes/guards";
 import type { Identity } from "@/lib/avatar";
@@ -67,11 +68,13 @@ export function ProfilePage() {
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-md px-4 py-10 text-center">
+      <Page width="form">
         <PageTitle name="Profile" />
         <h1 className="text-2xl font-bold tracking-tight">You are browsing as a guest</h1>
         <p className="mt-2 text-sm text-fg-muted">Sign in to build lists of songs.</p>
-        <div className="mt-6 flex flex-col gap-2">
+        {/* Stacked on a phone; a row from `sm`, where full-width buttons would
+            stretch across the form column. */}
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row">
           <Link href="/login" className={buttonClasses("primary", "lg")}>
             Sign in
           </Link>
@@ -81,7 +84,7 @@ export function ProfilePage() {
         </div>
 
         <ThemeToggle theme={theme} onChange={selectTheme} className="mt-10" />
-      </div>
+      </Page>
     );
   }
 
@@ -135,7 +138,7 @@ export function ProfilePage() {
   };
 
   return (
-    <div className="mx-auto max-w-md px-4 py-6">
+    <Page width="form">
       <PageTitle name="Profile" />
       <h1 className="mb-6 text-2xl font-bold tracking-tight">Profile</h1>
 
@@ -174,7 +177,9 @@ export function ProfilePage() {
         </div>
       </dl>
 
-      <form onSubmit={onSubmit} className="space-y-4">
+      {/* A name is short: the field keeps the narrow column it had, rather than
+          running across the whole form width. */}
+      <form onSubmit={onSubmit} className="max-w-md space-y-4">
         {error && <ErrorMessage>{error}</ErrorMessage>}
         <Field label="Display name" htmlFor="display-name" hint="Shown instead of your email">
           <Input
@@ -191,7 +196,10 @@ export function ProfilePage() {
       <div className="mt-8">
         <SectionHeading>Security</SectionHeading>
         {/* A link: changing a password is its own emailed-code flow. */}
-        <Link href="/change-password" className={buttonClasses("secondary", "lg", "w-full")}>
+        <Link
+          href="/change-password"
+          className={buttonClasses("secondary", "lg", "w-full sm:w-fit")}
+        >
           <KeyRound aria-hidden className="size-4" />
           Change password
         </Link>
@@ -199,11 +207,11 @@ export function ProfilePage() {
 
       <ThemeToggle theme={theme} onChange={selectTheme} className="mt-8" />
 
-      <Button variant="ghost" className="mt-8 w-full" onClick={() => void logout()}>
+      <Button variant="ghost" className="mt-8 w-full sm:w-fit" onClick={() => void logout()}>
         <LogOut aria-hidden className="size-4" />
         Sign out
       </Button>
-    </div>
+    </Page>
   );
 }
 
@@ -362,11 +370,13 @@ function ThemeToggle({
   return (
     <div className={className}>
       <SectionHeading id={`${id}-heading`}>Appearance</SectionHeading>
-      <fieldset aria-labelledby={`${id}-heading`} className={segmentedTrack}>
+      {/* Fitted from `sm`, as the admin tabs are: three segments need nothing
+          like the form column's width. */}
+      <fieldset aria-labelledby={`${id}-heading`} className={cn(segmentedTrack, "sm:w-fit")}>
         {THEME_OPTIONS.map((option) => (
           <label
             key={option.value}
-            className={segmentClasses(theme === option.value, "flex-1 cursor-pointer")}
+            className={segmentClasses(theme === option.value, "flex-1 cursor-pointer px-5")}
           >
             <input
               type="radio"
