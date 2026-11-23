@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 
+import { contentWidth } from "@/components/Page";
 import { PageTitle } from "@/components/PageTitle";
 import { CatalogPaneContext, SongOpenContext, useSongOpen } from "@/lib/catalogPane";
 import { cn } from "@/lib/cn";
@@ -132,7 +133,7 @@ export function ReaderPane({
           the sticky header's whole scroll range, and it would scroll away. */}
       <div className="contents @3xl/app:block @3xl/app:shrink-0">{header}</div>
       <div className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain">
-        <div className="mx-auto max-w-3xl px-4 py-4">{children}</div>
+        <div className={cn("mx-auto px-4 py-4", contentWidth)}>{children}</div>
       </div>
     </div>
   );

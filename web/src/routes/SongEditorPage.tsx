@@ -8,6 +8,7 @@ import { useCreateSong, useGenres, useSong, useUpdateSong } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { cardChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
+import { Page } from "@/components/Page";
 import { Waiting } from "@/routes/guards";
 import { PersonAutocomplete, type PersonSelection } from "@/components/PersonAutocomplete";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
@@ -202,13 +203,13 @@ export function SongEditorPage() {
   // song, so saving an empty form would blank it.
   if (isEdit && (songFailed || !existing)) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-6">
+      <Page width="form">
         <PageTitle name="Edit song" />
         <ErrorMessage>
           This song could not be loaded, so it cannot be edited right now. Reload the page to try
           again.
         </ErrorMessage>
-      </div>
+      </Page>
     );
   }
 
@@ -350,7 +351,7 @@ export function SongEditorPage() {
   const saving = createSong.isPending || updateSong.isPending;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
+    <Page width="form">
       <PageTitle name={heading} />
       <h1 className="mb-6 text-2xl font-bold tracking-tight">{heading}</h1>
 
@@ -737,6 +738,6 @@ export function SongEditorPage() {
           </Button>
         </div>
       </form>
-    </div>
+    </Page>
   );
 }

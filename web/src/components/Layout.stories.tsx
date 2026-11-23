@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { Layout } from "./Layout";
+import { Page } from "./Page";
 import { MenuHeader } from "./SearchHeader";
 import { applyNavCollapsed, storeNavCollapsed } from "@/lib/navCollapsed";
 import { makeUser } from "@/test/handlers";
@@ -26,10 +27,10 @@ const meta = {
   render: () => (
     <Layout>
       <MenuHeader />
-      <div className="mx-auto max-w-2xl px-4 py-6">
+      <Page width="content">
         <h1 className="text-2xl font-semibold">A page</h1>
         <p className="mt-2 text-fg-tertiary">The screen a route renders goes here.</p>
-      </div>
+      </Page>
     </Layout>
   ),
 } satisfies Meta<typeof Layout>;

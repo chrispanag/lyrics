@@ -10,6 +10,7 @@ import { Avatar } from "@/components/Avatar";
 import { Button, ErrorMessage, Field, Input, Sheet } from "@/components/ui";
 import { buttonClasses, segmentClasses, segmentedTrack } from "@/components/buttonStyles";
 import { panelChrome } from "@/components/cardStyles";
+import { Page } from "@/components/Page";
 import { PageTitle } from "@/components/PageTitle";
 import { Waiting } from "@/routes/guards";
 import type { Identity } from "@/lib/avatar";
@@ -67,8 +68,7 @@ export function ProfilePage() {
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-md px-4 py-10 text-center">
-        <PageTitle name="Profile" />
+      <ProfileColumn>
         <h1 className="text-2xl font-bold tracking-tight">You are browsing as a guest</h1>
         <p className="mt-2 text-sm text-fg-muted">Sign in to build lists of songs.</p>
         <div className="mt-6 flex flex-col gap-2">
@@ -81,7 +81,7 @@ export function ProfilePage() {
         </div>
 
         <ThemeToggle theme={theme} onChange={selectTheme} className="mt-10" />
-      </div>
+      </ProfileColumn>
     );
   }
 
@@ -135,8 +135,7 @@ export function ProfilePage() {
   };
 
   return (
-    <div className="mx-auto max-w-md px-4 py-6">
-      <PageTitle name="Profile" />
+    <ProfileColumn>
       <h1 className="mb-6 text-2xl font-bold tracking-tight">Profile</h1>
 
       <div className="mb-6">
@@ -166,7 +165,9 @@ export function ProfilePage() {
       <dl className={cn(panelChrome, "mb-6 space-y-2 text-sm")}>
         <div className="flex justify-between gap-3">
           <dt className="text-fg-tertiary">Email</dt>
-          <dd className="truncate font-medium">{user.email}</dd>
+          <dd className="truncate font-medium" title={user.email}>
+            {user.email}
+          </dd>
         </div>
         <div className="flex justify-between gap-3">
           <dt className="text-fg-tertiary">Role</dt>
@@ -203,7 +204,21 @@ export function ProfilePage() {
         <LogOut aria-hidden className="size-4" />
         Sign out
       </Button>
-    </div>
+    </ProfileColumn>
+  );
+}
+
+/**
+ * Profile's page, guest or signed in. A short settings card, so it keeps a
+ * narrow column inside the form column, starting at that column's left edge as
+ * the song editor's fields do.
+ */
+function ProfileColumn({ children }: { children: React.ReactNode }) {
+  return (
+    <Page width="form">
+      <PageTitle name="Profile" />
+      <div className="max-w-md">{children}</div>
+    </Page>
   );
 }
 
