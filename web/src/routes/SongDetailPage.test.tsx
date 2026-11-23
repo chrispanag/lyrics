@@ -211,8 +211,12 @@ describe("SongDetailPage", () => {
     server.use(
       http.get(`${API}/api/v1/songs/:id`, () =>
         HttpResponse.json(
-          // The trailing break is what a pasted textarea stores: no line for it.
-          makeSong({ lyrics: "Πρώτος στίχος\r\nδεύτερος <b>στίχος</b>\n\nτρίτη στροφή\n" }),
+          // Leading and trailing breaks are what a pasted textarea stores: no
+          // line for them.
+          makeSong({
+            lyrics:
+              "\nΠρώτος στίχος\r\nδεύτερος <b>στίχος</b>\n\nτρίτη στροφή\n  \nτέταρτη στροφή\n",
+          }),
         ),
       ),
     );
@@ -227,9 +231,13 @@ describe("SongDetailPage", () => {
       "δεύτερος <b>στίχος</b>",
       "",
       "τρίτη στροφή",
+      "",
+      "τέταρτη στροφή",
     ]);
-    // A real break, which a copied selection keeps, so the verses stay apart.
+    // A real break, which a copied selection keeps, so the verses stay apart;
+    // a line of only spaces is just as blank.
     expect(lines[2]?.querySelector("br")).not.toBeNull();
+    expect(lines[4]?.querySelector("br")).not.toBeNull();
   });
 
   it("does not offer editing to a guest", async () => {

@@ -546,18 +546,18 @@ function OnlyRecording({ recording }: { recording: Recording }) {
  * user input.
  *
  * A blank line is a `<br>`, not an empty block held open: an empty block adds
- * nothing to a copied selection, which would run the verses together. Trailing
- * breaks, which a pasted textarea often stores, are dropped, as `pre-line` drew
- * nothing for them.
+ * nothing to a copied selection, which would run the verses together. A line
+ * of only spaces is blank too, since its spaces collapse to nothing. Leading
+ * and trailing breaks, which a pasted textarea often stores, are dropped.
  */
 function LyricsLines({ lyrics }: { lyrics: string }) {
   return lyrics
-    .trimEnd()
+    .trim()
     .split(/\r?\n/)
     .map((line, index) => (
       // biome-ignore lint/suspicious/noArrayIndexKey: one string's lines, never reordered.
       <span key={index} className="block pl-[1em] -indent-[1em]">
-        {line || <br />}
+        {line.trim() ? line : <br />}
       </span>
     ));
 }
