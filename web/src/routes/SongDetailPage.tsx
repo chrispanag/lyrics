@@ -16,6 +16,7 @@ import { useRecordSongClick } from "@/api/recordSongClick";
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongSwipe } from "@/components/ListSongNav";
+import { contentWidth } from "@/components/Page";
 import { PageTitle } from "@/components/PageTitle";
 import { PersonLinks } from "@/components/PersonLinks";
 import { SongSearch } from "@/components/SongSearch";
@@ -84,7 +85,12 @@ export function SongNotFound() {
 
 function SongUnavailable({ message }: { message: string }) {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6 @3xl/app:mx-0 @3xl/app:max-w-none @3xl/app:px-3">
+    <div
+      className={cn(
+        "mx-auto px-4 py-6 @3xl/app:mx-0 @3xl/app:max-w-none @3xl/app:px-3",
+        contentWidth,
+      )}
+    >
       <PageTitle name="Song not available" />
       <ErrorMessage>{message}</ErrorMessage>
       <Link href="/" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
@@ -166,7 +172,10 @@ function SongArticle() {
     <article
       ref={surface}
       aria-busy={isLoading || isPlaceholderData}
-      className="mx-auto max-w-3xl @3xl/app:mx-0 @3xl/app:flex @3xl/app:min-h-0 @3xl/app:max-w-none @3xl/app:flex-1 @3xl/app:flex-col"
+      className={cn(
+        "mx-auto @3xl/app:mx-0 @3xl/app:flex @3xl/app:min-h-0 @3xl/app:max-w-none @3xl/app:flex-1 @3xl/app:flex-col",
+        contentWidth,
+      )}
     >
       {/* The title alone; nameless while in flight. */}
       <PageTitle name={song?.title} />
