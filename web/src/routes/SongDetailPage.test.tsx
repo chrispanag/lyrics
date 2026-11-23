@@ -431,11 +431,12 @@ describe("SongDetailPage while the song loads", () => {
 
     renderDetail({ user: makeUser({ id: "admin-1", role: "admin" }) });
 
-    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
-    expect(screen.getByRole("menuitem", { name: "Delete song" })).toBeDisabled();
+    // The menu holds nothing that could act yet, so it does not open at all.
+    expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
 
     release();
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
     expect(screen.getByRole("menuitem", { name: "Delete song" })).toBeEnabled();
   });
 });

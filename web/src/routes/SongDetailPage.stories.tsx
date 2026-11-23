@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent } from "storybook/test";
+import { expect, userEvent, waitFor } from "storybook/test";
 
 import { SongDetailPage } from "./SongDetailPage";
 import { catalogList, catalogSongs, entechno } from "@/test/catalog";
@@ -107,7 +107,10 @@ export const AsAdmin: Story = {
   parameters: { user: makeUser({ role: "admin" }) },
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole("link", { name: /edit/i })).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "More actions" }));
+    const more = canvas.getByRole("button", { name: "More actions" });
+    // Held shut until the song, which the confirmation names, has arrived.
+    await waitFor(() => expect(more).toBeEnabled());
+    await userEvent.click(more);
     await expect(canvas.getByRole("menuitem", { name: "Delete song" })).toBeVisible();
   },
 };

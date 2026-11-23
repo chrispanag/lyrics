@@ -28,6 +28,26 @@ function renderMenu({ onDelete = vi.fn(), renameDisabled = false } = {}) {
 const item = (name: string) => screen.getByRole("menuitem", { name });
 
 describe("MoreActionsMenu", () => {
+  // Each item is gated by its own condition; a reader none of them is for gets
+  // no menu, without the caller restating every condition.
+  it("renders nothing when no item is present", () => {
+    const { container } = render(<MoreActionsMenu>{false}</MoreActionsMenu>);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("can be held shut while nothing in it could act", () => {
+    render(
+      <MoreActionsMenu disabled>
+        <MenuItem icon={Trash} onSelect={vi.fn()}>
+          Delete
+        </MenuItem>
+      </MoreActionsMenu>,
+    );
+
+    expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
+  });
+
   it("is a closed menu button until pressed", () => {
     const { trigger } = renderMenu();
 

@@ -217,21 +217,16 @@ function SongArticle() {
                 <span className={actionLabel}>Edit</span>
               </Link>
             )}
-            {/* A step away from a reader's thumb. Only an admin has anything
-                in it, so no one else is shown the menu. */}
-            {hasRole(user?.role, "admin") && (
-              <MoreActionsMenu>
-                <MenuItem
-                  icon={Trash}
-                  danger
-                  // Waits for the song: the confirmation names it.
-                  disabled={!song}
-                  onSelect={() => setConfirmDelete(true)}
-                >
+            {/* A step away from a reader's thumb. Waits for the song: the
+                confirmation names it. Only an admin has anything in it, so no
+                one else is shown the menu. */}
+            <MoreActionsMenu disabled={!song}>
+              {hasRole(user?.role, "admin") && (
+                <MenuItem icon={Trash} danger onSelect={() => setConfirmDelete(true)}>
                   Delete song
                 </MenuItem>
-              </MoreActionsMenu>
-            )}
+              )}
+            </MoreActionsMenu>
           </div>
         </div>
       </div>

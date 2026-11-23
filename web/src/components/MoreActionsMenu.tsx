@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Children,
   type ComponentType,
   createContext,
   type KeyboardEvent,
@@ -63,13 +64,17 @@ function placeUnanchored(menu: HTMLElement, trigger: HTMLElement) {
   menu.style.right = `${document.documentElement.clientWidth - rect.right}px`;
 }
 
+/**
+ * Renders nothing when it holds no items, so each item is gated by its own
+ * condition and no caller restates them all to decide whether to show the menu.
+ */
 export function MoreActionsMenu({
-  label = "More actions",
+  disabled,
   children,
 }: {
-  /** The trigger's accessible name, which is also the menu's. */
-  label?: string;
-  /** `MenuItem`s. */
+  /** The trigger's, for while nothing in the menu could act yet. */
+  disabled?: boolean;
+  /** `MenuItem`s, each present only for a reader who may use it. */
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -98,9 +103,7 @@ export function MoreActionsMenu({
   useLayoutEffect(() => {
     const panel = menu.current;
     if (!open || !panel || !trigger.current) return;
-    // Optional so a browser without the Popover API still shows the panel,
-    // fixed in place by `placeUnanchored` and stacked by `z-dropdown`.
-    panel.showPopover?.();
+    panel.showPopover();
     if (!anchorsSupported()) placeUnanchored(panel, trigger.current);
     const list = itemsOf(panel);
     const target = enterAt.current === "last" ? list.at(-1) : list[0];
@@ -182,6 +185,8 @@ export function MoreActionsMenu({
     list[next]?.focus();
   };
 
+  if (Children.toArray(children).length === 0) return null;
+
   return (
     <Menu.Provider value={{ close }}>
       <Button
@@ -189,7 +194,8 @@ export function MoreActionsMenu({
         id={triggerId}
         variant="ghost"
         size="sm"
-        aria-label={label}
+        disabled={disabled}
+        aria-label="More actions"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

@@ -363,15 +363,15 @@ export function ListDetailPage() {
             {visibilityAction}
           </Button>
 
-          {/* The default list cannot be deleted (the server 403s), and Delete
-              is all the menu holds, so the default list has no menu. */}
-          {!list.is_default && (
-            <MoreActionsMenu>
+          <MoreActionsMenu>
+            {/* The default list cannot be deleted (the server 403s). With
+                nothing else in the menu, it then shows no menu at all. */}
+            {!list.is_default && (
               <MenuItem icon={Trash} danger onSelect={() => setConfirmDelete(true)}>
                 Delete list
               </MenuItem>
-            </MoreActionsMenu>
-          )}
+            )}
+          </MoreActionsMenu>
         </>
       )}
     </>
