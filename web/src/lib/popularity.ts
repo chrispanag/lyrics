@@ -23,11 +23,3 @@ export function visitorId(): string {
 function isNilUuid(value: string): boolean {
   return value.replace(/-/g, "") === "0".repeat(32);
 }
-
-/**
- * What the card badge counts, spoken in the link and shown in its hover
- * tooltip. Zero is not a badge, so this is only called for a positive count.
- */
-export function listAddsLabel(adds: number): string {
-  return adds === 1 ? "Saved to a list once" : `Saved to a list ${adds} times`;
-}

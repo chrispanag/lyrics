@@ -133,6 +133,60 @@ describe("SongDetailPage popularity", () => {
     expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
   });
 
+  // The tallies live behind Stats, for anyone, and count this visit too: the
+  // recorded click's reply is what the page holds by the time it opens.
+  it("shows the song's tallies under Stats", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(
+          makeSong({
+            created_at: "2024-03-15T10:00:00Z",
+            popularity: {
+              anonymous_clicks: 3,
+              authenticated_clicks: 1,
+              list_adds: 4,
+              list_users: 1,
+              score: 27,
+            },
+          }),
+        ),
+      ),
+      http.post(`${API}/api/v1/songs/:id/clicks`, () =>
+        HttpResponse.json({
+          anonymous_clicks: 1203,
+          authenticated_clicks: 1,
+          list_adds: 4,
+          list_users: 1,
+          score: 1220,
+        }),
+      ),
+    );
+
+    renderDetail();
+
+    const stats = await screen.findByRole("button", { name: "Stats" });
+    await waitFor(() => expect(stats).toBeEnabled());
+    // Off the page until asked for.
+    expect(screen.queryByText("4 times")).not.toBeInTheDocument();
+    await userEvent.click(stats);
+
+    const sheet = await screen.findByRole("dialog", { name: "Stats" });
+    const row = (label: string) => within(sheet).getByText(label).closest("div");
+    await waitFor(() => expect(row("Views")).toHaveTextContent("1,204"));
+    expect(row("Views")).toHaveTextContent("1 by signed-in readers");
+    expect(row("Added to a list")).toHaveTextContent("4 times");
+    expect(row("In lists of")).toHaveTextContent("1 person");
+    expect(row("In the catalog since")).toHaveTextContent("March 2024");
+  });
+
+  it("waits for the song before offering Stats", () => {
+    server.use(http.get(`${API}/api/v1/songs/:id`, () => new Promise(() => {})));
+
+    renderDetail();
+
+    expect(screen.getByRole("button", { name: "Stats" })).toBeDisabled();
+  });
+
   it("sends the session when the reader is signed in", async () => {
     let authorization: string | null = null;
     server.use(
