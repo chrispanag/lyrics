@@ -15,9 +15,9 @@ import {
 import { Avatar } from "@/components/Avatar";
 import { actionLabel, segmentClasses, segmentedTrack } from "@/components/buttonStyles";
 import { cardChrome } from "@/components/cardStyles";
+import { PageHeader } from "@/components/PageHeader";
 import { PageTitle } from "@/components/PageTitle";
 import { Page } from "@/components/Page";
-import { sectionLabel } from "@/components/textStyles";
 import {
   Button,
   ConfirmSheet,
@@ -71,9 +71,7 @@ export function AdminConsole({ children }: { children: ReactNode }) {
   return (
     <Page width="content">
       <PageTitle name={current ? `Admin · ${current.label}` : "Admin"} />
-      {/* The section's name above the screen's, in the song page's label style. */}
-      <p className={sectionLabel}>Admin</p>
-      {current && <h1 className="mt-1 text-2xl font-bold tracking-tight">{current.label}</h1>}
+      <PageHeader eyebrow={current && "Admin"} title={current?.label ?? "Admin"} />
 
       {/* Views of one console, so drawn as the segmented control the theme
           switch is, not as buttons that read as actions. */}

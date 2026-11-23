@@ -11,6 +11,7 @@ import { Button, ErrorMessage, Field, Input, Sheet } from "@/components/ui";
 import { buttonClasses, segmentClasses, segmentedTrack } from "@/components/buttonStyles";
 import { panelChrome } from "@/components/cardStyles";
 import { Page } from "@/components/Page";
+import { PageHeader } from "@/components/PageHeader";
 import { PageTitle } from "@/components/PageTitle";
 import { Waiting } from "@/routes/guards";
 import type { Identity } from "@/lib/avatar";
@@ -69,7 +70,7 @@ export function ProfilePage() {
   if (!user) {
     return (
       <ProfileColumn>
-        <h1 className="text-2xl font-bold tracking-tight">You are browsing as a guest</h1>
+        <PageHeader title="You are browsing as a guest" />
         <p className="mt-2 text-sm text-fg-muted">Sign in to build lists of songs.</p>
         <div className="mt-6 flex flex-col gap-2">
           <Link href="/login" className={buttonClasses("primary", "lg")}>
@@ -136,7 +137,7 @@ export function ProfilePage() {
 
   return (
     <ProfileColumn>
-      <h1 className="mb-6 text-2xl font-bold tracking-tight">Profile</h1>
+      <PageHeader title="Profile" className="mb-6" />
 
       <div className="mb-6">
         <PictureButton user={user} busy={busy} onClick={() => setPictureMenu(true)} />

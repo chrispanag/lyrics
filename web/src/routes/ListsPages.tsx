@@ -29,6 +29,7 @@ import { useAuth } from "@/auth/useAuth";
 import { paneActionLabel } from "@/components/buttonStyles";
 import { cardChrome, cardHover, tagChrome } from "@/components/cardStyles";
 import { ListBar, ListSkeleton } from "@/components/ListBar";
+import { PageHeader } from "@/components/PageHeader";
 import { PageTitle } from "@/components/PageTitle";
 import { Page } from "@/components/Page";
 import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
@@ -123,13 +124,16 @@ export function ListsPage() {
   return (
     <Page width="content">
       <PageTitle name="Your lists" />
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Your lists</h1>
-        <Button size="sm" onClick={() => setCreating(true)}>
-          <Plus aria-hidden className="size-4" />
-          New list
-        </Button>
-      </div>
+      <PageHeader
+        title="Your lists"
+        className="mb-6"
+        actions={
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <Plus aria-hidden className="size-4" />
+            New list
+          </Button>
+        }
+      />
 
       {isLoading && <Skeletons count={3} className="h-20 w-full" />}
 
