@@ -99,6 +99,19 @@ export const InAList: Story = {
   },
 };
 
+/** The song's tallies, left open so the axe check sees the dialog. */
+export const Stats: Story = {
+  play: async ({ canvas }) => {
+    const stats = await canvas.findByRole("button", { name: "Stats" });
+    // Enabled once the song, which carries the tallies, has arrived.
+    await waitFor(() => expect(stats).toBeEnabled());
+    await userEvent.click(stats);
+    const sheet = await canvas.findByRole("dialog", { name: "Stats" });
+    await expect(sheet).toBeVisible();
+    await expect(sheet).toHaveTextContent("Views");
+  },
+};
+
 /**
  * An admin can edit and delete any song; the page offers both, Delete behind
  * "More actions", left open so the axe check sees the menu.

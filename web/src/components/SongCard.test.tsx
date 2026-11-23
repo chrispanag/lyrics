@@ -49,22 +49,12 @@ describe("SongCard", () => {
     expect(screen.getByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
   });
 
-  // Read off the id, as the song page's watch link is, so the two agree.
-  it("badges a song with a video, and only one", () => {
-    const { unmount } = renderWithProviders(
-      <SongCard song={makeSong({ youtube_video_id: "dQw4w9WgXcQ" })} />,
-    );
-    expect(screen.getByRole("img", { name: "Has a video" })).toBeInTheDocument();
-    unmount();
-
-    renderWithProviders(<SongCard song={makeSong()} />);
-    expect(screen.queryByRole("img", { name: "Has a video" })).toBeNull();
-  });
-
-  it("badges how many times the song was added to a list, and nothing else", () => {
+  // A song's tallies and its video are on its own page; the card names it.
+  it("shows no badges, for a video or for any tally", () => {
     renderWithProviders(
       <SongCard
         song={makeSong({
+          youtube_video_id: "dQw4w9WgXcQ",
           popularity: {
             anonymous_clicks: 9,
             authenticated_clicks: 2,
@@ -76,23 +66,11 @@ describe("SongCard", () => {
       />,
     );
 
-    expect(screen.getByText("4")).toBeInTheDocument();
-    const label = "Saved to a list 4 times";
-    // Spoken in the link, and again in the hover tip. The tip is aria-hidden so
-    // a screen reader does not hear it twice.
-    const copies = screen.getAllByText(label);
-    expect(copies).toHaveLength(2);
-    expect(copies.filter((node) => node.classList.contains("sr-only"))).toHaveLength(1);
-    const tip = copies.find((node) => node.closest("[aria-hidden='true']"));
-    // Above the badge: below it, the tip sat on the byline.
-    expect(tip?.closest("[aria-hidden='true']")).toHaveClass(
-      "invisible",
-      "bottom-full",
-      "group-hover/saves:visible",
-    );
-    expect(screen.queryByText("9")).not.toBeInTheDocument();
-    expect(screen.queryByText(/click/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/people/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    for (const tally of ["4", "9", "2", "39"]) {
+      expect(screen.queryByText(tally)).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText(/saved to a list/i)).not.toBeInTheDocument();
   });
 
   it("marks the song the address has open", () => {

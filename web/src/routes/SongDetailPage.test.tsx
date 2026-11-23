@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
+import { useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SongDetailPage } from "./SongDetailPage";
@@ -8,7 +9,7 @@ import { setTokenProvider } from "@/api/client";
 import { keys } from "@/api/hooks";
 import { returnDestination } from "@/auth/returnTo";
 import { BackButton } from "@/components/BackButton";
-import { RouteParams, useSearchParams } from "@/lib/navigation";
+import { RouteParams, useRouter, useSearchParams } from "@/lib/navigation";
 import { deferred } from "@/test/deferred";
 import {
   API,
@@ -131,6 +132,151 @@ describe("SongDetailPage popularity", () => {
     expect(bodies).toHaveLength(1);
     expect(screen.queryByText(/click/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
+  });
+
+  // The tallies live behind Stats, for anyone. The recorded click's reply
+  // updates them, so they usually count this visit too: a refetch racing the
+  // click can land after it with the count from just before.
+  it("shows the song's tallies under Stats", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(
+          makeSong({
+            popularity: {
+              anonymous_clicks: 3,
+              authenticated_clicks: 1,
+              list_adds: 4,
+              list_users: 1,
+              score: 27,
+            },
+          }),
+        ),
+      ),
+      http.post(`${API}/api/v1/songs/:id/clicks`, () =>
+        HttpResponse.json({
+          anonymous_clicks: 1203,
+          authenticated_clicks: 1,
+          list_adds: 4,
+          list_users: 1,
+          score: 1220,
+        }),
+      ),
+    );
+
+    renderDetail();
+
+    const stats = await screen.findByRole("button", { name: "Stats" });
+    await waitFor(() => expect(stats).toBeEnabled());
+    // Off the page until asked for.
+    expect(screen.queryByText("4 times")).not.toBeInTheDocument();
+    await userEvent.click(stats);
+
+    const sheet = await screen.findByRole("dialog", { name: "Stats" });
+    const row = (label: string) => within(sheet).getByText(label).closest("div");
+    await waitFor(() => expect(row("Views")).toHaveTextContent("1,204"));
+    expect(row("Views")).toHaveTextContent("1 by signed-in readers");
+    expect(row("Added to a list")).toHaveTextContent("4 times");
+    expect(row("In lists of")).toHaveTextContent("1 person");
+    // The row a reader would read as the song's age, which for an imported
+    // catalog is only the import's.
+    expect(within(sheet).queryByText(/catalog since/i)).not.toBeInTheDocument();
+  });
+
+  // The card clicked in the catalog already carries the tallies, so Stats is
+  // offered before the full read with the lyrics arrives.
+  it("offers Stats from the clicked card, before the full song arrives", async () => {
+    const { lyrics: _lyrics, ...card } = makeSong({
+      popularity: {
+        anonymous_clicks: 6,
+        authenticated_clicks: 0,
+        list_adds: 2,
+        list_users: 2,
+        score: 10,
+      },
+    });
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(keys.songs({}), {
+      data: [card],
+      meta: { total: 1, limit: 20, offset: 0 },
+    });
+    server.use(http.get(`${API}/api/v1/songs/:id`, () => new Promise(() => {})));
+
+    renderDetail({ route: "/songs/thalassa-platia", queryClient });
+
+    const stats = await screen.findByRole("button", { name: "Stats" });
+    expect(stats).toBeEnabled();
+    await userEvent.click(stats);
+
+    const sheet = await screen.findByRole("dialog", { name: "Stats" });
+    const row = (label: string) => within(sheet).getByText(label).closest("div");
+    expect(row("Views")).toHaveTextContent("6");
+    expect(row("Added to a list")).toHaveTextContent("2 times");
+    expect(row("In lists of")).toHaveTextContent("2 people");
+  });
+
+  // As on Back or Forward: the sheet was about the song it opened on.
+  it("closes Stats when the address moves to another song", async () => {
+    const user = userEvent.setup();
+    // The next song is a card already in the cache, so the page has a song to
+    // show at once and nothing else would close the sheet.
+    const { lyrics: _lyrics, ...next } = makeSong({ id: "song-2", slug: "song-2", title: "Άλλο" });
+    const queryClient = testQueryClient();
+    // The next song's full read is held, so its card is what stands in.
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, ({ params }) =>
+        params.id === "song-2" ? new Promise(() => {}) : HttpResponse.json(makeSong()),
+      ),
+    );
+    // The router itself, as Back or Forward moves it: a click outside the
+    // modal sheet would be the sheet's to dismiss, not a navigation.
+    const router: { push?: (href: string) => void } = {};
+    function Router() {
+      const { push } = useRouter();
+      useEffect(() => {
+        router.push = push;
+      }, [push]);
+      return null;
+    }
+    renderWithProviders(
+      <TestRoutes
+        routes={{
+          "/songs/:id": (
+            <>
+              <SongDetailPage />
+              <Router />
+            </>
+          ),
+        }}
+      />,
+      { route: "/songs/song-1", queryClient },
+    );
+
+    const stats = await screen.findByRole("button", { name: "Stats" });
+    await waitFor(() => expect(stats).toBeEnabled());
+    await user.click(stats);
+    await screen.findByRole("dialog", { name: "Stats" });
+
+    // Seeded at the step: the test client drops unobserved data at once.
+    act(() => {
+      queryClient.setQueryData(keys.songs({}), {
+        data: [next],
+        meta: { total: 1, limit: 20, offset: 0 },
+      });
+      router.push?.("/songs/song-2");
+    });
+
+    // On the next song already, its card standing in, so only the reset can
+    // have closed the sheet.
+    expect(await screen.findByRole("heading", { name: "Άλλο", hidden: true })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Stats" })).toBeNull());
+  });
+
+  it("waits for the song before offering Stats", () => {
+    server.use(http.get(`${API}/api/v1/songs/:id`, () => new Promise(() => {})));
+
+    renderDetail();
+
+    expect(screen.getByRole("button", { name: "Stats" })).toBeDisabled();
   });
 
   it("sends the session when the reader is signed in", async () => {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { listAddsLabel, visitorId } from "./popularity";
+import { visitorId } from "./popularity";
 
 describe("visitorId", () => {
   afterEach(() => localStorage.clear());
@@ -14,12 +14,5 @@ describe("visitorId", () => {
   it("replaces a stored nil id, which the API refuses", () => {
     localStorage.setItem("songfolio.visitor", "00000000-0000-0000-0000-000000000000");
     expect(visitorId()).not.toBe("00000000-0000-0000-0000-000000000000");
-  });
-});
-
-describe("listAddsLabel", () => {
-  it("names one placement and many", () => {
-    expect(listAddsLabel(1)).toBe("Saved to a list once");
-    expect(listAddsLabel(4)).toBe("Saved to a list 4 times");
   });
 });

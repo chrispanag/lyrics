@@ -443,6 +443,8 @@ function invalidateMembership(
 ): Promise<unknown> {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: keys.songLists(songId) }),
+    // The song's `popularity` (`list_adds`, `list_users`), read under Stats.
+    queryClient.invalidateQueries({ queryKey: keys.song(songId) }),
     queryClient.invalidateQueries({ queryKey: keys.lists() }),
     queryClient.invalidateQueries({ queryKey: keys.list(listId) }),
   ]);

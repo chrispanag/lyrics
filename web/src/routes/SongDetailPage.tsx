@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
-import { Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
+import { ChartColumn, Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
 import {
@@ -23,6 +23,7 @@ import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { actionLabel, buttonClasses } from "@/components/buttonStyles";
 import { MenuItem, MoreActionsMenu } from "@/components/MoreActionsMenu";
+import { SongStatsSheet } from "@/components/SongStatsSheet";
 import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton, Spinner } from "@/components/ui";
 import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
@@ -142,7 +143,19 @@ function SongArticle() {
 
   const [listSheetOpen, setListSheetOpen] = useState(false);
   const [recordingsOpen, setRecordingsOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // A sheet belongs to the song it was opened on. Stepping to another (Back,
+  // Forward, a list's arrows) closes them, rather than showing the next song's
+  // counts or recordings under the same title.
+  const [sheetsFor, setSheetsFor] = useState(id);
+  if (sheetsFor !== id) {
+    setSheetsFor(id);
+    setListSheetOpen(false);
+    setRecordingsOpen(false);
+    setStatsOpen(false);
+    setConfirmDelete(false);
+  }
   // Only the buttons' limits read this: the lyrics are sized by CSS from the
   // attribute the boot script set before first paint (lib/fontSize).
   const [fontSizeIndex, setFontSizeIndex] = useStoredState(DEFAULT_FONT_SIZE, drawnFontSize);
@@ -195,6 +208,12 @@ function SongArticle() {
           {/* As tall as the search field once the list is beside the song, so
               the tools share its center. */}
           <div className="ml-auto flex items-center gap-1 @3xl/app:h-12">
+            {/* For everyone. The card a reader clicked already carries the
+                tallies, so this need not wait for the full read. */}
+            <Button variant="ghost" size="sm" disabled={!song} onClick={() => setStatsOpen(true)}>
+              <ChartColumn aria-hidden className="size-4" />
+              <span className={actionLabel}>Stats</span>
+            </Button>
             {/* Shown to guests too, who are sent to sign in. */}
             <Button
               variant="ghost"
@@ -328,6 +347,10 @@ function SongArticle() {
               open={listSheetOpen}
               onClose={() => setListSheetOpen(false)}
             />
+          )}
+
+          {song && (
+            <SongStatsSheet song={song} open={statsOpen} onClose={() => setStatsOpen(false)} />
           )}
 
           {song && (

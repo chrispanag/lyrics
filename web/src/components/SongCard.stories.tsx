@@ -43,16 +43,10 @@ export const Complete: Story = {
   play: async ({ canvas }) => {
     // Performers from the first recording lead the byline, then the composer.
     await expect(canvas.getByText("Γιώργος Νταλάρας · Μίκης Θεοδωράκης")).toBeVisible();
-    await expect(canvas.getByRole("img", { name: "Has a video" })).toBeVisible();
     await expect(canvas.getByText("θάλασσας").tagName).toBe("MARK");
-    // The badge is the times it was saved. Clicks stay off the card, and the
-    // explanation stays hidden until the pointer is on the badge.
-    const label = "Saved to a list 3 times";
-    const copies = canvas.getAllByText(label);
-    await expect(copies).toHaveLength(2);
-    const tip = copies.find((node) => node.closest("[aria-hidden='true']"));
-    await expect(tip).not.toBeVisible();
-    await expect(canvas.queryByText("6")).toBeNull();
+    // No badges: a video and the tallies are on the song's page, not the card.
+    await expect(canvas.queryByRole("img")).toBeNull();
+    await expect(canvas.queryByText("3")).toBeNull();
   },
 };
 
