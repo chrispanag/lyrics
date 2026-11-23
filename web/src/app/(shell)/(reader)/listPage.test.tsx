@@ -8,13 +8,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { setTokenProvider } from "@/api/client";
 import { keys } from "@/api/hooks";
 import { RouteParams } from "@/lib/navigation";
-import { ListDetailPage } from "@/routes/ListsPages";
+import { SongsPane } from "@/routes/SongsPane";
 import { catalogList, catalogSongs } from "@/test/catalog";
 import { API, apiError, listById, makeUnaddressedSong } from "@/test/handlers";
 import { server } from "@/test/server";
 import { TestProviders } from "@/test/TestProviders";
 
-import ListPage, { generateMetadata } from "./page";
+import ListPage, { generateMetadata } from "./listPage";
 
 /*
  * Pins the route's wiring: what a guest's read of a list hands the page and
@@ -72,7 +72,7 @@ describe("a public list's server-rendered document", () => {
     const tree = await ListPage(props(PUBLIC_ID));
 
     const found = boundary(tree);
-    expect(found?.props.children.type).toBe(ListDetailPage);
+    expect(found?.props.children.type).toBe(SongsPane);
     const entries = found?.props.state?.queries ?? [];
     expect(entries).toHaveLength(1);
     const [{ queryKey, state }] = entries as [DehydratedState["queries"][number]];
@@ -127,7 +127,7 @@ describe("a list a guest cannot read", () => {
 
     expect(structuredData(tree)).toBeNull();
     const found = boundary(tree);
-    expect(found?.props.children.type).toBe(ListDetailPage);
+    expect(found?.props.children.type).toBe(SongsPane);
     expect(found?.props.state).toBeUndefined();
     expect(html(tree, PRIVATE_ID)).not.toContain(SECRET);
   });

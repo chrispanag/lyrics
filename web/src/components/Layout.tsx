@@ -22,7 +22,8 @@ import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { FIELDS, useHomeEndInside } from "@/lib/modal";
 import { applyNavCollapsed, storeNavCollapsed, storedNavCollapsed } from "@/lib/navCollapsed";
-import { Link, NavLink, useNavigationKey, usePathname } from "@/lib/navigation";
+import { songSection } from "@/lib/listContext";
+import { Link, NavLink, useNavigationKey, usePathname, useSearchParams } from "@/lib/navigation";
 import { NAV_DRAWER_ID, NavDrawerContext, useNavDrawer } from "@/lib/navDrawer";
 import { hasRole } from "@/lib/types";
 import { useIntentPrefetch } from "@/lib/useIntentPrefetch";
@@ -172,8 +173,11 @@ export function Layout({ children }: { children?: ReactNode }) {
  * One of the navigation's links. The Lists link starts loading the lists on
  * hover, press or focus, which otherwise wait for the click and show
  * placeholders until they land.
+ *
+ * `section` is the entry an open song belongs to (`songSection`), or
+ * undefined anywhere else, where the link's own path decides.
  */
-function NavEntry({ item }: { item: NavItem }) {
+function NavEntry({ item, section }: { item: NavItem; section: string | undefined }) {
   const queryClient = useQueryClient();
   // Only the Lists link carries the handlers (see the spread below), and
   // `NavPanel` shows it only to a signed-in reader.
@@ -185,6 +189,7 @@ function NavEntry({ item }: { item: NavItem }) {
   return (
     <NavLink
       href={item.to}
+      active={section === undefined ? undefined : section === item.to}
       data-guest-only={item.identityCard || undefined}
       {...(item.warmsLists ? intent : undefined)}
       className={({ isActive }) =>
@@ -209,6 +214,7 @@ function NavEntry({ item }: { item: NavItem }) {
  */
 function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
   const { user } = useAuth();
+  const section = songSection(usePathname(), useSearchParams());
 
   const links = NAV_ITEMS.filter((item) => {
     if (item.adminOnly) return hasRole(user?.role, "admin");
@@ -241,7 +247,7 @@ function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
           bottom. */}
       <nav className="flex flex-1 flex-col gap-1">
         {links.map((item) => (
-          <NavEntry key={item.to} item={item} />
+          <NavEntry key={item.to} item={item} section={section} />
         ))}
 
         <div className="mt-auto px-2 pt-6">

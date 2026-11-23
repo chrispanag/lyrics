@@ -3,6 +3,7 @@ import { HttpResponse, http } from "msw";
 import { expect } from "storybook/test";
 
 import { ListDetailPage, ListsPage } from "./ListsPages";
+import { SongOpenContext } from "@/lib/catalogPane";
 import { catalogList } from "@/test/catalog";
 import { API, list, listById, makeList, makeUser } from "@/test/handlers";
 
@@ -46,6 +47,29 @@ export const AsReader: Story = {
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole("button", { name: /save to my lists/i })).toBeVisible();
     await expect(canvas.queryByRole("button", { name: /delete list/i })).toBeNull();
+  },
+};
+
+/**
+ * The list beside a song read from it: the pane a wide screen keeps on the left,
+ * the open song marked, and the song's own title and heading left to the song.
+ */
+export const BesideASong: Story = {
+  parameters: { path: "/songs/:id", route: "/songs/thalassa-platia?list=list-1" },
+  // What `ReaderSplit` tells the pane beside an open song.
+  decorators: [
+    (Story) => (
+      <SongOpenContext value>
+        <Story />
+      </SongOpenContext>
+    ),
+  ],
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole("heading", { level: 2, name: "Ρεμπέτικα" })).toBeVisible();
+    await expect(canvas.getByRole("link", { name: /Θάλασσα Πλατιά/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   },
 };
 

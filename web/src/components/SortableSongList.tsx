@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
+import { memo } from "react";
 
 import { rowControlChrome } from "./buttonStyles";
 import { SongRow } from "./SongRow";
@@ -31,8 +32,12 @@ import type { Song } from "@/lib/types";
  *
  * `onRemove` is required: only owners see this list, and a forgotten one would
  * silently render rows that cannot be removed.
+ *
+ * Memoized: beside a song the list re-renders on every step through it, and
+ * only the cards themselves follow the open song. The callbacks must be stable
+ * for this to hold.
  */
-export function SortableSongList({
+export const SortableSongList = memo(function SortableSongList({
   songs,
   listId,
   onReorder,
@@ -90,7 +95,7 @@ export function SortableSongList({
       </SortableContext>
     </DndContext>
   );
-}
+});
 
 function SortableRow({
   song,

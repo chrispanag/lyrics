@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useState, useSyncExternalStore, type SubmitEvent } from "react";
+import { lazy, memo, Suspense, useState, useSyncExternalStore, type SubmitEvent } from "react";
 import {
   ChevronRight,
   Copy,
@@ -26,8 +26,11 @@ import {
 } from "@/api/hooks";
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
+import { paneActionLabel } from "@/components/buttonStyles";
 import { cardChrome, cardHover, tagChrome } from "@/components/cardStyles";
+import { ListBar, ListSkeleton } from "@/components/ListBar";
 import { PageTitle } from "@/components/PageTitle";
+import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { SongRow } from "@/components/SongRow";
 import {
   Button,
@@ -37,16 +40,14 @@ import {
   Field,
   Input,
   Sheet,
-  Skeleton,
   Skeletons,
 } from "@/components/ui";
-import { actionLabel } from "@/components/buttonStyles";
-import { PageBar } from "@/components/PageBar";
+import { useCatalogPaneShown } from "@/lib/catalogPane";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
-import { listHref } from "@/lib/listContext";
+import { listHref, listInView, songHref, songRefFromPath, songRefHref } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
-import { Link, useParams, useRouter } from "@/lib/navigation";
+import { Link, usePathname, useRouter, useSearchParams } from "@/lib/navigation";
 
 // Only an owner can reorder, so the drag machinery loads on demand.
 const SortableSongList = lazy(() =>
@@ -56,8 +57,11 @@ const SortableSongList = lazy(() =>
 /**
  * The list without drag machinery, for readers and for an owner's list of one.
  * Without `onRemove` the rows are read-only.
+ *
+ * Memoized, as `SortableSongList` is: beside a song the list re-renders on
+ * every step through it, and only the cards themselves follow the open song.
  */
-function StaticSongList({
+const StaticSongList = memo(function StaticSongList({
   songs,
   listId,
   onRemove,
@@ -82,7 +86,7 @@ function StaticSongList({
       ))}
     </ul>
   );
-}
+});
 
 /** Whether anyone but the owner can read a list, said in words and not only an icon. */
 function VisibilityTag({ isPublic }: { isPublic: boolean }) {
@@ -196,8 +200,18 @@ function subscribeToNothing() {
   return () => {};
 }
 
+/**
+ * A list: on its own page, and beside a song read from it, where it is the
+ * list the reader steps through, with the open song marked. Which list is the
+ * address's to say (`listInView`).
+ */
 export function ListDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const pathname = usePathname();
+  const id = listInView(pathname, useSearchParams()) ?? undefined;
+  // The song open beside the list, if any: copying or deleting the list must
+  // not close it.
+  const openSong = songRefFromPath(pathname);
+  const shown = useCatalogPaneShown();
   const router = useRouter();
   const signIn = useSignInHref();
   const { user, loading: sessionLoading } = useAuth();
@@ -226,37 +240,31 @@ export function ListDetailPage() {
     () => "",
   );
 
+  // Stable, so the memoized rows are not re-rendered by each step through the
+  // list beside a song: a mutation's `mutate` keeps its identity.
+  const { mutate: onReorder } = reorderList;
+  const { mutate: removeFromList } = removeSong;
+
+  // Hidden beside a song on a phone, the list is not built until it shows.
   // A disabled query is not `isLoading`, so the session wait is spelled out, or
   // the page reports a list it has not asked for yet as unavailable. A list
   // already in hand (the server's read of a public one) renders at once: the
   // wait only exists so a private list is asked for with its owner's token.
-  if (!list && (sessionLoading || isLoading)) {
-    return (
-      <div className="mx-auto max-w-3xl space-y-3 px-4 py-6">
-        {/* Nameless while in flight, rather than "undefined — Songfolio". */}
-        <PageTitle />
-        <Skeleton className="h-9 w-20" />
-        <Skeleton className="h-9 w-1/2" />
-        <Skeleton className="h-28 w-full" />
-      </div>
-    );
-  }
+  if (!shown || (!list && (sessionLoading || isLoading))) return <ListSkeleton />;
 
   if (isError || !list) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-6">
-        <PageTitle name="List not available" />
+      <ReaderPane header={<ListBar />} title="List not available">
         <ErrorMessage>This list is not available.</ErrorMessage>
         <Link href="/lists" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
           Back to lists
         </Link>
-      </div>
+      </ReaderPane>
     );
   }
 
   const isOwner = user?.id === list.owner_id;
   const songs = list.songs ?? [];
-  const removeFromList = (songId: string) => removeSong.mutate(songId);
   // Undefined for a reader, which is what leaves their rows read-only.
   const onRemove = isOwner ? removeFromList : undefined;
   // `variables` outlives its request, so it is held to the flight.
@@ -283,7 +291,8 @@ export function ListDetailPage() {
     try {
       const copied = await copyList.mutateAsync({ id: list.id, name });
       setNaming(false);
-      router.push(listHref(copied.id));
+      // Beside a song, the reader goes on reading it, now from their copy.
+      router.push(openSong ? songHref({ slug: openSong }, copied.id) : listHref(copied.id));
     } catch (caught) {
       // Names are unique per owner, so a 409 opens the rename step.
       if (caught instanceof ApiError && caught.status === 409) {
@@ -302,73 +311,75 @@ export function ListDetailPage() {
     void saveCopy();
   };
 
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-4">
-      <PageTitle name={list.name} />
-      <PageBar>
-        {/* A non-owner only reaches a public list; guests are sent to sign in.
+  const actions = (
+    <>
+      {/* A non-owner only reaches a public list; guests are sent to sign in.
             Inert until the session is known: a server-rendered list is on screen
             before then, and `!user` would send a signed-in reader to sign in. */}
-        {!isOwner && (
+      {!isOwner && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onSave}
+          loading={copyList.isPending}
+          disabled={sessionLoading}
+        >
+          <Copy aria-hidden className="size-4" />
+          {/* Shown on a phone too: a reader's one action, and a copy icon
+                alone reads as "copy link". */}
+          Save to my lists
+        </Button>
+      )}
+
+      {isOwner && (
+        <>
           <Button
             variant="ghost"
             size="sm"
-            onClick={onSave}
-            loading={copyList.isPending}
-            disabled={sessionLoading}
+            onClick={() => {
+              setLinkState("idle");
+              setSharing(true);
+            }}
           >
-            <Copy aria-hidden className="size-4" />
-            {/* Shown on a phone too: a reader's one action, and a copy icon
-                alone reads as "copy link". */}
-            Save to my lists
+            <Share2 aria-hidden className="size-4" />
+            <span className={paneActionLabel}>Share</span>
           </Button>
-        )}
 
-        {isOwner && (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setLinkState("idle");
-                setSharing(true);
-              }}
-            >
-              <Share2 aria-hidden className="size-4" />
-              <span className={actionLabel}>Share</span>
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => updateList.mutate({ is_public: !list.is_public })}
-              loading={updateList.isPending}
-            >
-              <VisibilityIcon aria-hidden className="size-4" />
-              {/* Shown on a phone too: its icon is the state it switches to,
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => updateList.mutate({ is_public: !list.is_public })}
+            loading={updateList.isPending}
+          >
+            <VisibilityIcon aria-hidden className="size-4" />
+            {/* Shown on a phone too: its icon is the state it switches to,
                   beside a tag showing the state it is in. */}
-              {visibilityAction}
+            {visibilityAction}
+          </Button>
+
+          {/* The default list cannot be deleted (the server 403s). */}
+          {!list.is_default && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Delete list"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash aria-hidden className="size-4 text-fg-danger" />
             </Button>
+          )}
+        </>
+      )}
+    </>
+  );
 
-            {/* The default list cannot be deleted (the server 403s). */}
-            {!list.is_default && (
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Delete list"
-                onClick={() => setConfirmDelete(true)}
-              >
-                <Trash aria-hidden className="size-4 text-fg-danger" />
-              </Button>
-            )}
-          </>
-        )}
-      </PageBar>
-
-      <header className="mb-6">
-        <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">
+  return (
+    <ReaderPane header={<ListBar actions={actions} />} title={list.name}>
+      {/* Not a <header>: the bar above is the pane's banner. */}
+      <div className="mb-6">
+        <PaneHeading className="text-3xl font-bold leading-tight tracking-tight text-balance @3xl/app:text-2xl">
           {list.name}
-        </h1>
+        </PaneHeading>
         {list.description && <p className="mt-1 text-lg text-fg-muted">{list.description}</p>}
         <div className="mt-3 flex items-center gap-2">
           <p className="text-sm text-fg-muted">{songCount(list.item_count)}</p>
@@ -380,7 +391,7 @@ export function ListDetailPage() {
             <ErrorMessage>{copyError}</ErrorMessage>
           </div>
         )}
-      </header>
+      </div>
 
       {/* `songs` is `omitempty` in Go, hence the `?? []` above. */}
       {songs.length === 0 ? (
@@ -389,8 +400,11 @@ export function ListDetailPage() {
           title="This list is empty"
           description={isOwner ? "Open a song and use Save to add it here." : undefined}
         />
-      ) : /* Sortable only for an owner with two or more songs; the static list
-             is also the fallback while that chunk loads. */
+      ) : /* Sortable only for an owner with two or more songs. The static list
+             is the fallback while that chunk loads, and the pane builds no rows
+             until it shows (above), so a hidden list loads no drag machinery
+             and the rows are swapped once, for the sortable ones, not built
+             again when the pane first shows. */
       isOwner && songs.length > 1 ? (
         <Suspense
           fallback={
@@ -405,7 +419,7 @@ export function ListDetailPage() {
           <SortableSongList
             songs={songs}
             listId={list.id}
-            onReorder={(songIds) => reorderList.mutate(songIds)}
+            onReorder={onReorder}
             // Owner-only branch, and the prop is required: pass the unnarrowed one.
             onRemove={removeFromList}
             pendingRemoval={pendingRemoval}
@@ -512,10 +526,15 @@ export function ListDetailPage() {
         onClose={() => setConfirmDelete(false)}
         title="Delete this list?"
         pending={deleteList.isPending}
-        onConfirm={() => deleteList.mutate(list.id, { onSuccess: () => router.replace("/lists") })}
+        onConfirm={() =>
+          deleteList.mutate(list.id, {
+            // Beside a song, the song stays, read from the catalog now.
+            onSuccess: () => router.replace(openSong ? songRefHref(openSong) : "/lists"),
+          })
+        }
       >
         “{list.name}” will be removed. The songs themselves are not affected.
       </ConfirmSheet>
-    </div>
+    </ReaderPane>
   );
 }

@@ -33,13 +33,13 @@ import {
   drawnFontSize,
   storeFontSize,
 } from "@/lib/fontSize";
-import { LIST_PARAM, listPosition, songRefHref } from "@/lib/listContext";
+import { listInView, listPosition, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { headerBarPadding } from "@/components/SearchHeader";
 import { sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
-import { Link, useParams, useRouter, useSearchParams } from "@/lib/navigation";
+import { Link, useParams, usePathname, useRouter, useSearchParams } from "@/lib/navigation";
 import { useStoredState } from "@/lib/useStoredState";
 import { RecordingsSheet } from "@/components/RecordingsSheet";
 
@@ -115,9 +115,9 @@ function SongArticle() {
   useRecordSongClick(id, !sessionLoading && Boolean(fullSong));
   const deleteSong = useDeleteSong();
 
-  // The list this song is read from, if any. A failure just leaves the page
-  // without list navigation.
-  const listId = params.get(LIST_PARAM) ?? undefined;
+  // The list this song is read from, if any, as the pane beside it reads it
+  // (`listInView`). A failure just leaves the page without list navigation.
+  const listId = listInView(usePathname(), params) ?? undefined;
   const { data: contextList } = useList(listId, !sessionLoading);
 
   // The whole article is the surface the paging swipe is read across.
