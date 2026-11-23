@@ -299,14 +299,13 @@ function SongArticle() {
             {!fullSong ? (
               <Skeleton className="h-64 w-full" />
             ) : fullSong.lyrics?.trim() ? (
-              // whitespace-pre-line keeps the stored line and verse breaks.
               // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
               <p
                 lang={fullSong.language}
-                className="lyrics-size whitespace-pre-line leading-loose text-fg"
+                className="lyrics-size leading-loose text-fg"
                 style={{ fontFamily: "var(--font-lyrics)" }}
               >
-                {fullSong.lyrics}
+                <LyricsLines lyrics={fullSong.lyrics} />
               </p>
             ) : (
               <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>
@@ -537,6 +536,23 @@ function OnlyRecording({ recording }: { recording: Recording }) {
       {recording.notes && <RecordingNotes notes={recording.notes} />}
     </div>
   );
+}
+
+/**
+ * The lyrics, one block per stored line, each with a hanging indent: on a
+ * narrow screen a line too long to fit wraps with its remainder indented, so a
+ * continuation never reads as the next line. `text-indent` reaches only a
+ * block's first line, hence a block per line. A blank line keeps its height, so
+ * verses stay apart. Plain text throughout: lyrics are user input.
+ */
+function LyricsLines({ lyrics }: { lyrics: string }) {
+  return lyrics.split(/\r?\n/).map((line, index) => (
+    // Index keys: the lines are a fixed rendering of one string, never reordered.
+    // biome-ignore lint/suspicious/noArrayIndexKey: see above.
+    <span key={index} className="block min-h-lh pl-[1em] -indent-[1em]">
+      {line}
+    </span>
+  ));
 }
 
 /** One labeled row of the header's credits; the value is names or a year. */

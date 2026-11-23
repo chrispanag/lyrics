@@ -98,6 +98,41 @@ export const English: Story = {
   },
 };
 
+const longLine = makeSong({
+  id: "song-10",
+  slug: "makria-grammi",
+  title: "Μακριά γραμμή",
+  lyrics: "Κι αν η νύχτα πέσει βαριά πάνω στα σπίτια και στα στενά της γειτονιάς μας\nάλλος στίχος",
+});
+
+/**
+ * A phone's width: a line too long to fit wraps, and its remainder starts
+ * further in than the line did, so it never reads as the next line.
+ */
+export const WrappedLineOnAPhone: Story = {
+  parameters: { route: "/songs/makria-grammi" },
+  beforeEach({ msw }) {
+    msw.use(songByRef(longLine));
+  },
+  decorators: [
+    (Story) => (
+      <div className="w-[390px]">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvas }) => {
+    const line = await canvas.findByText(/Κι αν η νύχτα πέσει βαριά/);
+    const range = document.createRange();
+    range.selectNodeContents(line);
+    const rows = [...range.getClientRects()];
+    // Wrapped, so the check below has a continuation to measure.
+    await expect(new Set(rows.map((row) => Math.round(row.top))).size).toBeGreaterThan(1);
+    const [start, ...continuations] = rows.map((row) => row.left);
+    await expect(Math.max(...continuations)).toBeGreaterThan((start ?? 0) + 4);
+  },
+};
+
 export const NotFound: Story = {
   parameters: { route: "/songs/no-such-song" },
   play: async ({ canvas }) => {

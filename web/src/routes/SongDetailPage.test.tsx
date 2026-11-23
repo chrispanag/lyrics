@@ -204,13 +204,32 @@ describe("SongDetailPage", () => {
     expect(screen.getByRole("button", { name: "Back" })).toHaveClass("@3xl/app:hidden");
   });
 
-  // Lyrics are plain text whose line breaks carry the verses.
-  it("preserves line breaks in the lyrics", async () => {
+  // Lyrics are plain text whose line breaks carry the verses. Each line is its
+  // own block, so a long one wraps under a hanging indent, and a blank line
+  // keeps the gap between verses.
+  it("sets each lyric line apart, verses and all", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(
+          makeSong({ lyrics: "Πρώτος στίχος\r\nδεύτερος <b>στίχος</b>\n\nτρίτη στροφή" }),
+        ),
+      ),
+    );
+
     renderDetail();
 
-    const lyrics = await screen.findByText(/Στης θάλασσας τα βάθη/);
-    expect(lyrics).toHaveClass("whitespace-pre-line");
-    expect(lyrics.textContent).toContain("\n");
+    const first = await screen.findByText("Πρώτος στίχος");
+    const lines = [...(first.parentElement?.children ?? [])];
+    expect(lines.map((line) => line.textContent)).toEqual([
+      "Πρώτος στίχος",
+      // User input: shown as written, never as markup.
+      "δεύτερος <b>στίχος</b>",
+      "",
+      "τρίτη στροφή",
+    ]);
+    for (const line of lines) expect(line).toHaveClass("block", "pl-[1em]", "-indent-[1em]");
+    // The blank line holds a line's height, so the verses stay apart.
+    expect(lines[2]).toHaveClass("min-h-lh");
   });
 
   it("does not offer editing to a guest", async () => {
