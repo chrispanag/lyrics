@@ -22,7 +22,15 @@ import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { FIELDS, useHomeEndInside } from "@/lib/modal";
 import { applyNavCollapsed, storeNavCollapsed, storedNavCollapsed } from "@/lib/navCollapsed";
-import { Link, NavLink, useNavigationKey, usePathname } from "@/lib/navigation";
+import { listInView, songRefFromPath } from "@/lib/listContext";
+import {
+  Link,
+  NavLink,
+  type ReadonlySearchParams,
+  useNavigationKey,
+  usePathname,
+  useSearchParams,
+} from "@/lib/navigation";
 import { NAV_DRAWER_ID, NavDrawerContext, useNavDrawer } from "@/lib/navDrawer";
 import { hasRole } from "@/lib/types";
 import { useIntentPrefetch } from "@/lib/useIntentPrefetch";
@@ -58,6 +66,16 @@ const NAV_ITEMS: NavItem[] = [
   // across the console's screens.
   { to: "/admin", label: "Admin", icon: Shield, adminOnly: true },
 ];
+
+/**
+ * The entry a song belongs to, or undefined off a song, where the path decides.
+ * A song has no entry of its own: it is read from a list or from the catalog,
+ * and the entry lit is the one whose songs sit beside it.
+ */
+function songSection(pathname: string, searchParams: ReadonlySearchParams): string | undefined {
+  if (songRefFromPath(pathname) === null) return undefined;
+  return listInView(pathname, searchParams) ? "/lists" : "/";
+}
 
 /** The column's id, so opening it can move focus onto its first link. */
 const NAV_SIDEBAR_ID = "nav-sidebar";
@@ -181,10 +199,12 @@ function NavEntry({ item }: { item: NavItem }) {
     void queryClient.prefetchQuery(queries.lists());
   }, [queryClient]);
   const intent = useIntentPrefetch(prefetch);
+  const section = songSection(usePathname(), useSearchParams());
 
   return (
     <NavLink
       href={item.to}
+      active={section === undefined ? undefined : section === item.to}
       data-guest-only={item.identityCard || undefined}
       {...(item.warmsLists ? intent : undefined)}
       className={({ isActive }) =>

@@ -1,6 +1,13 @@
 "use client";
 
-import { lazy, Suspense, useState, useSyncExternalStore, type SubmitEvent } from "react";
+import {
+  lazy,
+  type ReactNode,
+  Suspense,
+  useState,
+  useSyncExternalStore,
+  type SubmitEvent,
+} from "react";
 import {
   ChevronRight,
   Copy,
@@ -26,8 +33,10 @@ import {
 } from "@/api/hooks";
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
+import { BackButton } from "@/components/BackButton";
 import { cardChrome, cardHover, tagChrome } from "@/components/cardStyles";
 import { PageTitle } from "@/components/PageTitle";
+import { ToolbarHeader } from "@/components/SearchHeader";
 import { SongRow } from "@/components/SongRow";
 import {
   Button,
@@ -40,13 +49,12 @@ import {
   Skeleton,
   Skeletons,
 } from "@/components/ui";
-import { actionLabel } from "@/components/buttonStyles";
-import { PageBar } from "@/components/PageBar";
+import { useCatalogPaneShown } from "@/lib/catalogPane";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
-import { listHref } from "@/lib/listContext";
+import { listHref, listInView, songRefFromPath } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
-import { Link, useParams, useRouter } from "@/lib/navigation";
+import { Link, usePathname, useRouter, useSearchParams } from "@/lib/navigation";
 
 // Only an owner can reorder, so the drag machinery loads on demand.
 const SortableSongList = lazy(() =>
@@ -196,8 +204,48 @@ function subscribeToNothing() {
   return () => {};
 }
 
+/**
+ * An action's text in the list's bar: hidden on a phone, as `actionLabel` is,
+ * and hidden again beside the lyrics, where the bar is a pane's width.
+ */
+const paneActionLabel = "sr-only sm:@max-3xl/app:not-sr-only";
+
+/**
+ * The list's frame: its bar, with `actions` opposite the way back, and under it
+ * the list. Beside the lyrics it is a fixed column, as the catalog is: the bar
+ * stays put and only the songs scroll, under it. Back is hidden there, as it is
+ * on the song beside it: the sidebar is the way out.
+ */
+function ListPane({ actions, children }: { actions?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:flex-col">
+      {/* `contents` below `@3xl`: a box only as tall as the header would be
+          the sticky header's whole scroll range, and it would scroll away. */}
+      <div className="contents @3xl/app:block @3xl/app:shrink-0">
+        <ToolbarHeader>
+          <BackButton className="@3xl/app:hidden" />
+          {actions && <div className="ml-auto flex items-center gap-1">{actions}</div>}
+        </ToolbarHeader>
+      </div>
+      <div className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain">
+        <div className="mx-auto max-w-3xl px-4 py-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A list: on its own page, and beside a song read from it, where it is the
+ * list the reader steps through, with the open song marked. Which list is the
+ * address's to say (`listInView`): a song's own id is no list's.
+ */
 export function ListDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const pathname = usePathname();
+  const id = listInView(pathname, useSearchParams()) ?? undefined;
+  // Beside a song, the song names the tab and holds the page's h1; the list
+  // is the column it was opened from.
+  const besideSong = songRefFromPath(pathname) !== null;
+  const shown = useCatalogPaneShown();
   const router = useRouter();
   const signIn = useSignInHref();
   const { user, loading: sessionLoading } = useAuth();
@@ -232,25 +280,26 @@ export function ListDetailPage() {
   // wait only exists so a private list is asked for with its owner's token.
   if (!list && (sessionLoading || isLoading)) {
     return (
-      <div className="mx-auto max-w-3xl space-y-3 px-4 py-6">
+      <ListPane>
         {/* Nameless while in flight, rather than "undefined — Songfolio". */}
-        <PageTitle />
-        <Skeleton className="h-9 w-20" />
-        <Skeleton className="h-9 w-1/2" />
-        <Skeleton className="h-28 w-full" />
-      </div>
+        {!besideSong && <PageTitle />}
+        <div className="space-y-3">
+          <Skeleton className="h-9 w-1/2" />
+          <Skeleton className="h-28 w-full" />
+        </div>
+      </ListPane>
     );
   }
 
   if (isError || !list) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-6">
-        <PageTitle name="List not available" />
+      <ListPane>
+        {!besideSong && <PageTitle name="List not available" />}
         <ErrorMessage>This list is not available.</ErrorMessage>
         <Link href="/lists" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
           Back to lists
         </Link>
-      </div>
+      </ListPane>
     );
   }
 
@@ -302,73 +351,78 @@ export function ListDetailPage() {
     void saveCopy();
   };
 
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-4">
-      <PageTitle name={list.name} />
-      <PageBar>
-        {/* A non-owner only reaches a public list; guests are sent to sign in.
+  const Heading = besideSong ? "h2" : "h1";
+
+  const actions = (
+    <>
+      {/* A non-owner only reaches a public list; guests are sent to sign in.
             Inert until the session is known: a server-rendered list is on screen
             before then, and `!user` would send a signed-in reader to sign in. */}
-        {!isOwner && (
+      {!isOwner && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onSave}
+          loading={copyList.isPending}
+          disabled={sessionLoading}
+        >
+          <Copy aria-hidden className="size-4" />
+          {/* Shown on a phone too: a reader's one action, and a copy icon
+                alone reads as "copy link". */}
+          Save to my lists
+        </Button>
+      )}
+
+      {isOwner && (
+        <>
           <Button
             variant="ghost"
             size="sm"
-            onClick={onSave}
-            loading={copyList.isPending}
-            disabled={sessionLoading}
+            onClick={() => {
+              setLinkState("idle");
+              setSharing(true);
+            }}
           >
-            <Copy aria-hidden className="size-4" />
-            {/* Shown on a phone too: a reader's one action, and a copy icon
-                alone reads as "copy link". */}
-            Save to my lists
+            <Share2 aria-hidden className="size-4" />
+            <span className={paneActionLabel}>Share</span>
           </Button>
-        )}
 
-        {isOwner && (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setLinkState("idle");
-                setSharing(true);
-              }}
-            >
-              <Share2 aria-hidden className="size-4" />
-              <span className={actionLabel}>Share</span>
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => updateList.mutate({ is_public: !list.is_public })}
-              loading={updateList.isPending}
-            >
-              <VisibilityIcon aria-hidden className="size-4" />
-              {/* Shown on a phone too: its icon is the state it switches to,
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => updateList.mutate({ is_public: !list.is_public })}
+            loading={updateList.isPending}
+          >
+            <VisibilityIcon aria-hidden className="size-4" />
+            {/* Shown on a phone too: its icon is the state it switches to,
                   beside a tag showing the state it is in. */}
-              {visibilityAction}
+            {visibilityAction}
+          </Button>
+
+          {/* The default list cannot be deleted (the server 403s). */}
+          {!list.is_default && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Delete list"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash aria-hidden className="size-4 text-fg-danger" />
             </Button>
+          )}
+        </>
+      )}
+    </>
+  );
 
-            {/* The default list cannot be deleted (the server 403s). */}
-            {!list.is_default && (
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Delete list"
-                onClick={() => setConfirmDelete(true)}
-              >
-                <Trash aria-hidden className="size-4 text-fg-danger" />
-              </Button>
-            )}
-          </>
-        )}
-      </PageBar>
-
-      <header className="mb-6">
-        <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">
+  return (
+    <ListPane actions={actions}>
+      {!besideSong && <PageTitle name={list.name} />}
+      {/* Not a <header>: the bar above is the pane's banner. */}
+      <div className="mb-6">
+        <Heading className="text-3xl font-bold leading-tight tracking-tight text-balance @3xl/app:text-2xl">
           {list.name}
-        </h1>
+        </Heading>
         {list.description && <p className="mt-1 text-lg text-fg-muted">{list.description}</p>}
         <div className="mt-3 flex items-center gap-2">
           <p className="text-sm text-fg-muted">{songCount(list.item_count)}</p>
@@ -380,7 +434,7 @@ export function ListDetailPage() {
             <ErrorMessage>{copyError}</ErrorMessage>
           </div>
         )}
-      </header>
+      </div>
 
       {/* `songs` is `omitempty` in Go, hence the `?? []` above. */}
       {songs.length === 0 ? (
@@ -389,9 +443,10 @@ export function ListDetailPage() {
           title="This list is empty"
           description={isOwner ? "Open a song and use Save to add it here." : undefined}
         />
-      ) : /* Sortable only for an owner with two or more songs; the static list
-             is also the fallback while that chunk loads. */
-      isOwner && songs.length > 1 ? (
+      ) : /* Sortable only for an owner with two or more songs, once the pane has
+             shown: hidden beside a song on a phone, it loads no drag machinery.
+             The static list is also the fallback while that chunk loads. */
+      isOwner && songs.length > 1 && shown ? (
         <Suspense
           fallback={
             <StaticSongList
@@ -516,6 +571,6 @@ export function ListDetailPage() {
       >
         “{list.name}” will be removed. The songs themselves are not affected.
       </ConfirmSheet>
-    </div>
+    </ListPane>
   );
 }

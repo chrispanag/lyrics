@@ -55,6 +55,28 @@ export function songRefFromPath(pathname: string): string | null {
 }
 
 /**
+ * The list a `/lists/…` address names, or null for any other address. The
+ * inverse of `listHref`.
+ */
+export function listRefFromPath(pathname: string): string | null {
+  return /^\/lists\/([^/]+)$/.exec(pathname)?.[1] ?? null;
+}
+
+/**
+ * The list the reader is in at an address: the list's own page, or the list a
+ * song is being read from. Null anywhere else, a song read from no list
+ * included. The list pane, the slot beside a song and the navigation all ask
+ * this, so they cannot disagree about whether the reader is in a list.
+ */
+export function listInView(
+  pathname: string,
+  searchParams: Pick<URLSearchParams, "get">,
+): string | null {
+  if (songRefFromPath(pathname) !== null) return searchParams.get(LIST_PARAM) || null;
+  return listRefFromPath(pathname);
+}
+
+/**
  * Whether a route parameter names this song, by slug or id. Both forms,
  * permanently: the server's 308 does not cover every load, and matching the slug
  * alone silently drops the list bar, swipe and arrow keys on an id address.

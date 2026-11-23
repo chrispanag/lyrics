@@ -28,6 +28,11 @@ const stepChrome =
 /**
  * The list a song is being read from, where it sits in it, and the way on.
  * The list's name links back to it: the only way out from a shared link.
+ *
+ * Drawn only while the list is not beside the song. From `@3xl` the list pane
+ * says all of it, the open song marked in it, so the bar is hidden there; the
+ * keys and the neighbors' prefetch stay, since they hang on this component and
+ * not on its box.
  */
 export function ListSongNavBar({ position }: { position: ListPosition }) {
   useArrowKeyPaging(position);
@@ -36,7 +41,10 @@ export function ListSongNavBar({ position }: { position: ListPosition }) {
   return (
     <nav
       aria-label="Song navigation"
-      className={cn(cardChrome, "mb-5 flex items-center gap-2 bg-surface px-3 py-1.5")}
+      className={cn(
+        cardChrome,
+        "mb-5 flex items-center gap-2 bg-surface px-3 py-1.5 @3xl/app:hidden",
+      )}
     >
       <Link
         href={position.listHref}

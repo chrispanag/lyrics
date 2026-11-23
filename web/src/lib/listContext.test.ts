@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { songCanonicalHref, songRefIsId } from "./listContext";
+import { listInView, songCanonicalHref, songRefIsId } from "./listContext";
 
 /*
  * The two halves of the id-to-slug redirect, pinned from both sides: too narrow
@@ -50,5 +50,23 @@ describe("songCanonicalHref", () => {
     expect(songCanonicalHref("thalassa-platia", { tag: ["a", "b"] })).toBe(
       "/songs/thalassa-platia?tag=a&tag=b",
     );
+  });
+});
+
+describe("listInView", () => {
+  const search = (query: string) => new URLSearchParams(query);
+
+  it("is the list on its own page, and the one a song is read from", () => {
+    expect(listInView("/lists/list-1", search(""))).toBe("list-1");
+    expect(listInView("/songs/thalassa-platia", search("list=list-1"))).toBe("list-1");
+  });
+
+  // A song read from no list belongs to the catalog, as does every other screen.
+  it("is no list anywhere else", () => {
+    expect(listInView("/songs/thalassa-platia", search(""))).toBeNull();
+    expect(listInView("/songs/thalassa-platia", search("list="))).toBeNull();
+    expect(listInView("/", search("list=list-1"))).toBeNull();
+    expect(listInView("/lists", search(""))).toBeNull();
+    expect(listInView("/songs/thalassa-platia/edit", search("list=list-1"))).toBeNull();
   });
 });

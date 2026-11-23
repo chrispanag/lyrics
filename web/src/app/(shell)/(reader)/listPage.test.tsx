@@ -14,7 +14,7 @@ import { API, apiError, listById, makeUnaddressedSong } from "@/test/handlers";
 import { server } from "@/test/server";
 import { TestProviders } from "@/test/TestProviders";
 
-import ListPage, { generateMetadata } from "./page";
+import ListPage, { generateMetadata } from "./listPage";
 
 /*
  * Pins the route's wiring: what a guest's read of a list hands the page and

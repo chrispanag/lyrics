@@ -49,6 +49,21 @@ export const AsReader: Story = {
   },
 };
 
+/**
+ * The list beside a song read from it: the pane a wide screen keeps on the left,
+ * the open song marked, and the song's own title and heading left to the song.
+ */
+export const BesideASong: Story = {
+  parameters: { path: "/songs/:id", route: "/songs/thalassa-platia?list=list-1" },
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole("heading", { level: 2, name: "Ρεμπέτικα" })).toBeVisible();
+    await expect(canvas.getByRole("link", { name: /Θάλασσα Πλατιά/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  },
+};
+
 export const Empty: Story = {
   parameters: { user: owner },
   beforeEach({ msw }) {

@@ -243,15 +243,21 @@ export function pathMatches(pathname: string, href: string): boolean {
 /**
  * A link that knows when it names the current screen, for navigation: lit
  * through `className`, and announced with `aria-current="page"`.
+ *
+ * `active` decides for a screen whose path does not say which entry it belongs
+ * to; left out, the path does (`pathMatches`).
  */
 export function NavLink({
   href,
   className,
+  active,
   ...rest
 }: Omit<LinkProps, "className"> & {
   className: (state: { isActive: boolean }) => string;
+  active?: boolean | undefined;
 }) {
-  const isActive = pathMatches(usePathname(), href);
+  const matched = pathMatches(usePathname(), href);
+  const isActive = active ?? matched;
   return (
     <Link
       href={href}

@@ -8,8 +8,8 @@ import { songRefFromPath } from "@/lib/listContext";
 import { usePathname } from "@/lib/navigation";
 
 /**
- * The catalog on the left and the lyrics on the right, once the content column
- * can hold both — an inbox beside the message it has open.
+ * The catalog, or a list, on the left and the lyrics on the right, once the
+ * content column can hold both — an inbox beside the message it has open.
  *
  * The column is what is left after the navigation. `@3xl` is 48rem, Tailwind's
  * `md`: with the column collapsed that is the window from `md` up, and with it

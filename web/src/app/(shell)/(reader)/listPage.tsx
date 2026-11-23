@@ -21,6 +21,10 @@ import { ListDetailPage } from "@/routes/ListsPages";
  * rendered here: a private one renders nothing about itself, and its owner's
  * browser asks again once the session is restored. See CLAUDE.md, "What the
  * server renders".
+ *
+ * The `@catalog` slot renders this beside the reading pane, so opening a song
+ * from the list keeps it on screen. The route's own page re-exports
+ * `generateMetadata` and the empty pane; `cache` makes the two one read.
  */
 
 /**

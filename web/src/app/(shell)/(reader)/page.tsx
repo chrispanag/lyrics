@@ -1,22 +1,11 @@
-import { SixteenthNotes } from "lucide-react";
-
-import { EmptyState } from "@/components/ui";
+import { EmptyReadingPane } from "./readingPane";
 
 export { generateMetadata } from "./catalogPage";
 
 /*
- * The reading pane when no song is open. While the column is too narrow for
- * both, it is hidden and the catalog is the whole page; once the column can
- * hold them, it sits to the right of the list.
+ * The catalog's own address. The `@catalog` slot renders the catalog; this is
+ * the reading pane beside it, with no song open.
  */
-export default function ReadingPane() {
-  return (
-    <div className="flex flex-1 items-center justify-center">
-      <EmptyState
-        icon={<SixteenthNotes className="size-12" />}
-        title="Select a song"
-        description="Its lyrics will open here."
-      />
-    </div>
-  );
+export default function CatalogReadingPane() {
+  return <EmptyReadingPane />;
 }

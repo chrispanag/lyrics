@@ -5,9 +5,13 @@ import { describe, expect, it, vi } from "vitest";
 import { ReaderSplit } from "./ReaderSplit";
 import { Link, useRouter } from "@/lib/navigation";
 import { BrowsePage } from "@/routes/BrowsePage";
+import { ListDetailPage } from "@/routes/ListsPages";
+import { catalogList } from "@/test/catalog";
+import { listById } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { recordRequests } from "@/test/requests";
-import { CurrentAddress } from "@/test/routes";
+import { CurrentAddress, TestRoutes } from "@/test/routes";
+import { server } from "@/test/server";
 
 function Reader() {
   const router = useRouter();
@@ -56,5 +60,36 @@ describe("ReaderSplit", () => {
       vi.useRealTimers();
     }
     expect(requests.paths).toEqual([]);
+  });
+
+  // A list's own page fills the same slot, so a song opened from it keeps the
+  // list on screen, scrolled where it was, with the song marked in it.
+  it("keeps a list mounted beside the song opened from it", async () => {
+    server.use(listById(catalogList(3)));
+    const user = userEvent.setup();
+    renderWithProviders(
+      <ReaderSplit catalog={<ListDetailPage />}>
+        <TestRoutes
+          routes={{ "/lists/:id": <p>Select a song</p>, "/songs/:id": <CurrentAddress /> }}
+        />
+      </ReaderSplit>,
+      { route: "/lists/list-1" },
+    );
+    const card = await screen.findByRole("link", { name: /Φραγκοσυριανή/ });
+    expect(card).not.toHaveAttribute("aria-current");
+
+    const lists = recordRequests((path) => path.startsWith("/api/v1/lists"));
+    try {
+      await user.click(card);
+      expect(screen.getByText("Now at /songs/frangosyriani?list=list-1")).toBeInTheDocument();
+      // The same card, not one rebuilt: the list was kept, not read again.
+      expect(screen.getByRole("link", { name: /Φραγκοσυριανή/ })).toBe(card);
+      expect(card).toHaveAttribute("aria-current", "page");
+      // Beside a song the song holds the page's h1; the list's name steps down.
+      expect(screen.getByRole("heading", { level: 2, name: "Ρεμπέτικα" })).toBeInTheDocument();
+    } finally {
+      lists.stop();
+    }
+    expect(lists.paths).toEqual([]);
   });
 });

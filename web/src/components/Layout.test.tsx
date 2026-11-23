@@ -54,6 +54,23 @@ describe("Layout navigation", () => {
       within(drawer()).getByRole("link", { name: "Sign in", hidden: true }),
     ).toBeInTheDocument();
   });
+
+  // A song has no entry of its own. It belongs to the list beside it: the one
+  // its `?list=` names, or else the catalog.
+  it.each([
+    { route: "/", entry: "Browse" },
+    { route: "/songs/thalassa-platia", entry: "Browse" },
+    { route: "/lists", entry: "Lists" },
+    { route: "/lists/list-1", entry: "Lists" },
+    { route: "/songs/thalassa-platia?list=list-1", entry: "Lists" },
+  ])("lights $entry, and only it, at $route", ({ route, entry }) => {
+    renderWithProviders(<Layout />, { route, user: makeUser() });
+
+    const lit = within(sidebar())
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("aria-current") === "page");
+    expect(lit.map((link) => link.textContent)).toEqual([entry]);
+  });
 });
 
 describe("Lists link prefetch", () => {

@@ -55,6 +55,26 @@ export function SearchHeader({
 }
 
 /**
+ * The same bar holding a screen's own controls where the search box would be:
+ * a list's, in the pane the catalog takes beside a song. It shows at every
+ * width, since beside the lyrics it is the pane's header, and the way to the
+ * navigation once the column is collapsed. The row is as tall as the search
+ * field, so the bar lines up with a song's tools across the reader.
+ */
+export function ToolbarHeader({ children }: { children: ReactNode }) {
+  return (
+    <StickyHeader>
+      <div className={headerColumn}>
+        <div className="flex h-12 items-center gap-2">
+          <MenuButton />
+          {children}
+        </div>
+      </div>
+    </StickyHeader>
+  );
+}
+
+/**
  * The same bar for a screen with no search box of its own: the hamburger, in
  * the place every other screen keeps it. `mobileOnly`, since at a desk the
  * sidebar is the navigation until the reader collapses it, and then this bar
