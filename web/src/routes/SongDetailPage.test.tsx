@@ -528,7 +528,8 @@ describe("SongDetailPage recordings", () => {
         id: "song-2",
         slug: "second",
         title: "Θάλασσα Πλατιά",
-        recordings: [makeRecording()],
+        // Two, so there is a sheet to open: a lone recording shows inline.
+        recordings: [makeRecording(), makeRecording({ id: "r2", is_first: false })],
       }),
       makeSong({
         id: "song-3",
@@ -597,6 +598,47 @@ describe("SongDetailPage recordings", () => {
     expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
   });
 
+  // Its performers and year are the song's own rows, so only the label, the
+  // mark and the notes are added, and the year is said once.
+  it("shows a lone recording inline rather than offering a sheet", async () => {
+    withRecordings([makeRecording({ label: "Columbia", notes: "Recorded in Athens." })]);
+
+    renderDetail();
+
+    expect(await screen.findByText("Columbia · First recording")).toBeInTheDocument();
+    expect(screen.getByText("Recorded in Athens.")).toBeInTheDocument();
+    expect(screen.getAllByText("1964")).toHaveLength(1);
+    expect(screen.getAllByText("Γιώργος Νταλάρας")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /show all/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: /recordings/i })).not.toBeInTheDocument();
+  });
+
+  // Unmarked, unlabeled and without notes, it has nothing the page lacks.
+  it("adds nothing for a lone recording with nothing of its own to say", async () => {
+    withRecordings([makeRecording({ is_first: false })]);
+
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(screen.queryByText(/first recording/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /show all/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps the sheet for two recordings, with nothing inline", async () => {
+    withRecordings([
+      makeRecording({ id: "r1", label: "Columbia" }),
+      makeRecording({ id: "r2", is_first: false, release_year: 1988 }),
+    ]);
+
+    renderDetail();
+
+    expect(
+      await screen.findByRole("button", { name: "Show all 2 recordings" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Columbia")).not.toBeInTheDocument();
+    expect(screen.queryByText(/first recording/i)).not.toBeInTheDocument();
+  });
+
   it("offers nothing to open when the song has no recordings", async () => {
     renderDetail();
 
@@ -609,7 +651,10 @@ describe("SongDetailPage recordings", () => {
   // column must not repeat it.
   it("names a year-only recording once", async () => {
     const user = userEvent.setup();
-    withRecordings([makeRecording({ performers: [], label: null, release_year: 1964 })]);
+    withRecordings([
+      makeRecording({ performers: [], label: null, release_year: 1964 }),
+      makeRecording({ id: "r2", is_first: false, release_year: 1988 }),
+    ]);
 
     renderDetail();
 
@@ -622,7 +667,10 @@ describe("SongDetailPage recordings", () => {
   // A row with its own text still shows the year beside it.
   it("still shows the year beside a named recording", async () => {
     const user = userEvent.setup();
-    withRecordings([makeRecording({ release_year: 1971 })]);
+    withRecordings([
+      makeRecording({ release_year: 1971 }),
+      makeRecording({ id: "r2", is_first: false, release_year: 1988, performers: [] }),
+    ]);
 
     renderDetail();
 
@@ -661,11 +709,14 @@ describe("SongDetailPage recordings", () => {
   // No `is_first`, no badge: index 0 makes no claim.
   it("badges no recording when none is marked", async () => {
     const user = userEvent.setup();
-    withRecordings([makeRecording({ is_first: false })]);
+    withRecordings([
+      makeRecording({ is_first: false }),
+      makeRecording({ id: "r2", is_first: false, release_year: 1988 }),
+    ]);
 
     renderDetail();
 
-    await user.click(await screen.findByRole("button", { name: "Show all 1 recording" }));
+    await user.click(await screen.findByRole("button", { name: "Show all 2 recordings" }));
 
     const sheet = await screen.findByRole("dialog", { name: /recordings/i });
     expect(within(sheet).queryByText("First recording")).not.toBeInTheDocument();
@@ -702,7 +753,7 @@ describe("SongDetailPage recordings", () => {
   // Closing must return focus to the trigger.
   it("returns focus to the control that opened it", async () => {
     const user = userEvent.setup();
-    withRecordings([makeRecording()]);
+    withRecordings([makeRecording(), makeRecording({ id: "r2", is_first: false })]);
 
     renderDetail();
 

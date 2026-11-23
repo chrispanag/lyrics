@@ -35,7 +35,7 @@ import {
   storeFontSize,
 } from "@/lib/fontSize";
 import { listInView, listPosition, songRefFromPath, songRefHref } from "@/lib/listContext";
-import { canEditSong, hasRole, type Song } from "@/lib/types";
+import { canEditSong, hasRole, type Recording, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { headerBarPadding } from "@/components/SearchHeader";
 import { sectionLabel } from "@/components/textStyles";
@@ -372,8 +372,9 @@ function SongArticle() {
 }
 
 /**
- * A song's title, credits, genres and the way into its recordings. The
- * skeleton in `SongArticle` mirrors its spacing; change both together.
+ * A song's title, credits, genres and its recordings: a lone one inline, or the
+ * way into several. The skeleton in `SongArticle` mirrors its spacing; change
+ * both together.
  */
 function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: () => void }) {
   const creditsByRole = groupCredits(song.credits);
@@ -383,6 +384,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
   // hedge between them. See CLAUDE.md, "Recordings".
   const performers = songPerformers(song);
   const year = song.release_year;
+  const onlyRecording = song.recordings.length === 1 ? song.recordings[0] : undefined;
 
   return (
     /* The song's own language: the title is content too. */
@@ -406,8 +408,8 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
         {year && <CreditRow label="Year">{year}</CreditRow>}
       </dl>
 
-      {/* Offered for one recording too: only the sheet shows labels and notes. */}
-      {song.recordings.length > 0 && (
+      {onlyRecording && <OnlyRecording recording={onlyRecording} />}
+      {song.recordings.length > 1 && (
         <button
           type="button"
           onClick={onShowRecordings}
@@ -506,6 +508,25 @@ function AddToListSheet({
         Manage lists
       </Link>
     </Sheet>
+  );
+}
+
+/**
+ * What the recordings sheet would add about a song's only recording, in its
+ * place. Its performers, year and video are already on the page, as the song's
+ * copies of this same row, so only the label, the first-recording mark and the
+ * notes remain. Nothing at all when the row has none of them.
+ */
+function OnlyRecording({ recording }: { recording: Recording }) {
+  // Keyed on the flag, as in the sheet: being the only one makes no claim.
+  const facts = [recording.label, recording.is_first ? "First recording" : null].filter(Boolean);
+  if (facts.length === 0 && !recording.notes) return null;
+
+  return (
+    <div className="mt-2 text-sm text-fg-muted">
+      {facts.length > 0 && <p>{facts.join(" · ")}</p>}
+      {recording.notes && <p className="mt-1 whitespace-pre-line">{recording.notes}</p>}
+    </div>
   );
 }
 

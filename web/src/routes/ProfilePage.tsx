@@ -86,14 +86,18 @@ export function ProfilePage() {
     );
   }
 
+  // The name as the save would send it, so a save that would change nothing,
+  // padding included, is not offered. A successful save moves the stored name
+  // to match, which disables the button again.
+  const nameToSend = displayName.trim() || null;
+  const nameUnchanged = nameToSend === user.display_name;
+
   const onSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     try {
       // The PATCH returns the updated user, saving a GET /me.
-      const updated = await updateProfile.mutateAsync({
-        display_name: displayName.trim() || null,
-      });
+      const updated = await updateProfile.mutateAsync({ display_name: nameToSend });
       await reload(updated);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -185,7 +189,7 @@ export function ProfilePage() {
             onChange={(event) => setDisplayName(event.target.value)}
           />
         </Field>
-        <Button type="submit" loading={updateProfile.isPending}>
+        <Button type="submit" loading={updateProfile.isPending} disabled={nameUnchanged}>
           {saved ? "Saved" : "Save changes"}
         </Button>
       </form>
