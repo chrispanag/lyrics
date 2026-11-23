@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, vi } from "vitest";
 import { NAV_COLLAPSED_ATTRIBUTE } from "./src/lib/navCollapsed";
 import { installDialogStub } from "./src/test/dialog";
 import { StubIntersectionObserver } from "./src/test/intersection";
+import { installPopoverStub } from "./src/test/popover";
 import { server } from "./src/test/server";
 
 /**
@@ -47,6 +48,8 @@ beforeAll(() => {
     Element.prototype.scrollBy = vi.fn();
     // `Sheet` is a modal `<dialog>`; see src/test/dialog.ts.
     installDialogStub();
+    // `MoreActionsMenu` is a popover; see src/test/popover.ts.
+    installPopoverStub();
   }
 
   // An unstubbed request is a bug in the test. Outside the guard: node specs too.

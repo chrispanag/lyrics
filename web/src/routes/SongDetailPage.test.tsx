@@ -189,9 +189,9 @@ describe("SongDetailPage", () => {
     renderDetail();
 
     const title = await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
-    const save = screen.getByRole("button", { name: /save to a list/i });
+    const addToList = screen.getByRole("button", { name: /add to list/i });
     // Back, then the tools, inside the bar.
-    const bar = save.parentElement?.parentElement?.parentElement;
+    const bar = addToList.parentElement?.parentElement?.parentElement;
     const scroller = title.closest("header")?.parentElement?.parentElement;
 
     expect(title.closest("header")).toHaveAttribute("lang", "el");
@@ -200,7 +200,7 @@ describe("SongDetailPage", () => {
     expect(bar).not.toContainElement(title);
     expect(scroller).toHaveClass("@3xl/app:overflow-y-auto");
     expect(scroller).toContainElement(title);
-    expect(scroller).not.toContainElement(save);
+    expect(scroller).not.toContainElement(addToList);
     expect(screen.getByRole("button", { name: "Back" })).toHaveClass("@3xl/app:hidden");
   });
 
@@ -319,12 +319,12 @@ describe("SongDetailPage", () => {
   });
 
   // A guest is offered Save and sent to sign in.
-  it("offers saving to a guest and sends them to sign in", async () => {
+  it("offers Add to list to a guest and sends them to sign in", async () => {
     const user = userEvent.setup();
 
     renderDetail();
 
-    await user.click(await screen.findByRole("button", { name: /save to a list/i }));
+    await user.click(await screen.findByRole("button", { name: /add to list/i }));
 
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
   });
@@ -334,9 +334,9 @@ describe("SongDetailPage", () => {
 
     renderDetail({ user: makeUser({ id: "user-1" }) });
 
-    await user.click(await screen.findByRole("button", { name: /save to a list/i }));
+    await user.click(await screen.findByRole("button", { name: /add to list/i }));
 
-    expect(await screen.findByRole("dialog", { name: /save to list/i })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /add to list/i })).toBeInTheDocument();
   });
 
   it("reports a song that could not be loaded", async () => {
@@ -391,7 +391,7 @@ describe("SongDetailPage while the song loads", () => {
     renderDetail();
 
     expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /save to a list/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add to list/i })).toBeInTheDocument();
 
     release();
     expect(await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" })).toBeInTheDocument();
@@ -431,11 +431,12 @@ describe("SongDetailPage while the song loads", () => {
 
     renderDetail({ user: makeUser({ id: "admin-1", role: "admin" }) });
 
-    expect(screen.getByRole("button", { name: "Delete song" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(screen.getByRole("menuitem", { name: "Delete song" })).toBeDisabled();
 
     release();
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
-    expect(screen.getByRole("button", { name: "Delete song" })).toBeEnabled();
+    expect(screen.getByRole("menuitem", { name: "Delete song" })).toBeEnabled();
   });
 });
 
@@ -970,8 +971,8 @@ describe("SongDetailPage inside a list", () => {
 
     renderDetail({ route: "/songs/song-2?list=list-1", user: makeUser({ id: "user-1" }) });
 
-    await user.click(await screen.findByRole("button", { name: /save to a list/i }));
-    await screen.findByRole("dialog", { name: /save to list/i });
+    await user.click(await screen.findByRole("button", { name: /add to list/i }));
+    await screen.findByRole("dialog", { name: /add to list/i });
 
     await user.keyboard("{ArrowRight}");
 
@@ -1105,8 +1106,8 @@ describe("SongDetailPage inside a list", () => {
     const user = userEvent.setup();
     await openSecond({ user: makeUser({ id: "user-1" }) });
 
-    await user.click(screen.getByRole("button", { name: /save to a list/i }));
-    const sheet = await screen.findByRole("dialog", { name: /save to list/i });
+    await user.click(screen.getByRole("button", { name: /add to list/i }));
+    const sheet = await screen.findByRole("dialog", { name: /add to list/i });
 
     swipe(sheet, 500, 380);
 
@@ -1277,7 +1278,7 @@ describe("SongDetailPage inside a list", () => {
 
     renderDetail({ route: "/songs/song-2?list=list-1", user: null });
 
-    await user.click(await screen.findByRole("button", { name: "Save to a list" }));
+    await user.click(await screen.findByRole("button", { name: "Add to list" }));
 
     expect(await screen.findByText("Return to /songs/song-2?list=list-1")).toBeInTheDocument();
   });
@@ -1315,7 +1316,7 @@ describe("SongDetailPage inside a list", () => {
   });
 });
 
-describe("SongDetailPage save to list", () => {
+describe("SongDetailPage Add to list", () => {
   function serveSheet(membership: () => Response | Promise<Response>) {
     server.use(
       http.get(`${API}/api/v1/lists`, () =>
@@ -1341,7 +1342,7 @@ describe("SongDetailPage save to list", () => {
     );
     renderDetail({ user: makeUser() });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Save to a list" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Add to list" }));
     const on = await screen.findByRole("button", { name: /Ρεμπέτικα/ });
     expect(on).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /Έντεχνα/ })).toHaveAttribute(
@@ -1363,7 +1364,7 @@ describe("SongDetailPage save to list", () => {
     });
     renderDetail({ user: makeUser() });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Save to a list" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Add to list" }));
     expect(await screen.findByText("Loading")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Ρεμπέτικα/ })).not.toBeInTheDocument();
 
@@ -1387,7 +1388,7 @@ describe("SongDetailPage save to list", () => {
     );
     renderDetail({ user: makeUser() });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Save to a list" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Add to list" }));
     const on = await screen.findByRole("button", { name: /Ρεμπέτικα/ });
     await userEvent.click(on);
 
@@ -1401,15 +1402,43 @@ describe("SongDetailPage save to list", () => {
     serveSheet(() => apiError(500, "internal", "Something went wrong."));
     renderDetail({ user: makeUser() });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Save to a list" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Add to list" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong.");
     expect(screen.queryByRole("button", { name: /Ρεμπέτικα/ })).not.toBeInTheDocument();
   });
 });
 
+/** Chooses Delete from the toolbar's "More actions" menu. */
+async function chooseDeleteSong() {
+  await userEvent.click(await screen.findByRole("button", { name: "More actions" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "Delete song" }));
+}
+
 // Exercises the shared `ConfirmSheet`, as does ListsPages' delete spec.
 describe("SongDetailPage deletion", () => {
+  // Delete is one press further away than it was, behind the menu, and still
+  // asks before it acts.
+  it("asks before deleting from inside the menu, and hands focus back to it", async () => {
+    renderDetail({ user: makeUser({ role: "admin" }) });
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+
+    await chooseDeleteSong();
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Delete this song?" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "More actions" })).toHaveFocus());
+  });
+
+  it("shows no menu to a reader who cannot delete", async () => {
+    renderDetail({ user: makeUser({ role: "contributor" }) });
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+
+    expect(screen.queryByRole("button", { name: "More actions" })).not.toBeInTheDocument();
+  });
+
   it("asks before deleting a song, and deletes the one it named", async () => {
     let deleted = "";
     server.use(
@@ -1421,7 +1450,7 @@ describe("SongDetailPage deletion", () => {
 
     renderDetail({ user: makeUser({ role: "admin" }) });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Delete song" }));
+    await chooseDeleteSong();
     expect(screen.getByText(/will be removed for everyone/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
@@ -1441,13 +1470,13 @@ describe("SongDetailPage deletion", () => {
 
     renderDetail({ user: makeUser({ role: "admin" }) });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Delete song" }));
+    await chooseDeleteSong();
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Song is referenced by a list.");
     // The refusal does not survive into the next opening.
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    await userEvent.click(screen.getByRole("button", { name: "Delete song" }));
+    await chooseDeleteSong();
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -1463,7 +1492,7 @@ describe("SongDetailPage deletion", () => {
 
     renderDetail({ user: makeUser({ role: "admin" }) });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Delete song" }));
+    await chooseDeleteSong();
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByText(/will be removed for everyone/)).not.toBeInTheDocument();

@@ -42,6 +42,12 @@ async function findHandle(title: string): Promise<HTMLElement> {
   return screen.findByRole("button", { name: `Reorder ${title}` });
 }
 
+/** Chooses Delete from the list bar's "More actions" menu. */
+async function chooseDeleteList() {
+  await userEvent.click(await screen.findByRole("button", { name: "More actions" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "Delete list" }));
+}
+
 describe("ListsPage", () => {
   it("lists the reader's lists, each marked public or private, with its song count", async () => {
     server.use(
@@ -260,7 +266,7 @@ describe("ListDetailPage beside a song", () => {
     );
 
     renderBesideSong("/songs/thalassa-platia?list=list-1");
-    await userEvent.click(await screen.findByRole("button", { name: /Delete list/ }));
+    await chooseDeleteList();
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() =>
@@ -290,7 +296,7 @@ describe("ListDetailPage sharing", () => {
 
     // The page moves to the copy, which the reader can edit.
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /delete list/i })).toBeInTheDocument(),
+      expect(screen.getByRole("button", { name: "More actions" })).toBeInTheDocument(),
     );
   });
 
@@ -577,7 +583,7 @@ describe("ListDetailPage default list", () => {
     renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
 
     expect(await screen.findByRole("button", { name: /^share$/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /delete list/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More actions" })).not.toBeInTheDocument();
   });
 });
 
@@ -705,6 +711,30 @@ describe("ListDetailPage removal", () => {
 
 // Exercises the shared `ConfirmSheet`, as does SongDetailPage's delete spec.
 describe("ListDetailPage deletion", () => {
+  // Delete is one press further away than it was, behind the menu, and still
+  // asks before it acts.
+  it("asks before deleting from inside the menu, and hands focus back to it", async () => {
+    serveLists(makeList({ id: "list-1", owner_id: "user-1", name: "Ρεμπέτικα" }));
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+    await chooseDeleteList();
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Delete this list?" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "More actions" })).toHaveFocus());
+  });
+
+  it("shows no menu to a reader who does not own the list", async () => {
+    serveLists(makeList({ id: "list-1", owner_id: "someone-else", is_public: true }));
+
+    renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
+
+    expect(await screen.findByRole("button", { name: /save to my lists/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More actions" })).not.toBeInTheDocument();
+  });
+
   it("asks before deleting a list, and deletes the one it named", async () => {
     serveLists(makeList({ id: "list-1", owner_id: "user-1", name: "Ρεμπέτικα" }));
     let deleted = "";
@@ -717,7 +747,7 @@ describe("ListDetailPage deletion", () => {
 
     renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
 
-    await userEvent.click(await screen.findByRole("button", { name: /Delete list/ }));
+    await chooseDeleteList();
     expect(screen.getByText(/The songs themselves are not affected/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
@@ -738,7 +768,7 @@ describe("ListDetailPage deletion", () => {
 
     renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
 
-    await userEvent.click(await screen.findByRole("button", { name: /Delete list/ }));
+    await chooseDeleteList();
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByText(/The songs themselves are not affected/)).not.toBeInTheDocument();
