@@ -41,8 +41,11 @@ export const Phone: Story = {
   args: { title: "Τα αγαπημένα μου ρεμπέτικα του καλοκαιριού", actions: newList },
   decorators: [
     (Story) => (
-      <div data-testid="frame" className="w-[390px] px-4">
-        <Story />
+      <div className="w-[390px] px-4">
+        {/* Measured inside the gutters, so spilling into one fails. */}
+        <div data-testid="frame">
+          <Story />
+        </div>
       </div>
     ),
   ],
