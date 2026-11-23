@@ -197,13 +197,9 @@ function SongArticle() {
           {/* As tall as the search field once the list is beside the song, so
               the tools share its center. */}
           <div className="ml-auto flex items-center gap-1 @3xl/app:h-12">
-            {/* For everyone, and waits for the song: its tallies come with it. */}
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={!fullSong}
-              onClick={() => setStatsOpen(true)}
-            >
+            {/* For everyone. The card a reader clicked already carries the
+                tallies, so this need not wait for the full read. */}
+            <Button variant="ghost" size="sm" disabled={!song} onClick={() => setStatsOpen(true)}>
               <ChartColumn aria-hidden className="size-4" />
               <span className={actionLabel}>Stats</span>
             </Button>
@@ -342,8 +338,8 @@ function SongArticle() {
             />
           )}
 
-          {fullSong && (
-            <SongStatsSheet song={fullSong} open={statsOpen} onClose={() => setStatsOpen(false)} />
+          {song && (
+            <SongStatsSheet song={song} open={statsOpen} onClose={() => setStatsOpen(false)} />
           )}
 
           {song && (

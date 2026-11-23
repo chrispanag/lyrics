@@ -61,7 +61,6 @@ export const SongCard = memo(function SongCard({
         current && "border-line-accent bg-accent-subtle",
       )}
     >
-      {/* No badges: a song's tallies are on its page, under Stats. */}
       {/* h2: both pages that list cards (the catalog and a list) put them
           directly under the page's h1, and an h3 there skips a level. */}
       <h2 className="truncate font-semibold text-fg">{song.title}</h2>

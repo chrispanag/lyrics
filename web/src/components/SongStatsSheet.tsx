@@ -3,16 +3,8 @@ import type { ReactNode } from "react";
 import { Sheet } from "@/components/ui";
 import type { Song } from "@/lib/types";
 
-/*
- * Fixed locale and zone, so the server and the browser format alike, and a
- * reader anywhere sees the month the song was added in the catalog's own terms.
- */
+/* A fixed locale, so the server and the browser format alike. */
 const tally = new Intl.NumberFormat("en-US");
-const month = new Intl.DateTimeFormat("en-US", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 /** `pluralize` takes regular `-s` nouns only, and "person" is not one. */
 function people(n: number): string {
@@ -28,6 +20,9 @@ function times(n: number): string {
  * is where they are. Views are the song page's opens, each visitor counted once
  * (`useRecordSongClick`). `list_adds` counts every placement and never falls;
  * `list_users` is who has it in a list now.
+ *
+ * No "added on" date: `created_at` is when a row was inserted, which for the
+ * imported catalog is the import, the same for nearly every song.
  */
 export function SongStatsSheet({
   song,
@@ -55,7 +50,6 @@ export function SongStatsSheet({
         </StatRow>
         <StatRow label="Added to a list">{times(list_adds)}</StatRow>
         <StatRow label="In lists of">{people(list_users)}</StatRow>
-        <StatRow label="In the catalog since">{month.format(new Date(song.created_at))}</StatRow>
       </dl>
     </Sheet>
   );

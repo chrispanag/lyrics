@@ -133,14 +133,14 @@ describe("SongDetailPage popularity", () => {
     expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
   });
 
-  // The tallies live behind Stats, for anyone, and count this visit too: the
-  // recorded click's reply is what the page holds by the time it opens.
+  // The tallies live behind Stats, for anyone. The recorded click's reply
+  // updates them, so they usually count this visit too: a refetch racing the
+  // click can land after it with the count from just before.
   it("shows the song's tallies under Stats", async () => {
     server.use(
       http.get(`${API}/api/v1/songs/:id`, () =>
         HttpResponse.json(
           makeSong({
-            created_at: "2024-03-15T10:00:00Z",
             popularity: {
               anonymous_clicks: 3,
               authenticated_clicks: 1,
@@ -176,7 +176,25 @@ describe("SongDetailPage popularity", () => {
     expect(row("Views")).toHaveTextContent("1 by signed-in readers");
     expect(row("Added to a list")).toHaveTextContent("4 times");
     expect(row("In lists of")).toHaveTextContent("1 person");
-    expect(row("In the catalog since")).toHaveTextContent("March 2024");
+    // The row a reader would read as the song's age, which for an imported
+    // catalog is only the import's.
+    expect(within(sheet).queryByText(/catalog since/i)).not.toBeInTheDocument();
+  });
+
+  // The card clicked in the catalog already carries the tallies, so Stats is
+  // offered before the full read with the lyrics arrives.
+  it("offers Stats from the clicked card, before the full song arrives", async () => {
+    const { lyrics: _lyrics, ...card } = makeSong();
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(keys.songs({}), {
+      data: [card],
+      meta: { total: 1, limit: 20, offset: 0 },
+    });
+    server.use(http.get(`${API}/api/v1/songs/:id`, () => new Promise(() => {})));
+
+    renderDetail({ route: "/songs/thalassa-platia", queryClient });
+
+    expect(await screen.findByRole("button", { name: "Stats" })).toBeEnabled();
   });
 
   it("waits for the song before offering Stats", () => {
