@@ -8,7 +8,7 @@ import { keys } from "@/api/hooks";
 import { API, apiError, list, listById, makeList, makeSong, makeUser } from "@/test/handlers";
 import { stubRowRects } from "@/test/rects";
 import { renderWithProviders } from "@/test/render";
-import { TestRoutes } from "@/test/routes";
+import { CurrentAddress, TestRoutes } from "@/test/routes";
 import { server } from "@/test/server";
 
 /**
@@ -213,6 +213,59 @@ describe("ListDetailPage", () => {
     renderDetail("/lists/list-1", { user: makeUser({ id: "user-1" }) });
 
     expect(await screen.findByRole("heading", { name: "Ρεμπέτικα" })).toBeInTheDocument();
+  });
+});
+
+// Beside a song the list is where the reader reads from, not the page they are
+// on: what they do to it must not close the song.
+describe("ListDetailPage beside a song", () => {
+  function renderBesideSong(route: string) {
+    return renderWithProviders(
+      <TestRoutes
+        routes={{
+          "/songs/:id": (
+            <>
+              <ListDetailPage />
+              <CurrentAddress />
+            </>
+          ),
+        }}
+      />,
+      { route, user: makeUser({ id: "user-1" }) },
+    );
+  }
+
+  it("keeps the song open, read from the copy, once the list is saved", async () => {
+    const source = makeList({ id: "list-1", owner_id: "someone-else", name: "Ρεμπέτικα" });
+    const copy = makeList({ id: "list-2", owner_id: "user-1", name: "Ρεμπέτικα" });
+    serveLists(source, copy);
+    server.use(
+      http.post(`${API}/api/v1/lists/:id/copy`, () => HttpResponse.json(copy, { status: 201 })),
+    );
+
+    renderBesideSong("/songs/thalassa-platia?list=list-1");
+    await userEvent.click(await screen.findByRole("button", { name: /save to my lists/i }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/songs/thalassa-platia?list=list-2",
+      ),
+    );
+  });
+
+  it("keeps the song open, without the list, once the list is deleted", async () => {
+    serveLists(makeList({ id: "list-1", owner_id: "user-1", name: "Ρεμπέτικα" }));
+    server.use(
+      http.delete(`${API}/api/v1/lists/:id`, () => new HttpResponse(null, { status: 204 })),
+    );
+
+    renderBesideSong("/songs/thalassa-platia?list=list-1");
+    await userEvent.click(await screen.findByRole("button", { name: /Delete list/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(/\/songs\/thalassa-platia$/),
+    );
   });
 });
 

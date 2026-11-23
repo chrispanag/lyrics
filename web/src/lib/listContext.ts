@@ -48,10 +48,11 @@ export function songRefHref(ref: string): string {
 
 /**
  * The song a `/songs/…` address names, or null for any other address. The
- * inverse of `songHref`; parse paths here, not elsewhere.
+ * inverse of `songHref`; parse paths here, not elsewhere. `/songs/new` is the
+ * editor, not a song: migration 000010 reserves `new` out of slug space.
  */
 export function songRefFromPath(pathname: string): string | null {
-  return /^\/songs\/([^/]+)$/.exec(pathname)?.[1] ?? null;
+  return /^\/songs\/(?!new$)([^/]+)$/.exec(pathname)?.[1] ?? null;
 }
 
 /** The list a `/lists/…` address names, or null for any other address. */

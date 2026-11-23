@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  lazy,
-  memo,
-  Suspense,
-  useCallback,
-  useState,
-  useSyncExternalStore,
-  type SubmitEvent,
-} from "react";
+import { lazy, memo, Suspense, useState, useSyncExternalStore, type SubmitEvent } from "react";
 import {
   ChevronRight,
   Copy,
@@ -53,7 +45,7 @@ import {
 import { useCatalogPaneShown } from "@/lib/catalogPane";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
-import { listHref, listInView } from "@/lib/listContext";
+import { listHref, listInView, songHref, songRefFromPath, songRefHref } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
 import { Link, usePathname, useRouter, useSearchParams } from "@/lib/navigation";
 
@@ -214,7 +206,11 @@ function subscribeToNothing() {
  * address's to say (`listInView`).
  */
 export function ListDetailPage() {
-  const id = listInView(usePathname(), useSearchParams()) ?? undefined;
+  const pathname = usePathname();
+  const id = listInView(pathname, useSearchParams()) ?? undefined;
+  // The song open beside the list, if any: copying or deleting the list must
+  // not close it.
+  const openSong = songRefFromPath(pathname);
   const shown = useCatalogPaneShown();
   const router = useRouter();
   const signIn = useSignInHref();
@@ -246,10 +242,8 @@ export function ListDetailPage() {
 
   // Stable, so the memoized rows are not re-rendered by each step through the
   // list beside a song: a mutation's `mutate` keeps its identity.
-  const { mutate: reorder } = reorderList;
-  const { mutate: remove } = removeSong;
-  const onReorder = useCallback((songIds: string[]) => reorder(songIds), [reorder]);
-  const removeFromList = useCallback((songId: string) => remove(songId), [remove]);
+  const { mutate: onReorder } = reorderList;
+  const { mutate: removeFromList } = removeSong;
 
   // Hidden beside a song on a phone, the list is not built until it shows.
   // A disabled query is not `isLoading`, so the session wait is spelled out, or
@@ -297,7 +291,8 @@ export function ListDetailPage() {
     try {
       const copied = await copyList.mutateAsync({ id: list.id, name });
       setNaming(false);
-      router.push(listHref(copied.id));
+      // Beside a song, the reader goes on reading it, now from their copy.
+      router.push(openSong ? songHref({ slug: openSong }, copied.id) : listHref(copied.id));
     } catch (caught) {
       // Names are unique per owner, so a 409 opens the rename step.
       if (caught instanceof ApiError && caught.status === 409) {
@@ -531,7 +526,12 @@ export function ListDetailPage() {
         onClose={() => setConfirmDelete(false)}
         title="Delete this list?"
         pending={deleteList.isPending}
-        onConfirm={() => deleteList.mutate(list.id, { onSuccess: () => router.replace("/lists") })}
+        onConfirm={() =>
+          deleteList.mutate(list.id, {
+            // Beside a song, the song stays, read from the catalog now.
+            onSuccess: () => router.replace(openSong ? songRefHref(openSong) : "/lists"),
+          })
+        }
       >
         “{list.name}” will be removed. The songs themselves are not affected.
       </ConfirmSheet>

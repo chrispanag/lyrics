@@ -83,5 +83,7 @@ describe("songSection", () => {
   it("leaves every other screen to its path", () => {
     expect(songSection("/lists/list-1", search(""))).toBeUndefined();
     expect(songSection("/", search("list=list-1"))).toBeUndefined();
+    // The song editor, not a song: `new` is no slug.
+    expect(songSection("/songs/new", search(""))).toBeUndefined();
   });
 });

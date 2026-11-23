@@ -4,7 +4,6 @@ import type { ComponentType, ReactNode } from "react";
 import NotFound from "@/app/not-found";
 import { RouteParams, Redirect, usePathname } from "@/lib/navigation";
 import { VerificationGate } from "@/routes/guards";
-
 import { ListDetailPage } from "@/routes/ListsPages";
 import { SongsPane } from "@/routes/SongsPane";
 import { SongDetailPage } from "@/routes/SongDetailPage";

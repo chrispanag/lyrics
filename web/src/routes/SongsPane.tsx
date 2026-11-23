@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, type ReactNode, Suspense } from "react";
+import { Fragment, lazy, type ReactNode, Suspense } from "react";
 
 import { ListSkeleton } from "@/components/ListBar";
 import { listInView } from "@/lib/listContext";
@@ -23,12 +23,18 @@ const LazyListDetailPage = lazy(() =>
  * fallback. Left out, it loads on demand.
  */
 export function SongsPane({ list }: { list?: ReactNode }) {
-  if (!listInView(usePathname(), useSearchParams())) return <BrowsePage />;
+  const listId = listInView(usePathname(), useSearchParams());
+  if (!listId) return <BrowsePage />;
+  // Keyed by the list: the slot can stay mounted while the address moves from
+  // one list to another (Back between songs read from two lists), and an open
+  // sheet or a copy error must not carry over to the other list.
   return (
-    list ?? (
-      <Suspense fallback={<ListSkeleton />}>
-        <LazyListDetailPage />
-      </Suspense>
-    )
+    <Fragment key={listId}>
+      {list ?? (
+        <Suspense fallback={<ListSkeleton />}>
+          <LazyListDetailPage />
+        </Suspense>
+      )}
+    </Fragment>
   );
 }
