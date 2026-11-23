@@ -92,10 +92,10 @@ function cacheEntry(id: string, list: SongList): DehydratedState {
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ listId: string }>;
 }): Promise<Metadata> {
-  const { id } = await params;
-  const list = await loadList(id);
+  const { listId } = await params;
+  const list = await loadList(listId);
   if (list === "hidden") return { robots: { index: false } };
   if (!list) return {};
 
@@ -118,9 +118,14 @@ export async function generateMetadata({
   };
 }
 
-export default async function ListPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const read = await loadList(id);
+/*
+ * `listId`, not `id`: the slot keeps this segment beside a song, and Next
+ * merges every active segment's params, so a shared name would hand the song
+ * page the list's id. `routeParams.test.ts` keeps the reader's names apart.
+ */
+export default async function ListPage({ params }: { params: Promise<{ listId: string }> }) {
+  const { listId } = await params;
+  const read = await loadList(listId);
   const list = read === "hidden" ? null : read;
 
   return (
@@ -134,7 +139,7 @@ export default async function ListPage({ params }: { params: Promise<{ id: strin
       )}
       {/* No state for a list the guest cannot read: the page waits for the
           session and asks with the reader's token, as it always has. */}
-      <HydrationBoundary state={list ? cacheEntry(id, list) : undefined}>
+      <HydrationBoundary state={list ? cacheEntry(listId, list) : undefined}>
         <SongsPane list={<ListDetailPage />} />
       </HydrationBoundary>
     </>

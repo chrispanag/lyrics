@@ -12,13 +12,13 @@ const owner = makeUser({ id: "user-1", display_name: "Christos" });
 const rempetika = catalogList(4, { description: "Όσα παίζουμε τα Σάββατα." });
 
 /*
- * The list pages. The detail page is mounted under `/lists/:id`; each story
+ * The list pages. The detail page is mounted under `/lists/:listId`; each story
  * waits for its content in `play`, so the axe check sees the loaded page.
  */
 const meta = {
   title: "Pages/List",
   component: ListDetailPage,
-  parameters: { layout: "fullscreen", path: "/lists/:id", route: "/lists/list-1" },
+  parameters: { layout: "fullscreen", path: "/lists/:listId", route: "/lists/list-1" },
   beforeEach({ msw }) {
     msw.use(listById(rempetika));
   },

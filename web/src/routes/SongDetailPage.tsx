@@ -33,13 +33,13 @@ import {
   drawnFontSize,
   storeFontSize,
 } from "@/lib/fontSize";
-import { listInView, listPosition, songRefHref } from "@/lib/listContext";
+import { listInView, listPosition, songRefFromPath, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { headerBarPadding } from "@/components/SearchHeader";
 import { sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
-import { Link, useParams, usePathname, useRouter, useSearchParams } from "@/lib/navigation";
+import { Link, usePathname, useRouter, useSearchParams } from "@/lib/navigation";
 import { useStoredState } from "@/lib/useStoredState";
 import { RecordingsSheet } from "@/components/RecordingsSheet";
 
@@ -99,7 +99,10 @@ function SongUnavailable({ message }: { message: string }) {
  * so it renders at once; only the song's own content waits behind a skeleton.
  */
 function SongArticle() {
-  const { id } = useParams<{ id: string }>();
+  // From the address, not `useParams`: Next merges the params of every active
+  // segment, and the list kept beside the song is one (see `listInView`).
+  const pathname = usePathname();
+  const id = songRefFromPath(pathname) ?? undefined;
   const router = useRouter();
   const signIn = useSignInHref();
   const params = useSearchParams();
@@ -117,7 +120,7 @@ function SongArticle() {
 
   // The list this song is read from, if any, as the pane beside it reads it
   // (`listInView`). A failure just leaves the page without list navigation.
-  const listId = listInView(usePathname(), params) ?? undefined;
+  const listId = listInView(pathname, params) ?? undefined;
   const { data: contextList } = useList(listId, !sessionLoading);
 
   // The whole article is the surface the paging swipe is read across.

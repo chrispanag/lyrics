@@ -22,7 +22,7 @@ function renderDetail(route: string, options: Parameters<typeof renderWithProvid
   return renderWithProviders(
     <TestRoutes
       routes={{
-        "/lists/:id": <ListDetailPage />,
+        "/lists/:listId": <ListDetailPage />,
         "/login": <h1>Sign in</h1>,
         // Where a deleted list leaves its owner.
         "/lists": <h1>Your lists</h1>,

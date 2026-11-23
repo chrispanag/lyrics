@@ -50,9 +50,20 @@ export function songRefHref(ref: string): string {
  * The song a `/songs/…` address names, or null for any other address. The
  * inverse of `songHref`; parse paths here, not elsewhere. `/songs/new` is the
  * editor, not a song: migration 000010 reserves `new` out of slug space.
+ *
+ * Decoded, as Next decodes the route's `params`: the server page keys the
+ * song it hands over by that value, and `useSong` encodes the ref again, so a
+ * raw `%2D` would miss the cache and ask the API for `%252D`.
  */
 export function songRefFromPath(pathname: string): string | null {
-  return /^\/songs\/(?!new$)([^/]+)$/.exec(pathname)?.[1] ?? null;
+  const ref = /^\/songs\/(?!new$)([^/]+)$/.exec(pathname)?.[1];
+  if (ref === undefined) return null;
+  try {
+    return decodeURIComponent(ref);
+  } catch {
+    // A malformed escape names no song either way; keep it as written.
+    return ref;
+  }
 }
 
 /** The list a `/lists/…` address names, or null for any other address. */

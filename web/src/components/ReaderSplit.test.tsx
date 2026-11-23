@@ -70,7 +70,7 @@ describe("ReaderSplit", () => {
     renderWithProviders(
       <ReaderSplit catalog={<ListDetailPage />}>
         <TestRoutes
-          routes={{ "/lists/:id": <p>Select a song</p>, "/songs/:id": <CurrentAddress /> }}
+          routes={{ "/lists/:listId": <p>Select a song</p>, "/songs/:id": <CurrentAddress /> }}
         />
       </ReaderSplit>,
       { route: "/lists/list-1" },

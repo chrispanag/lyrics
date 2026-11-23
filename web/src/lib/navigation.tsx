@@ -97,7 +97,12 @@ export function useCurrentHref(): string {
   return withSearch(pathname, searchParams.toString());
 }
 
-/** The dynamic segments of the route being rendered, by name. */
+/**
+ * The dynamic segments by name, merged across every active segment, slots
+ * included: a slot a soft navigation kept keeps its params here too. Where a
+ * slot can sit beside the page, read the address instead (`songRefFromPath`,
+ * `listInView`).
+ */
 export function useParams<T extends Record<string, string>>(): Partial<T> {
   return useBackend().params as Partial<T>;
 }
@@ -357,9 +362,11 @@ export function NavigationProvider({
 }
 
 /**
- * Hands a matched route's dynamic segments to what renders under it, the way
- * Next's `useParams` answers for the page it rendered. For the harness, which
- * matches routes itself (`test/routes.tsx`); the app's backend has them already.
+ * Hands a matched route's dynamic segments to what renders under it. For the
+ * harness, which matches routes itself (`test/routes.tsx`); the app's backend
+ * has them already. Unlike Next it answers for one page, never merging a slot's
+ * params in, so a spec cannot show two segments' names colliding:
+ * `routeParams.test.ts` keeps the reader's apart instead.
  */
 export function RouteParams({
   params,
