@@ -5,7 +5,7 @@ import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { keys } from "@/api/hooks";
-import { BrowsePage } from "@/routes/BrowsePage";
+import { SongsPane } from "@/routes/SongsPane";
 import { catalogGenres, catalogSongs } from "@/test/catalog";
 import { API, apiError, list, makePerson, notFound } from "@/test/handlers";
 import { server } from "@/test/server";
@@ -65,7 +65,7 @@ describe("the catalog's server render", () => {
       props({ person: PERSON.id, sort: "title", genre_slug: "rempetiko" }),
     );
 
-    expect(handover(tree)?.props.children.type).toBe(BrowsePage);
+    expect(handover(tree)?.props.children.type).toBe(SongsPane);
     // Written out rather than derived: deriving it here would pass whatever
     // the route derived.
     expect(entries(tree).map((entry) => entry.queryKey)).toEqual(
@@ -132,7 +132,7 @@ describe("the catalog's server render", () => {
     const tree = await CatalogPage(props({ person: PERSON.id }));
 
     // The browser asks again and says so in its own words; never a 500 here.
-    expect(handover(tree)?.props.children.type).toBe(BrowsePage);
+    expect(handover(tree)?.props.children.type).toBe(SongsPane);
     expect(entries(tree)).toEqual([]);
     // An outage is no reason to deindex the person's page.
     expect((await generateMetadata(props({ person: PERSON.id }))).alternates?.canonical).toBe(

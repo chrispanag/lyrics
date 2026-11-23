@@ -4,8 +4,9 @@ import type { ComponentType, ReactNode } from "react";
 import NotFound from "@/app/not-found";
 import { RouteParams, Redirect, usePathname } from "@/lib/navigation";
 import { VerificationGate } from "@/routes/guards";
-import { BrowsePage } from "@/routes/BrowsePage";
+
 import { ListDetailPage } from "@/routes/ListsPages";
+import { SongsPane } from "@/routes/SongsPane";
 import { SongDetailPage } from "@/routes/SongDetailPage";
 import { bestMatch } from "./match";
 
@@ -38,8 +39,8 @@ const layouts = import.meta.glob<Module>(["/src/app/**/layout.tsx", "!/src/app/l
 
 /** The screen each async page renders, by route pattern. */
 const SERVER_PAGES: Record<string, ReactNode> = {
-  "/": <BrowsePage />,
-  "/lists/:id": <ListDetailPage />,
+  "/": <SongsPane />,
+  "/lists/:id": <SongsPane list={<ListDetailPage />} />,
   "/songs/:id": <SongDetailPage />,
 };
 

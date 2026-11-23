@@ -3,6 +3,7 @@ import { HttpResponse, http } from "msw";
 import { expect } from "storybook/test";
 
 import { ListDetailPage, ListsPage } from "./ListsPages";
+import { SongOpenContext } from "@/lib/catalogPane";
 import { catalogList } from "@/test/catalog";
 import { API, list, listById, makeList, makeUser } from "@/test/handlers";
 
@@ -55,6 +56,14 @@ export const AsReader: Story = {
  */
 export const BesideASong: Story = {
   parameters: { path: "/songs/:id", route: "/songs/thalassa-platia?list=list-1" },
+  // What `ReaderSplit` tells the pane beside an open song.
+  decorators: [
+    (Story) => (
+      <SongOpenContext value>
+        <Story />
+      </SongOpenContext>
+    ),
+  ],
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole("heading", { level: 2, name: "Ρεμπέτικα" })).toBeVisible();
     await expect(canvas.getByRole("link", { name: /Θάλασσα Πλατιά/ })).toHaveAttribute(

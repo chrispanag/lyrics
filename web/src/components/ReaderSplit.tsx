@@ -1,8 +1,15 @@
 "use client";
 
-import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import {
+  type ComponentPropsWithoutRef,
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
-import { CatalogPaneContext } from "@/lib/catalogPane";
+import { PageTitle } from "@/components/PageTitle";
+import { CatalogPaneContext, SongOpenContext, useSongOpen } from "@/lib/catalogPane";
 import { cn } from "@/lib/cn";
 import { songRefFromPath } from "@/lib/listContext";
 import { usePathname } from "@/lib/navigation";
@@ -80,7 +87,9 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
           onSong && "@max-3xl/app:hidden",
         )}
       >
-        <CatalogPaneContext value={seen}>{catalog}</CatalogPaneContext>
+        <CatalogPaneContext value={seen}>
+          <SongOpenContext value={onSong}>{catalog}</SongOpenContext>
+        </CatalogPaneContext>
       </section>
       <div
         className={cn(
@@ -94,4 +103,46 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
       </div>
     </div>
   );
+}
+
+/**
+ * The frame of the pane `ReaderSplit` puts on the left, the catalog's or a
+ * list's: its `header` above, and under it the pane's content. Beside the
+ * lyrics it is a fixed column, so the header stays put and only the content
+ * scrolls, its scrollbar starting under the header. Below that it is the page,
+ * and the header sticks as the page scrolls.
+ *
+ * While no song is open the pane is the page, so it names the tab after
+ * `title`, nameless while that is still loading. Beside a song the song does.
+ */
+export function ReaderPane({
+  header,
+  title,
+  children,
+}: {
+  header: ReactNode;
+  title?: string | undefined;
+  children: ReactNode;
+}) {
+  const songOpen = useSongOpen();
+  return (
+    <div className="@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:flex-col">
+      {!songOpen && <PageTitle name={title} />}
+      {/* `contents` below `@3xl`: a box only as tall as the header would be
+          the sticky header's whole scroll range, and it would scroll away. */}
+      <div className="contents @3xl/app:block @3xl/app:shrink-0">{header}</div>
+      <div className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain">
+        <div className="mx-auto max-w-3xl px-4 py-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The pane's heading: the page's h1 on its own, and an h2 beside a song, which
+ * holds the page's h1 itself. The pane's cards are h2s either way.
+ */
+export function PaneHeading(props: ComponentPropsWithoutRef<"h1">) {
+  const Heading = useSongOpen() ? "h2" : "h1";
+  return <Heading {...props} />;
 }

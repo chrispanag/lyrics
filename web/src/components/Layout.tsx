@@ -22,15 +22,8 @@ import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { FIELDS, useHomeEndInside } from "@/lib/modal";
 import { applyNavCollapsed, storeNavCollapsed, storedNavCollapsed } from "@/lib/navCollapsed";
-import { listInView, songRefFromPath } from "@/lib/listContext";
-import {
-  Link,
-  NavLink,
-  type ReadonlySearchParams,
-  useNavigationKey,
-  usePathname,
-  useSearchParams,
-} from "@/lib/navigation";
+import { songSection } from "@/lib/listContext";
+import { Link, NavLink, useNavigationKey, usePathname, useSearchParams } from "@/lib/navigation";
 import { NAV_DRAWER_ID, NavDrawerContext, useNavDrawer } from "@/lib/navDrawer";
 import { hasRole } from "@/lib/types";
 import { useIntentPrefetch } from "@/lib/useIntentPrefetch";
@@ -66,16 +59,6 @@ const NAV_ITEMS: NavItem[] = [
   // across the console's screens.
   { to: "/admin", label: "Admin", icon: Shield, adminOnly: true },
 ];
-
-/**
- * The entry a song belongs to, or undefined off a song, where the path decides.
- * A song has no entry of its own: it is read from a list or from the catalog,
- * and the entry lit is the one whose songs sit beside it.
- */
-function songSection(pathname: string, searchParams: ReadonlySearchParams): string | undefined {
-  if (songRefFromPath(pathname) === null) return undefined;
-  return listInView(pathname, searchParams) ? "/lists" : "/";
-}
 
 /** The column's id, so opening it can move focus onto its first link. */
 const NAV_SIDEBAR_ID = "nav-sidebar";
@@ -190,8 +173,11 @@ export function Layout({ children }: { children?: ReactNode }) {
  * One of the navigation's links. The Lists link starts loading the lists on
  * hover, press or focus, which otherwise wait for the click and show
  * placeholders until they land.
+ *
+ * `section` is the entry an open song belongs to (`songSection`), or
+ * undefined anywhere else, where the link's own path decides.
  */
-function NavEntry({ item }: { item: NavItem }) {
+function NavEntry({ item, section }: { item: NavItem; section: string | undefined }) {
   const queryClient = useQueryClient();
   // Only the Lists link carries the handlers (see the spread below), and
   // `NavPanel` shows it only to a signed-in reader.
@@ -199,7 +185,6 @@ function NavEntry({ item }: { item: NavItem }) {
     void queryClient.prefetchQuery(queries.lists());
   }, [queryClient]);
   const intent = useIntentPrefetch(prefetch);
-  const section = songSection(usePathname(), useSearchParams());
 
   return (
     <NavLink
@@ -229,6 +214,7 @@ function NavEntry({ item }: { item: NavItem }) {
  */
 function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
   const { user } = useAuth();
+  const section = songSection(usePathname(), useSearchParams());
 
   const links = NAV_ITEMS.filter((item) => {
     if (item.adminOnly) return hasRole(user?.role, "admin");
@@ -261,7 +247,7 @@ function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
           bottom. */}
       <nav className="flex flex-1 flex-col gap-1">
         {links.map((item) => (
-          <NavEntry key={item.to} item={item} />
+          <NavEntry key={item.to} item={item} section={section} />
         ))}
 
         <div className="mt-auto px-2 pt-6">

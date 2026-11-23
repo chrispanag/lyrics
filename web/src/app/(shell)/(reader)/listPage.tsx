@@ -15,6 +15,7 @@ import { listHref } from "@/lib/listContext";
 import { OG_BASE, SITE_ORIGIN } from "@/lib/site";
 import type { SongList } from "@/lib/types";
 import { ListDetailPage } from "@/routes/ListsPages";
+import { SongsPane } from "@/routes/SongsPane";
 
 /*
  * A list's page. The server reads it as a guest, so only a public list is ever
@@ -23,8 +24,11 @@ import { ListDetailPage } from "@/routes/ListsPages";
  * server renders".
  *
  * The `@catalog` slot renders this beside the reading pane, so opening a song
- * from the list keeps it on screen. The route's own page re-exports
- * `generateMetadata` and the empty pane; `cache` makes the two one read.
+ * from the list keeps it on screen. The read is handed over here, but which
+ * pane shows is `SongsPane`'s to say from the address: a soft navigation keeps
+ * this page in the slot on a song opened from search too, which is in no list.
+ * The route's own page re-exports `generateMetadata`; `cache` makes its read
+ * and this one the same read.
  */
 
 /**
@@ -131,7 +135,7 @@ export default async function ListPage({ params }: { params: Promise<{ id: strin
       {/* No state for a list the guest cannot read: the page waits for the
           session and asks with the reader's token, as it always has. */}
       <HydrationBoundary state={list ? cacheEntry(id, list) : undefined}>
-        <ListDetailPage />
+        <SongsPane list={<ListDetailPage />} />
       </HydrationBoundary>
     </>
   );

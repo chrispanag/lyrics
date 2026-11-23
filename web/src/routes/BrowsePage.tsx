@@ -8,7 +8,7 @@ import { useGenres, usePerson, useSongPages } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { buttonClasses } from "@/components/buttonStyles";
 import { InfiniteScrollTrigger } from "@/components/InfiniteScrollTrigger";
-import { PageTitle } from "@/components/PageTitle";
+import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
@@ -27,8 +27,7 @@ import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
 import { catalogName, catalogQuery, catalogView, viewGenre } from "@/lib/browse";
 import { useCatalogPaneShown } from "@/lib/catalogPane";
 import { songCount } from "@/lib/format";
-import { songRefFromPath } from "@/lib/listContext";
-import { Link, usePathname, useSearchParams, useSetSearchParams } from "@/lib/navigation";
+import { Link, useSearchParams, useSetSearchParams } from "@/lib/navigation";
 
 /** Browse and search. Filter state lives in the URL, so it is shareable. */
 export function BrowsePage() {
@@ -109,23 +108,13 @@ export function BrowsePage() {
   // Named by the query or the landing filter, since each is a history entry
   // and a bookmark; `generateMetadata`'s `og:title` is the same name.
   const name = catalogName(view, { person: activePerson, genre: activeGenre }) ?? "Browse";
-  // Beside an open song the song names the tab and the page, and this column
-  // is the list. On its own it is the page.
-  const besideSong = songRefFromPath(usePathname()) !== null;
   // The filters each card's link keeps, so the list beside the song is this one.
   const cardSearch = catalogQuery(params);
 
   return (
-    // Beside the lyrics the pane is a fixed column. The search stays put and
-    // only the songs scroll, so the scrollbar starts under the header.
-    <div className="@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:flex-col">
-      {!besideSong && <PageTitle name={name} />}
-      {/* Hidden: the search box is the page's visible heading in all but name.
-          What it holds is the outline's root, which each card's h2 sits under. */}
-      {!besideSong && <h1 className="sr-only">{name}</h1>}
-      {/* `contents` below `@3xl`: a box only as tall as the header would be
-          the sticky header's whole scroll range, and it would scroll away. */}
-      <div className="contents @3xl/app:block @3xl/app:shrink-0">
+    <ReaderPane
+      title={name}
+      header={
         <SearchHeader
           trailing={
             <Button
@@ -176,73 +165,71 @@ export function BrowsePage() {
         >
           <SearchField value={draft} onChange={setDraft} />
         </SearchHeader>
+      }
+    >
+      {/* Hidden: the search box is the pane's visible heading in all but name. */}
+      <PaneHeading className="sr-only">{name}</PaneHeading>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <Tally>{isPending ? "Searching…" : songCount(total)}</Tally>
+        {hasRole(user?.role, "contributor") && (
+          // A styled Link: an anchor nested in a button is invalid.
+          <Link href="/songs/new" prefetch={false} className={buttonClasses("secondary", "sm")}>
+            <Plus aria-hidden className="size-4" />
+            Add song
+          </Link>
+        )}
       </div>
 
-      <div className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain">
-        <div className="mx-auto max-w-3xl px-4 py-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <Tally>{isPending ? "Searching…" : songCount(total)}</Tally>
-            {hasRole(user?.role, "contributor") && (
-              // A styled Link: an anchor nested in a button is invalid.
-              <Link href="/songs/new" prefetch={false} className={buttonClasses("secondary", "sm")}>
-                <Plus aria-hidden className="size-4" />
-                Add song
-              </Link>
-            )}
-          </div>
+      {/* A later page's failure is said where it happened, below the list. */}
+      {isError && !isFetchNextPageError && (
+        <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
+      )}
 
-          {/* A later page's failure is said where it happened, below the list. */}
-          {isError && !isFetchNextPageError && (
-            <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
-          )}
+      {/* `h-28` restates a song card's height; update it if cards change. */}
+      {isPending && <Skeletons count={5} className="h-28 w-full" />}
 
-          {/* `h-28` restates a song card's height; update it if cards change. */}
-          {isPending && <Skeletons count={5} className="h-28 w-full" />}
+      {!isPending && data && songs.length === 0 && (
+        <EmptyState
+          icon={<SixteenthNotes className="size-12" />}
+          title={query ? "No songs matched" : "No songs yet"}
+          description={
+            query
+              ? "Try fewer words, or check the spelling."
+              : "Songs added to the catalog will appear here."
+          }
+        />
+      )}
 
-          {!isPending && data && songs.length === 0 && (
-            <EmptyState
-              icon={<SixteenthNotes className="size-12" />}
-              title={query ? "No songs matched" : "No songs yet"}
-              description={
-                query
-                  ? "Try fewer words, or check the spelling."
-                  : "Songs added to the catalog will appear here."
-              }
-            />
-          )}
+      <div className="space-y-3">
+        {songs.map((song) => (
+          <SongCard key={song.id} song={song} search={cardSearch} />
+        ))}
+      </div>
 
-          <div className="space-y-3">
-            {songs.map((song) => (
-              <SongCard key={song.id} song={song} search={cardSearch} />
-            ))}
-          </div>
+      {isFetchingNextPage && (
+        <Skeletons count={2} className="h-28 w-full" stackClassName="mt-3 space-y-3" />
+      )}
 
-          {isFetchingNextPage && (
-            <Skeletons count={2} className="h-28 w-full" stackClassName="mt-3 space-y-3" />
-          )}
-
-          {isFetchNextPageError && (
-            // Not retried by scrolling: a failing API would be asked on every pixel.
-            <div className="mt-4 space-y-3">
-              <ErrorMessage>{errorMessage(error, "More songs could not be loaded.")}</ErrorMessage>
-              <Button
-                variant="secondary"
-                size="sm"
-                // Waits out a refetch rather than cancelling it, as the trigger does.
-                onClick={() => fetchNextPage({ cancelRefetch: false })}
-              >
-                Try again
-              </Button>
-            </div>
-          )}
-
-          {/* Not while a refetch runs either: `fetchNextPage` would cancel it and
-            append to the stale pages it was replacing. */}
-          {hasNextPage && !isFetching && !isFetchNextPageError && (
-            <InfiniteScrollTrigger onLoadMore={() => fetchNextPage()} />
-          )}
+      {isFetchNextPageError && (
+        // Not retried by scrolling: a failing API would be asked on every pixel.
+        <div className="mt-4 space-y-3">
+          <ErrorMessage>{errorMessage(error, "More songs could not be loaded.")}</ErrorMessage>
+          <Button
+            variant="secondary"
+            size="sm"
+            // Waits out a refetch rather than cancelling it, as the trigger does.
+            onClick={() => fetchNextPage({ cancelRefetch: false })}
+          >
+            Try again
+          </Button>
         </div>
-      </div>
+      )}
+
+      {/* Not while a refetch runs either: `fetchNextPage` would cancel it and
+            append to the stale pages it was replacing. */}
+      {hasNextPage && !isFetching && !isFetchNextPageError && (
+        <InfiniteScrollTrigger onLoadMore={() => fetchNextPage()} />
+      )}
 
       {/* Gated so the sheet body is not built on every keystroke while closed. */}
       {filtersOpen && (
@@ -334,6 +321,6 @@ export function BrowsePage() {
           </div>
         </Sheet>
       )}
-    </div>
+    </ReaderPane>
   );
 }

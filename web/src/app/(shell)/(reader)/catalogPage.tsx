@@ -16,15 +16,16 @@ import { songCount } from "@/lib/format";
 import { websiteJsonLd } from "@/lib/jsonLd";
 import { type NextSearchParams, isUuid, searchFrom } from "@/lib/listContext";
 import { OG_BASE, SITE_NAME, SITE_SUMMARY } from "@/lib/site";
-import { BrowsePage } from "@/routes/BrowsePage";
+import { SongsPane } from "@/routes/SongsPane";
 
 /*
  * The catalog, rendered on the server from the reads `BrowsePage` would make
  * on its first render, plus what only a server can say: which views are pages
  * worth indexing, and the site's own JSON-LD.
  *
- * The `@catalog` slot renders this beside the reading pane. The route's own
- * page re-exports `generateMetadata` and, when no song is open, the empty pane.
+ * The `@catalog` slot renders this beside the reading pane, through
+ * `SongsPane`, which says from the address which pane shows (`listInView`).
+ * The route's own page re-exports `generateMetadata`.
  */
 
 interface Props {
@@ -209,7 +210,7 @@ export default async function CatalogPage({ searchParams }: Props) {
           in the browser's first render — with no second round trip. Only
           successful reads are dehydrated. */}
       <HydrationBoundary state={dehydrate(client)}>
-        <BrowsePage />
+        <SongsPane />
       </HydrationBoundary>
     </>
   );

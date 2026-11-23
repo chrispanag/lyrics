@@ -54,19 +54,21 @@ export function songRefFromPath(pathname: string): string | null {
   return /^\/songs\/([^/]+)$/.exec(pathname)?.[1] ?? null;
 }
 
-/**
- * The list a `/lists/…` address names, or null for any other address. The
- * inverse of `listHref`.
- */
-export function listRefFromPath(pathname: string): string | null {
+/** The list a `/lists/…` address names, or null for any other address. */
+function listRefFromPath(pathname: string): string | null {
   return /^\/lists\/([^/]+)$/.exec(pathname)?.[1] ?? null;
 }
 
 /**
  * The list the reader is in at an address: the list's own page, or the list a
  * song is being read from. Null anywhere else, a song read from no list
- * included. The list pane, the slot beside a song and the navigation all ask
- * this, so they cannot disagree about whether the reader is in a list.
+ * included, and an empty `?list=` names none. The pane beside the lyrics, the
+ * song page's list bar and the navigation all ask this, so they cannot
+ * disagree about whether the reader is in a list.
+ *
+ * Read from the address, not from which route matched: a soft navigation keeps
+ * whichever `@catalog` page last matched, so the slot's own route would still
+ * say "list" on a song opened from search, which carries no list.
  */
 export function listInView(
   pathname: string,
@@ -74,6 +76,19 @@ export function listInView(
 ): string | null {
   if (songRefFromPath(pathname) !== null) return searchParams.get(LIST_PARAM) || null;
   return listRefFromPath(pathname);
+}
+
+/**
+ * The navigation entry a song belongs to, or undefined off a song, where the
+ * path decides. A song has no entry of its own: it is read from a list or from
+ * the catalog, and the entry lit is the one whose songs sit beside it.
+ */
+export function songSection(
+  pathname: string,
+  searchParams: Pick<URLSearchParams, "get">,
+): "/" | "/lists" | undefined {
+  if (songRefFromPath(pathname) === null) return undefined;
+  return listInView(pathname, searchParams) ? "/lists" : "/";
 }
 
 /**

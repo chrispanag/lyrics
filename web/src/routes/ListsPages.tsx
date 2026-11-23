@@ -2,8 +2,9 @@
 
 import {
   lazy,
-  type ReactNode,
+  memo,
   Suspense,
+  useCallback,
   useState,
   useSyncExternalStore,
   type SubmitEvent,
@@ -33,10 +34,11 @@ import {
 } from "@/api/hooks";
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
-import { BackButton } from "@/components/BackButton";
+import { paneActionLabel } from "@/components/buttonStyles";
 import { cardChrome, cardHover, tagChrome } from "@/components/cardStyles";
+import { ListBar, ListSkeleton } from "@/components/ListBar";
 import { PageTitle } from "@/components/PageTitle";
-import { ToolbarHeader } from "@/components/SearchHeader";
+import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { SongRow } from "@/components/SongRow";
 import {
   Button,
@@ -46,13 +48,12 @@ import {
   Field,
   Input,
   Sheet,
-  Skeleton,
   Skeletons,
 } from "@/components/ui";
 import { useCatalogPaneShown } from "@/lib/catalogPane";
 import { cn } from "@/lib/cn";
 import { songCount } from "@/lib/format";
-import { listHref, listInView, songRefFromPath } from "@/lib/listContext";
+import { listHref, listInView } from "@/lib/listContext";
 import type { Song } from "@/lib/types";
 import { Link, usePathname, useRouter, useSearchParams } from "@/lib/navigation";
 
@@ -64,8 +65,11 @@ const SortableSongList = lazy(() =>
 /**
  * The list without drag machinery, for readers and for an owner's list of one.
  * Without `onRemove` the rows are read-only.
+ *
+ * Memoized, as `SortableSongList` is: beside a song the list re-renders on
+ * every step through it, and only the cards themselves follow the open song.
  */
-function StaticSongList({
+const StaticSongList = memo(function StaticSongList({
   songs,
   listId,
   onRemove,
@@ -90,7 +94,7 @@ function StaticSongList({
       ))}
     </ul>
   );
-}
+});
 
 /** Whether anyone but the owner can read a list, said in words and not only an icon. */
 function VisibilityTag({ isPublic }: { isPublic: boolean }) {
@@ -205,46 +209,12 @@ function subscribeToNothing() {
 }
 
 /**
- * An action's text in the list's bar: hidden on a phone, as `actionLabel` is,
- * and hidden again beside the lyrics, where the bar is a pane's width.
- */
-const paneActionLabel = "sr-only sm:@max-3xl/app:not-sr-only";
-
-/**
- * The list's frame: its bar, with `actions` opposite the way back, and under it
- * the list. Beside the lyrics it is a fixed column, as the catalog is: the bar
- * stays put and only the songs scroll, under it. Back is hidden there, as it is
- * on the song beside it: the sidebar is the way out.
- */
-function ListPane({ actions, children }: { actions?: ReactNode; children: ReactNode }) {
-  return (
-    <div className="@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:flex-col">
-      {/* `contents` below `@3xl`: a box only as tall as the header would be
-          the sticky header's whole scroll range, and it would scroll away. */}
-      <div className="contents @3xl/app:block @3xl/app:shrink-0">
-        <ToolbarHeader>
-          <BackButton className="@3xl/app:hidden" />
-          {actions && <div className="ml-auto flex items-center gap-1">{actions}</div>}
-        </ToolbarHeader>
-      </div>
-      <div className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain">
-        <div className="mx-auto max-w-3xl px-4 py-4">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-/**
  * A list: on its own page, and beside a song read from it, where it is the
  * list the reader steps through, with the open song marked. Which list is the
- * address's to say (`listInView`): a song's own id is no list's.
+ * address's to say (`listInView`).
  */
 export function ListDetailPage() {
-  const pathname = usePathname();
-  const id = listInView(pathname, useSearchParams()) ?? undefined;
-  // Beside a song, the song names the tab and holds the page's h1; the list
-  // is the column it was opened from.
-  const besideSong = songRefFromPath(pathname) !== null;
+  const id = listInView(usePathname(), useSearchParams()) ?? undefined;
   const shown = useCatalogPaneShown();
   const router = useRouter();
   const signIn = useSignInHref();
@@ -274,38 +244,33 @@ export function ListDetailPage() {
     () => "",
   );
 
+  // Stable, so the memoized rows are not re-rendered by each step through the
+  // list beside a song: a mutation's `mutate` keeps its identity.
+  const { mutate: reorder } = reorderList;
+  const { mutate: remove } = removeSong;
+  const onReorder = useCallback((songIds: string[]) => reorder(songIds), [reorder]);
+  const removeFromList = useCallback((songId: string) => remove(songId), [remove]);
+
+  // Hidden beside a song on a phone, the list is not built until it shows.
   // A disabled query is not `isLoading`, so the session wait is spelled out, or
   // the page reports a list it has not asked for yet as unavailable. A list
   // already in hand (the server's read of a public one) renders at once: the
   // wait only exists so a private list is asked for with its owner's token.
-  if (!list && (sessionLoading || isLoading)) {
-    return (
-      <ListPane>
-        {/* Nameless while in flight, rather than "undefined — Songfolio". */}
-        {!besideSong && <PageTitle />}
-        <div className="space-y-3">
-          <Skeleton className="h-9 w-1/2" />
-          <Skeleton className="h-28 w-full" />
-        </div>
-      </ListPane>
-    );
-  }
+  if (!shown || (!list && (sessionLoading || isLoading))) return <ListSkeleton />;
 
   if (isError || !list) {
     return (
-      <ListPane>
-        {!besideSong && <PageTitle name="List not available" />}
+      <ReaderPane header={<ListBar />} title="List not available">
         <ErrorMessage>This list is not available.</ErrorMessage>
         <Link href="/lists" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
           Back to lists
         </Link>
-      </ListPane>
+      </ReaderPane>
     );
   }
 
   const isOwner = user?.id === list.owner_id;
   const songs = list.songs ?? [];
-  const removeFromList = (songId: string) => removeSong.mutate(songId);
   // Undefined for a reader, which is what leaves their rows read-only.
   const onRemove = isOwner ? removeFromList : undefined;
   // `variables` outlives its request, so it is held to the flight.
@@ -350,8 +315,6 @@ export function ListDetailPage() {
     }
     void saveCopy();
   };
-
-  const Heading = besideSong ? "h2" : "h1";
 
   const actions = (
     <>
@@ -416,13 +379,12 @@ export function ListDetailPage() {
   );
 
   return (
-    <ListPane actions={actions}>
-      {!besideSong && <PageTitle name={list.name} />}
+    <ReaderPane header={<ListBar actions={actions} />} title={list.name}>
       {/* Not a <header>: the bar above is the pane's banner. */}
       <div className="mb-6">
-        <Heading className="text-3xl font-bold leading-tight tracking-tight text-balance @3xl/app:text-2xl">
+        <PaneHeading className="text-3xl font-bold leading-tight tracking-tight text-balance @3xl/app:text-2xl">
           {list.name}
-        </Heading>
+        </PaneHeading>
         {list.description && <p className="mt-1 text-lg text-fg-muted">{list.description}</p>}
         <div className="mt-3 flex items-center gap-2">
           <p className="text-sm text-fg-muted">{songCount(list.item_count)}</p>
@@ -443,10 +405,12 @@ export function ListDetailPage() {
           title="This list is empty"
           description={isOwner ? "Open a song and use Save to add it here." : undefined}
         />
-      ) : /* Sortable only for an owner with two or more songs, once the pane has
-             shown: hidden beside a song on a phone, it loads no drag machinery.
-             The static list is also the fallback while that chunk loads. */
-      isOwner && songs.length > 1 && shown ? (
+      ) : /* Sortable only for an owner with two or more songs. The static list
+             is the fallback while that chunk loads, and the pane builds no rows
+             until it shows (above), so a hidden list loads no drag machinery
+             and the rows are swapped once, for the sortable ones, not built
+             again when the pane first shows. */
+      isOwner && songs.length > 1 ? (
         <Suspense
           fallback={
             <StaticSongList
@@ -460,7 +424,7 @@ export function ListDetailPage() {
           <SortableSongList
             songs={songs}
             listId={list.id}
-            onReorder={(songIds) => reorderList.mutate(songIds)}
+            onReorder={onReorder}
             // Owner-only branch, and the prop is required: pass the unnarrowed one.
             onRemove={removeFromList}
             pendingRemoval={pendingRemoval}
@@ -571,6 +535,6 @@ export function ListDetailPage() {
       >
         “{list.name}” will be removed. The songs themselves are not affected.
       </ConfirmSheet>
-    </ListPane>
+    </ReaderPane>
   );
 }

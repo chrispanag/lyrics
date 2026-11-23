@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { listInView, songCanonicalHref, songRefIsId } from "./listContext";
+import { listInView, songCanonicalHref, songRefIsId, songSection } from "./listContext";
 
 /*
  * The two halves of the id-to-slug redirect, pinned from both sides: too narrow
@@ -68,5 +68,20 @@ describe("listInView", () => {
     expect(listInView("/", search("list=list-1"))).toBeNull();
     expect(listInView("/lists", search(""))).toBeNull();
     expect(listInView("/songs/thalassa-platia/edit", search("list=list-1"))).toBeNull();
+  });
+});
+
+describe("songSection", () => {
+  const search = (query: string) => new URLSearchParams(query);
+
+  it("is the entry whose songs sit beside a song", () => {
+    expect(songSection("/songs/thalassa-platia", search("list=list-1"))).toBe("/lists");
+    expect(songSection("/songs/thalassa-platia", search(""))).toBe("/");
+    expect(songSection("/songs/thalassa-platia", search("list="))).toBe("/");
+  });
+
+  it("leaves every other screen to its path", () => {
+    expect(songSection("/lists/list-1", search(""))).toBeUndefined();
+    expect(songSection("/", search("list=list-1"))).toBeUndefined();
   });
 });

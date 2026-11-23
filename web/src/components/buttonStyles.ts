@@ -61,6 +61,13 @@ export const rowControlChrome =
 export const actionLabel = "sr-only sm:not-sr-only";
 
 /**
+ * `actionLabel` for a control in the pane beside the lyrics: hidden on a phone,
+ * and hidden again once the pane sits beside a song, where its bar is a pane's
+ * width.
+ */
+export const paneActionLabel = "sr-only sm:@max-3xl/app:not-sr-only";
+
+/**
  * A segmented control: the track, and one segment in it. Shared by the theme
  * switch (radios) and the admin console's tabs (links), so a choice between
  * views looks the same wherever it is offered.
