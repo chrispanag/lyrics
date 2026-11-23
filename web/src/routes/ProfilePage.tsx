@@ -70,20 +70,22 @@ export function ProfilePage() {
     return (
       <Page width="form">
         <PageTitle name="Profile" />
-        <h1 className="text-2xl font-bold tracking-tight">You are browsing as a guest</h1>
-        <p className="mt-2 text-sm text-fg-muted">Sign in to build lists of songs.</p>
-        {/* Stacked on a phone; a row from `sm`, where full-width buttons would
-            stretch across the form column. */}
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-          <Link href="/login" className={buttonClasses("primary", "lg")}>
-            Sign in
-          </Link>
-          <Link href="/register" className={buttonClasses("secondary", "lg")}>
-            Create an account
-          </Link>
-        </div>
+        {/* Profile is a short settings card: it keeps a narrow column, at the
+            form column's left edge so it lines up with every other page. */}
+        <div className="max-w-md">
+          <h1 className="text-2xl font-bold tracking-tight">You are browsing as a guest</h1>
+          <p className="mt-2 text-sm text-fg-muted">Sign in to build lists of songs.</p>
+          <div className="mt-6 flex flex-col gap-2">
+            <Link href="/login" className={buttonClasses("primary", "lg")}>
+              Sign in
+            </Link>
+            <Link href="/register" className={buttonClasses("secondary", "lg")}>
+              Create an account
+            </Link>
+          </div>
 
-        <ThemeToggle theme={theme} onChange={selectTheme} className="mt-10" />
+          <ThemeToggle theme={theme} onChange={selectTheme} className="mt-10" />
+        </div>
       </Page>
     );
   }
@@ -140,77 +142,75 @@ export function ProfilePage() {
   return (
     <Page width="form">
       <PageTitle name="Profile" />
-      <h1 className="mb-6 text-2xl font-bold tracking-tight">Profile</h1>
+      {/* Narrow, as the guest view is: see there. */}
+      <div className="max-w-md">
+        <h1 className="mb-6 text-2xl font-bold tracking-tight">Profile</h1>
 
-      <div className="mb-6">
-        <PictureButton user={user} busy={busy} onClick={() => setPictureMenu(true)} />
-        {/* Announces the wait the aria-hidden badge spinner shows. Always
-            rendered: a live region must exist before its text changes. */}
-        <span role="status" className="sr-only">
-          {busy ? busyMessage(removeAvatar.isPending) : ""}
-        </span>
-      </div>
-
-      <PictureMenu
-        open={pictureMenu}
-        onClose={() => setPictureMenu(false)}
-        hasPicture={Boolean(user.avatar_updated_at)}
-        busy={busy}
-        onPick={(event) => void onPickPicture(event)}
-        onRemove={() => void onRemovePicture()}
-      />
-
-      {pictureError && (
         <div className="mb-6">
-          <ErrorMessage>{pictureError}</ErrorMessage>
+          <PictureButton user={user} busy={busy} onClick={() => setPictureMenu(true)} />
+          {/* Announces the wait the aria-hidden badge spinner shows. Always
+            rendered: a live region must exist before its text changes. */}
+          <span role="status" className="sr-only">
+            {busy ? busyMessage(removeAvatar.isPending) : ""}
+          </span>
         </div>
-      )}
 
-      <dl className={cn(panelChrome, "mb-6 space-y-2 text-sm")}>
-        <div className="flex justify-between gap-3">
-          <dt className="text-fg-tertiary">Email</dt>
-          <dd className="truncate font-medium">{user.email}</dd>
-        </div>
-        <div className="flex justify-between gap-3">
-          <dt className="text-fg-tertiary">Role</dt>
-          <dd className="font-medium capitalize">{user.role}</dd>
-        </div>
-      </dl>
+        <PictureMenu
+          open={pictureMenu}
+          onClose={() => setPictureMenu(false)}
+          hasPicture={Boolean(user.avatar_updated_at)}
+          busy={busy}
+          onPick={(event) => void onPickPicture(event)}
+          onRemove={() => void onRemovePicture()}
+        />
 
-      {/* A name is short: the field keeps the narrow column it had, rather than
-          running across the whole form width. */}
-      <form onSubmit={onSubmit} className="max-w-md space-y-4">
-        {error && <ErrorMessage>{error}</ErrorMessage>}
-        <Field label="Display name" htmlFor="display-name" hint="Shown instead of your email">
-          <Input
-            id="display-name"
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-          />
-        </Field>
-        <Button type="submit" loading={updateProfile.isPending}>
-          {saved ? "Saved" : "Save changes"}
+        {pictureError && (
+          <div className="mb-6">
+            <ErrorMessage>{pictureError}</ErrorMessage>
+          </div>
+        )}
+
+        <dl className={cn(panelChrome, "mb-6 space-y-2 text-sm")}>
+          <div className="flex justify-between gap-3">
+            <dt className="text-fg-tertiary">Email</dt>
+            <dd className="truncate font-medium">{user.email}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-fg-tertiary">Role</dt>
+            <dd className="font-medium capitalize">{user.role}</dd>
+          </div>
+        </dl>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          {error && <ErrorMessage>{error}</ErrorMessage>}
+          <Field label="Display name" htmlFor="display-name" hint="Shown instead of your email">
+            <Input
+              id="display-name"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+            />
+          </Field>
+          <Button type="submit" loading={updateProfile.isPending}>
+            {saved ? "Saved" : "Save changes"}
+          </Button>
+        </form>
+
+        <div className="mt-8">
+          <SectionHeading>Security</SectionHeading>
+          {/* A link: changing a password is its own emailed-code flow. */}
+          <Link href="/change-password" className={buttonClasses("secondary", "lg", "w-full")}>
+            <KeyRound aria-hidden className="size-4" />
+            Change password
+          </Link>
+        </div>
+
+        <ThemeToggle theme={theme} onChange={selectTheme} className="mt-8" />
+
+        <Button variant="ghost" className="mt-8 w-full" onClick={() => void logout()}>
+          <LogOut aria-hidden className="size-4" />
+          Sign out
         </Button>
-      </form>
-
-      <div className="mt-8">
-        <SectionHeading>Security</SectionHeading>
-        {/* A link: changing a password is its own emailed-code flow. */}
-        <Link
-          href="/change-password"
-          className={buttonClasses("secondary", "lg", "w-full sm:w-fit")}
-        >
-          <KeyRound aria-hidden className="size-4" />
-          Change password
-        </Link>
       </div>
-
-      <ThemeToggle theme={theme} onChange={selectTheme} className="mt-8" />
-
-      <Button variant="ghost" className="mt-8 w-full sm:w-fit" onClick={() => void logout()}>
-        <LogOut aria-hidden className="size-4" />
-        Sign out
-      </Button>
     </Page>
   );
 }
@@ -370,13 +370,11 @@ function ThemeToggle({
   return (
     <div className={className}>
       <SectionHeading id={`${id}-heading`}>Appearance</SectionHeading>
-      {/* Fitted from `sm`, as the admin tabs are: three segments need nothing
-          like the form column's width. */}
-      <fieldset aria-labelledby={`${id}-heading`} className={cn(segmentedTrack, "sm:w-fit")}>
+      <fieldset aria-labelledby={`${id}-heading`} className={segmentedTrack}>
         {THEME_OPTIONS.map((option) => (
           <label
             key={option.value}
-            className={segmentClasses(theme === option.value, "flex-1 cursor-pointer px-5")}
+            className={segmentClasses(theme === option.value, "flex-1 cursor-pointer")}
           >
             <input
               type="radio"

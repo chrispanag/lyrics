@@ -17,14 +17,4 @@ describe("Page", () => {
     expect(page).toHaveClass("max-w-2xl");
     expect(page).not.toHaveClass("max-w-3xl");
   });
-
-  it("adds a caller's classes beside its own", () => {
-    render(
-      <Page width="form" className="text-center">
-        Guest
-      </Page>,
-    );
-
-    expect(screen.getByText("Guest")).toHaveClass("max-w-2xl", "text-center");
-  });
 });

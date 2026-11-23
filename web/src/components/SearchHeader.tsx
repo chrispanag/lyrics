@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 import { MenuButton, StickyHeader } from "./Layout";
+import { contentWidth } from "./Page";
 
 /**
  * Inset of every sticky bar. The catalog's search and a song's tools are
@@ -11,8 +12,11 @@ import { MenuButton, StickyHeader } from "./Layout";
  */
 export const headerBarPadding = "px-4 py-3";
 
-/** The column both bars share, so the hamburger never moves between screens. */
-const headerColumn = cn("mx-auto max-w-3xl", headerBarPadding);
+/**
+ * The column both bars share, so the hamburger never moves between screens:
+ * the content page's width, so it lines up with the page under it.
+ */
+const headerColumn = cn("mx-auto", contentWidth, headerBarPadding);
 
 /**
  * The header a search box sits in, shared by the catalog and a song page.
