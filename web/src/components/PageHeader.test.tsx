@@ -19,16 +19,9 @@ describe("PageHeader", () => {
     expect(screen.getAllByRole("heading")).toHaveLength(1);
   });
 
-  it("renders a way back above the title, and the actions beside it", () => {
-    render(
-      <PageHeader
-        title="Edit song"
-        back={<a href="/songs">Back</a>}
-        actions={<button type="button">New list</button>}
-      />,
-    );
+  it("renders the page's actions", () => {
+    render(<PageHeader title="Your lists" actions={<button type="button">New list</button>} />);
 
-    expect(screen.getByRole("link", { name: "Back" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New list" })).toBeInTheDocument();
   });
 });

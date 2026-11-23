@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Plus } from "lucide-react";
 import { expect } from "storybook/test";
 
-import { BackButton } from "./BackButton";
 import { PageHeader } from "./PageHeader";
 import { Button } from "./ui";
 
@@ -32,10 +31,6 @@ export const WithActions: Story = {
 /** Admin: the section's name over the screen's. */
 export const WithEyebrow: Story = {
   args: { eyebrow: "Admin", title: "Users" },
-};
-
-export const WithBack: Story = {
-  args: { back: <BackButton />, title: "Edit song" },
 };
 
 /**
