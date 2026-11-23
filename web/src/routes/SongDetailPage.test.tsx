@@ -211,7 +211,8 @@ describe("SongDetailPage", () => {
     server.use(
       http.get(`${API}/api/v1/songs/:id`, () =>
         HttpResponse.json(
-          makeSong({ lyrics: "Πρώτος στίχος\r\nδεύτερος <b>στίχος</b>\n\nτρίτη στροφή" }),
+          // The trailing break is what a pasted textarea stores: no line for it.
+          makeSong({ lyrics: "Πρώτος στίχος\r\nδεύτερος <b>στίχος</b>\n\nτρίτη στροφή\n" }),
         ),
       ),
     );
@@ -227,9 +228,8 @@ describe("SongDetailPage", () => {
       "",
       "τρίτη στροφή",
     ]);
-    for (const line of lines) expect(line).toHaveClass("block", "pl-[1em]", "-indent-[1em]");
-    // The blank line holds a line's height, so the verses stay apart.
-    expect(lines[2]).toHaveClass("min-h-lh");
+    // A real break, which a copied selection keeps, so the verses stay apart.
+    expect(lines[2]?.querySelector("br")).not.toBeNull();
   });
 
   it("does not offer editing to a guest", async () => {

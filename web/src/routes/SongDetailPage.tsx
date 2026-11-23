@@ -542,17 +542,24 @@ function OnlyRecording({ recording }: { recording: Recording }) {
  * The lyrics, one block per stored line, each with a hanging indent: on a
  * narrow screen a line too long to fit wraps with its remainder indented, so a
  * continuation never reads as the next line. `text-indent` reaches only a
- * block's first line, hence a block per line. A blank line keeps its height, so
- * verses stay apart. Plain text throughout: lyrics are user input.
+ * block's first line, hence a block per line. Plain text throughout: lyrics are
+ * user input.
+ *
+ * A blank line is a `<br>`, not an empty block held open: an empty block adds
+ * nothing to a copied selection, which would run the verses together. Trailing
+ * breaks, which a pasted textarea often stores, are dropped, as `pre-line` drew
+ * nothing for them.
  */
 function LyricsLines({ lyrics }: { lyrics: string }) {
-  return lyrics.split(/\r?\n/).map((line, index) => (
-    // Index keys: the lines are a fixed rendering of one string, never reordered.
-    // biome-ignore lint/suspicious/noArrayIndexKey: see above.
-    <span key={index} className="block min-h-lh pl-[1em] -indent-[1em]">
-      {line}
-    </span>
-  ));
+  return lyrics
+    .trimEnd()
+    .split(/\r?\n/)
+    .map((line, index) => (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one string's lines, never reordered.
+      <span key={index} className="block pl-[1em] -indent-[1em]">
+        {line || <br />}
+      </span>
+    ));
 }
 
 /** One labeled row of the header's credits; the value is names or a year. */

@@ -69,6 +69,24 @@ export const Documented: Story = {
   },
 };
 
+/**
+ * Copied lyrics keep their lines and the gap between verses: each line is its
+ * own block, and only a real break survives a selection.
+ */
+export const CopiesVerseByVerse: Story = {
+  parameters: { route: "/songs/to-palio-roloi" },
+  play: async ({ canvas }) => {
+    // The refrain opens both verses; the first one is in the paragraph either way.
+    const [first] = await canvas.findAllByText("Το παλιό ρολόι χτυπά", { selector: "span" });
+    const lyrics = first?.parentElement;
+    if (!lyrics) throw new Error("No lyrics paragraph");
+    const selection = window.getSelection();
+    selection?.selectAllChildren(lyrics);
+    await expect(selection?.toString().trim()).toBe(documented.lyrics);
+    selection?.removeAllRanges();
+  },
+};
+
 /** Read from a list: the bar names the list and the place in it. */
 export const InAList: Story = {
   parameters: { route: "/songs/frangosyriani?list=list-1" },
