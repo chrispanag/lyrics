@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, userEvent, waitFor } from "storybook/test";
 
 import { SongDetailPage } from "./SongDetailPage";
 import { catalogList, catalogSongs, entechno } from "@/test/catalog";
@@ -99,11 +99,19 @@ export const InAList: Story = {
   },
 };
 
-/** An admin can edit and delete any song; the page offers both. */
+/**
+ * An admin can edit and delete any song; the page offers both, Delete behind
+ * "More actions", left open so the axe check sees the menu.
+ */
 export const AsAdmin: Story = {
   parameters: { user: makeUser({ role: "admin" }) },
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole("link", { name: /edit/i })).toBeVisible();
+    const more = canvas.getByRole("button", { name: "More actions" });
+    // Held shut until the song, which the confirmation names, has arrived.
+    await waitFor(() => expect(more).toBeEnabled());
+    await userEvent.click(more);
+    await expect(canvas.getByRole("menuitem", { name: "Delete song" })).toBeVisible();
   },
 };
 

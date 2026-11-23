@@ -22,6 +22,7 @@ import { PersonLinks } from "@/components/PersonLinks";
 import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { actionLabel, buttonClasses } from "@/components/buttonStyles";
+import { MenuItem, MoreActionsMenu } from "@/components/MoreActionsMenu";
 import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton, Spinner } from "@/components/ui";
 import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
@@ -194,19 +195,17 @@ function SongArticle() {
           {/* As tall as the search field once the list is beside the song, so
               the tools share its center. */}
           <div className="ml-auto flex items-center gap-1 @3xl/app:h-12">
-            {/* Shown to guests too, who are sent to sign in. Labeled because "Save"
-              alone does not say where to. */}
+            {/* Shown to guests too, who are sent to sign in. */}
             <Button
               variant="ghost"
               size="sm"
-              aria-label="Save to a list"
               // `user` is only a snapshot until the restore settles; neither branch
               // may be decided on it.
               disabled={sessionLoading}
               onClick={() => (user ? setListSheetOpen(true) : router.push(signIn))}
             >
               <ListPlus aria-hidden className="size-4" />
-              <span className={actionLabel}>Save</span>
+              <span className={actionLabel}>Add to list</span>
             </Button>
             {canEdit && (
               <Link
@@ -218,18 +217,16 @@ function SongArticle() {
                 <span className={actionLabel}>Edit</span>
               </Link>
             )}
-            {hasRole(user?.role, "admin") && (
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="Delete song"
-                // Waits for the song: the confirmation names it.
-                disabled={!song}
-                onClick={() => setConfirmDelete(true)}
-              >
-                <Trash aria-hidden className="size-4 text-fg-danger" />
-              </Button>
-            )}
+            {/* A step away from a reader's thumb. Waits for the song: the
+                confirmation names it. Only an admin has anything in it, so no
+                one else is shown the menu. */}
+            <MoreActionsMenu disabled={!song}>
+              {hasRole(user?.role, "admin") && (
+                <MenuItem icon={Trash} danger onSelect={() => setConfirmDelete(true)}>
+                  Delete song
+                </MenuItem>
+              )}
+            </MoreActionsMenu>
           </div>
         </div>
       </div>
@@ -324,7 +321,7 @@ function SongArticle() {
             </section>
           )}
 
-          {/* Needs only the id, so Save works while the song is loading. */}
+          {/* Needs only the id, so Add to list works while the song is loading. */}
           {user && id && (
             <AddToListSheet
               songId={id}
@@ -461,7 +458,7 @@ function AddToListSheet({
   const memberOf = new Set(membership.data?.list_ids ?? []);
 
   return (
-    <Sheet open={open} onClose={onClose} title="Save to list">
+    <Sheet open={open} onClose={onClose} title="Add to list">
       {failure && (
         <ErrorMessage>{errorMessage(failure, "Your lists could not be loaded.")}</ErrorMessage>
       )}

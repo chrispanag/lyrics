@@ -29,6 +29,7 @@ import { useAuth } from "@/auth/useAuth";
 import { paneActionLabel } from "@/components/buttonStyles";
 import { cardChrome, cardHover, tagChrome } from "@/components/cardStyles";
 import { ListBar, ListSkeleton } from "@/components/ListBar";
+import { MenuItem, MoreActionsMenu } from "@/components/MoreActionsMenu";
 import { PageHeader } from "@/components/PageHeader";
 import { PageTitle } from "@/components/PageTitle";
 import { Page } from "@/components/Page";
@@ -362,17 +363,15 @@ export function ListDetailPage() {
             {visibilityAction}
           </Button>
 
-          {/* The default list cannot be deleted (the server 403s). */}
-          {!list.is_default && (
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="Delete list"
-              onClick={() => setConfirmDelete(true)}
-            >
-              <Trash aria-hidden className="size-4 text-fg-danger" />
-            </Button>
-          )}
+          <MoreActionsMenu>
+            {/* The default list cannot be deleted (the server 403s). With
+                nothing else in the menu, it then shows no menu at all. */}
+            {!list.is_default && (
+              <MenuItem icon={Trash} danger onSelect={() => setConfirmDelete(true)}>
+                Delete list
+              </MenuItem>
+            )}
+          </MoreActionsMenu>
         </>
       )}
     </>
@@ -403,7 +402,7 @@ export function ListDetailPage() {
         <EmptyState
           icon={<ListMusic className="size-12" />}
           title="This list is empty"
-          description={isOwner ? "Open a song and use Save to add it here." : undefined}
+          description={isOwner ? "Open a song and use Add to list to put it here." : undefined}
         />
       ) : /* Sortable only for an owner with two or more songs. The static list
              is the fallback while that chunk loads, and the pane builds no rows

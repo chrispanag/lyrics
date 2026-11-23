@@ -369,6 +369,25 @@
   }
 }
 
+/* The panel of a `MoreActionsMenu`, a popover in the top layer. Below its
+   trigger with their right edges level, so it grows back across the bar it sits
+   at the end of and never past a narrow pane; above it where there is no room
+   below. The anchor is named by the component, per menu. Without anchor
+   positioning, the component sets `top` and `right` itself on opening; `inset:
+   auto` is what lets those two stand alone in place of the UA's centering. */
+@layer components {
+  .action-menu {
+    inset: auto;
+    margin: 0.25rem 0 0;
+  }
+  @supports (position-area: block-end) {
+    .action-menu {
+      position-area: block-end span-inline-start;
+      position-try-fallbacks: flip-block;
+    }
+  }
+}
+
 @layer components {
   /* The phone's navigation drawer — see `MobileNavDrawer`. A modal `<dialog>`
      filling the viewport that is itself a horizontal scroller with two snap

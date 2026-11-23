@@ -37,7 +37,7 @@ export const AsOwner: Story = {
     // on a loaded machine that outlasts findBy's one second.
     await import("@/components/SortableSongList");
     await expect(await canvas.findAllByRole("button", { name: /reorder/i })).toHaveLength(4);
-    await expect(canvas.getByRole("button", { name: /delete list/i })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "More actions" })).toBeVisible();
   },
 };
 
@@ -46,7 +46,7 @@ export const AsReader: Story = {
   parameters: { user: makeUser({ id: "user-2" }) },
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole("button", { name: /save to my lists/i })).toBeVisible();
-    await expect(canvas.queryByRole("button", { name: /delete list/i })).toBeNull();
+    await expect(canvas.queryByRole("button", { name: "More actions" })).toBeNull();
   },
 };
 

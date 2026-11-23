@@ -93,7 +93,7 @@ test.describe("signed in", () => {
 
     await page.goto("/");
     await page.getByRole("link").filter({ hasText: "Θάλασσα" }).first().click();
-    await page.getByRole("button", { name: /save/i }).click();
+    await page.getByRole("button", { name: /add to list/i }).click();
 
     const listToggle = page.getByRole("button", { name: new RegExp(listName) });
     await listToggle.click();
