@@ -193,7 +193,12 @@ export function ProfilePage() {
           <Input
             id="display-name"
             value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
+            onChange={(event) => {
+              setDisplayName(event.target.value);
+              // A failed save's error belongs to the name it tried; once the
+              // name is back to the stored one there is nothing to retry.
+              setError("");
+            }}
           />
         </Field>
         <Button type="submit" loading={updateProfile.isPending} disabled={nameUnchanged}>

@@ -338,7 +338,9 @@ function SongArticle() {
             <RecordingsSheet
               recordings={song.recordings}
               language={song.language}
-              open={recordingsOpen}
+              // Only reachable past one recording: a refetch that leaves one
+              // closes it rather than stranding it with nothing to return to.
+              open={recordingsOpen && song.recordings.length > 1}
               onClose={() => setRecordingsOpen(false)}
             />
           )}

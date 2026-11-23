@@ -188,6 +188,25 @@ describe("ProfilePage", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
   });
 
+  // The button turns off once the name is back to the stored one, so an error
+  // left up would point at a save there is no way to retry.
+  it("clears a failed save's error once the name is edited", async () => {
+    server.use(
+      http.patch(`${API}/api/v1/me`, () => apiError(500, "internal", "Something went wrong.")),
+    );
+
+    renderWithProviders(<ProfilePage />, { user: makeUser() });
+    const field = screen.getByLabelText("Display name");
+    await userEvent.type(field, "Μαρία");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByRole("alert");
+
+    await userEvent.clear(field);
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+  });
+
   it("signs out from the button at the foot of the page", async () => {
     const logout = vi.fn(async () => {});
 

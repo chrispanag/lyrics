@@ -5,11 +5,15 @@ import type { Recording } from "@/lib/types";
 
 /**
  * The mark a recording carries when it is the first, in the sheet and on a song
- * with only one. The brand ramp stops at 900, so no `brand-950` here.
+ * with only one. The brand ramp stops at 900, so no `brand-950` here. English
+ * even inside the song's `lang`, where the lone recording places it.
  */
 export function FirstRecordingBadge() {
   return (
-    <span className="rounded-full bg-accent-subtle px-2 py-0.5 text-xs font-medium text-fg-accent-subtle">
+    <span
+      lang="en"
+      className="rounded-full bg-accent-subtle px-2 py-0.5 text-xs font-medium text-fg-accent-subtle"
+    >
       First recording
     </span>
   );
