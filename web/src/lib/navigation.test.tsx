@@ -61,7 +61,7 @@ const key = () => screen.getByTestId("key").textContent;
 const canGoBack = () => screen.getByTestId("back").textContent;
 
 describe("useNavigationKey", () => {
-  // The drawer and the song page's search box reset on it; a link to the
+  // The search sheet and the song page's search box reset on it; a link to the
   // screen already showing has to count, though the address does not move.
   it("changes for a link to the address already showing", async () => {
     renderWithProviders(<Probe />, { route: "/songs/a" });

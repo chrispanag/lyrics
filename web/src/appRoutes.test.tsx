@@ -29,10 +29,11 @@ function splitPanes(): void {
 }
 
 /*
- * Every screen inside the shell offers the hamburger. `SearchHeader` and the
- * `(menu)` layout supply it independently, so only the app directory itself,
- * composed by position (`test/app.tsx`), can check both; a miss leaves a phone
- * on a screen it cannot navigate off.
+ * Every screen inside the shell offers a phone's bottom bar, and the desk's
+ * way back to a collapsed column. The shell supplies the bar, and
+ * `SearchHeader` and the `(menu)` layout the menu button, independently, so
+ * only the app directory itself, composed by position (`test/app.tsx`), can
+ * check them all; a miss leaves a reader on a screen they cannot navigate off.
  */
 describe("Reaching the navigation from every screen", () => {
   const admin = makeUser({ role: "admin" });
@@ -53,7 +54,7 @@ describe("Reaching the navigation from every screen", () => {
     { route: "/nowhere-at-all" },
   ];
 
-  it.each(SCREENS)("offers the drawer at $route", async ({ route, user = null }) => {
+  it.each(SCREENS)("offers the navigation at $route", async ({ route, user = null }) => {
     // Not covered by the default handlers; they only have to answer.
     server.use(
       listById(makeList()),
@@ -62,10 +63,13 @@ describe("Reaching the navigation from every screen", () => {
 
     renderWithProviders(<TestApp />, { route, user });
 
+    const bar = await screen.findByRole("navigation", { name: "Navigation" });
+    expect(within(bar).getByRole("link", { name: "Browse" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "Search" })).toBeInTheDocument();
     // The reader mounts the list and the song together, and each carries the
     // button. jsdom has no breakpoints, so the one a phone would hide is here
-    // too; either one is the way to the drawer.
-    expect(await screen.findAllByRole("button", { name: "Open menu" })).not.toHaveLength(0);
+    // too; either one is the way back to the column.
+    expect(screen.getAllByRole("button", { name: "Open menu" })).not.toHaveLength(0);
   });
 
   // The credential screens have no navigation by design.
@@ -73,6 +77,7 @@ describe("Reaching the navigation from every screen", () => {
     renderWithProviders(<TestApp />, { route });
 
     expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Navigation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open menu" })).not.toBeInTheDocument();
   });
 

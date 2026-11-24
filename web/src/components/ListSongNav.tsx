@@ -144,10 +144,11 @@ export function ListSongSwipe({
     <div
       ref={markMounted}
       aria-hidden
-      // Fixed, so it is on screen without scrolling; bottom-12 matches the
-      // shell's `pb-12`. `md:hidden` must stay on this observed box: a hidden
-      // box never intersects, so the one showing is not spent at a desk.
-      className="pointer-events-none fixed inset-x-0 bottom-12 z-floating flex justify-center md:hidden"
+      // Fixed, so it is on screen without scrolling, and above the bottom bar
+      // at its full height, so the bar never covers it. `md:hidden` must stay
+      // on this observed box: a hidden box never intersects, so the one
+      // showing is not spent at a desk.
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(--spacing(20)+env(safe-area-inset-bottom))] z-floating flex justify-center md:hidden"
     >
       {/* Opaque and inverted so it reads over the lyrics; only available
           directions get an arrow. */}

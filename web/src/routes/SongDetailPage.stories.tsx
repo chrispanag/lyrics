@@ -1,9 +1,11 @@
-import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, waitFor } from "storybook/test";
+import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { SongDetailPage } from "./SongDetailPage";
+import { Layout } from "@/components/Layout";
 import { catalogList, catalogSongs, entechno } from "@/test/catalog";
 import { listById, makeRecording, makeSong, makeUser, songByRef } from "@/test/handlers";
+import { phoneGlobals, phoneParameters } from "@/test/phone";
 
 const documented = makeSong({
   id: "song-9",
@@ -176,5 +178,148 @@ export const NotFound: Story = {
   parameters: { route: "/songs/no-such-song" },
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole("alert")).toHaveTextContent("Song was not found.");
+  },
+};
+
+/*
+ * A phone, 390×844, in the shell: the thin top bar of Back and the tools, the
+ * bottom bar, and the lyrics between them. Before the bottom bar, the search
+ * header (73px) and the tools row (68px) stacked above the title, 141px in all.
+ */
+
+const LAST_LINE = "Κι ο τελευταίος στίχος";
+
+const longSong = makeSong({
+  id: "song-11",
+  slug: "makry-tragoydi",
+  title: "Μακρύ τραγούδι",
+  lyrics: [
+    ...Array.from({ length: 60 }, (_, index) => `Στίχος ${index + 1} του τραγουδιού`),
+    LAST_LINE,
+  ].join("\n"),
+});
+
+/** The page in the shell, which draws the bottom bar. */
+const inShell: Decorator = (Story) => (
+  <Layout>
+    <Story />
+  </Layout>
+);
+
+const onAPhone: Story = {
+  parameters: { ...phoneParameters, route: "/songs/makry-tragoydi" },
+  globals: phoneGlobals,
+  decorators: [inShell],
+  beforeEach({ msw }) {
+    msw.use(songByRef(longSong));
+  },
+};
+
+/** The phone's chrome, found by what index.css and the page key on. */
+function chrome() {
+  const tools = document.querySelector<HTMLElement>(".max-md\\:sticky");
+  const bar = document.querySelector<HTMLElement>(".bottom-bar");
+  const tabs = document.querySelector<HTMLElement>(".bottom-bar-tabs");
+  const pill = document.querySelector<HTMLElement>(".bottom-bar-pill");
+  if (!tools || !bar || !tabs || !pill) throw new Error("The phone's chrome is missing.");
+  return { tools, bar, tabs, pill };
+}
+
+/** Waits out the bars' 200ms slide and fade. */
+const settled = () => new Promise((resolve) => setTimeout(resolve, 400));
+
+/**
+ * At the top both bars are out; scrolled down, the top bar is gone and the
+ * bottom one is its small pill, and the lyrics have more of the screen.
+ */
+export const PhoneChrome: Story = {
+  ...onAPhone,
+  play: async ({ canvas }) => {
+    await canvas.findByText(LAST_LINE);
+    const { tools, bar, tabs, pill } = chrome();
+
+    // No search header: the tools bar is the only bar above the song.
+    await expect(canvas.queryByRole("combobox", { name: /search songs/i })).toBeNull();
+    const top = tools.getBoundingClientRect();
+    await expect(top.top).toBe(0);
+    await expect(top.height).toBeLessThanOrEqual(56);
+    await expect(within(tools).getByRole("button", { name: "Back" })).toBeVisible();
+    await expect(getComputedStyle(tabs).opacity).toBe("1");
+    await expect(getComputedStyle(pill).opacity).toBe("0");
+    // The room between the bars at the top of the page: more than the old
+    // stack above the title left, even with the bottom bar out.
+    const atTop = tabs.getBoundingClientRect().top - top.bottom;
+    await expect(atTop).toBeGreaterThan(844 - 141);
+
+    window.scrollTo({ top: 600, behavior: "instant" });
+    await waitFor(() => expect(bar).toHaveAttribute("data-tucked"));
+    await settled();
+
+    await expect(tools.getBoundingClientRect().bottom).toBeLessThanOrEqual(0);
+    await expect(getComputedStyle(tabs).opacity).toBe("0");
+    await expect(getComputedStyle(pill).opacity).toBe("1");
+    await expect(pill).toHaveTextContent("Μακρύ τραγούδι");
+    // Everything above the pill is the lyrics'.
+    const scrolled = pill.getBoundingClientRect().top;
+    // Measured: 733px at the top, 800px scrolled.
+    await expect(scrolled).toBeGreaterThan(atTop + 50);
+    await expect(scrolled).toBeGreaterThan(844 - 60);
+
+    // Back up, and both return.
+    window.scrollTo({ top: 400, behavior: "instant" });
+    await waitFor(() => expect(bar).not.toHaveAttribute("data-tucked"));
+    await settled();
+    await expect(tools.getBoundingClientRect().top).toBe(0);
+    await expect(getComputedStyle(tabs).opacity).toBe("1");
+  },
+};
+
+/** At the very end of the song, the last line scrolls clear of the bar at its full height. */
+export const PhoneLastLine: Story = {
+  ...onAPhone,
+  play: async ({ canvas }) => {
+    const last = await canvas.findByText(LAST_LINE);
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" });
+    await settled();
+
+    const { bar, pill } = chrome();
+    const line = last.getBoundingClientRect();
+    // The bar's box is where the expanded tabs sit; the pill sits inside it.
+    await expect(line.bottom).toBeLessThanOrEqual(bar.getBoundingClientRect().top);
+    await expect(line.bottom).toBeLessThanOrEqual(pill.getBoundingClientRect().top);
+  },
+};
+
+/** The bar's Search opens a full-screen sheet with the field ready to type in. */
+export const PhoneSearch: Story = {
+  ...onAPhone,
+  play: async ({ canvas }) => {
+    await canvas.findByText(LAST_LINE);
+    await userEvent.click(canvas.getByRole("button", { name: "Search" }));
+
+    const sheet = await canvas.findByRole("dialog", { name: "Search" });
+    await expect(sheet).toBeVisible();
+    const field = within(sheet).getByRole("combobox", { name: /search songs/i });
+    await waitFor(() => expect(field).toHaveFocus());
+    // The field sits at the top, clear of where a keyboard rises.
+    await expect(field.getBoundingClientRect().top).toBeLessThan(844 / 4);
+  },
+};
+
+/** Read from a list: the swipe hint sits above the bottom bar, not under it. */
+export const PhoneInAList: Story = {
+  parameters: { ...phoneParameters, route: "/songs/frangosyriani?list=list-1" },
+  globals: phoneGlobals,
+  decorators: [inShell],
+  loaders: [() => localStorage.removeItem("lyrics:swipe-hint-seen")],
+  beforeEach({ msw }) {
+    msw.use(listById(catalogList(3)));
+  },
+  play: async ({ canvas }) => {
+    const hint = await canvas.findByText("Swipe through the list");
+    const { bar } = chrome();
+    await expect(hint.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      bar.getBoundingClientRect().top,
+    );
   },
 };

@@ -9,7 +9,7 @@ import { useAuth } from "@/auth/useAuth";
 import { buttonClasses } from "@/components/buttonStyles";
 import { InfiniteScrollTrigger } from "@/components/InfiniteScrollTrigger";
 import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
-import { SearchField } from "@/components/SearchField";
+import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
 import {
@@ -163,7 +163,8 @@ export function BrowsePage() {
             )
           }
         >
-          <SearchField value={draft} onChange={setDraft} />
+          {/* Marked for the phone's Search button, which comes here. */}
+          <SearchField value={draft} onChange={setDraft} {...{ [CATALOG_SEARCH_ATTRIBUTE]: "" }} />
         </SearchHeader>
       }
     >

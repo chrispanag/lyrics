@@ -4,7 +4,7 @@
  * The column is part of the layout from `md` up. Collapsing it gives the width
  * back to the page, which is what lets the song list and the lyrics sit side by
  * side on a window that could not hold them beside the column. A phone has no
- * column — the drawer covers the page — so the choice only changes a desk.
+ * column — the bottom bar is its navigation — so the choice only changes a desk.
  *
  * An attribute on <html>, set before first paint by `NAV_COLLAPSED_BOOT_SCRIPT`,
  * and the rules in styles/index.css show and hide from it. The server's markup

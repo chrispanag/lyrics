@@ -43,13 +43,29 @@ import { headerBarPadding } from "@/components/SearchHeader";
 import { sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
 import { Link, usePathname, useRouter, useSearchParams } from "@/lib/navigation";
+import { useChromeTucked } from "@/lib/scrollChrome";
 import { useStoredState } from "@/lib/useStoredState";
 import { FirstRecordingBadge, RecordingNotes, RecordingsSheet } from "@/components/RecordingsSheet";
 
 /**
- * A song. While the list is put away, the catalog's search box sits above the
- * song, which is the way to another one; once the list is on screen the box
- * would be a second one. The box stays outside the `<article>` the paging
+ * The catalog's search box above a song, from `md` up while the list is put
+ * away: the way to another song. Once the list is on screen the box would be
+ * a second one, and below `md` the bottom bar's Search is the way, so the song
+ * gets the room.
+ *
+ * `contents` until it is hidden: a box only as tall as the header would be its
+ * whole sticky range, and it would scroll away.
+ */
+function SongSearchAbove() {
+  return (
+    <div className="contents max-md:hidden @3xl/app:hidden">
+      <SongSearch />
+    </div>
+  );
+}
+
+/**
+ * A song. The search box above it stays outside the `<article>` the paging
  * swipe is read across.
  */
 export function SongDetailPage() {
@@ -57,11 +73,7 @@ export function SongDetailPage() {
     // Fills the reading pane once the list is beside it, so the tools can stay
     // put and the lyrics scroll under them.
     <div className="@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:flex-col">
-      {/* `contents` until it is hidden: a box only as tall as the header
-          would be its whole sticky range, and it would scroll away. */}
-      <div className="contents @3xl/app:hidden">
-        <SongSearch />
-      </div>
+      <SongSearchAbove />
       <SongArticle />
     </div>
   );
@@ -69,17 +81,13 @@ export function SongDetailPage() {
 
 /**
  * What the song route's `not-found.tsx` renders when the API says no song has
- * the address: the page's own "not available", under the same search header,
- * which is also this screen's only way to the navigation on a phone.
+ * the address: the page's own "not available", under the same search header
+ * as a song, from which the reader can look for the one they meant.
  */
 export function SongNotFound() {
   return (
     <>
-      {/* `contents` until it is hidden: a box only as tall as the header
-          would be its whole sticky range, and it would scroll away. */}
-      <div className="contents @3xl/app:hidden">
-        <SongSearch />
-      </div>
+      <SongSearchAbove />
       <SongUnavailable message="No song has this address." />
     </>
   );
@@ -90,6 +98,8 @@ function SongUnavailable({ message }: { message: string }) {
     <div
       className={cn(
         "mx-auto px-4 py-6 @3xl/app:mx-0 @3xl/app:max-w-none @3xl/app:px-3",
+        // No header above it on a phone, so it keeps clear of the notch itself.
+        "max-md:pt-[calc(--spacing(6)+env(safe-area-inset-top))]",
         contentWidth,
       )}
     >
@@ -140,6 +150,8 @@ function SongArticle() {
   useLayoutEffect(() => {
     lyrics.current?.scrollTo({ top: 0, behavior: "instant" });
   }, [id]);
+
+  const tucked = useChromeTucked();
 
   const [listSheetOpen, setListSheetOpen] = useState(false);
   const [recordingsOpen, setRecordingsOpen] = useState(false);
@@ -196,14 +208,26 @@ function SongArticle() {
       {/* Beside the list, Back leaves and this bar is the header: it stays
           put, and the lyrics scroll under it, so the scrollbar starts at the
           title. Its height follows the search header, chips included, so the
-          two borders stay one line. */}
+          two borders stay one line.
+
+          On a phone it is the page's only top bar, so it is a thin sticky one,
+          which hides on the way down and returns on the way up together with
+          the bottom bar (`useChromeTucked`), but never while it holds focus. */}
       <div
         className={cn(
           "@3xl/app:shrink-0 @3xl/app:border-b @3xl/app:border-line @3xl/app:bg-canvas @3xl/app:pt-safe",
           "@3xl/app:min-h-[var(--sticky-header-height,0px)]",
+          "max-md:sticky max-md:top-0 max-md:z-sticky max-md:border-b max-md:border-line max-md:bg-canvas/90 max-md:pt-safe max-md:backdrop-blur",
+          "max-md:motion-safe:transition-transform max-md:motion-safe:duration-200",
+          tucked && "max-md:-translate-y-full max-md:focus-within:translate-y-0",
         )}
       >
-        <div className={cn("flex items-center gap-2 @max-3xl/app:py-4", headerBarPadding)}>
+        <div
+          className={cn(
+            "flex items-center gap-2 max-md:py-1 md:@max-3xl/app:py-4",
+            headerBarPadding,
+          )}
+        >
           <BackButton className="@3xl/app:hidden" />
           {/* As tall as the search field once the list is beside the song, so
               the tools share its center. */}

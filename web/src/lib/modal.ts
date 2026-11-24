@@ -14,9 +14,7 @@ import {
  *
  * Every modal is a native `<dialog>` opened with `showModal()`, which the
  * browser makes modal: inert page, focus moved in and handed back, Escape.
- * `useDialog` drives `Sheet`'s; the navigation drawer drives its own, since it
- * closes by sliding away (see `MobileNavDrawer`), and shares only
- * `useHomeEndInside`.
+ * `useDialog` drives each one, through `Sheet`.
  */
 
 /** Whether a modal is currently open anywhere on the page. */
@@ -72,9 +70,9 @@ function scrollerFor(target: EventTarget | null, dialog: HTMLDialogElement): HTM
  * and given to the scroller they were meant for. On the document rather than
  * the dialog, because a press on plain text leaves focus on `<body>`, where a
  * key never passes through the dialog. A field keeps them: a caret, or a
- * `<select>`'s first and last option. Shared by `useDialog` and the drawer.
+ * `<select>`'s first and last option.
  */
-export function useHomeEndInside(open: boolean, ref: RefObject<HTMLDialogElement | null>) {
+function useHomeEndInside(open: boolean, ref: RefObject<HTMLDialogElement | null>) {
   useEffect(() => {
     const dialog = ref.current;
     if (!open || !dialog) return;

@@ -310,16 +310,22 @@ export function ErrorMessage({ children }: { children: ReactNode }) {
  * The header is always there, so `showModal()` starts focus on Close; the
  * content mounts once the dialog is open, so an `autoFocus` field in it then
  * takes focus without being mistaken for the opener (`useDialog`).
+ *
+ * `fullScreen` fills the viewport at every width instead, for a sheet whose
+ * content is a field and what it finds: the field stays at the top, clear of
+ * a phone's keyboard, rather than pinned above it.
  */
 export function Sheet({
   open,
   onClose,
   title,
+  fullScreen,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  fullScreen?: boolean;
   children: ReactNode;
 }) {
   const [dialog, shown] = useDialog({ open, onClose });
@@ -344,9 +350,7 @@ export function Sheet({
           className={cn(
             // Pinned to the bottom, centered from `sm`. Sticky to the viewport's
             // edge, since the track is a pixel taller than it.
-            "sticky bottom-0 mt-auto flex max-h-[85dvh] w-full flex-col",
-            "rounded-t-sheet bg-surface shadow-sheet",
-            "sm:mx-auto sm:my-auto sm:max-w-lg sm:rounded-sheet",
+            "sticky bottom-0 mt-auto flex w-full flex-col bg-surface",
             // On opening it rises from the bottom edge, or from `sm` grows into
             // place. `@starting-style` applies on every `showModal()`, because
             // the panel has no style while the dialog is `display: none`. The
@@ -354,8 +358,17 @@ export function Sheet({
             // ignores that utility's `--tw-translate-*` variables in a
             // starting style.
             "transition-[translate,scale,opacity] duration-250 ease-out",
-            "starting:[translate:0_100%] sm:starting:[translate:0_--spacing(2)]",
-            "sm:starting:scale-95 sm:starting:opacity-0",
+            fullScreen
+              ? // The viewport's height, under the notch. It fades in rather
+                // than rising: a whole screen sliding up is a lot of motion
+                // for opening a search.
+                "h-dvh pt-safe starting:opacity-0"
+              : cn(
+                  "max-h-[85dvh] rounded-t-sheet shadow-sheet",
+                  "sm:mx-auto sm:my-auto sm:max-w-lg sm:rounded-sheet",
+                  "starting:[translate:0_100%] sm:starting:[translate:0_--spacing(2)]",
+                  "sm:starting:scale-95 sm:starting:opacity-0",
+                ),
           )}
         >
           <div className="flex items-center justify-between border-b border-line px-5 py-4">

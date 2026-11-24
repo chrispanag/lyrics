@@ -29,7 +29,7 @@ import type { Recording } from "@/lib/types";
 import { testQueryClient } from "@/test/providers";
 import { renderWithProviders } from "@/test/render";
 import { TestRoutes } from "@/test/routes";
-import { scrollDown, setScrollY } from "@/test/scroll";
+import { scrollDown, scrollUp, setScrollY } from "@/test/scroll";
 import { server } from "@/test/server";
 
 /**
@@ -1677,5 +1677,48 @@ describe("SongDetailPage search", () => {
 
     // `toHaveClass`, which fails on a missing header too.
     expect(header).not.toHaveClass("max-md:-translate-y-full");
+  });
+
+  /*
+   * jsdom has no breakpoints, so the `max-md:` classes are the readable form
+   * of what a phone draws. There the bottom bar's Search is the way to another
+   * song, and the song takes the room the search header had.
+   */
+  it("leaves the search header off on a phone", async () => {
+    renderDetail();
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+
+    const header = screen.getByRole("combobox", { name: /search songs/i }).closest("header");
+    expect(header?.parentElement).toHaveClass("max-md:hidden");
+  });
+});
+
+/*
+ * On a phone, Back and the tools are one thin sticky bar, which gets out of
+ * the way on the way down with the rest of the phone's chrome.
+ */
+describe("SongDetailPage tools bar on a phone", () => {
+  const toolsBar = () =>
+    screen.getByRole("button", { name: "Stats" }).closest(".max-md\\:sticky") as HTMLElement;
+
+  it("is sticky on a phone, and only there", async () => {
+    renderDetail();
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+
+    expect(toolsBar()).toContainElement(screen.getByRole("button", { name: "Back" }));
+    expect(toolsBar()).not.toHaveClass("sticky");
+  });
+
+  it("hides on the way down and returns on the way up", async () => {
+    renderDetail();
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+
+    scrollDown();
+    expect(toolsBar()).toHaveClass("max-md:-translate-y-full");
+    // Never while it holds focus.
+    expect(toolsBar()).toHaveClass("max-md:focus-within:translate-y-0");
+
+    scrollUp();
+    expect(toolsBar()).not.toHaveClass("max-md:-translate-y-full");
   });
 });
