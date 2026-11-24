@@ -11,9 +11,17 @@ import { InfiniteScrollTrigger } from "@/components/InfiniteScrollTrigger";
 import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
-import { SongCard, SongCardSkeletons } from "@/components/SongCard";
-import { songRows } from "@/components/cardStyles";
-import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Tally } from "@/components/ui";
+import { SongCard } from "@/components/SongCard";
+import {
+  Button,
+  Chip,
+  EmptyState,
+  ErrorMessage,
+  Select,
+  Sheet,
+  Skeletons,
+  Tally,
+} from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
 import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
 import { catalogName, catalogQuery, catalogView, viewGenre } from "@/lib/browse";
@@ -177,6 +185,9 @@ export function BrowsePage() {
         <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
       )}
 
+      {/* `h-28` restates a song card's height; update it if cards change. */}
+      {isPending && <Skeletons count={5} className="h-28 w-full" />}
+
       {!isPending && data && songs.length === 0 && (
         <EmptyState
           icon={<SixteenthNotes className="size-12" />}
@@ -189,15 +200,15 @@ export function BrowsePage() {
         />
       )}
 
-      {/* The skeletons inside the rows' box, so they take a row's width and
-          rules and nothing shifts when the songs replace them. */}
-      <div className={songRows}>
-        {isPending && <SongCardSkeletons count={5} />}
+      <div className="space-y-3">
         {songs.map((song) => (
           <SongCard key={song.id} song={song} search={cardSearch} />
         ))}
-        {isFetchingNextPage && <SongCardSkeletons count={2} />}
       </div>
+
+      {isFetchingNextPage && (
+        <Skeletons count={2} className="h-28 w-full" stackClassName="mt-3 space-y-3" />
+      )}
 
       {isFetchNextPageError && (
         // Not retried by scrolling: a failing API would be asked on every pixel.

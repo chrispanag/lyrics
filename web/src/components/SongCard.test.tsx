@@ -4,8 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SongCard } from "./SongCard";
 import { NavigationProvider } from "@/lib/navigation";
 import { recordingBackend } from "@/test/backend";
-import { laiko, rempetiko } from "@/test/catalog";
-import { makeRecording, makeSong } from "@/test/handlers";
+import { makeGenre, makeRecording, makeSong } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { recordRequests } from "@/test/requests";
 
@@ -89,26 +88,20 @@ describe("SongCard", () => {
     expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
   });
 
-  it("puts a song's genres before its names, on the same line", () => {
-    renderWithProviders(<SongCard song={makeSong({ genres: [rempetiko, laiko] })} />);
+  // Compared against a real chip's classes, the nearest jsdom gets to its box.
+  it("holds the genre row open with a chip's box when a song has none", () => {
+    const genre = makeGenre();
+    const withGenre = renderWithProviders(<SongCard song={makeSong({ genres: [genre] })} />);
+    const chip = screen.getByText(genre.name);
 
-    expect(screen.getByRole("paragraph")).toHaveTextContent(
-      /^Ρεμπέτικο · Λαϊκό · Μίκης Θεοδωράκης$/,
-    );
-  });
+    // No placeholder beside real chips.
+    expect(withGenre.container.querySelector(".invisible")).toBeNull();
 
-  // No separator leads the line when there is no genre for it to follow.
-  it("shows the names alone for a song with no genre", () => {
-    renderWithProviders(<SongCard song={makeSong({ genres: [] })} />);
+    const { container } = renderWithProviders(<SongCard song={makeSong({ genres: [] })} />);
+    const placeholder = container.querySelector(".invisible");
 
-    expect(screen.getByRole("paragraph")).toHaveTextContent(/^Μίκης Θεοδωράκης$/);
-  });
-
-  // Nor trails it when there are no names after it.
-  it("shows the genre alone for a song with nobody credited", () => {
-    renderWithProviders(<SongCard song={makeSong({ credits: [], genres: [rempetiko] })} />);
-
-    expect(screen.getByRole("paragraph")).toHaveTextContent(/^Ρεμπέτικο$/);
+    expect(placeholder).toHaveClass(`${chip.className} invisible`, { exact: true });
+    expect(placeholder?.textContent).toBe("\u00A0");
   });
 });
 

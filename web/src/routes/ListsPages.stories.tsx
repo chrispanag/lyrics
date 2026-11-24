@@ -6,7 +6,6 @@ import { ListDetailPage, ListsPage } from "./ListsPages";
 import { SongOpenContext } from "@/lib/catalogPane";
 import { catalogList } from "@/test/catalog";
 import { API, list, listById, makeList, makeUser } from "@/test/handlers";
-import { expectCompactRows, PHONE_FRAME, phoneWidth } from "@/test/phone";
 
 const owner = makeUser({ id: "user-1", display_name: "Christos" });
 
@@ -42,35 +41,6 @@ export const AsOwner: Story = {
   },
 };
 
-/**
- * The owner's rows on a phone: the handle and the remove button fit beside a
- * compact row, inside the page's gutters, without making it taller.
- */
-export const AsOwnerOnAPhone: Story = {
-  parameters: { user: owner },
-  decorators: [phoneWidth],
-  play: async ({ canvas }) => {
-    await import("@/components/SortableSongList");
-    const handles = await canvas.findAllByRole("button", { name: /reorder/i });
-    const removes = canvas.getAllByRole("button", { name: /^Remove .* from this list$/ });
-    const frame = canvas.getByTestId(PHONE_FRAME).getBoundingClientRect();
-    const rows = canvas
-      .getAllByRole("link")
-      .filter((link) => link.getAttribute("href")?.includes("?list="));
-    await expect(rows).toHaveLength(4);
-
-    const boxes = await expectCompactRows(rows);
-    for (const [index, box] of boxes.entries()) {
-      const handle = handles[index]?.getBoundingClientRect();
-      const remove = removes[index]?.getBoundingClientRect();
-      await expect(handle?.right).toBeLessThanOrEqual(box.left);
-      await expect(remove?.left).toBeGreaterThanOrEqual(box.right);
-      await expect(handle?.left).toBeGreaterThanOrEqual(frame.left);
-      await expect(remove?.right).toBeLessThanOrEqual(frame.right);
-    }
-  },
-};
-
 /** Someone else's public list: read-only, with the way to copy it. */
 export const AsReader: Story = {
   parameters: { user: makeUser({ id: "user-2" }) },
@@ -100,44 +70,6 @@ export const BesideASong: Story = {
       "aria-current",
       "page",
     );
-  },
-};
-
-/**
- * The owner's list beside a song: the open song's fill and bar are the whole
- * row's, the handle and the remove button inside them and the bar at its edge.
- */
-export const AsOwnerBesideASong: Story = {
-  parameters: { user: owner, path: "/songs/:id", route: "/songs/thalassa-platia?list=list-1" },
-  decorators: [
-    (Story) => (
-      <SongOpenContext value>
-        <Story />
-      </SongOpenContext>
-    ),
-    phoneWidth,
-  ],
-  play: async ({ canvas }) => {
-    await import("@/components/SortableSongList");
-    const handle = await canvas.findByRole("button", { name: "Reorder Θάλασσα Πλατιά" });
-    const open = canvas.getByRole("link", { current: "page" });
-    const row = open.closest("li")?.firstElementChild;
-    if (!(row instanceof HTMLElement)) throw new Error("The open song has no row.");
-
-    // The fill on the row, the card itself left clear to show it.
-    const rowStyle = getComputedStyle(row);
-    await expect(rowStyle.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
-    await expect(getComputedStyle(open).backgroundColor).toBe("rgba(0, 0, 0, 0)");
-    await expect(row.contains(handle)).toBe(true);
-
-    // The bar at the row's left edge, ahead of the handle, not beside the title.
-    const bar = getComputedStyle(row, "::before");
-    await expect(bar.width).toBe("4px");
-    await expect(bar.left).toBe("0px");
-    await expect(row.getBoundingClientRect().left).toBeLessThan(
-      handle.getBoundingClientRect().left + 1,
-    );
-    await expect(getComputedStyle(open, "::before").content).toBe("none");
   },
 };
 

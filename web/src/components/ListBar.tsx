@@ -5,8 +5,6 @@ import type { ReactNode } from "react";
 import { BackButton } from "./BackButton";
 import { ReaderPane } from "./ReaderSplit";
 import { ToolbarHeader } from "./SearchHeader";
-import { songRows } from "./cardStyles";
-import { SongCardSkeletons } from "./SongCard";
 import { Skeleton } from "./ui";
 import { useSongOpen } from "@/lib/catalogPane";
 
@@ -34,14 +32,9 @@ export function ListBar({ actions }: { actions?: ReactNode }) {
 export function ListSkeleton() {
   return (
     <ReaderPane header={<ListBar />}>
-      {/* The heading block's lines, the name and then the count, so the rows
-          below do not move down when the list arrives. */}
-      <div className="mb-6">
+      <div className="space-y-3">
         <Skeleton className="h-9 w-1/2" />
-        <Skeleton className="mt-3 h-5 w-24" />
-      </div>
-      <div className={songRows}>
-        <SongCardSkeletons count={1} />
+        <Skeleton className="h-28 w-full" />
       </div>
     </ReaderPane>
   );
