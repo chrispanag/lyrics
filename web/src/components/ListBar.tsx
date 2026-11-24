@@ -34,7 +34,12 @@ export function ListBar({ actions }: { actions?: ReactNode }) {
 export function ListSkeleton() {
   return (
     <ReaderPane header={<ListBar />}>
-      <Skeleton className="mb-6 h-9 w-1/2" />
+      {/* The heading block's lines, the name and then the count, so the rows
+          below do not move down when the list arrives. */}
+      <div className="mb-6">
+        <Skeleton className="h-9 w-1/2" />
+        <Skeleton className="mt-3 h-5 w-24" />
+      </div>
       <div className={songRows}>
         <SongCardSkeletons count={1} />
       </div>

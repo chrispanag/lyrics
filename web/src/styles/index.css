@@ -369,6 +369,26 @@
   }
 }
 
+/* The open song's mark in a song list: a fill, and a bar at the start as well,
+   so the open song still stands apart from the row under the pointer. The bar
+   is drawn over the padding, not as a border, so it takes no width from the
+   text, and lets clicks through to whatever it covers. `SongCard` paints it on
+   itself; `SongRow` paints it on the whole list row, handle and remove button
+   included, with `has-[[aria-current=page]]:`. */
+@utility open-song-mark {
+  position: relative;
+  background-color: var(--color-accent-subtle);
+  &::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: calc(var(--spacing) * 1);
+    background-color: var(--color-accent);
+    pointer-events: none;
+  }
+}
+
 /* The panel of a `MoreActionsMenu`, a popover in the top layer. Below its
    trigger with their right edges level, so it grows back across the bar it sits
    at the end of and never past a narrow pane; above it where there is no room

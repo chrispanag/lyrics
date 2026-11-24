@@ -4,6 +4,7 @@ import { expect, userEvent, waitFor } from "storybook/test";
 import { SongDetailPage } from "./SongDetailPage";
 import { catalogList, catalogSongs, entechno } from "@/test/catalog";
 import { listById, makeRecording, makeSong, makeUser, songByRef } from "@/test/handlers";
+import { phoneWidth } from "@/test/phone";
 
 const documented = makeSong({
   id: "song-9",
@@ -153,13 +154,7 @@ export const WrappedLineOnAPhone: Story = {
   beforeEach({ msw }) {
     msw.use(songByRef(longLine));
   },
-  decorators: [
-    (Story) => (
-      <div className="w-[390px]">
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [phoneWidth],
   play: async ({ canvas }) => {
     const line = await canvas.findByText(/Κι αν η νύχτα πέσει βαριά/);
     const range = document.createRange();

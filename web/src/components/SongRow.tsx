@@ -38,10 +38,11 @@ export function SongRow({
   return (
     <div
       className={cn(
-        "relative flex items-center gap-2 transition-colors hover:bg-accent-subtle active:bg-accent-subtle",
-        // SongCard's own mark, moved out to the row; keep the two alike. The
-        // bar lets clicks through to the handle it is drawn over.
-        "has-[[aria-current=page]]:bg-accent-subtle has-[[aria-current=page]]:before:pointer-events-none has-[[aria-current=page]]:before:absolute has-[[aria-current=page]]:before:inset-y-0 has-[[aria-current=page]]:before:left-0 has-[[aria-current=page]]:before:w-1 has-[[aria-current=page]]:before:bg-accent",
+        // Pressed only through the song's link: a press on the handle or the
+        // remove button neither opens the song nor should look as if it did.
+        "relative flex items-center gap-2 transition-colors hover:bg-accent-subtle has-[a:active]:bg-accent-subtle",
+        // SongCard's own mark (index.css), moved out to the row.
+        "has-[[aria-current=page]]:open-song-mark",
       )}
     >
       {handle}

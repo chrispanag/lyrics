@@ -77,12 +77,8 @@ export const SongCard = memo(function SongCard({
         "block",
         songRowBox,
         !inRow && "transition-colors hover:bg-accent-subtle active:bg-accent-subtle",
-        // A bar as well as the fill, so the open song still stands apart from
-        // the row under the pointer. Drawn over the padding, not as a border,
-        // so it takes no width from the text. `SongRow` draws the same.
-        !inRow &&
-          current &&
-          "relative bg-accent-subtle before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-accent",
+        // index.css; `SongRow` paints the same mark on a list's row.
+        !inRow && current && "open-song-mark",
       )}
     >
       {/* h2: both pages that list cards (the catalog and a list) put them
