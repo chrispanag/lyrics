@@ -284,6 +284,68 @@ describe("Bottom bar", () => {
 
       expect(pill()).toHaveTextContent("Profile");
     });
+
+    /**
+     * Swaps in an observer that reports the bottom bar's boxes as soon as they
+     * are watched, and hands back the setup file's. Only the bar's: the other
+     * observers in the shell read entries this one does not make.
+     */
+    function observeTheBarAtOnce(): () => void {
+      const setupStub = globalThis.ResizeObserver;
+      globalThis.ResizeObserver = class {
+        readonly callback: ResizeObserverCallback;
+        constructor(callback: ResizeObserverCallback) {
+          this.callback = callback;
+        }
+        observe(target: Element) {
+          if (target.closest(".bottom-bar")) this.callback([], this as unknown as ResizeObserver);
+        }
+        unobserve() {}
+        disconnect() {}
+      };
+      return () => {
+        globalThis.ResizeObserver = setupStub;
+      };
+    }
+
+    // index.css shrinks the tabs' surface by these to the pill's face; the
+    // stories measure the result in a real browser.
+    it("measures the shrink from the face to the bar", () => {
+      const face = (element: HTMLElement) => element.classList.contains("bottom-bar-pill-face");
+      vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return face(this) ? 120 : 360;
+      });
+      vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return face(this) ? 24 : 60;
+      });
+      const restore = observeTheBarAtOnce();
+      try {
+        renderWithProviders(<Layout />, { route: "/profile" });
+
+        const box = bar().closest<HTMLElement>(".bottom-bar");
+        expect(Number(box?.style.getPropertyValue("--pill-sx"))).toBeCloseTo(1 / 3);
+        expect(box?.style.getPropertyValue("--pill-sy")).toBe("0.4");
+      } finally {
+        restore();
+      }
+    });
+
+    // From `md` up the bar is `display: none`, with nothing to measure.
+    it("leaves the shrink alone while the bar is not laid out", () => {
+      const restore = observeTheBarAtOnce();
+      try {
+        renderWithProviders(<Layout />, { route: "/profile" });
+
+        const box = bar().closest<HTMLElement>(".bottom-bar");
+        expect(box?.style.getPropertyValue("--pill-sx")).toBe("");
+      } finally {
+        restore();
+      }
+    });
   });
 });
 

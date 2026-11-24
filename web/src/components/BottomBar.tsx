@@ -1,7 +1,7 @@
 "use client";
 
-import { LibraryBig, ListMusic, Search } from "lucide-react";
-import { useState } from "react";
+import { ChevronUp, LibraryBig, ListMusic, Search } from "lucide-react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 
 import { useList, useSong } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
@@ -36,7 +36,9 @@ const BAR_ICONS: Partial<Record<string, typeof Search>> = {
  *
  * While the reader scrolls down it shrinks to a small pill saying where they
  * are, and it comes back on any scroll up, at the top of the page, on a tap on
- * the pill, and when focus moves into it (`lib/scrollChrome`). Collapsed is
+ * the pill, and when focus moves into it (`lib/scrollChrome`). The bar's own
+ * surface shrinks into the pill, rather than one fading out as the other fades
+ * in, so the eye follows it down and sees where the tabs went. Collapsed is
  * only how it looks: the tabs stay in the accessibility tree and in the tab
  * order, and reaching one brings the bar back. Styles are `.bottom-bar` in
  * index.css.
@@ -48,6 +50,10 @@ export function BottomBar() {
   const tucked = useChromeTucked();
   const navigationKey = useNavigationKey();
   const [searching, setSearching] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const faceRef = useRef<HTMLSpanElement>(null);
+  usePillScale(barRef, navRef, faceRef);
 
   // Any navigation closes the search, before the new screen is drawn: a result
   // chosen, Enter, or "See all". Keyed on the navigation, not the pathname, so
@@ -79,6 +85,7 @@ export function BottomBar() {
   return (
     <>
       <div
+        ref={barRef}
         // Presses through its own margins land on the page; the tabs and the
         // pill take theirs back (index.css).
         className="bottom-bar pointer-events-none fixed inset-x-0 bottom-0 z-sticky flex justify-center px-4 pb-[max(--spacing(2),env(safe-area-inset-bottom))] md:hidden"
@@ -86,37 +93,55 @@ export function BottomBar() {
       >
         {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: tracks focus arriving in its links; nothing here is pressed. */}
         <nav
+          ref={navRef}
           aria-label="Navigation"
           // Focus arriving by Tab, or a screen reader's cursor, opens the bar,
           // so what has focus is never drawn shrunk. index.css holds it open
           // while focus stays inside.
           onFocus={revealChrome}
-          className="bottom-bar-tabs flex w-full max-w-md items-stretch gap-1 rounded-full border border-line bg-surface/95 p-1 shadow-popover backdrop-blur"
+          // Round, but by index.css, which rounds the shrunk pill too.
+          className="bottom-bar-tabs flex w-full max-w-md border border-line bg-surface/95 p-1 shadow-popover backdrop-blur"
         >
-          {tabs.map((item) => (
-            <BarTab key={item.to} item={item} section={section} />
-          ))}
-          <button
-            type="button"
-            onClick={search}
-            className={cn(tabChrome, "text-fg-tertiary hover:bg-subtle")}
-          >
-            <Search aria-hidden className="size-5" />
-            Search
-          </button>
+          {/* One box to fade, apart from the surface, which stays. The tabs'
+              own `transition-colors` would outrank a fade set on each. */}
+          <div className="bottom-bar-row flex min-w-0 flex-1 items-stretch gap-1">
+            {tabs.map((item) => (
+              <BarTab key={item.to} item={item} section={section} />
+            ))}
+            <button
+              type="button"
+              onClick={search}
+              className={cn(tabChrome, "text-fg-tertiary hover:bg-subtle")}
+            >
+              <Search aria-hidden className="size-5" />
+              Search
+            </button>
+          </div>
         </nav>
 
         {/* What the shrunk bar shows. A duplicate of the tabs for a screen
             reader, which reaches those instead, so hidden from it and out of
-            the tab order; a tap on it brings the tabs back. */}
+            the tab order; a tap on it brings the tabs back.
+
+            Only the words: the surface under them is the tabs' own, shrunk to
+            the face's size. The face is 24px, too small for a thumb, so the
+            button around it is a full 44px, reaching 8px down into the gap
+            under the bar and 12px up over the page. */}
         <button
           type="button"
           tabIndex={-1}
           aria-hidden
           onClick={revealChrome}
-          className="bottom-bar-pill absolute inset-x-0 bottom-[max(--spacing(2),env(safe-area-inset-bottom))] mx-auto flex h-9 w-fit max-w-[75%] items-center gap-1.5 rounded-full border border-line bg-surface/95 px-3.5 text-xs font-medium text-fg-secondary shadow-popover backdrop-blur"
+          className="bottom-bar-pill absolute inset-x-0 bottom-[calc(max(--spacing(2),env(safe-area-inset-bottom))-(--spacing(2)))] mx-auto flex h-11 w-fit max-w-[75%] px-2 pt-3 pb-2"
         >
-          <Whereabouts />
+          <span
+            ref={faceRef}
+            className="bottom-bar-pill-face flex h-6 min-w-0 items-center gap-1 px-2.5 text-xs leading-none font-medium text-fg-secondary"
+          >
+            <Whereabouts />
+            {/* Says the pill opens, as Safari's shrunk address bar does. */}
+            <ChevronUp aria-hidden className="size-3.5 shrink-0 text-fg-tertiary" />
+          </span>
         </button>
       </div>
 
@@ -127,6 +152,37 @@ export function BottomBar() {
       </Sheet>
     </>
   );
+}
+
+/**
+ * Measures how far the tabs' surface shrinks to become the pill: the face's
+ * width and height over the bar's, as `--pill-sx` and `--pill-sy` on the bar's
+ * box, which index.css scales the surface by. Remeasured whenever either
+ * changes size: the song's title arriving, a phone turned. Written straight to
+ * the style, since nothing React draws depends on it.
+ */
+function usePillScale(
+  barRef: RefObject<HTMLDivElement | null>,
+  navRef: RefObject<HTMLElement | null>,
+  faceRef: RefObject<HTMLSpanElement | null>,
+): void {
+  useEffect(() => {
+    const bar = barRef.current;
+    const nav = navRef.current;
+    const face = faceRef.current;
+    if (!bar || !nav || !face) return;
+    const measure = () => {
+      // Layout sizes, which the surface's own scale leaves alone. Zero is a
+      // bar not laid out (from `md` up), where the scale is moot.
+      if (!nav.offsetWidth || !nav.offsetHeight) return;
+      bar.style.setProperty("--pill-sx", String(face.offsetWidth / nav.offsetWidth));
+      bar.style.setProperty("--pill-sy", String(face.offsetHeight / nav.offsetHeight));
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    observer.observe(face);
+    return () => observer.disconnect();
+  }, [barRef, navRef, faceRef]);
 }
 
 /** A tab's box: a column of icon and label, a thumb's width. */
@@ -192,7 +248,7 @@ function Whereabouts() {
   if (position) {
     return (
       <>
-        <ListMusic aria-hidden className="size-4 shrink-0" />
+        <ListMusic aria-hidden className="size-3.5 shrink-0" />
         <span className="truncate">{position.listName}</span>
         <span className="shrink-0 tabular-nums text-fg-tertiary">
           · {position.index + 1} of {position.total}
@@ -204,7 +260,7 @@ function Whereabouts() {
   if (list && !ref) {
     return (
       <>
-        <ListMusic aria-hidden className="size-4 shrink-0" />
+        <ListMusic aria-hidden className="size-3.5 shrink-0" />
         <span className="truncate">{list.name}</span>
       </>
     );

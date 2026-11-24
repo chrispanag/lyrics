@@ -220,9 +220,17 @@ function chrome() {
   const tools = document.querySelector<HTMLElement>(".max-md\\:sticky");
   const bar = document.querySelector<HTMLElement>(".bottom-bar");
   const tabs = document.querySelector<HTMLElement>(".bottom-bar-tabs");
+  const row = document.querySelector<HTMLElement>(".bottom-bar-row");
   const pill = document.querySelector<HTMLElement>(".bottom-bar-pill");
-  if (!tools || !bar || !tabs || !pill) throw new Error("The phone's chrome is missing.");
-  return { tools, bar, tabs, pill };
+  if (!tools || !bar || !tabs || !row || !pill) throw new Error("The phone's chrome is missing.");
+  return { tools, bar, tabs, row, pill };
+}
+
+/** Scrolls far enough down that the chrome tucks away, and waits it out. */
+async function tuck(bar: HTMLElement) {
+  window.scrollTo({ top: 600, behavior: "instant" });
+  await waitFor(() => expect(bar).toHaveAttribute("data-tucked"));
+  await settled();
 }
 
 /** Waits out the bars' 200ms slide and fade. */
@@ -236,7 +244,7 @@ export const PhoneChrome: Story = {
   ...onAPhone,
   play: async ({ canvas }) => {
     await canvas.findByText(LAST_LINE);
-    const { tools, bar, tabs, pill } = chrome();
+    const { tools, bar, tabs, row, pill } = chrome();
 
     // No search header: the tools bar is the only bar above the song.
     await expect(canvas.queryByRole("combobox", { name: /search songs/i })).toBeNull();
@@ -244,33 +252,116 @@ export const PhoneChrome: Story = {
     await expect(top.top).toBe(0);
     await expect(top.height).toBeLessThanOrEqual(56);
     await expect(within(tools).getByRole("button", { name: "Back" })).toBeVisible();
-    await expect(getComputedStyle(tabs).opacity).toBe("1");
+    await expect(getComputedStyle(row).opacity).toBe("1");
     await expect(getComputedStyle(pill).opacity).toBe("0");
     // The room between the bars at the top of the page: more than the old
     // stack above the title left, even with the bottom bar out.
     const atTop = tabs.getBoundingClientRect().top - top.bottom;
     await expect(atTop).toBeGreaterThan(844 - 141);
 
-    window.scrollTo({ top: 600, behavior: "instant" });
-    await waitFor(() => expect(bar).toHaveAttribute("data-tucked"));
-    await settled();
+    await tuck(bar);
 
     await expect(tools.getBoundingClientRect().bottom).toBeLessThanOrEqual(0);
-    await expect(getComputedStyle(tabs).opacity).toBe("0");
+    await expect(getComputedStyle(row).opacity).toBe("0");
     await expect(getComputedStyle(pill).opacity).toBe("1");
     await expect(pill).toHaveTextContent("Μακρύ τραγούδι");
-    // Everything above the pill is the lyrics'.
-    const scrolled = pill.getBoundingClientRect().top;
-    // Measured: 733px at the top, 800px scrolled.
+    // Everything above the pill's surface is the lyrics': its hit area
+    // reaches higher, but draws nothing there.
+    const scrolled = tabs.getBoundingClientRect().top;
+    // Measured: 733px at the top, 812px scrolled (800 with the 36px pill).
     await expect(scrolled).toBeGreaterThan(atTop + 50);
-    await expect(scrolled).toBeGreaterThan(844 - 60);
+    await expect(scrolled).toBeGreaterThanOrEqual(805);
 
     // Back up, and both return.
     window.scrollTo({ top: 400, behavior: "instant" });
     await waitFor(() => expect(bar).not.toHaveAttribute("data-tucked"));
     await settled();
     await expect(tools.getBoundingClientRect().top).toBe(0);
-    await expect(getComputedStyle(tabs).opacity).toBe("1");
+    await expect(getComputedStyle(row).opacity).toBe("1");
+  },
+};
+
+/**
+ * Scrolled down, left there so the axe check sees the pill over the lyrics in
+ * both themes. The pill is the tabs' own surface shrunk, thin but a full
+ * thumb's height to press, with a chevron saying it opens.
+ */
+export const PhonePill: Story = {
+  ...onAPhone,
+  play: async ({ canvas }) => {
+    await canvas.findByText(LAST_LINE);
+    const { bar, tabs, pill } = chrome();
+    await expect(getComputedStyle(tabs).scale).toBe("1");
+
+    await tuck(bar);
+
+    // The same surface, shrunk where it stood, not a second one faded in.
+    await expect(chrome().tabs).toBe(tabs);
+    await expect(getComputedStyle(tabs).scale).not.toBe("1");
+    const surface = tabs.getBoundingClientRect();
+    // Measured: 24px.
+    await expect(surface.height).toBeGreaterThanOrEqual(22);
+    await expect(surface.height).toBeLessThanOrEqual(26);
+    // On the pill's words, which it frames.
+    const face = pill.querySelector<HTMLElement>(".bottom-bar-pill-face");
+    const words = face?.getBoundingClientRect();
+    await expect(Math.abs((words?.top ?? 0) - surface.top)).toBeLessThan(1);
+    await expect(Math.abs((words?.width ?? 0) - surface.width)).toBeLessThan(1);
+
+    // A thumb's height to press, the surface inside it.
+    const target = pill.getBoundingClientRect();
+    await expect(target.height).toBeGreaterThanOrEqual(44);
+    await expect(target.top).toBeLessThanOrEqual(surface.top);
+    await expect(target.bottom).toBeGreaterThanOrEqual(surface.bottom);
+    await expect(pill.querySelector("svg.lucide-chevron-up")).not.toBeNull();
+
+    // A press at the top of the hit area, above the surface, opens the bar.
+    const above = document.elementFromPoint(target.left + target.width / 2, target.top + 2);
+    await expect(pill.contains(above)).toBe(true);
+  },
+};
+
+/**
+ * The shrink is a transition on the surface's `scale`, and only where motion
+ * is welcome: under reduced motion the bar changes at once. The test browser
+ * cannot be put in reduced motion from a story, so this reads the style
+ * sheet: every rule that transitions the surface sits in a
+ * `prefers-reduced-motion: no-preference` block.
+ */
+export const PhoneMorphMotion: Story = {
+  ...onAPhone,
+  play: async ({ canvas }) => {
+    await canvas.findByText(LAST_LINE);
+    const { tabs } = chrome();
+    if (matchMedia("(prefers-reduced-motion: no-preference)").matches) {
+      await expect(getComputedStyle(tabs).transitionProperty.split(", ")).toContain("scale");
+    }
+
+    const transitions: { media: string[] }[] = [];
+    const walk = (rules: CSSRuleList, media: string[]) => {
+      for (const rule of Array.from(rules)) {
+        if (rule instanceof CSSMediaRule) walk(rule.cssRules, [...media, rule.conditionText]);
+        else if (rule instanceof CSSStyleRule) {
+          if (rule.selectorText.includes(".bottom-bar-tabs") && rule.style.transition) {
+            transitions.push({ media });
+          }
+          if (rule.cssRules.length > 0) walk(rule.cssRules, media);
+        } else if ("cssRules" in rule) walk((rule as CSSGroupingRule).cssRules, media);
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) {
+      try {
+        walk(sheet.cssRules, []);
+      } catch {
+        // A cross-origin sheet (a font's) cannot be read, and is not ours.
+      }
+    }
+    await expect(transitions.length).toBeGreaterThan(0);
+    for (const { media } of transitions) {
+      await expect(
+        media.some((query) => query.includes("prefers-reduced-motion: no-preference")),
+      ).toBe(true);
+    }
   },
 };
 

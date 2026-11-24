@@ -389,9 +389,17 @@
 }
 
 /* A phone's bottom bar — see `BottomBar`. Expanded it is the tabs; tucked
-   (`data-tucked`, while the reader scrolls down) the tabs fade and sink and
-   the small pill saying where the reader is takes their place. Only
-   `opacity`, `translate` and `scale` move, and only where motion is welcome.
+   (`data-tucked`, while the reader scrolls down) the tabs' surface shrinks,
+   from its bottom edge, to the pill's face, by the scale `BottomBar` measures
+   into `--pill-sx` and `--pill-sy`. The tabs fade as it shrinks and the words
+   saying where the reader is fade in on it. Only `opacity` and `scale` move,
+   and only where motion is welcome; under reduced motion the change is
+   instant.
+
+   Scaled unevenly, a round end turns oval, so the shrunk surface's radius is
+   divided by its scale, to come out at half the face's 24px on each axis. Not
+   transitioned: the shape is exact at rest, and the brief oval in between
+   is the price of animating only the transform.
 
    Tucked is only how it looks. The tabs stay focusable and in the
    accessibility tree, and while focus is inside them the bar is drawn
@@ -399,32 +407,42 @@
    one the reader cannot see. The pill takes presses only while it shows. */
 @layer components {
   .bottom-bar-tabs {
+    border-radius: calc(infinity * 1px);
     transform-origin: bottom center;
+    /* At rest too, so the surface is not a new stacking context only once it moves. */
+    scale: 1;
     pointer-events: auto;
   }
   .bottom-bar-pill {
     opacity: 0;
-    scale: 0.9;
     pointer-events: none;
   }
   .bottom-bar[data-tucked]:not(:focus-within) .bottom-bar-tabs {
-    opacity: 0;
-    scale: 0.9;
-    translate: 0 25%;
+    scale: var(--pill-sx, 0.4) var(--pill-sy, 0.4);
+    border-radius: calc(0.75rem / var(--pill-sx, 0.4)) / calc(0.75rem / var(--pill-sy, 0.4));
     pointer-events: none;
+  }
+  .bottom-bar[data-tucked]:not(:focus-within) .bottom-bar-row {
+    opacity: 0;
   }
   .bottom-bar[data-tucked]:not(:focus-within) .bottom-bar-pill {
     opacity: 1;
-    scale: 1;
     pointer-events: auto;
   }
   @media (prefers-reduced-motion: no-preference) {
-    .bottom-bar-tabs,
+    .bottom-bar-tabs {
+      transition: scale 200ms ease-out;
+    }
+    /* Gone before the surface is small enough to squeeze them. */
+    .bottom-bar-row {
+      transition: opacity 120ms ease-out;
+    }
     .bottom-bar-pill {
-      transition:
-        opacity 200ms ease-out,
-        scale 200ms ease-out,
-        translate 200ms ease-out;
+      transition: opacity 150ms ease-out;
+    }
+    /* The words arrive as the surface does, not on the full-width bar. */
+    .bottom-bar[data-tucked]:not(:focus-within) .bottom-bar-pill {
+      transition-delay: 80ms;
     }
   }
 }
