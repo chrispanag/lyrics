@@ -41,8 +41,11 @@ export const Complete: Story = {
     }),
   },
   play: async ({ canvas }) => {
-    // Performers from the first recording lead the byline, then the composer.
-    await expect(canvas.getByText("Γιώργος Νταλάρας · Μίκης Θεοδωράκης")).toBeVisible();
+    // The genres lead the line, then the first recording's performers, then
+    // the composer.
+    await expect(
+      canvas.getByText("Ρεμπέτικο · Λαϊκό · Γιώργος Νταλάρας · Μίκης Θεοδωράκης"),
+    ).toBeVisible();
     await expect(canvas.getByText("θάλασσας").tagName).toBe("MARK");
     // No badges: a video and the tallies are on the song's page, not the card.
     await expect(canvas.queryByRole("img")).toBeNull();
@@ -61,7 +64,48 @@ export const InAList: Story = {
   },
 };
 
-/** Cards stay level: an empty byline and genre row keep their height. */
+/**
+ * A line too long for the row is cut once, at its end: the genre leads and
+ * stays in sight, and the names give way.
+ */
+export const LongByline: Story = {
+  args: {
+    song: makeSong({
+      credits: [
+        { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
+        { person_id: "person-2", name: "Ιάκωβος Καμπανέλλης", role: "lyricist", position: 0 },
+      ],
+      recordings: [makeRecording()],
+      genres: [makeGenre()],
+    }),
+  },
+  decorators: [
+    (Story) => (
+      <div className="w-[270px]">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvas }) => {
+    const line = canvas.getByText(/^Ρεμπέτικο · Γιώργος Νταλάρας/);
+    // Cut short, by the line's own ellipsis.
+    await expect(line.scrollWidth).toBeGreaterThan(line.clientWidth);
+    await expect(getComputedStyle(line).textOverflow).toBe("ellipsis");
+    // One box holding one string, so there is one ellipsis and it ends the
+    // line: no second truncated piece whose separator could sit beside it.
+    await expect(line.children).toHaveLength(0);
+    await expect(line.textContent).not.toMatch(/·\s*·/);
+    // The genre is before the cut, whole.
+    const genre = document.createRange();
+    genre.selectNodeContents(line);
+    genre.setEnd(line.firstChild ?? line, "Ρεμπέτικο".length);
+    await expect(genre.getBoundingClientRect().right).toBeLessThan(
+      line.getBoundingClientRect().right,
+    );
+  },
+};
+
+/** Rows stay level: an empty names line keeps its height. */
 export const Level: Story = {
   render: () => (
     <div className="grid grid-cols-2 items-start gap-3">

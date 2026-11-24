@@ -27,7 +27,7 @@ import {
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { paneActionLabel } from "@/components/buttonStyles";
-import { cardChrome, cardHover, tagChrome } from "@/components/cardStyles";
+import { cardChrome, cardHover, songRows, tagChrome } from "@/components/cardStyles";
 import { ListBar, ListSkeleton } from "@/components/ListBar";
 import { MenuItem, MoreActionsMenu } from "@/components/MoreActionsMenu";
 import { PageHeader } from "@/components/PageHeader";
@@ -76,7 +76,7 @@ const StaticSongList = memo(function StaticSongList({
   pendingRemoval?: string | undefined;
 }) {
   return (
-    <ul className="space-y-3">
+    <ul className={songRows}>
       {songs.map((song) => (
         <li key={song.id}>
           <SongRow

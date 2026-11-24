@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SongCard } from "./SongCard";
 import { NavigationProvider } from "@/lib/navigation";
 import { recordingBackend } from "@/test/backend";
-import { makeGenre, makeRecording, makeSong } from "@/test/handlers";
+import { laiko, rempetiko } from "@/test/catalog";
+import { makeRecording, makeSong } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { recordRequests } from "@/test/requests";
 
@@ -88,20 +89,26 @@ describe("SongCard", () => {
     expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
   });
 
-  // Compared against a real chip's classes, the nearest jsdom gets to its box.
-  it("holds the genre row open with a chip's box when a song has none", () => {
-    const genre = makeGenre();
-    const withGenre = renderWithProviders(<SongCard song={makeSong({ genres: [genre] })} />);
-    const chip = screen.getByText(genre.name);
+  it("puts a song's genres before its names, on the same line", () => {
+    renderWithProviders(<SongCard song={makeSong({ genres: [rempetiko, laiko] })} />);
 
-    // No placeholder beside real chips.
-    expect(withGenre.container.querySelector(".invisible")).toBeNull();
+    expect(screen.getByRole("paragraph")).toHaveTextContent(
+      /^Ρεμπέτικο · Λαϊκό · Μίκης Θεοδωράκης$/,
+    );
+  });
 
-    const { container } = renderWithProviders(<SongCard song={makeSong({ genres: [] })} />);
-    const placeholder = container.querySelector(".invisible");
+  // No separator leads the line when there is no genre for it to follow.
+  it("shows the names alone for a song with no genre", () => {
+    renderWithProviders(<SongCard song={makeSong({ genres: [] })} />);
 
-    expect(placeholder).toHaveClass(`${chip.className} invisible`, { exact: true });
-    expect(placeholder?.textContent).toBe("\u00A0");
+    expect(screen.getByRole("paragraph")).toHaveTextContent(/^Μίκης Θεοδωράκης$/);
+  });
+
+  // Nor trails it when there are no names after it.
+  it("shows the genre alone for a song with nobody credited", () => {
+    renderWithProviders(<SongCard song={makeSong({ credits: [], genres: [rempetiko] })} />);
+
+    expect(screen.getByRole("paragraph")).toHaveTextContent(/^Ρεμπέτικο$/);
   });
 });
 
