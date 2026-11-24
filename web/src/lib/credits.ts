@@ -34,7 +34,7 @@ export function songPerformers(song: Pick<Song, "recordings">): RecordingPerform
 }
 
 /**
- * The names under a song title: on a card after its genres, and in quick search.
+ * The one line of names under a song title, on a card and in quick search.
  *
  * The performers lead, then the authorship credits, with each name once.
  */
