@@ -41,6 +41,43 @@ export const AsOwner: Story = {
   },
 };
 
+/**
+ * The owner's rows on a phone: the handle and the remove button fit beside a
+ * compact row, inside the page's gutters, without making it taller.
+ */
+export const AsOwnerOnAPhone: Story = {
+  parameters: { user: owner },
+  decorators: [
+    (Story) => (
+      <div className="w-[390px]">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvas, canvasElement }) => {
+    await import("@/components/SortableSongList");
+    const handles = await canvas.findAllByRole("button", { name: /reorder/i });
+    const removes = canvas.getAllByRole("button", { name: /^Remove .* from this list$/ });
+    const frame = canvasElement.querySelector("div.w-\\[390px\\]")?.getBoundingClientRect();
+    const rows = canvas
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("href")?.includes("?list="));
+    await expect(rows).toHaveLength(4);
+
+    for (const [index, row] of rows.entries()) {
+      const box = row.getBoundingClientRect();
+      await expect(box.height).toBeGreaterThanOrEqual(44);
+      await expect(box.height).toBeLessThanOrEqual(68);
+      const handle = handles[index]?.getBoundingClientRect();
+      const remove = removes[index]?.getBoundingClientRect();
+      await expect(handle?.right).toBeLessThanOrEqual(box.left);
+      await expect(remove?.left).toBeGreaterThanOrEqual(box.right);
+      await expect(handle?.left).toBeGreaterThanOrEqual(frame?.left ?? 0);
+      await expect(remove?.right).toBeLessThanOrEqual(frame?.right ?? 0);
+    }
+  },
+};
+
 /** Someone else's public list: read-only, with the way to copy it. */
 export const AsReader: Story = {
   parameters: { user: makeUser({ id: "user-2" }) },

@@ -43,6 +43,8 @@ export const Complete: Story = {
   play: async ({ canvas }) => {
     // Performers from the first recording lead the byline, then the composer.
     await expect(canvas.getByText("Γιώργος Νταλάρας · Μίκης Θεοδωράκης")).toBeVisible();
+    // The genres follow the names on their line, rather than as chips below.
+    await expect(canvas.getByText(/Ρεμπέτικο · Λαϊκό/)).toBeVisible();
     await expect(canvas.getByText("θάλασσας").tagName).toBe("MARK");
     // No badges: a video and the tallies are on the song's page, not the card.
     await expect(canvas.queryByRole("img")).toBeNull();
@@ -61,7 +63,41 @@ export const InAList: Story = {
   },
 };
 
-/** Cards stay level: an empty byline and genre row keep their height. */
+/**
+ * A byline too long for the row gives way before the genre does, so the genre
+ * stays in sight at a phone's width.
+ */
+export const LongByline: Story = {
+  args: {
+    song: makeSong({
+      credits: [
+        { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
+        { person_id: "person-2", name: "Ιάκωβος Καμπανέλλης", role: "lyricist", position: 0 },
+      ],
+      recordings: [makeRecording()],
+      genres: [makeGenre()],
+    }),
+  },
+  decorators: [
+    (Story) => (
+      <div className="w-[270px]">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvas }) => {
+    const names = canvas.getByText(/^Γιώργος Νταλάρας/);
+    // Cut short, and the genre still whole beside it.
+    await expect(names.scrollWidth).toBeGreaterThan(names.clientWidth);
+    const genre = canvas.getByText(/Ρεμπέτικο/);
+    await expect(genre.scrollWidth).toBeLessThanOrEqual(genre.clientWidth);
+    await expect(genre.getBoundingClientRect().right).toBeLessThanOrEqual(
+      canvas.getByRole("link").getBoundingClientRect().right,
+    );
+  },
+};
+
+/** Rows stay level: an empty names line keeps its height. */
 export const Level: Story = {
   render: () => (
     <div className="grid grid-cols-2 items-start gap-3">

@@ -34,7 +34,7 @@ export function ListSkeleton() {
     <ReaderPane header={<ListBar />}>
       <div className="space-y-3">
         <Skeleton className="h-9 w-1/2" />
-        <Skeleton className="h-28 w-full" />
+        <Skeleton className="h-16 w-full" />
       </div>
     </ReaderPane>
   );

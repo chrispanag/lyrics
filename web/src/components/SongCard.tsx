@@ -3,7 +3,6 @@ import { memo, useCallback } from "react";
 
 import { queries } from "@/api/hooks";
 import { Snippet } from "./Snippet";
-import { cardChrome, cardHover, tagChrome } from "./cardStyles";
 import { cn } from "@/lib/cn";
 import { songByline } from "@/lib/credits";
 import { songHref, songMatchesRef, songRefFromPath } from "@/lib/listContext";
@@ -17,8 +16,13 @@ import type { Song } from "@/lib/types";
  *
  * `listId` (passed by list rows only) keeps `?list=` on the song's address.
  *
- * The subtitle and genre row keep their box when empty so cards stay level; the
- * snippet varies in height and is not reserved.
+ * A compact row, the title over one line of names and genres, so a phone shows
+ * about ten. It draws no border: the list it sits in rules a line between rows
+ * (`rowDividers` in cardStyles). The same row at every width, since beside a
+ * song the list is a pane about as narrow as a phone.
+ *
+ * The names line keeps its box when empty so rows stay level; the snippet,
+ * which only search results carry, varies in height and is not reserved.
  */
 export const SongCard = memo(function SongCard({
   song,
@@ -31,6 +35,7 @@ export const SongCard = memo(function SongCard({
   search?: string;
 }) {
   const credits = songByline(song);
+  const genres = song.genres.map((genre) => genre.name).join(" · ");
   const open = songRefFromPath(usePathname());
   const current = open !== null && songMatchesRef(song, open);
 
@@ -55,41 +60,39 @@ export const SongCard = memo(function SongCard({
       aria-current={current ? "page" : undefined}
       {...intent}
       className={cn(
-        cardChrome,
-        cardHover,
-        "block bg-surface p-4 active:bg-accent-subtle",
-        current && "border-line-accent bg-accent-subtle",
+        "block px-3 py-2.5 transition-colors hover:bg-accent-subtle active:bg-accent-subtle",
+        // A bar as well as the fill, so the open song still stands apart from
+        // the row under the pointer. Drawn over the padding, not as a border,
+        // so it takes no width from the text.
+        current &&
+          "relative bg-accent-subtle before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-accent",
       )}
     >
       {/* h2: both pages that list cards (the catalog and a list) put them
           directly under the page's h1, and an h3 there skips a level. */}
       <h2 className="truncate font-semibold text-fg">{song.title}</h2>
-      {/* Always rendered; `min-h-lh` gives an empty <p> its line box. */}
-      <p className="mt-0.5 min-h-lh truncate text-sm text-fg-muted">{credits}</p>
+      {/* Always rendered; `min-h-lh` gives an empty <p> its line box. The names
+          give way first, so a long byline cannot push the genre out of sight,
+          and the genre is capped so that it cannot push out the names.
+          `fg-tertiary`, not `fg-muted`: the open song's row is a fill. */}
+      <p className="flex min-h-lh gap-x-1 text-sm text-fg-tertiary">
+        {credits && <span className="min-w-0 truncate">{credits}</span>}
+        {genres && (
+          <span className={cn("shrink-0 truncate", credits && "max-w-1/2")}>
+            {/* The leading space is for the text a screen reader or a copy
+                reads; on screen the line drops it and the gap stands in. */}
+            {credits && " · "}
+            {genres}
+          </span>
+        )}
+      </p>
 
       {song.snippet && (
         <Snippet
           text={song.snippet}
-          className="mt-2 line-clamp-2 text-sm leading-relaxed whitespace-pre-line text-fg-tertiary"
+          className="mt-1 line-clamp-2 text-sm leading-relaxed whitespace-pre-line text-fg-tertiary"
         />
       )}
-
-      {/* Held open when empty by an invisible chip rather than a measured
-          height. Its non-breaking space is load-bearing: an empty flex item is
-          only its padding. */}
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {song.genres.length > 0 ? (
-          song.genres.map((genre) => (
-            <span key={genre.id} className={tagChrome}>
-              {genre.name}
-            </span>
-          ))
-        ) : (
-          <span aria-hidden className={cn(tagChrome, "invisible")}>
-            {"\u00A0"}
-          </span>
-        )}
-      </div>
     </Link>
   );
 });

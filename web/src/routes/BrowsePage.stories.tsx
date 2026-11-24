@@ -4,8 +4,8 @@ import { expect } from "storybook/test";
 
 import { BrowsePage } from "./BrowsePage";
 import type { Song } from "@/lib/types";
-import { catalogGenres, catalogSongs } from "@/test/catalog";
-import { API, apiError, list, makeUser } from "@/test/handlers";
+import { catalogGenres, catalogSongs, laiko, rempetiko } from "@/test/catalog";
+import { API, apiError, list, makeRecording, makeSong, makeUser } from "@/test/handlers";
 
 /** Serves `songs` for the catalog and the catalog's genres for the filter. */
 function serveCatalog(songs: Song[]) {
@@ -35,6 +35,68 @@ export const Catalog: Story = {
   play: async ({ canvas }) => {
     await expect(await canvas.findByText("Φραγκοσυριανή")).toBeVisible();
     await expect(canvas.queryByRole("link", { name: /add song/i })).toBeNull();
+  },
+};
+
+/** A dozen songs with long Greek titles and bylines, each a different slug. */
+const dozen = Array.from({ length: 12 }, (_, index) =>
+  makeSong({
+    id: `song-${index}`,
+    slug: `tragoudi-${index}`,
+    title: `Τραγούδι ${index + 1}: Ήρθε η ώρα να φύγω από τη γειτονιά μας`,
+    credits: [
+      { person_id: "person-1", name: "Μίκης Θεοδωράκης", role: "composer", position: 0 },
+      { person_id: "person-2", name: "Ιάκωβος Καμπανέλλης", role: "lyricist", position: 0 },
+    ],
+    recordings: [makeRecording()],
+    // Every third song without a genre, to show the rows stay level.
+    genres: index % 3 === 0 ? [] : [rempetiko, laiko].slice(0, index % 3),
+  }),
+);
+
+/**
+ * A phone's screen, about 740px of it under the browser's own bars, holds ten
+ * songs: rows a thumb can still hit, and the open one marked.
+ */
+export const OnAPhone: Story = {
+  parameters: { route: "/songs/tragoudi-2" },
+  beforeEach({ msw }) {
+    msw.use(...serveCatalog(dozen));
+  },
+  decorators: [
+    (Story) => (
+      <div className="w-[390px]">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvas }) => {
+    await canvas.findByText(/Τραγούδι 12:/);
+    const rows = canvas
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("href")?.startsWith("/songs/tragoudi-"));
+    await expect(rows).toHaveLength(12);
+
+    const boxes = rows.map((row) => row.getBoundingClientRect());
+    for (const box of boxes) {
+      await expect(box.height).toBeGreaterThanOrEqual(44);
+      await expect(box.height).toBeLessThanOrEqual(68);
+    }
+    const first = boxes[0]?.top ?? 0;
+    await expect(boxes.filter((box) => box.bottom - first <= 740).length).toBeGreaterThanOrEqual(
+      10,
+    );
+
+    // Marked by more than its attribute: a fill and a bar the rest lack.
+    const open = canvas.getByRole("link", { current: "page" });
+    const other = rows.find((row) => row !== open);
+    const openStyle = getComputedStyle(open);
+    await expect(openStyle.backgroundColor).not.toBe(
+      other && getComputedStyle(other).backgroundColor,
+    );
+    const bar = getComputedStyle(open, "::before");
+    await expect(bar.width).toBe("4px");
+    await expect(bar.backgroundColor).not.toBe(openStyle.backgroundColor);
   },
 };
 

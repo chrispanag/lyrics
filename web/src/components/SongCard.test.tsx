@@ -88,20 +88,38 @@ describe("SongCard", () => {
     expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
   });
 
-  // Compared against a real chip's classes, the nearest jsdom gets to its box.
-  it("holds the genre row open with a chip's box when a song has none", () => {
-    const genre = makeGenre();
-    const withGenre = renderWithProviders(<SongCard song={makeSong({ genres: [genre] })} />);
-    const chip = screen.getByText(genre.name);
+  it("puts a song's genres after its names, on the same line", () => {
+    renderWithProviders(
+      <SongCard
+        song={makeSong({
+          genres: [
+            makeGenre(),
+            makeGenre({ id: "genre-2", name: "\u039B\u03B1\u03CA\u03BA\u03CC", slug: "laiko" }),
+          ],
+        })}
+      />,
+    );
 
-    // No placeholder beside real chips.
-    expect(withGenre.container.querySelector(".invisible")).toBeNull();
+    expect(screen.getByRole("paragraph")).toHaveTextContent(
+      /^\u039C\u03AF\u03BA\u03B7\u03C2 \u0398\u03B5\u03BF\u03B4\u03C9\u03C1\u03AC\u03BA\u03B7\u03C2 \u00B7 \u03A1\u03B5\u03BC\u03C0\u03AD\u03C4\u03B9\u03BA\u03BF \u00B7 \u039B\u03B1\u03CA\u03BA\u03CC$/,
+    );
+  });
 
-    const { container } = renderWithProviders(<SongCard song={makeSong({ genres: [] })} />);
-    const placeholder = container.querySelector(".invisible");
+  it("adds nothing after the names of a song with no genre", () => {
+    renderWithProviders(<SongCard song={makeSong({ genres: [] })} />);
 
-    expect(placeholder).toHaveClass(`${chip.className} invisible`, { exact: true });
-    expect(placeholder?.textContent).toBe("\u00A0");
+    expect(screen.getByRole("paragraph")).toHaveTextContent(
+      /^\u039C\u03AF\u03BA\u03B7\u03C2 \u0398\u03B5\u03BF\u03B4\u03C9\u03C1\u03AC\u03BA\u03B7\u03C2$/,
+    );
+  });
+
+  // No separator leads the line when there are no names for it to follow.
+  it("shows the genre alone for a song with nobody credited", () => {
+    renderWithProviders(<SongCard song={makeSong({ credits: [], genres: [makeGenre()] })} />);
+
+    expect(screen.getByRole("paragraph")).toHaveTextContent(
+      /^\u03A1\u03B5\u03BC\u03C0\u03AD\u03C4\u03B9\u03BA\u03BF$/,
+    );
   });
 });
 

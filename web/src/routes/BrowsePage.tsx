@@ -12,6 +12,7 @@ import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
+import { rowDividers } from "@/components/cardStyles";
 import {
   Button,
   Chip,
@@ -22,6 +23,7 @@ import {
   Skeletons,
   Tally,
 } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { useDebounced } from "@/lib/useDebounced";
 import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
 import { catalogName, catalogQuery, catalogView, viewGenre } from "@/lib/browse";
@@ -185,8 +187,9 @@ export function BrowsePage() {
         <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
       )}
 
-      {/* `h-28` restates a song card's height; update it if cards change. */}
-      {isPending && <Skeletons count={5} className="h-28 w-full" />}
+      {/* `h-16` and `space-y-px` restate a song row's height and the rule
+          under it; update them if rows change. */}
+      {isPending && <Skeletons count={5} className="h-16 w-full" stackClassName="space-y-px" />}
 
       {!isPending && data && songs.length === 0 && (
         <EmptyState
@@ -200,14 +203,16 @@ export function BrowsePage() {
         />
       )}
 
-      <div className="space-y-3">
+      {/* Pulled into the gutter by the rows' own padding, so the titles line
+          up with the tally above while the open song's fill reaches wider. */}
+      <div className={cn("-mx-3", rowDividers)}>
         {songs.map((song) => (
           <SongCard key={song.id} song={song} search={cardSearch} />
         ))}
       </div>
 
       {isFetchingNextPage && (
-        <Skeletons count={2} className="h-28 w-full" stackClassName="mt-3 space-y-3" />
+        <Skeletons count={2} className="h-16 w-full" stackClassName="mt-px space-y-px" />
       )}
 
       {isFetchNextPageError && (
