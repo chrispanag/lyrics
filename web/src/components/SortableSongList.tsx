@@ -20,7 +20,7 @@ import { GripVertical } from "lucide-react";
 import { memo } from "react";
 
 import { rowControlChrome } from "./buttonStyles";
-import { rowDividers } from "./cardStyles";
+import { songRows } from "./cardStyles";
 import { SongRow } from "./SongRow";
 import { cn } from "@/lib/cn";
 import { verticalWithinList } from "@/lib/dragBounds";
@@ -82,7 +82,7 @@ export const SortableSongList = memo(function SortableSongList({
       onDragEnd={onDragEnd}
     >
       <SortableContext items={songs.map((song) => song.id)} strategy={verticalListSortingStrategy}>
-        <ul className={rowDividers}>
+        <ul className={songRows}>
           {songs.map((song) => (
             <SortableRow
               key={song.id}
@@ -123,9 +123,13 @@ function SortableRow({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      // Filled while dragged: a row has no background of its own, and would
-      // show the row it passes over through its text.
-      className={isDragging ? "relative z-raised bg-surface opacity-80" : undefined}
+      // Lifted while dragged, and opaque: a row has no background of its own,
+      // and would show the row it passes over through its text. Filled with
+      // what the list sits on, the page below `@3xl` and the pane's surface
+      // beside a song (ReaderSplit), so only the shadow sets it apart.
+      className={
+        isDragging ? "relative z-raised bg-canvas shadow-popover @3xl/app:bg-surface" : undefined
+      }
     >
       <SongRow
         song={song}

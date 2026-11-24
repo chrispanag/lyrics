@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import { BackButton } from "./BackButton";
 import { ReaderPane } from "./ReaderSplit";
 import { ToolbarHeader } from "./SearchHeader";
+import { songRows } from "./cardStyles";
+import { SongCardSkeletons } from "./SongCard";
 import { Skeleton } from "./ui";
 import { useSongOpen } from "@/lib/catalogPane";
 
@@ -32,9 +34,9 @@ export function ListBar({ actions }: { actions?: ReactNode }) {
 export function ListSkeleton() {
   return (
     <ReaderPane header={<ListBar />}>
-      <div className="space-y-3">
-        <Skeleton className="h-9 w-1/2" />
-        <Skeleton className="h-16 w-full" />
+      <Skeleton className="mb-6 h-9 w-1/2" />
+      <div className={songRows}>
+        <SongCardSkeletons count={1} />
       </div>
     </ReaderPane>
   );

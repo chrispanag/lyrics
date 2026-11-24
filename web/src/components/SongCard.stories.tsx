@@ -41,10 +41,11 @@ export const Complete: Story = {
     }),
   },
   play: async ({ canvas }) => {
-    // Performers from the first recording lead the byline, then the composer.
-    await expect(canvas.getByText("Γιώργος Νταλάρας · Μίκης Θεοδωράκης")).toBeVisible();
-    // The genres follow the names on their line, rather than as chips below.
-    await expect(canvas.getByText(/Ρεμπέτικο · Λαϊκό/)).toBeVisible();
+    // The genres lead the line, then the first recording's performers, then
+    // the composer.
+    await expect(
+      canvas.getByText("Ρεμπέτικο · Λαϊκό · Γιώργος Νταλάρας · Μίκης Θεοδωράκης"),
+    ).toBeVisible();
     await expect(canvas.getByText("θάλασσας").tagName).toBe("MARK");
     // No badges: a video and the tallies are on the song's page, not the card.
     await expect(canvas.queryByRole("img")).toBeNull();
@@ -64,8 +65,8 @@ export const InAList: Story = {
 };
 
 /**
- * A byline too long for the row gives way before the genre does, so the genre
- * stays in sight at a phone's width.
+ * A line too long for the row is cut once, at its end: the genre leads and
+ * stays in sight, and the names give way.
  */
 export const LongByline: Story = {
   args: {
@@ -86,13 +87,20 @@ export const LongByline: Story = {
     ),
   ],
   play: async ({ canvas }) => {
-    const names = canvas.getByText(/^Γιώργος Νταλάρας/);
-    // Cut short, and the genre still whole beside it.
-    await expect(names.scrollWidth).toBeGreaterThan(names.clientWidth);
-    const genre = canvas.getByText(/Ρεμπέτικο/);
-    await expect(genre.scrollWidth).toBeLessThanOrEqual(genre.clientWidth);
-    await expect(genre.getBoundingClientRect().right).toBeLessThanOrEqual(
-      canvas.getByRole("link").getBoundingClientRect().right,
+    const line = canvas.getByText(/^Ρεμπέτικο · Γιώργος Νταλάρας/);
+    // Cut short, by the line's own ellipsis.
+    await expect(line.scrollWidth).toBeGreaterThan(line.clientWidth);
+    await expect(getComputedStyle(line).textOverflow).toBe("ellipsis");
+    // One box holding one string, so there is one ellipsis and it ends the
+    // line: no second truncated piece whose separator could sit beside it.
+    await expect(line.children).toHaveLength(0);
+    await expect(line.textContent).not.toMatch(/·\s*·/);
+    // The genre is before the cut, whole.
+    const genre = document.createRange();
+    genre.selectNodeContents(line);
+    genre.setEnd(line.firstChild ?? line, "Ρεμπέτικο".length);
+    await expect(genre.getBoundingClientRect().right).toBeLessThan(
+      line.getBoundingClientRect().right,
     );
   },
 };

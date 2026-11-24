@@ -11,19 +11,9 @@ import { InfiniteScrollTrigger } from "@/components/InfiniteScrollTrigger";
 import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
-import { SongCard } from "@/components/SongCard";
-import { rowDividers } from "@/components/cardStyles";
-import {
-  Button,
-  Chip,
-  EmptyState,
-  ErrorMessage,
-  Select,
-  Sheet,
-  Skeletons,
-  Tally,
-} from "@/components/ui";
-import { cn } from "@/lib/cn";
+import { SongCard, SongCardSkeletons } from "@/components/SongCard";
+import { songRows } from "@/components/cardStyles";
+import { Button, Chip, EmptyState, ErrorMessage, Select, Sheet, Tally } from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
 import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
 import { catalogName, catalogQuery, catalogView, viewGenre } from "@/lib/browse";
@@ -187,10 +177,6 @@ export function BrowsePage() {
         <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
       )}
 
-      {/* `h-16` and `space-y-px` restate a song row's height and the rule
-          under it; update them if rows change. */}
-      {isPending && <Skeletons count={5} className="h-16 w-full" stackClassName="space-y-px" />}
-
       {!isPending && data && songs.length === 0 && (
         <EmptyState
           icon={<SixteenthNotes className="size-12" />}
@@ -203,17 +189,15 @@ export function BrowsePage() {
         />
       )}
 
-      {/* Pulled into the gutter by the rows' own padding, so the titles line
-          up with the tally above while the open song's fill reaches wider. */}
-      <div className={cn("-mx-3", rowDividers)}>
+      {/* The skeletons inside the rows' box, so they take a row's width and
+          rules and nothing shifts when the songs replace them. */}
+      <div className={songRows}>
+        {isPending && <SongCardSkeletons count={5} />}
         {songs.map((song) => (
           <SongCard key={song.id} song={song} search={cardSearch} />
         ))}
+        {isFetchingNextPage && <SongCardSkeletons count={2} />}
       </div>
-
-      {isFetchingNextPage && (
-        <Skeletons count={2} className="h-16 w-full" stackClassName="mt-px space-y-px" />
-      )}
 
       {isFetchNextPageError && (
         // Not retried by scrolling: a failing API would be asked on every pixel.

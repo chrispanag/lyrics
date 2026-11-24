@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SongCard } from "./SongCard";
 import { NavigationProvider } from "@/lib/navigation";
 import { recordingBackend } from "@/test/backend";
-import { makeGenre, makeRecording, makeSong } from "@/test/handlers";
+import { laiko, rempetiko } from "@/test/catalog";
+import { makeRecording, makeSong } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { recordRequests } from "@/test/requests";
 
@@ -88,38 +89,26 @@ describe("SongCard", () => {
     expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
   });
 
-  it("puts a song's genres after its names, on the same line", () => {
-    renderWithProviders(
-      <SongCard
-        song={makeSong({
-          genres: [
-            makeGenre(),
-            makeGenre({ id: "genre-2", name: "\u039B\u03B1\u03CA\u03BA\u03CC", slug: "laiko" }),
-          ],
-        })}
-      />,
-    );
+  it("puts a song's genres before its names, on the same line", () => {
+    renderWithProviders(<SongCard song={makeSong({ genres: [rempetiko, laiko] })} />);
 
     expect(screen.getByRole("paragraph")).toHaveTextContent(
-      /^\u039C\u03AF\u03BA\u03B7\u03C2 \u0398\u03B5\u03BF\u03B4\u03C9\u03C1\u03AC\u03BA\u03B7\u03C2 \u00B7 \u03A1\u03B5\u03BC\u03C0\u03AD\u03C4\u03B9\u03BA\u03BF \u00B7 \u039B\u03B1\u03CA\u03BA\u03CC$/,
+      /^Ρεμπέτικο · Λαϊκό · Μίκης Θεοδωράκης$/,
     );
   });
 
-  it("adds nothing after the names of a song with no genre", () => {
+  // No separator leads the line when there is no genre for it to follow.
+  it("shows the names alone for a song with no genre", () => {
     renderWithProviders(<SongCard song={makeSong({ genres: [] })} />);
 
-    expect(screen.getByRole("paragraph")).toHaveTextContent(
-      /^\u039C\u03AF\u03BA\u03B7\u03C2 \u0398\u03B5\u03BF\u03B4\u03C9\u03C1\u03AC\u03BA\u03B7\u03C2$/,
-    );
+    expect(screen.getByRole("paragraph")).toHaveTextContent(/^Μίκης Θεοδωράκης$/);
   });
 
-  // No separator leads the line when there are no names for it to follow.
+  // Nor trails it when there are no names after it.
   it("shows the genre alone for a song with nobody credited", () => {
-    renderWithProviders(<SongCard song={makeSong({ credits: [], genres: [makeGenre()] })} />);
+    renderWithProviders(<SongCard song={makeSong({ credits: [], genres: [rempetiko] })} />);
 
-    expect(screen.getByRole("paragraph")).toHaveTextContent(
-      /^\u03A1\u03B5\u03BC\u03C0\u03AD\u03C4\u03B9\u03BA\u03BF$/,
-    );
+    expect(screen.getByRole("paragraph")).toHaveTextContent(/^Ρεμπέτικο$/);
   });
 });
 

@@ -6,6 +6,7 @@ import { BrowsePage } from "./BrowsePage";
 import type { Song } from "@/lib/types";
 import { catalogGenres, catalogSongs, laiko, rempetiko } from "@/test/catalog";
 import { API, apiError, list, makeRecording, makeSong, makeUser } from "@/test/handlers";
+import { expectCompactRows, phoneWidth } from "@/test/phone";
 
 /** Serves `songs` for the catalog and the catalog's genres for the filter. */
 function serveCatalog(songs: Song[]) {
@@ -63,13 +64,7 @@ export const OnAPhone: Story = {
   beforeEach({ msw }) {
     msw.use(...serveCatalog(dozen));
   },
-  decorators: [
-    (Story) => (
-      <div className="w-[390px]">
-        <Story />
-      </div>
-    ),
-  ],
+  decorators: [phoneWidth],
   play: async ({ canvas }) => {
     await canvas.findByText(/Τραγούδι 12:/);
     const rows = canvas
@@ -77,11 +72,7 @@ export const OnAPhone: Story = {
       .filter((link) => link.getAttribute("href")?.startsWith("/songs/tragoudi-"));
     await expect(rows).toHaveLength(12);
 
-    const boxes = rows.map((row) => row.getBoundingClientRect());
-    for (const box of boxes) {
-      await expect(box.height).toBeGreaterThanOrEqual(44);
-      await expect(box.height).toBeLessThanOrEqual(68);
-    }
+    const boxes = await expectCompactRows(rows);
     const first = boxes[0]?.top ?? 0;
     await expect(boxes.filter((box) => box.bottom - first <= 740).length).toBeGreaterThanOrEqual(
       10,
