@@ -284,6 +284,12 @@ describe("Bottom bar", () => {
 
     scrollToY(990);
     expect(tucked()).toBe(false);
+
+    // Out, the bounce's way down is no stretch down either.
+    scrollToY(1000);
+    scrollToY(1060);
+    scrollToY(1000);
+    expect(tucked()).toBe(false);
   });
 
   // The offset does not move here, so no scroll event brings it back. A link

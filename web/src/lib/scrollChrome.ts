@@ -12,7 +12,7 @@ import { useEffect } from "react";
  * about which way the reader last went.
  *
  * The answer is `data-chrome-tucked` on <html>, which index.css draws from,
- * not React state: a tuck happens on every change of scroll direction, and
+ * not React state: the chrome tucks and comes back over and over in a read, and
  * drawing it through React would re-render each bar and the page holding one,
  * for a change that is only a transform. Nothing React renders reads it.
  *
@@ -67,7 +67,10 @@ function set(next: boolean): void {
 
 /**
  * Whether `y` is past the end of a page that scrolls at all: iOS's bounce,
- * whose way back reads as a scroll up and would bring the chrome out.
+ * whose way back reads as a scroll up and would bring the chrome out, and
+ * whose way out would tuck it. The `overscroll-behavior` in index.css is on
+ * <body>, which the spec does not carry to the page's own scroller, so it is
+ * not counted on to stop the bounce.
  */
 function pastEnd(y: number): boolean {
   const end = document.documentElement.scrollHeight - window.innerHeight;
