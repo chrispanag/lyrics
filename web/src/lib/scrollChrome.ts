@@ -3,9 +3,8 @@ import { useEffect } from "react";
 /*
  * Whether a phone's chrome is tucked away: the top bars hidden and the bottom
  * bar shrunk to its small pill. Tucked once the reader has scrolled down a
- * little way, back on any scroll up, at the top of the page, and
- * whenever something asks (a tap on the pill, focus moving into a bar, a new
- * screen).
+ * little way, back on any scroll up, at the top of the page, and whenever
+ * something asks (a tap on the pill, focus moving into a bar, a new screen).
  *
  * One answer for the whole page, so every bar moves on the same scroll. Each
  * bar listening for itself would start counting from wherever the page was
@@ -76,15 +75,13 @@ function pastEnd(y: number): boolean {
 }
 
 /*
- * The end of a page brings nothing out. It did once, as Safari's toolbar
- * does, but a flick that tucks the chrome on its way down then brought it
- * straight back on arrival, a shrink and a regrow in a moment. A touch up
- * brings it out there as anywhere.
+ * The end of a page brings nothing out: a flick that tucks the chrome on its
+ * way down would bring it straight back on arrival.
  */
 function onScroll(): void {
   const y = window.scrollY;
-  if (pastEnd(y)) return;
   if (y <= TOP_PX) set(false);
+  else if (pastEnd(y)) return;
   else if (tucked) {
     // Still going down moves the count's start with it; a turn up brings it back.
     if (y <= anchorY && anchorY - y <= TURN_PX) return;
