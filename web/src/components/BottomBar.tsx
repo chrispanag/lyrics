@@ -27,7 +27,8 @@ import { revealChrome, useChromeScroll } from "@/lib/scrollChrome";
  * are, and it comes back on any scroll up, at the top of the page, on a tap on
  * the pill, and when focus moves into it (`lib/scrollChrome`). The bar's own
  * surface shrinks into the pill, rather than one fading out as the other fades
- * in, so the eye follows it down and sees where the tabs went. Collapsed is
+ * in, so the eye follows it down and sees where the tabs went; only at the
+ * pill's size does the face's own surface take over from it. Collapsed is
  * only how it looks: the tabs stay in the accessibility tree and in the tab
  * order, and reaching one brings the bar back. Styles are `.bottom-bar` in
  * index.css, keyed on `data-chrome-tucked`, so a tuck re-renders nothing here.
@@ -92,8 +93,15 @@ export function BottomBar() {
           {/* One box to fade, apart from the surface, which stays. The tabs'
               own `transition` would outrank a fade set on each. */}
           <div className="bottom-bar-row relative flex min-w-0 flex-1 items-stretch gap-1">
-            {/* Every tab, and Search after them. */}
-            <LitTabMark index={current ? tabs.indexOf(current) : -1} count={tabs.length + 1} />
+            {/* Every tab, and Search after them. Drawn afresh when the tabs
+                change (the reader's account arriving after the server's
+                guest bar, or a sign-in or out), so it is not seen sliding
+                across tabs that moved under it. */}
+            <LitTabMark
+              key={tabs.length}
+              index={current ? tabs.indexOf(current) : -1}
+              count={tabs.length + 1}
+            />
             {tabs.map((item) => (
               <BarTab key={item.to} item={item} user={user} active={item === current} />
             ))}
@@ -178,26 +186,34 @@ function usePillScale() {
  */
 const barSurface = "border border-line bg-surface/95";
 
-/** A tab that is not lit, and Search: muted, and shaded on a hover or a press. */
-const idleTab = "text-fg-tertiary hover:bg-subtle active:bg-subtle";
+/**
+ * A tab that is not lit, and Search: muted, shaded on a hover, and on a press
+ * shaded and giving a little, so a tap answers before the next screen does;
+ * hover alone never fires on a touch. Not the lit tab, which a press leads
+ * nowhere and whose shading, `LitTabMark`, would stay full size around it.
+ */
+const idleTab = "text-fg-tertiary hover:bg-subtle active:bg-subtle motion-safe:active:scale-95";
 
 /**
  * A tab's box: a column of icon and label, a thumb's width. Every tab is
  * `flex-1`, so all are one width, which `LitTabMark` relies on. `relative`
- * lifts it over the mark. A press shades it and gives a little, so a tap
- * answers before the next screen does; hover alone never fires on a touch.
+ * lifts it over the mark. `transition` rather than `transition-colors`, so a
+ * press's scale (`idleTab`) eases too.
  */
 const tabChrome =
-  "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-1.5 text-[11px] leading-tight font-medium transition motion-safe:active:scale-95";
+  "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-1.5 text-[11px] leading-tight font-medium transition";
 
 /**
  * The lit tab's shading, one mark for the whole row, so a new lit tab is the
  * mark sliding across to it rather than one fading out and another in. Placed
  * from the lit tab's index among `count` equal tabs (`tabChrome`), not
  * measured: the server draws it where it belongs, and a first paint never
- * slides it from somewhere else. Gone where no tab is lit (`index` -1).
+ * slides it from somewhere else. Gone where no tab is lit (`index` -1): it
+ * fades where it last stood, rather than sliding to the first tab as it goes.
  */
 function LitTabMark({ index, count }: { index: number; count: number }) {
+  const [at, setAt] = useState(Math.max(index, 0));
+  if (index >= 0 && index !== at) setAt(index);
   const gap = "var(--spacing)";
   return (
     <span
@@ -210,7 +226,7 @@ function LitTabMark({ index, count }: { index: number; count: number }) {
       style={{
         // `gap-1` between the tabs; a translate's 100% is the mark's own width.
         width: `calc((100% - ${count - 1} * ${gap}) / ${count})`,
-        translate: `calc(${Math.max(index, 0)} * (100% + ${gap}))`,
+        translate: `calc(${at} * (100% + ${gap}))`,
       }}
     />
   );

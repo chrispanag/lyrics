@@ -45,15 +45,16 @@ const bottomBar = (canvas: ReturnType<typeof within>) =>
 
 /** Waits until the lit tab's shading sits exactly under the tab named `name`. */
 async function markUnder(bar: HTMLElement, name: string) {
-  const mark = bar.querySelector<HTMLElement>(".bottom-bar-mark");
-  if (!mark) throw new Error("No mark under the lit tab.");
-  const tab = within(bar).getByRole("link", { name }).getBoundingClientRect();
+  // Read afresh each time: the mark is drawn anew when the tabs change.
   await waitFor(() => {
+    const mark = bar.querySelector<HTMLElement>(".bottom-bar-mark");
+    if (!mark) throw new Error("No mark under the lit tab.");
+    const tab = within(bar).getByRole("link", { name }).getBoundingClientRect();
     const drawn = mark.getBoundingClientRect();
     expect(Math.abs(drawn.left - tab.left)).toBeLessThan(1);
     expect(Math.abs(drawn.width - tab.width)).toBeLessThan(1);
+    expect(getComputedStyle(mark).opacity).toBe("1");
   });
-  await expect(getComputedStyle(mark).opacity).toBe("1");
 }
 
 /**

@@ -233,7 +233,10 @@ async function tuck() {
   await settled();
 }
 
-/** Waits out the bars' slide and fades (`--duration-chrome`, 250ms). */
+/**
+ * Waits out the bars' slide and fades: `--duration-chrome` (250ms), and the
+ * shrunk surface's 80ms fade after it.
+ */
 const settled = () => new Promise((resolve) => setTimeout(resolve, 400));
 
 /**
@@ -296,8 +299,9 @@ export const PhoneChrome: Story = {
 
 /**
  * Scrolled down, left there so the axe check sees the pill over the lyrics in
- * both themes. The pill is the tabs' own surface shrunk, thin but a full
- * thumb's height to press, with a chevron saying it opens.
+ * both themes. The tabs' own surface shrinks to the pill, whose face then
+ * draws its own; thin, but a full thumb's height to press, with a chevron
+ * saying it opens.
  */
 export const PhonePill: Story = {
   ...onAPhone,
