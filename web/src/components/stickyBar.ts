@@ -9,7 +9,7 @@ import { useChromeScroll } from "@/lib/scrollChrome";
  * `sticky-bar` utility in index.css; `tucks` adds the slide out of the way
  * with the rest of the phone's chrome, which index.css draws from
  * `data-chrome-tucked` on <html> (`lib/scrollChrome`), below `md` only, and
- * never while the bar holds focus: a Tab into it must land on screen.
+ * never while the bar holds visible focus: a Tab into it must land on screen.
  *
  * Two literal spellings rather than a prefix glued on, since Tailwind finds
  * its classes by reading the source.

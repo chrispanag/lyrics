@@ -81,7 +81,8 @@ export function BottomBar() {
           aria-label="Navigation"
           // Focus arriving by Tab, or a screen reader's cursor, opens the bar,
           // so what has focus is never drawn shrunk. index.css holds it open
-          // while focus stays inside.
+          // while visible focus stays inside, and puts it away while a field
+          // elsewhere has the keyboard up.
           onFocus={revealChrome}
           // Round, but by index.css, which rounds the shrunk pill too. No
           // backdrop blur: through a 95% surface it was all but invisible,
