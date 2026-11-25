@@ -80,21 +80,14 @@ function atEnd(y: number): boolean {
 
 function onScroll(): void {
   const y = window.scrollY;
-  if (y <= TOP_PX || atEnd(y)) {
-    set(false);
-    anchorAt(y);
+  const turned = tucked ? y > lastY : y < lastY;
+  if (y <= TOP_PX || atEnd(y)) set(false);
+  else if (tucked ? anchorY - y > REVEAL_PX : y - anchorY > TUCK_PX) set(!tucked);
+  else if (!turned) {
+    lastY = y;
     return;
   }
-  if (tucked ? y > lastY : y < lastY) {
-    anchorAt(y);
-    return;
-  }
-  if (tucked ? anchorY - y > REVEAL_PX : y - anchorY > TUCK_PX) {
-    set(!tucked);
-    anchorAt(y);
-    return;
-  }
-  lastY = y;
+  anchorAt(y);
 }
 
 /**

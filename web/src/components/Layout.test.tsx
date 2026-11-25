@@ -15,7 +15,7 @@ import { API, list, listById, makeList, makeSong, makeUser } from "@/test/handle
 import { recordRequests } from "@/test/requests";
 import { renderWithProviders } from "@/test/render";
 import { CurrentAddress } from "@/test/routes";
-import { scrollDown, scrollUp, setScrollY } from "@/test/scroll";
+import { scrollDown, scrollToY, scrollUp, setScrollY } from "@/test/scroll";
 import { server } from "@/test/server";
 
 // The chrome's scroll state reads the offset when its first bar mounts.
@@ -217,21 +217,17 @@ describe("Bottom bar", () => {
   it("does not move for a small scroll, or near the top", () => {
     renderWithProviders(<Layout />);
 
-    setScrollY(6);
-    fireEvent.scroll(window);
+    scrollToY(6);
     expect(tucked()).toBe(false);
 
-    setScrollY(60);
-    fireEvent.scroll(window);
+    scrollToY(60);
     expect(tucked()).toBe(false);
 
-    setScrollY(300);
-    fireEvent.scroll(window);
+    scrollToY(300);
     expect(tucked()).toBe(true);
 
     // Back up, but by less than the jitter.
-    setScrollY(295);
-    fireEvent.scroll(window);
+    scrollToY(295);
     expect(tucked()).toBe(true);
   });
 
@@ -239,26 +235,22 @@ describe("Bottom bar", () => {
   // is a touch up, and they come at once.
   it("tucks only after a stretch down, counted from the turn, and comes back on a touch up", () => {
     renderWithProviders(<Layout />);
-    const scrollTo = (y: number) => {
-      setScrollY(y);
-      fireEvent.scroll(window);
-    };
 
     // From the edge of the top, where the chrome is always out.
-    scrollTo(80);
-    scrollTo(115);
+    scrollToY(80);
+    scrollToY(115);
     expect(tucked()).toBe(false);
 
     // A turn up and back down starts the count over from the highest point.
-    scrollTo(100);
-    scrollTo(135);
+    scrollToY(100);
+    scrollToY(135);
     expect(tucked()).toBe(false);
-    scrollTo(145);
+    scrollToY(145);
     expect(tucked()).toBe(true);
 
     // Further down moves the turn with it, so the way back counts from there.
-    scrollTo(600);
-    scrollTo(590);
+    scrollToY(600);
+    scrollToY(590);
     expect(tucked()).toBe(false);
   });
 
@@ -270,17 +262,14 @@ describe("Bottom bar", () => {
       window.innerHeight + 1000,
     );
 
-    setScrollY(500);
-    fireEvent.scroll(window);
+    scrollToY(500);
     expect(tucked()).toBe(true);
 
-    setScrollY(990);
-    fireEvent.scroll(window);
+    scrollToY(990);
     expect(tucked()).toBe(false);
   });
 
-  // Not through the scroll to the top, whose event a page already there never
-  // fires; here the offset does not move at all.
+  // The offset does not move here, so no scroll event brings it back.
   it("comes back on a new screen", async () => {
     const user = userEvent.setup();
     renderWithProviders(<Layout />, { user: makeUser() });

@@ -35,8 +35,10 @@
   /* How a phone's chrome moves as it tucks and comes back: the top bars'
      slide and the bottom bar's shrink, so they move as one. Fast off the mark
      and a long, soft settle, as iOS moves its own bars; `ease-out` stops dead
-     by comparison. `ease-chrome` as a utility. */
+     by comparison. `ease-chrome` as a utility. The bottom bar's fades are
+     timed against the duration. */
   --ease-chrome: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-chrome: 250ms;
 
   --color-brand-50: oklch(0.97 0.02 45);
   --color-brand-100: oklch(0.94 0.04 45);
@@ -497,7 +499,7 @@
      are the bar coming back, and the tucked ones are the bar shrinking. */
   @media (prefers-reduced-motion: no-preference) {
     .bottom-bar-tabs {
-      transition: scale 250ms var(--ease-chrome);
+      transition: scale var(--duration-chrome) var(--ease-chrome);
     }
     /* Coming back: the words go, then the tabs fade in on a surface that is
        most of the way to full size. */
@@ -535,7 +537,7 @@
    under `max-md:` alone. The slide it eases is the tuck; see the
    `chrome-tucked` variant. */
 @utility sticky-bar {
-  @apply sticky top-0 z-sticky border-b border-line bg-canvas/90 pt-safe backdrop-blur motion-safe:transition-transform motion-safe:duration-250 motion-safe:ease-chrome;
+  @apply sticky top-0 z-sticky border-b border-line bg-canvas/90 pt-safe backdrop-blur motion-safe:transition-transform motion-safe:duration-(--duration-chrome) motion-safe:ease-chrome;
 }
 
 /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the edges
