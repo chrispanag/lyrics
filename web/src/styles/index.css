@@ -437,9 +437,12 @@
    (`data-chrome-tucked` on <html>, while the reader scrolls down) the tabs'
    surface shrinks, from its bottom edge, to the pill's face, by the scale
    `BottomBar` measures into `--pill-sx` and `--pill-sy`. The tabs fade as it
-   shrinks and the words saying where the reader is fade in on it. Only
-   `opacity` and `scale` move, and only where motion is welcome; under reduced
-   motion the change is instant.
+   shrinks, and as it reaches the face's size the face fades in with its own
+   surface, border and shadow, drawn at full size, and the shrunk one fades
+   out under it: scaled, its 1px border and its shadow were thinner than any
+   other in the app. Coming back, the shrunk surface is there again at once,
+   under the face, and grows. Only `opacity` and `scale` move, and only where
+   motion is welcome; under reduced motion the change is instant.
 
    Scaled unevenly, a round end turns oval, so the shrunk surface's radius is
    divided by its scale, to come out at half the face's 24px on each axis. Not
@@ -473,6 +476,7 @@
       .bottom-bar-tabs {
         scale: var(--pill-sx, 0.4) var(--pill-sy, 0.4);
         border-radius: calc(0.75rem / var(--pill-sx, 0.4)) / calc(0.75rem / var(--pill-sy, 0.4));
+        opacity: 0;
         pointer-events: none;
       }
       .bottom-bar-row {
@@ -518,16 +522,23 @@
     .bottom-bar-pill {
       transition: opacity 80ms ease-out;
     }
-    /* Shrinking: the tabs go, then the words arrive as the surface does. */
+    /* Shrinking: the tabs go, then the face, words and surface, arrives in
+       the shrink's last stretch, and the shrunk surface fades under it once
+       the face is all there. */
     .bottom-bar {
       @variant chrome-tucked {
+        .bottom-bar-tabs {
+          transition:
+            scale var(--duration-chrome) var(--ease-chrome),
+            opacity 80ms linear var(--duration-chrome);
+        }
         .bottom-bar-row {
           transition:
             opacity 80ms ease-out,
             pointer-events 0s;
         }
         .bottom-bar-pill {
-          transition: opacity 150ms ease-out 100ms;
+          transition: opacity 100ms ease-out calc(var(--duration-chrome) - 100ms);
         }
       }
     }

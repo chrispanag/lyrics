@@ -43,6 +43,19 @@ type Story = StoryObj<typeof meta>;
 const bottomBar = (canvas: ReturnType<typeof within>) =>
   canvas.queryByRole("navigation", { name: "Navigation" });
 
+/** Waits until the lit tab's shading sits exactly under the tab named `name`. */
+async function markUnder(bar: HTMLElement, name: string) {
+  const mark = bar.querySelector<HTMLElement>(".bottom-bar-row > [aria-hidden]");
+  if (!mark) throw new Error("No mark under the lit tab.");
+  const tab = within(bar).getByRole("link", { name }).getBoundingClientRect();
+  await waitFor(() => {
+    const drawn = mark.getBoundingClientRect();
+    expect(Math.abs(drawn.left - tab.left)).toBeLessThan(1);
+    expect(Math.abs(drawn.width - tab.width)).toBeLessThan(1);
+  });
+  await expect(getComputedStyle(mark).opacity).toBe("1");
+}
+
 /**
  * A guest gets the profile link (the theme switch lives there) and Sign in.
  * At a desk the column is the navigation, and the phone's bar is not drawn.
@@ -125,6 +138,11 @@ export const PhoneSignedIn: Story = {
     );
     await expect(within(bar).getByRole("link", { name: "Profile" })).toBeVisible();
     await expect(within(bar).getByRole("button", { name: "Search" })).toBeVisible();
+
+    // One shading for the lit tab, which slides to the next one lit.
+    await markUnder(bar, "Lists");
+    await userEvent.click(within(bar).getByRole("link", { name: "Profile" }));
+    await markUnder(bar, "Profile");
   },
 };
 
@@ -156,5 +174,6 @@ export const PhoneAdmin: Story = {
       "aria-current",
       "page",
     );
+    await markUnder(bar, "Profile");
   },
 };
