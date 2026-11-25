@@ -308,9 +308,8 @@ export const PhonePill: Story = {
 
     await tuck();
 
-    // The same surface, shrunk where it stood, so the eye follows it down;
-    // at rest it has faded under the face, whose own border and shadow are
-    // drawn at full size rather than scaled thin with it.
+    // The same surface, shrunk where it stood; at rest it has faded under the
+    // face's own, drawn at full size.
     await expect(chrome().tabs).toBe(tabs);
     await expect(getComputedStyle(tabs).scale).not.toBe("1");
     await expect(getComputedStyle(tabs).opacity).toBe("0");
@@ -320,10 +319,10 @@ export const PhonePill: Story = {
     await expect(surface.height).toBeLessThanOrEqual(26);
     // On the pill's words, which it frames.
     const face = pill.querySelector<HTMLElement>(".bottom-bar-pill-face");
-    const words = face?.getBoundingClientRect();
-    await expect(Math.abs((words?.top ?? 0) - surface.top)).toBeLessThan(1);
-    await expect(Math.abs((words?.width ?? 0) - surface.width)).toBeLessThan(1);
     if (!face) throw new Error("The pill has no face.");
+    const words = face.getBoundingClientRect();
+    await expect(Math.abs(words.top - surface.top)).toBeLessThan(1);
+    await expect(Math.abs(words.width - surface.width)).toBeLessThan(1);
     await expect(getComputedStyle(face).borderTopWidth).toBe("1px");
     await expect(getComputedStyle(face).boxShadow).not.toBe("none");
 

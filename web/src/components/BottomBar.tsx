@@ -87,20 +87,17 @@ export function BottomBar() {
           // Round, but by index.css, which rounds the shrunk pill too. No
           // backdrop blur: through a 95% surface it was all but invisible,
           // and it was recomputed on every frame of the shrink.
-          className="bottom-bar-tabs flex w-full max-w-md border border-line bg-surface/95 p-1 shadow-popover"
+          className={cn("bottom-bar-tabs flex w-full max-w-md p-1 shadow-popover", barSurface)}
         >
           {/* One box to fade, apart from the surface, which stays. The tabs'
               own `transition` would outrank a fade set on each. */}
           <div className="bottom-bar-row relative flex min-w-0 flex-1 items-stretch gap-1">
+            {/* Every tab, and Search after them. */}
             <LitTabMark index={current ? tabs.indexOf(current) : -1} count={tabs.length + 1} />
             {tabs.map((item) => (
               <BarTab key={item.to} item={item} user={user} active={item === current} />
             ))}
-            <button
-              type="button"
-              onClick={search}
-              className={cn(tabChrome, "text-fg-tertiary hover:bg-subtle active:bg-subtle")}
-            >
+            <button type="button" onClick={search} className={cn(tabChrome, idleTab)}>
               <Search aria-hidden className="size-5" />
               Search
             </button>
@@ -111,13 +108,11 @@ export function BottomBar() {
             reader, which reaches those instead, so hidden from it and out of
             the tab order; a tap on it brings the tabs back.
 
-            The tabs' own surface shrinks to the face's size, so the eye
-            follows it down; once it is there the face's own surface takes
-            over and the shrunk one fades (index.css). Shrunk, its border and
-            shadow were scaled down with it, thinner than every other 1px
-            line; the face's are drawn at full size. The face is 24px, too
-            small for a thumb, so the button around it is a full 44px, reaching
-            8px down into the gap under the bar and 12px up over the page. */}
+            The tabs' own surface shrinks to the face's size, and the face's
+            own surface takes over from it there (index.css). The face is
+            24px, too small for a thumb, so the button around it is a full
+            44px, reaching 8px down into the gap under the bar and 12px up
+            over the page. */}
         <button
           type="button"
           tabIndex={-1}
@@ -127,7 +122,10 @@ export function BottomBar() {
         >
           <span
             ref={faceRef}
-            className="bottom-bar-pill-face flex h-6 min-w-0 items-center gap-1 rounded-full border border-line bg-surface/95 px-2.5 text-xs leading-none font-medium text-fg-secondary shadow-raised"
+            className={cn(
+              "bottom-bar-pill-face flex h-6 min-w-0 items-center gap-1 rounded-full px-2.5 text-xs leading-none font-medium text-fg-secondary shadow-raised",
+              barSurface,
+            )}
           >
             <Whereabouts entry={current} />
             {/* Says the pill opens, as Safari's shrunk address bar does. */}
@@ -175,6 +173,15 @@ function usePillScale() {
 }
 
 /**
+ * The bar's surface, which the pill's face draws too: index.css fades one into
+ * the other, so they must match. Each has its own shadow, sized to it.
+ */
+const barSurface = "border border-line bg-surface/95";
+
+/** A tab that is not lit, and Search: muted, and shaded on a hover or a press. */
+const idleTab = "text-fg-tertiary hover:bg-subtle active:bg-subtle";
+
+/**
  * A tab's box: a column of icon and label, a thumb's width. Every tab is
  * `flex-1`, so all are one width, which `LitTabMark` relies on. `relative`
  * lifts it over the mark. A press shades it and gives a little, so a tap
@@ -196,7 +203,7 @@ function LitTabMark({ index, count }: { index: number; count: number }) {
     <span
       aria-hidden
       className={cn(
-        "absolute inset-y-0 left-0 rounded-full bg-accent-subtle",
+        "bottom-bar-mark absolute inset-y-0 left-0 rounded-full bg-accent-subtle",
         "motion-safe:transition-[translate,opacity] motion-safe:duration-(--duration-chrome) motion-safe:ease-chrome",
         index < 0 && "opacity-0",
       )}
@@ -224,7 +231,7 @@ function BarTab({ item, user, active }: { item: NavItem; user: User | null; acti
         cn(
           tabChrome,
           // The lit tab's shading is `LitTabMark`, under it.
-          isActive ? "text-fg-accent-subtle" : "text-fg-tertiary hover:bg-subtle active:bg-subtle",
+          isActive ? "text-fg-accent-subtle" : idleTab,
         )
       }
     >

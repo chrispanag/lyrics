@@ -45,7 +45,7 @@ const bottomBar = (canvas: ReturnType<typeof within>) =>
 
 /** Waits until the lit tab's shading sits exactly under the tab named `name`. */
 async function markUnder(bar: HTMLElement, name: string) {
-  const mark = bar.querySelector<HTMLElement>(".bottom-bar-row > [aria-hidden]");
+  const mark = bar.querySelector<HTMLElement>(".bottom-bar-mark");
   if (!mark) throw new Error("No mark under the lit tab.");
   const tab = within(bar).getByRole("link", { name }).getBoundingClientRect();
   await waitFor(() => {
@@ -155,6 +155,7 @@ export const PhoneGuest: Story = {
     if (!bar) throw new Error("No bottom bar on a phone.");
     await expect(within(bar).queryByRole("link", { name: "Lists" })).toBeNull();
     await expect(within(bar).getByRole("link", { name: "Profile" })).toBeVisible();
+    await markUnder(bar, "Browse");
   },
 };
 
