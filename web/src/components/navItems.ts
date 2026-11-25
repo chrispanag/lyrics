@@ -64,6 +64,14 @@ export function offeredTo(item: NavItem, user: User | null): boolean {
 }
 
 /**
+ * The entries `user` is offered on the column, or on a phone's bottom bar
+ * (`phone`), which has no Admin tab: a phone reaches the console from Profile.
+ */
+export function offeredEntries(user: User | null, { phone }: { phone: boolean }): NavItem[] {
+  return NAV_ITEMS.filter((item) => offeredTo(item, user) && !(phone && item.adminOnly));
+}
+
+/**
  * The entry the reader is in, which the column and the bottom bar light and
  * the bar's pill names, so the three cannot disagree.
  *
@@ -73,18 +81,24 @@ export function offeredTo(item: NavItem, user: User | null): boolean {
  * editor, an address that names nothing) is Browse, the catalog every other
  * screen leads back to: the pill must always say something, and the lit tab
  * must be what it says.
+ *
+ * Undefined for a song read from a list the reader has no entry for (a guest,
+ * who is offered no Lists): the pill names that list, so lighting Browse would
+ * say something else, and no entry is lit.
  */
 export function currentEntry(
   pathname: string,
   searchParams: Pick<URLSearchParams, "get">,
   user: User | null,
   { phone }: { phone: boolean },
-): NavItem {
-  const offered = NAV_ITEMS.filter((item) => offeredTo(item, user) && !(phone && item.adminOnly));
+): NavItem | undefined {
+  const offered = offeredEntries(user, { phone });
+  const section = songSection(pathname, searchParams);
   const claimed =
-    songSection(pathname, searchParams) ??
-    (phone && pathMatches(pathname, ADMIN_ITEM.to) ? PROFILE.to : pathname);
-  return offered.find((item) => pathMatches(claimed, item.to)) ?? BROWSE;
+    section ?? (phone && pathMatches(pathname, ADMIN_ITEM.to) ? PROFILE.to : pathname);
+  const entry = offered.find((item) => pathMatches(claimed, item.to));
+  if (entry) return entry;
+  return section && section !== BROWSE.to ? undefined : BROWSE;
 }
 
 /**

@@ -277,7 +277,8 @@ export const PhoneChrome: Story = {
     await expect(pill).toHaveTextContent("Μακρύ τραγούδι");
     // Everything above the pill's surface is the lyrics': its hit area
     // reaches higher, but draws nothing there.
-    const scrolled = tabs.getBoundingClientRect().top; // Measured: 733px at the top, 812px scrolled (800 with the 36px pill).
+    const scrolled = tabs.getBoundingClientRect().top;
+    // Measured: 733px at the top, 812px scrolled (800 with the 36px pill).
     await expect(scrolled).toBeGreaterThan(atTop + 50);
     await expect(scrolled).toBeGreaterThanOrEqual(805);
 

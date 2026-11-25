@@ -179,7 +179,7 @@ function NavPanel() {
             // `-mx-2` lines its background up with the links above.
             <NavLink
               href="/profile"
-              active={current.identityCard === true}
+              active={current?.identityCard === true}
               className={({ isActive }) =>
                 cn(
                   "-mx-2 flex min-w-0 items-center gap-2.5 rounded-control px-2 py-2 transition-colors",

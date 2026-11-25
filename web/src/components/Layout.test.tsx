@@ -300,6 +300,21 @@ describe("Bottom bar", () => {
       expect(pill()).toHaveTextContent(entry);
     });
 
+    // A guest has no Lists tab, so on a song read from a shared list the pill
+    // names the list and no tab claims it: Browse lit would contradict it.
+    it("lights no tab for a guest reading a song from a list", async () => {
+      server.use(
+        listById(catalogList(3)),
+        http.get(`${API}/api/v1/songs/:id`, () =>
+          HttpResponse.json(makeSong({ id: "song-2", slug: "frangosyriani" })),
+        ),
+      );
+      renderWithProviders(<Layout />, { route: "/songs/frangosyriani?list=list-1", user: null });
+
+      await waitFor(() => expect(pill()).toHaveTextContent(/^Ρεμπέτικα/));
+      expect(lit(bar())).toEqual([]);
+    });
+
     /**
      * Swaps in an observer that reports the bottom bar's boxes as soon as they
      * are watched, and hands back the setup file's. Only the bar's: the other

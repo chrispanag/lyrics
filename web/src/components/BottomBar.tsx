@@ -8,13 +8,7 @@ import { useListPosition } from "@/api/useListPosition";
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { CATALOG_SEARCH_ATTRIBUTE } from "@/components/SearchField";
-import {
-  currentEntry,
-  NAV_ITEMS,
-  type NavItem,
-  offeredTo,
-  useWarmLists,
-} from "@/components/navItems";
+import { currentEntry, type NavItem, offeredEntries, useWarmLists } from "@/components/navItems";
 import { SongSearchBox } from "@/components/SongSearch";
 import { Sheet } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -26,8 +20,8 @@ import { revealChrome, useChromeScroll } from "@/lib/scrollChrome";
 /**
  * A phone's navigation and search, floating above the bottom edge: below `md`
  * only, where the column is not in the layout. The tabs are the column's
- * entries (`NAV_ITEMS`), lit by the same rule (`currentEntry`), less Admin,
- * which a phone reaches from Profile.
+ * entries less Admin, which a phone reaches from Profile (`offeredEntries`),
+ * lit by the same rule (`currentEntry`).
  *
  * While the reader scrolls down it shrinks to a small pill saying where they
  * are, and it comes back on any scroll up, at the top of the page, on a tap on
@@ -56,7 +50,7 @@ export function BottomBar() {
     setSearching(false);
   }
 
-  const tabs = NAV_ITEMS.filter((item) => offeredTo(item, user) && !item.adminOnly);
+  const tabs = offeredEntries(user, { phone: true });
 
   // Browse is the search: its own field, with the filters beside it and every
   // match below it. A sheet over it would be a second, smaller copy, so the
@@ -215,7 +209,7 @@ function BarTab({ item, user, active }: { item: NavItem; user: User | null; acti
  * The song and the list are the page's own queries, so this asks for nothing
  * the page has not.
  */
-function Whereabouts({ entry }: { entry: NavItem }) {
+function Whereabouts({ entry }: { entry: NavItem | undefined }) {
   const { ref, list, position } = useListPosition();
   const { data: song } = useSong(ref, { fromCachedCard: true });
 
@@ -246,5 +240,6 @@ function Whereabouts({ entry }: { entry: NavItem }) {
       <span className="truncate">Song</span>
     );
   }
-  return <span className="truncate">{entry.label}</span>;
+  // Undefined only for a song read from a list, which returned above.
+  return <span className="truncate">{entry?.label}</span>;
 }
