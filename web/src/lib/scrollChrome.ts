@@ -3,7 +3,7 @@ import { useEffect } from "react";
 /*
  * Whether a phone's chrome is tucked away: the top bars hidden and the bottom
  * bar shrunk to its small pill. Tucked once the reader has scrolled down a
- * little way, back on any scroll up, at the top and the end of the page, and
+ * little way, back on any scroll up, at the top of the page, and
  * whenever something asks (a tap on the pill, focus moving into a bar, a new
  * screen).
  *
@@ -43,13 +43,6 @@ const TURN_PX = 8;
 /** Within this of the top, the chrome is always out: there is nothing to give room to. */
 const TOP_PX = 80;
 
-/**
- * Within this of the end, the chrome is out too, as Safari's toolbar is: the
- * reader has finished and the tabs are what comes next. It also keeps iOS's
- * bounce at the end, which reads as a short scroll up, from flicking it out.
- */
-const END_PX = 24;
-
 let tucked = false;
 /**
  * Where the current stretch started, so each threshold counts from the turn,
@@ -73,15 +66,25 @@ function set(next: boolean): void {
   document.documentElement.toggleAttribute(CHROME_TUCKED_ATTRIBUTE, next);
 }
 
-/** Whether `y` is at the end of a page that scrolls at all. */
-function atEnd(y: number): boolean {
+/**
+ * Whether `y` is past the end of a page that scrolls at all: iOS's bounce,
+ * whose way back reads as a scroll up and would bring the chrome out.
+ */
+function pastEnd(y: number): boolean {
   const end = document.documentElement.scrollHeight - window.innerHeight;
-  return end > 0 && y >= end - END_PX;
+  return end > 0 && y > end;
 }
 
+/*
+ * The end of a page brings nothing out. It did once, as Safari's toolbar
+ * does, but a flick that tucks the chrome on its way down then brought it
+ * straight back on arrival, a shrink and a regrow in a moment. A touch up
+ * brings it out there as anywhere.
+ */
 function onScroll(): void {
   const y = window.scrollY;
-  if (y <= TOP_PX || atEnd(y)) set(false);
+  if (pastEnd(y)) return;
+  if (y <= TOP_PX) set(false);
   else if (tucked) {
     // Still going down moves the count's start with it; a turn up brings it back.
     if (y <= anchorY && anchorY - y <= TURN_PX) return;
