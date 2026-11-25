@@ -27,7 +27,8 @@ import { revealChrome, useChromeScroll } from "@/lib/scrollChrome";
  * are, and it comes back on any scroll up, at the top of the page, on a tap on
  * the pill, and when focus moves into it (`lib/scrollChrome`). The bar's own
  * surface shrinks into the pill, rather than one fading out as the other fades
- * in, so the eye follows it down and sees where the tabs went. Collapsed is
+ * in, so the eye follows it down and sees where the tabs went; only at the
+ * pill's size does the face's own surface take over from it. Collapsed is
  * only how it looks: the tabs stay in the accessibility tree and in the tab
  * order, and reaching one brings the bar back. Styles are `.bottom-bar` in
  * index.css, keyed on `data-chrome-tucked`, so a tuck re-renders nothing here.
@@ -87,19 +88,24 @@ export function BottomBar() {
           // Round, but by index.css, which rounds the shrunk pill too. No
           // backdrop blur: through a 95% surface it was all but invisible,
           // and it was recomputed on every frame of the shrink.
-          className="bottom-bar-tabs flex w-full max-w-md border border-line bg-surface/95 p-1 shadow-popover"
+          className={cn("bottom-bar-tabs flex w-full max-w-md p-1 shadow-popover", barSurface)}
         >
           {/* One box to fade, apart from the surface, which stays. The tabs'
-              own `transition-colors` would outrank a fade set on each. */}
-          <div className="bottom-bar-row flex min-w-0 flex-1 items-stretch gap-1">
+              own `transition` would outrank a fade set on each. */}
+          <div className="bottom-bar-row relative flex min-w-0 flex-1 items-stretch gap-1">
+            {/* Every tab, and Search after them. Drawn afresh when the tabs
+                change (the reader's account arriving after the server's
+                guest bar, or a sign-in or out), so it is not seen sliding
+                across tabs that moved under it. */}
+            <LitTabMark
+              key={tabs.length}
+              index={current ? tabs.indexOf(current) : -1}
+              count={tabs.length + 1}
+            />
             {tabs.map((item) => (
               <BarTab key={item.to} item={item} user={user} active={item === current} />
             ))}
-            <button
-              type="button"
-              onClick={search}
-              className={cn(tabChrome, "text-fg-tertiary hover:bg-subtle")}
-            >
+            <button type="button" onClick={search} className={cn(tabChrome, idleTab)}>
               <Search aria-hidden className="size-5" />
               Search
             </button>
@@ -110,10 +116,11 @@ export function BottomBar() {
             reader, which reaches those instead, so hidden from it and out of
             the tab order; a tap on it brings the tabs back.
 
-            Only the words: the surface under them is the tabs' own, shrunk to
-            the face's size. The face is 24px, too small for a thumb, so the
-            button around it is a full 44px, reaching 8px down into the gap
-            under the bar and 12px up over the page. */}
+            The tabs' own surface shrinks to the face's size, and the face's
+            own surface takes over from it there (index.css). The face is
+            24px, too small for a thumb, so the button around it is a full
+            44px, reaching 8px down into the gap under the bar and 12px up
+            over the page. */}
         <button
           type="button"
           tabIndex={-1}
@@ -123,7 +130,10 @@ export function BottomBar() {
         >
           <span
             ref={faceRef}
-            className="bottom-bar-pill-face flex h-6 min-w-0 items-center gap-1 px-2.5 text-xs leading-none font-medium text-fg-secondary"
+            className={cn(
+              "bottom-bar-pill-face flex h-6 min-w-0 items-center gap-1 rounded-full px-2.5 text-xs leading-none font-medium text-fg-secondary shadow-raised",
+              barSurface,
+            )}
           >
             <Whereabouts entry={current} />
             {/* Says the pill opens, as Safari's shrunk address bar does. */}
@@ -170,9 +180,57 @@ function usePillScale() {
   return { navRef, faceRef };
 }
 
-/** A tab's box: a column of icon and label, a thumb's width. */
+/**
+ * The bar's surface, which the pill's face draws too: index.css fades one into
+ * the other, so they must match. Each has its own shadow, sized to it.
+ */
+const barSurface = "border border-line bg-surface/95";
+
+/**
+ * A tab that is not lit, and Search: muted, shaded on a hover, and on a press
+ * shaded and giving a little, so a tap answers before the next screen does;
+ * hover alone never fires on a touch. Not the lit tab, which a press leads
+ * nowhere and whose shading, `LitTabMark`, would stay full size around it.
+ */
+const idleTab = "text-fg-tertiary hover:bg-subtle active:bg-subtle motion-safe:active:scale-95";
+
+/**
+ * A tab's box: a column of icon and label, a thumb's width. Every tab is
+ * `flex-1`, so all are one width, which `LitTabMark` relies on. `relative`
+ * lifts it over the mark. `transition` rather than `transition-colors`, so a
+ * press's scale (`idleTab`) eases too.
+ */
 const tabChrome =
-  "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-1.5 text-[11px] leading-tight font-medium transition-colors";
+  "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-1.5 text-[11px] leading-tight font-medium transition";
+
+/**
+ * The lit tab's shading, one mark for the whole row, so a new lit tab is the
+ * mark sliding across to it rather than one fading out and another in. Placed
+ * from the lit tab's index among `count` equal tabs (`tabChrome`), not
+ * measured: the server draws it where it belongs, and a first paint never
+ * slides it from somewhere else. Gone where no tab is lit (`index` -1): it
+ * fades where it last stood, rather than sliding to the first tab as it goes.
+ */
+function LitTabMark({ index, count }: { index: number; count: number }) {
+  const [at, setAt] = useState(Math.max(index, 0));
+  if (index >= 0 && index !== at) setAt(index);
+  const gap = "var(--spacing)";
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "bottom-bar-mark absolute inset-y-0 left-0 rounded-full bg-accent-subtle",
+        "motion-safe:transition-[translate,opacity] motion-safe:duration-(--duration-chrome) motion-safe:ease-chrome",
+        index < 0 && "opacity-0",
+      )}
+      style={{
+        // `gap-1` between the tabs; a translate's 100% is the mark's own width.
+        width: `calc((100% - ${count - 1} * ${gap}) / ${count})`,
+        translate: `calc(${at} * (100% + ${gap}))`,
+      }}
+    />
+  );
+}
 
 /** One of the bar's tabs. A signed-in reader's Profile is their picture. */
 function BarTab({ item, user, active }: { item: NavItem; user: User | null; active: boolean }) {
@@ -188,7 +246,8 @@ function BarTab({ item, user, active }: { item: NavItem; user: User | null; acti
       className={({ isActive }) =>
         cn(
           tabChrome,
-          isActive ? "bg-accent-subtle text-fg-accent-subtle" : "text-fg-tertiary hover:bg-subtle",
+          // The lit tab's shading is `LitTabMark`, under it.
+          isActive ? "text-fg-accent-subtle" : idleTab,
         )
       }
     >

@@ -233,7 +233,10 @@ async function tuck() {
   await settled();
 }
 
-/** Waits out the bars' slide and fades (`--duration-chrome`, 250ms). */
+/**
+ * Waits out the bars' slide and fades: `--duration-chrome` (250ms), and the
+ * shrunk surface's 80ms fade after it.
+ */
 const settled = () => new Promise((resolve) => setTimeout(resolve, 400));
 
 /**
@@ -296,8 +299,9 @@ export const PhoneChrome: Story = {
 
 /**
  * Scrolled down, left there so the axe check sees the pill over the lyrics in
- * both themes. The pill is the tabs' own surface shrunk, thin but a full
- * thumb's height to press, with a chevron saying it opens.
+ * both themes. The tabs' own surface shrinks to the pill, whose face then
+ * draws its own; thin, but a full thumb's height to press, with a chevron
+ * saying it opens.
  */
 export const PhonePill: Story = {
   ...onAPhone,
@@ -308,18 +312,23 @@ export const PhonePill: Story = {
 
     await tuck();
 
-    // The same surface, shrunk where it stood, not a second one faded in.
+    // The same surface, shrunk where it stood; at rest it has faded under the
+    // face's own, drawn at full size.
     await expect(chrome().tabs).toBe(tabs);
     await expect(getComputedStyle(tabs).scale).not.toBe("1");
+    await expect(getComputedStyle(tabs).opacity).toBe("0");
     const surface = tabs.getBoundingClientRect();
     // Measured: 24px.
     await expect(surface.height).toBeGreaterThanOrEqual(22);
     await expect(surface.height).toBeLessThanOrEqual(26);
     // On the pill's words, which it frames.
     const face = pill.querySelector<HTMLElement>(".bottom-bar-pill-face");
-    const words = face?.getBoundingClientRect();
-    await expect(Math.abs((words?.top ?? 0) - surface.top)).toBeLessThan(1);
-    await expect(Math.abs((words?.width ?? 0) - surface.width)).toBeLessThan(1);
+    if (!face) throw new Error("The pill has no face.");
+    const words = face.getBoundingClientRect();
+    await expect(Math.abs(words.top - surface.top)).toBeLessThan(1);
+    await expect(Math.abs(words.width - surface.width)).toBeLessThan(1);
+    await expect(getComputedStyle(face).borderTopWidth).toBe("1px");
+    await expect(getComputedStyle(face).boxShadow).not.toBe("none");
 
     // A thumb's height to press, the surface inside it.
     const target = pill.getBoundingClientRect();
