@@ -436,14 +436,13 @@
    Tucked is only how it looks. The tabs stay focusable and in the
    accessibility tree, and while visible focus is inside them the bar is drawn
    expanded whatever the scroll says, so a control reached by Tab is never
-   one the reader cannot see. Not any focus: a tap leaves Chrome on Android's
-   focus on the tab, which would hold the bar out (see `chrome-tucked`). The
-   pill takes presses only while it shows.
+   one the reader cannot see (see `chrome-tucked`). The pill takes presses
+   only while it shows.
 
-   While the reader types in a field anywhere on the page, the bar is out of
-   the way altogether: a phone's keyboard pushes it up to sit on top of the
-   keys, over what the field finds. The kinds of `input` that open no
-   keyboard leave it alone. */
+   While the reader types in a field anywhere on the page (`:read-write`,
+   which a checkbox or a button never is), the bar is out of the way
+   altogether: a phone's keyboard pushes it up to sit on top of the keys, over
+   what the field finds. */
 @layer components {
   .bottom-bar-tabs {
     border-radius: calc(infinity * 1px);
@@ -456,37 +455,23 @@
     opacity: 0;
     pointer-events: none;
   }
-  :root[data-chrome-tucked] .bottom-bar:not(:has(:focus-visible)) {
-    .bottom-bar-tabs {
-      scale: var(--pill-sx, 0.4) var(--pill-sy, 0.4);
-      border-radius: calc(0.75rem / var(--pill-sx, 0.4)) / calc(0.75rem / var(--pill-sy, 0.4));
-      pointer-events: none;
-    }
-    .bottom-bar-row {
-      opacity: 0;
-    }
-    .bottom-bar-pill {
-      opacity: 1;
-      pointer-events: auto;
+  .bottom-bar {
+    @variant chrome-tucked {
+      .bottom-bar-tabs {
+        scale: var(--pill-sx, 0.4) var(--pill-sy, 0.4);
+        border-radius: calc(0.75rem / var(--pill-sx, 0.4)) / calc(0.75rem / var(--pill-sy, 0.4));
+        pointer-events: none;
+      }
+      .bottom-bar-row {
+        opacity: 0;
+      }
+      .bottom-bar-pill {
+        opacity: 1;
+        pointer-events: auto;
+      }
     }
   }
-  :root:has(
-      :is(
-          input:not(
-            [type="checkbox"],
-            [type="radio"],
-            [type="range"],
-            [type="button"],
-            [type="submit"],
-            [type="reset"],
-            [type="file"],
-            [type="color"]
-          ),
-          textarea,
-          [contenteditable]:not([contenteditable="false"])
-        ):focus
-    )
-    .bottom-bar {
+  :root:has(:read-write:focus) .bottom-bar {
     visibility: hidden;
   }
   @media (prefers-reduced-motion: no-preference) {
@@ -501,8 +486,12 @@
       transition: opacity 150ms ease-out;
     }
     /* The words arrive as the surface does, not on the full-width bar. */
-    :root[data-chrome-tucked] .bottom-bar:not(:has(:focus-visible)) .bottom-bar-pill {
-      transition-delay: 80ms;
+    .bottom-bar {
+      @variant chrome-tucked {
+        .bottom-bar-pill {
+          transition-delay: 80ms;
+        }
+      }
     }
   }
 }
