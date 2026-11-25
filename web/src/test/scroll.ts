@@ -11,7 +11,7 @@ export function setScrollY(y: number): void {
 }
 
 /**
- * Scrolls down past the header's 80px floor and 8px jitter threshold. Callers
+ * Scrolls down past the chrome's 80px floor and 40px tuck threshold. Callers
  * must `setScrollY(0)` in a `beforeEach`: the property outlives the render, and
  * a stale offset makes this no movement at all.
  */

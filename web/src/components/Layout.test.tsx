@@ -235,6 +235,63 @@ describe("Bottom bar", () => {
     expect(tucked()).toBe(true);
   });
 
+  // A nudge while reading is not a decision to read on; reaching for the bars
+  // is a touch up, and they come at once.
+  it("tucks only after a stretch down, counted from the turn, and comes back on a touch up", () => {
+    renderWithProviders(<Layout />);
+    const scrollTo = (y: number) => {
+      setScrollY(y);
+      fireEvent.scroll(window);
+    };
+
+    // From the edge of the top, where the chrome is always out.
+    scrollTo(80);
+    scrollTo(115);
+    expect(tucked()).toBe(false);
+
+    // A turn up and back down starts the count over from the highest point.
+    scrollTo(100);
+    scrollTo(135);
+    expect(tucked()).toBe(false);
+    scrollTo(145);
+    expect(tucked()).toBe(true);
+
+    // Further down moves the turn with it, so the way back counts from there.
+    scrollTo(600);
+    scrollTo(590);
+    expect(tucked()).toBe(false);
+  });
+
+  // As Safari's toolbar does: the reader has finished, and iOS's bounce at the
+  // end reads as a short scroll up anyway.
+  it("comes back at the end of the page", () => {
+    renderWithProviders(<Layout />);
+    vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(
+      window.innerHeight + 1000,
+    );
+
+    setScrollY(500);
+    fireEvent.scroll(window);
+    expect(tucked()).toBe(true);
+
+    setScrollY(990);
+    fireEvent.scroll(window);
+    expect(tucked()).toBe(false);
+  });
+
+  // Not through the scroll to the top, whose event a page already there never
+  // fires; here the offset does not move at all.
+  it("comes back on a new screen", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Layout />, { user: makeUser() });
+    scrollDown();
+    expect(tucked()).toBe(true);
+
+    await user.click(within(bar()).getByRole("link", { name: "Lists" }));
+
+    await waitFor(() => expect(tucked()).toBe(false));
+  });
+
   it("comes back when anything in it takes focus", () => {
     renderWithProviders(<Layout />);
     scrollDown();
