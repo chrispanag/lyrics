@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
+import { Profiler } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Layout, StickyHeader } from "./Layout";
@@ -8,6 +9,7 @@ import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "./SearchField";
 import { MenuHeader } from "./SearchHeader";
 import { NAV_COLLAPSED_ATTRIBUTE } from "@/lib/navCollapsed";
 import { modalIsOpen } from "@/lib/modal";
+import { CHROME_TUCKED_ATTRIBUTE } from "@/lib/scrollChrome";
 import { catalogList } from "@/test/catalog";
 import { API, list, listById, makeList, makeSong, makeUser } from "@/test/handlers";
 import { recordRequests } from "@/test/requests";
@@ -142,8 +144,8 @@ describe("Lists link prefetch", () => {
 describe("Bottom bar", () => {
   const tabs = () => within(bar()).getAllByRole("link");
   const searchButton = () => within(bar()).getByRole("button", { name: "Search" });
-  /** Tucked is an attribute on the bar's box; index.css draws it. */
-  const tucked = () => bar().closest(".bottom-bar")?.hasAttribute("data-tucked");
+  /** Tucked is an attribute on <html>; index.css draws it. */
+  const tucked = () => document.documentElement.hasAttribute(CHROME_TUCKED_ATTRIBUTE);
 
   it("offers a reader Browse, Lists and their Profile, and Search", () => {
     renderWithProviders(<Layout />, { user: makeUser({ display_name: "Christos" }) });
@@ -285,6 +287,19 @@ describe("Bottom bar", () => {
       expect(pill()).toHaveTextContent("Profile");
     });
 
+    // One rule (`currentEntry`) for both, so the pill never names a tab other
+    // than the one lit: an address no entry claims is the catalog's, and the
+    // console is Profile's on a phone.
+    it.each([
+      { route: "/people/x", role: "user" as const, entry: "Browse" },
+      { route: "/admin", role: "admin" as const, entry: "Profile" },
+    ])("names the tab it lights at $route", ({ route, role, entry }) => {
+      renderWithProviders(<Layout />, { route, user: makeUser({ role }) });
+
+      expect(lit(bar())).toEqual([entry]);
+      expect(pill()).toHaveTextContent(entry);
+    });
+
     /**
      * Swaps in an observer that reports the bottom bar's boxes as soon as they
      * are watched, and hands back the setup file's. Only the bar's: the other
@@ -326,9 +341,9 @@ describe("Bottom bar", () => {
       try {
         renderWithProviders(<Layout />, { route: "/profile" });
 
-        const box = bar().closest<HTMLElement>(".bottom-bar");
-        expect(Number(box?.style.getPropertyValue("--pill-sx"))).toBeCloseTo(1 / 3);
-        expect(box?.style.getPropertyValue("--pill-sy")).toBe("0.4");
+        const surface = bar();
+        expect(Number(surface.style.getPropertyValue("--pill-sx"))).toBeCloseTo(1 / 3);
+        expect(surface.style.getPropertyValue("--pill-sy")).toBe("0.4");
       } finally {
         restore();
       }
@@ -340,8 +355,8 @@ describe("Bottom bar", () => {
       try {
         renderWithProviders(<Layout />, { route: "/profile" });
 
-        const box = bar().closest<HTMLElement>(".bottom-bar");
-        expect(box?.style.getPropertyValue("--pill-sx")).toBe("");
+        const surface = bar();
+        expect(surface.style.getPropertyValue("--pill-sx")).toBe("");
       } finally {
         restore();
       }
@@ -434,7 +449,7 @@ describe("Search sheet", () => {
     expect(screen.getByRole("searchbox", { name: /search songs/i })).toHaveFocus();
     expect(modalIsOpen()).toBe(false);
     // And the chrome is out, the header holding that field with it.
-    expect(bar().closest(".bottom-bar")).not.toHaveAttribute("data-tucked");
+    expect(document.documentElement).not.toHaveAttribute(CHROME_TUCKED_ATTRIBUTE);
   });
 });
 
@@ -478,7 +493,8 @@ describe("Collapsible navigation", () => {
 });
 
 /*
- * jsdom has no breakpoints, so the `max-md:` class is the readable form of
+ * jsdom has no breakpoints and no style sheet, so the tucked attribute on
+ * <html> and the class that slides the header by it are the readable form of
  * "hides on a phone, sticky at a desk". Pinned on the shared component rather
  * than through either page.
  */
@@ -486,14 +502,18 @@ describe("StickyHeader", () => {
   // Use `toHaveClass`, so negative assertions fail on a missing element and
   // whole class names are matched.
   const header = () => screen.getByText("Search").closest("header");
+  const tucked = () => document.documentElement.hasAttribute(CHROME_TUCKED_ATTRIBUTE);
+  /** The slide, under `max-md:` only, and held while the header has focus (index.css). */
+  const TUCKS = "max-md:chrome-tucked:-translate-y-full";
 
   it("gets out of the way on the way down, and only on a phone", () => {
     render(<StickyHeader>Search</StickyHeader>);
+    expect(header()).toHaveClass("sticky-bar", TUCKS);
+    expect(tucked()).toBe(false);
 
     scrollDown();
 
-    expect(header()).toHaveClass("max-md:-translate-y-full");
-    expect(header()).not.toHaveClass("-translate-y-full");
+    expect(tucked()).toBe(true);
   });
 
   it("comes back on the way up", () => {
@@ -502,15 +522,25 @@ describe("StickyHeader", () => {
     scrollDown();
     scrollUp();
 
-    expect(header()).not.toHaveClass("max-md:-translate-y-full");
+    expect(tucked()).toBe(false);
   });
 
   it("stays put while it is pinned", () => {
     render(<StickyHeader pinned>Search</StickyHeader>);
 
-    scrollDown();
+    expect(header()).toHaveClass("sticky-bar");
+    expect(header()).not.toHaveClass(TUCKS);
+  });
 
-    expect(header()).not.toHaveClass("max-md:-translate-y-full");
+  // Nothing is left behind for the next page, whose bars start out.
+  it("takes the attribute away with the last bar", () => {
+    const { unmount } = render(<StickyHeader>Search</StickyHeader>);
+    scrollDown();
+    expect(tucked()).toBe(true);
+
+    unmount();
+
+    expect(tucked()).toBe(false);
   });
 
   // One scroll moves every bar: each reads the page's one answer, rather than
@@ -524,8 +554,29 @@ describe("StickyHeader", () => {
 
     scrollDown();
 
-    expect(screen.getByText("Tools").closest("header")).toHaveClass("max-md:-translate-y-full");
-    expect(bar().closest(".bottom-bar")).toHaveAttribute("data-tucked");
+    expect(screen.getByText("Tools").closest("header")).toHaveClass(TUCKS);
+    expect(tucked()).toBe(true);
+  });
+
+  // A tuck is drawn by CSS from the attribute: neither the header nor the
+  // bar, nor anything under them, renders for it.
+  it("renders nothing for a tuck", () => {
+    const commits = vi.fn();
+    renderWithProviders(
+      <Profiler id="shell" onRender={commits}>
+        <Layout>
+          <StickyHeader>Tools</StickyHeader>
+        </Layout>
+      </Profiler>,
+    );
+    commits.mockClear();
+
+    scrollDown();
+    expect(tucked()).toBe(true);
+    scrollUp();
+    expect(tucked()).toBe(false);
+
+    expect(commits).not.toHaveBeenCalled();
   });
 
   /*

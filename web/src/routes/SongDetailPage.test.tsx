@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { useEffect } from "react";
+import { Profiler, useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SongDetailPage } from "./SongDetailPage";
@@ -25,6 +25,7 @@ import {
 } from "@/test/handlers";
 import { intersectAll, observedElements } from "@/test/intersection";
 import { songMatchesRef } from "@/lib/listContext";
+import { CHROME_TUCKED_ATTRIBUTE } from "@/lib/scrollChrome";
 import type { Recording } from "@/lib/types";
 import { testQueryClient } from "@/test/providers";
 import { renderWithProviders } from "@/test/render";
@@ -1699,26 +1700,60 @@ describe("SongDetailPage search", () => {
  */
 describe("SongDetailPage tools bar on a phone", () => {
   const toolsBar = () =>
-    screen.getByRole("button", { name: "Stats" }).closest(".max-md\\:sticky") as HTMLElement;
+    screen.getByRole("button", { name: "Stats" }).closest("[data-sticky-header]") as HTMLElement;
+  const tucked = () => document.documentElement.hasAttribute(CHROME_TUCKED_ATTRIBUTE);
 
+  // `StickyHeader`'s chrome, under `max-md:` alone.
   it("is sticky on a phone, and only there", async () => {
     renderDetail();
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
 
     expect(toolsBar()).toContainElement(screen.getByRole("button", { name: "Back" }));
-    expect(toolsBar()).not.toHaveClass("sticky");
+    expect(toolsBar()).toHaveClass("max-md:sticky-bar");
+    expect(toolsBar()).not.toHaveClass("sticky-bar");
   });
 
+  // index.css slides it by the attribute on <html>, and never while it holds
+  // focus; the specs for that rule are `StickyHeader`'s.
   it("hides on the way down and returns on the way up", async () => {
     renderDetail();
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(toolsBar()).toHaveClass("max-md:chrome-tucked:-translate-y-full");
 
     scrollDown();
-    expect(toolsBar()).toHaveClass("max-md:-translate-y-full");
-    // Never while it holds focus.
-    expect(toolsBar()).toHaveClass("max-md:focus-within:translate-y-0");
+    expect(tucked()).toBe(true);
 
     scrollUp();
-    expect(toolsBar()).not.toHaveClass("max-md:-translate-y-full");
+    expect(tucked()).toBe(false);
+  });
+
+  // The page holds the lyrics, the tools and the sheets: a re-render of it on
+  // every change of scroll direction is what drawing the tuck in CSS avoids.
+  it("renders nothing for a tuck", async () => {
+    const commits = vi.fn();
+    renderWithProviders(
+      <TestRoutes
+        routes={{
+          "/songs/:id": (
+            <Profiler id="song" onRender={commits}>
+              <SongDetailPage />
+            </Profiler>
+          ),
+        }}
+      />,
+      { route: "/songs/song-1" },
+    );
+    // The lyrics: the full read, not the cached card.
+    await screen.findByText("η αγάπη μου κοιμάται");
+    // Whatever was still settling (the session, the click count) lands first.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    commits.mockClear();
+
+    scrollDown();
+    expect(tucked()).toBe(true);
+    scrollUp();
+    expect(tucked()).toBe(false);
+
+    expect(commits).not.toHaveBeenCalled();
   });
 });

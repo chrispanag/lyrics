@@ -1,17 +1,7 @@
 "use client";
 
 import { useId, useState, type ChangeEvent, type SubmitEvent } from "react";
-import {
-  KeyRound,
-  LoaderCircle,
-  LogOut,
-  Moon,
-  Pencil,
-  Shield,
-  Sun,
-  Trash,
-  Upload,
-} from "lucide-react";
+import { KeyRound, LoaderCircle, LogOut, Moon, Pencil, Sun, Trash, Upload } from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import { useRemoveAvatar, useUpdateProfile, useUploadAvatar } from "@/api/hooks";
@@ -25,7 +15,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageTitle } from "@/components/PageTitle";
 import { Waiting } from "@/routes/guards";
 import type { Identity } from "@/lib/avatar";
-import { hasRole } from "@/lib/types";
+import { ADMIN_ITEM, offeredTo } from "@/components/navItems";
 import { cn } from "@/lib/cn";
 import {
   IMAGE_TOO_LARGE_ERROR,
@@ -219,12 +209,13 @@ export function ProfilePage() {
 
       {/* A phone's way to the console: its bottom bar has room for the
           screens everyone uses, and an admin's Profile tab leads here. From
-          `md` up the column has an Admin entry of its own. */}
-      {hasRole(user.role, "admin") && (
+          `md` up the column has an Admin entry of its own, offered to the same
+          readers. */}
+      {offeredTo(ADMIN_ITEM, user) && (
         <div className="mt-8 md:hidden">
           <SectionHeading>Administration</SectionHeading>
-          <Link href="/admin" className={buttonClasses("secondary", "lg", "w-full")}>
-            <Shield aria-hidden className="size-4" />
+          <Link href={ADMIN_ITEM.to} className={buttonClasses("secondary", "lg", "w-full")}>
+            <ADMIN_ITEM.icon aria-hidden className="size-4" />
             Admin console
           </Link>
         </div>

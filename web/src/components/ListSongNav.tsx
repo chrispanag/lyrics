@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, ListMusic } from "lucide-react";
 
 import { cardChrome } from "./cardStyles";
 import { cn } from "@/lib/cn";
-import type { ListPosition } from "@/lib/listContext";
+import { type ListPosition, positionLabel } from "@/lib/listContext";
 import { FIELDS, modalIsOpen } from "@/lib/modal";
 import { startsClearOfEdges, swipeDirection } from "@/lib/swipe";
 import { Link, useRouter } from "@/lib/navigation";
@@ -55,7 +55,7 @@ export function ListSongNavBar({ position }: { position: ListPosition }) {
       </Link>
 
       <span className="ml-auto shrink-0 text-xs tabular-nums text-fg-muted">
-        {position.index + 1} of {position.total}
+        {positionLabel(position)}
       </span>
 
       <StepArrow href={position.previousHref} back />
@@ -145,10 +145,10 @@ export function ListSongSwipe({
       ref={markMounted}
       aria-hidden
       // Fixed, so it is on screen without scrolling, and above the bottom bar
-      // at its full height, so the bar never covers it. `md:hidden` must stay
-      // on this observed box: a hidden box never intersects, so the one
-      // showing is not spent at a desk.
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(--spacing(20)+env(safe-area-inset-bottom))] z-floating flex justify-center md:hidden"
+      // at its full height (`--bottom-bar-clearance`), so the bar never covers
+      // it. `md:hidden` must stay on this observed box: a hidden box never
+      // intersects, so the one showing is not spent at a desk.
+      className="pointer-events-none fixed inset-x-0 bottom-(--bottom-bar-clearance) z-floating flex justify-center md:hidden"
     >
       {/* Opaque and inverted so it reads over the lyrics; only available
           directions get an arrow. */}

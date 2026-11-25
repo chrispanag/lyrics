@@ -4,6 +4,11 @@
    alone, so the in-app toggle can override the system preference. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* A phone's chrome while tucked away (`lib/scrollChrome` sets the attribute),
+   except a bar holding focus: a control reached by Tab must be on screen. Used
+   under `max-md:`, as `stickyBarClasses` does. */
+@custom-variant chrome-tucked (:root[data-chrome-tucked] &:not(:focus-within));
+
 /* `inline` because `--font-inter` is set by next/font on <html>; see
    app/layout.tsx. */
 @theme inline {
@@ -241,7 +246,7 @@
        too. */
     @apply scheme-light dark:scheme-dark;
     /* Keeps a control reached by Tab from landing under the sticky header,
-       whose height `StickyHeader` measures into this property; screens without
+       whose height `useStickyBar` measures into this property; screens without
        one leave it unset. Below `md` as well, although the header hides on the
        way down and the padding then leaves a gap above the target: Shift+Tab
        scrolls up, which brings the header back over it, and a gap is cosmetic
@@ -259,6 +264,17 @@
      inside the listbox. */
   [data-sticky-header] :focus {
     scroll-margin-top: calc(-1 * var(--sticky-header-height, 0px));
+  }
+  /* A song's tools bar is stuck on a phone and is the reading pane's own
+     header beside the list, but in between it is an ordinary row under the
+     sticky search header, and a control in it must clear that header like
+     any other. */
+  @media (width >= 48rem) {
+    @container app (width < 48rem) {
+      [data-sticky-header="phone"] :focus {
+        scroll-margin-top: 0;
+      }
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -388,13 +404,25 @@
   }
 }
 
+/* What the bottom bar takes from the foot of a phone's screen. The gap under
+   it is the home indicator, or a small margin where there is none; the pill
+   hangs from the same line. The clearance is the expanded bar (58px) with
+   room to spare, plus that gap: what a control reached by Tab, the swipe hint
+   and the end of a page keep clear of. */
+@layer base {
+  :root {
+    --bottom-bar-gap: max(--spacing(2), env(safe-area-inset-bottom));
+    --bottom-bar-clearance: calc(--spacing(18) + var(--bottom-bar-gap));
+  }
+}
+
 /* A phone's bottom bar — see `BottomBar`. Expanded it is the tabs; tucked
-   (`data-tucked`, while the reader scrolls down) the tabs' surface shrinks,
-   from its bottom edge, to the pill's face, by the scale `BottomBar` measures
-   into `--pill-sx` and `--pill-sy`. The tabs fade as it shrinks and the words
-   saying where the reader is fade in on it. Only `opacity` and `scale` move,
-   and only where motion is welcome; under reduced motion the change is
-   instant.
+   (`data-chrome-tucked` on <html>, while the reader scrolls down) the tabs'
+   surface shrinks, from its bottom edge, to the pill's face, by the scale
+   `BottomBar` measures into `--pill-sx` and `--pill-sy`. The tabs fade as it
+   shrinks and the words saying where the reader is fade in on it. Only
+   `opacity` and `scale` move, and only where motion is welcome; under reduced
+   motion the change is instant.
 
    Scaled unevenly, a round end turns oval, so the shrunk surface's radius is
    divided by its scale, to come out at half the face's 24px on each axis. Not
@@ -417,17 +445,19 @@
     opacity: 0;
     pointer-events: none;
   }
-  .bottom-bar[data-tucked]:not(:focus-within) .bottom-bar-tabs {
-    scale: var(--pill-sx, 0.4) var(--pill-sy, 0.4);
-    border-radius: calc(0.75rem / var(--pill-sx, 0.4)) / calc(0.75rem / var(--pill-sy, 0.4));
-    pointer-events: none;
-  }
-  .bottom-bar[data-tucked]:not(:focus-within) .bottom-bar-row {
-    opacity: 0;
-  }
-  .bottom-bar[data-tucked]:not(:focus-within) .bottom-bar-pill {
-    opacity: 1;
-    pointer-events: auto;
+  :root[data-chrome-tucked] .bottom-bar:not(:focus-within) {
+    .bottom-bar-tabs {
+      scale: var(--pill-sx, 0.4) var(--pill-sy, 0.4);
+      border-radius: calc(0.75rem / var(--pill-sx, 0.4)) / calc(0.75rem / var(--pill-sy, 0.4));
+      pointer-events: none;
+    }
+    .bottom-bar-row {
+      opacity: 0;
+    }
+    .bottom-bar-pill {
+      opacity: 1;
+      pointer-events: auto;
+    }
   }
   @media (prefers-reduced-motion: no-preference) {
     .bottom-bar-tabs {
@@ -441,7 +471,7 @@
       transition: opacity 150ms ease-out;
     }
     /* The words arrive as the surface does, not on the full-width bar. */
-    .bottom-bar[data-tucked]:not(:focus-within) .bottom-bar-pill {
+    :root[data-chrome-tucked] .bottom-bar:not(:focus-within) .bottom-bar-pill {
       transition-delay: 80ms;
     }
   }
@@ -449,12 +479,19 @@
 
 /* Below `md` the bottom bar floats over the page's foot. A control reached by
    Tab scrolls clear of it, as `scroll-padding-top` keeps one clear of a sticky
-   header: the expanded bar's height, its gap from the edge, and the home
-   indicator. */
+   header. */
 @media (width < 48rem) {
   html {
-    scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    scroll-padding-bottom: var(--bottom-bar-clearance);
   }
+}
+
+/* The look every sticky top bar shares (`stickyBarClasses`): a page's header,
+   and a song's tools bar on a phone. A utility, so the song's can be applied
+   under `max-md:` alone. The slide it eases is the tuck; see the
+   `chrome-tucked` variant. */
+@utility sticky-bar {
+  @apply sticky top-0 z-sticky border-b border-line bg-canvas/90 pt-safe backdrop-blur motion-safe:transition-transform motion-safe:duration-200;
 }
 
 /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the edges
@@ -553,7 +590,8 @@
   }
 }
 
-/* The shell's bottom padding (`pb-12`, and `pb-8` from `md`). Once the content
+/* The shell's bottom padding (the bottom bar's clearance and a little more
+   below `md`, `pb-8` from it; see `Layout`). Once the content
    column is wide enough for the list and the lyrics — `@3xl`, the same 48rem —
    the reader fills the viewport and scrolls inside its panes, and the padding
    would only make the window scroll past them. Only around the reader: every

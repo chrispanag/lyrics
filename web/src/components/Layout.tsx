@@ -7,14 +7,19 @@ import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { BottomBar } from "@/components/BottomBar";
 import { buttonClasses } from "@/components/buttonStyles";
-import { NAV_ITEMS, type NavItem, offeredTo, useWarmLists } from "@/components/navItems";
+import {
+  currentEntry,
+  NAV_ITEMS,
+  type NavItem,
+  offeredTo,
+  useWarmLists,
+} from "@/components/navItems";
+import { stickyBarClasses, useStickyBar } from "@/components/stickyBar";
 import { Button } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { applyNavCollapsed, storeNavCollapsed, storedNavCollapsed } from "@/lib/navCollapsed";
-import { songSection } from "@/lib/listContext";
 import { Link, NavLink, usePathname, useSearchParams } from "@/lib/navigation";
-import { useChromeTucked } from "@/lib/scrollChrome";
 
 /**
  * The lit and pressable treatments shared by the nav links and the identity
@@ -79,15 +84,15 @@ export function Layout({ children }: { children?: ReactNode }) {
       {/* `app` is the content column. The list and the lyrics become two
           panes once it is wide enough, which collapsing the navigation is
           what makes true on a narrower window. The bottom room on a phone is
-          the bar floating over the page plus the home indicator under it, so
-          the last lyric line, the end of a list and its infinite-scroll
-          trigger all scroll clear of the bar. index.css takes it off once the
-          panes are up, or the window would scroll past them. */}
+          what the bar floating over the page covers (`--bottom-bar-clearance`)
+          and a little more, so the last lyric line, the end of a list and its
+          infinite-scroll trigger all scroll clear of the bar. index.css takes
+          it off once the panes are up, or the window would scroll past them. */}
       <main className="@container/app min-w-0 flex-1">
         {/* No Suspense boundary here: a server streams the shell the moment
             one sits above a page, so a page's `notFound()` or redirect
             arrives as a 200 with a meta tag rather than a 404 or a 308. */}
-        <div className="app-column pb-[calc(--spacing(24)+env(safe-area-inset-bottom))] md:pb-8">
+        <div className="app-column pb-[calc(var(--bottom-bar-clearance)+--spacing(4))] md:pb-8">
           {children}
         </div>
       </main>
@@ -99,12 +104,9 @@ export function Layout({ children }: { children?: ReactNode }) {
 
 /**
  * One of the navigation's links. The Lists link starts loading the lists on
- * hover, press or focus (`useWarmLists`).
- *
- * `section` is the entry an open song belongs to (`songSection`), or
- * undefined anywhere else, where the link's own path decides.
+ * hover, press or focus (`useWarmLists`). Lit when it is the `currentEntry`.
  */
-function NavEntry({ item, section }: { item: NavItem; section: string | undefined }) {
+function NavEntry({ item, active }: { item: NavItem; active: boolean }) {
   // Only the Lists link carries the handlers (see the spread below), and
   // `NavPanel` shows it only to a signed-in reader.
   const intent = useWarmLists();
@@ -112,7 +114,7 @@ function NavEntry({ item, section }: { item: NavItem; section: string | undefine
   return (
     <NavLink
       href={item.to}
-      active={section === undefined ? undefined : section === item.to}
+      active={active}
       data-guest-only={item.identityCard || undefined}
       {...(item.warmsLists ? intent : undefined)}
       className={({ isActive }) =>
@@ -129,32 +131,38 @@ function NavEntry({ item, section }: { item: NavItem; section: string | undefine
 }
 
 /**
- * The column's navigation: the wordmark, the links, and the identity card or
- * the Sign in button at its foot.
+ * The column's navigation: the wordmark and the control that hides the
+ * column, the links, and the identity card or the Sign in button at its foot.
  */
-function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
+function NavPanel() {
   const { user } = useAuth();
-  const section = songSection(usePathname(), useSearchParams());
+  const current = currentEntry(usePathname(), useSearchParams(), user, { phone: false });
 
   // Only a guest, who has no card, keeps the Profile link.
   const links = NAV_ITEMS.filter((item) => offeredTo(item, user) && !(item.identityCard && user));
 
   return (
     <>
-      <div
-        className={cn(
-          "mb-8 flex items-center gap-1 px-2",
-          // The desktop row is as tall as the search field and a song's tools,
-          // so the collapse control shares their center. The link is a flex
-          // item: an inline one keeps a line box under the wordmark and the
-          // control then sits below it.
-          wordmarkTrailing ? "min-h-12" : undefined,
-        )}
-      >
+      {/* As tall as the search field and a song's tools, so the collapse
+          control shares their center. The link is a flex item: an inline one
+          keeps a line box under the wordmark and the control then sits below
+          it. */}
+      <div className="mb-8 flex min-h-12 items-center gap-1 px-2">
         <Link href="/" className="flex min-w-0 items-center">
           <Wordmark />
         </Link>
-        {wordmarkTrailing}
+        {/* Into the row's padding, so the wordmark keeps the room it had
+            before the button sat beside it. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={hideNavigation}
+          aria-label="Hide navigation"
+          className="-mr-2 shrink-0"
+        >
+          <PanelLeftClose aria-hidden className="size-5" />
+        </Button>
       </div>
 
       {/* The card stays inside the <nav> landmark: it is the way to
@@ -162,7 +170,7 @@ function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
           bottom. */}
       <nav className="flex flex-1 flex-col gap-1">
         {links.map((item) => (
-          <NavEntry key={item.to} item={item} section={section} />
+          <NavEntry key={item.to} item={item} active={item === current} />
         ))}
 
         <div className="mt-auto px-2 pt-6">
@@ -171,6 +179,7 @@ function NavPanel({ wordmarkTrailing }: { wordmarkTrailing?: ReactNode }) {
             // `-mx-2` lines its background up with the links above.
             <NavLink
               href="/profile"
+              active={current.identityCard === true}
               className={({ isActive }) =>
                 cn(
                   "-mx-2 flex min-w-0 items-center gap-2.5 rounded-control px-2 py-2 transition-colors",
@@ -209,23 +218,7 @@ function DesktopSidebar() {
         // `min-h-12`, the collapse control centers on that field and the tools.
         className="nav-sidebar-panel flex h-full shrink-0 flex-col border-r border-line bg-surface px-4 pt-3 pb-6"
       >
-        <NavPanel
-          wordmarkTrailing={
-            // Into the row's padding, so the wordmark keeps the room it had
-            // before the button sat beside it. Desktop only: the column is not
-            // on screen below `md`.
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={hideNavigation}
-              aria-label="Hide navigation"
-              className="-mr-2 shrink-0"
-            >
-              <PanelLeftClose aria-hidden className="size-5" />
-            </Button>
-          }
-        />
+        <NavPanel />
       </div>
     </aside>
   );
@@ -257,74 +250,34 @@ export function MenuButton() {
 }
 
 /**
- * A sticky page header that gets out of the way on a phone.
- *
- * Hides on scroll down and returns on scroll up, below `md` only, together
- * with the rest of the phone's chrome (`useChromeTucked`): the `max-md:`
- * prefix does that in CSS rather than tracking `matchMedia`, whose answer
- * would have to be kept in step with a window resized across the breakpoint.
+ * A sticky page header that gets out of the way on a phone, together with the
+ * rest of the phone's chrome (`stickyBarClasses`, `useStickyBar`).
  *
  * `pinned` holds it still, for a header with something anchored to it.
  *
- * `mobileOnly` goes on the `<header>` itself, since a bordered box with a
- * hidden child still draws a hairline. Shown only from `md` up and only while
- * the column is collapsed, when the bar is the way back to the navigation on a
- * screen that has no search box (index.css).
- *
- * Its height is published as `--sticky-header-height` on `<html>`, which the
- * root's `scroll-padding-top` reads, so a control reached by Tab is scrolled
- * clear of the header rather than to the viewport edge underneath it. Measured
- * rather than written down: the catalog's filter chips change the height, and
- * a `mobileOnly` header that is put away is `display: none` and measures 0.
+ * `collapsedOnly` is a header shown only from `md` up and only while the
+ * column is collapsed, when it is the way back to the navigation on a screen
+ * that has no search box (index.css). On the `<header>` itself, since a
+ * bordered box with a hidden child still draws a hairline.
  */
 export function StickyHeader({
   children,
   pinned,
-  mobileOnly,
+  collapsedOnly,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   pinned?: boolean | undefined;
-  mobileOnly?: boolean;
+  collapsedOnly?: boolean;
 }) {
-  const hidden = useChromeTucked();
   const ref = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const header = ref.current;
-    if (!header) return;
-    const root = document.documentElement.style;
-    // `offsetHeight` is the border box, so the safe-area padding counts too.
-    // A header the layout has put away (`display: none`) measures 0. Publishing
-    // that would clear the height of the header that is actually showing: the
-    // list and the song each have one, and only one is on screen at a time.
-    let published = "";
-    const observer = new ResizeObserver(() => {
-      const height = header.offsetHeight;
-      if (height === 0) return;
-      published = `${height}px`;
-      root.setProperty("--sticky-header-height", published);
-    });
-    // Border box here too, or a rotation that changes only the inset is missed.
-    observer.observe(header, { box: "border-box" });
-    return () => {
-      observer.disconnect();
-      if (published !== "" && root.getPropertyValue("--sticky-header-height") === published) {
-        root.removeProperty("--sticky-header-height");
-      }
-    };
-  }, []);
+  useStickyBar(ref);
 
   return (
     <header
       ref={ref}
       // Read by index.css, which keeps focus inside the header from scrolling.
       data-sticky-header
-      className={cn(
-        "sticky top-0 z-sticky border-b border-line bg-canvas/90 backdrop-blur transition-transform duration-200 pt-safe",
-        // Never away while it holds focus: a Tab into it must land on screen.
-        hidden && !pinned && "max-md:-translate-y-full max-md:focus-within:translate-y-0",
-        mobileOnly && "nav-menu-header",
-      )}
+      className={cn(stickyBarClasses({ tucks: !pinned }), collapsedOnly && "nav-menu-header")}
     >
       {children}
     </header>

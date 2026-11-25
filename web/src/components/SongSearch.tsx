@@ -28,25 +28,17 @@ const PANEL_SIZE = 6;
 /** The chrome of the panel's one-line answers, which differ only in what they say. */
 const noteChrome = "px-4 py-3 text-sm";
 
-/**
- * Search the catalog from a song, in the header above it. The header is the
- * box's, because the box's own state decides when that is pinned.
- */
+/** Search the catalog from a song, in the header above it. */
 export function SongSearch() {
-  return (
-    <SongSearchBox
-      // Pinned while focused too: on iOS, focusing a field can scroll the
-      // page, which would hide the header before the panel opens.
-      frame={(box, pinned) => <SearchHeader pinned={pinned}>{box}</SearchHeader>}
-    />
-  );
+  return <SongSearchBox />;
 }
 
 /**
  * Search the catalog, and step straight into what comes back: the field and
- * its results. Above a song the results drop down over the page (`panel`); in
- * the phone's search sheet they sit under the field and fill the sheet
- * (`sheet`), which is the whole screen and has nothing to dismiss them for.
+ * its results. Above a song (`panel`) the box sits in its own search header,
+ * which the box's state pins, and the results drop down over the page; in the
+ * phone's search sheet (`sheet`) they sit under the field and fill the sheet,
+ * which is the whole screen and has nothing to dismiss them for.
  *
  * Focus never leaves the field: the highlight is `aria-activedescendant` and
  * rows are `tabIndex={-1}`, so `useArrowKeyPaging` (which stands down for a
@@ -56,18 +48,15 @@ export function SongSearch() {
  * The panel is closed by a `pointerdown` listener, never a full-screen
  * transparent element.
  *
- * `frame` wraps the box, told whether anything should hold it on screen: the
- * field has focus or results are showing. `onEscape` takes Escape from the
- * field, which otherwise only closes the panel.
+ * `onEscape` takes Escape from the field, which otherwise only closes the
+ * panel.
  */
 export function SongSearchBox({
   variant = "panel",
-  frame = (box) => box,
   onEscape,
   autoFocus,
 }: {
   variant?: "panel" | "sheet";
-  frame?: (box: ReactNode, pinned: boolean) => ReactNode;
   onEscape?: () => void;
   autoFocus?: boolean;
 }) {
@@ -83,7 +72,7 @@ export function SongSearchBox({
   const [dismissed, setDismissed] = useState(false);
   // The highlighted row; -1 is the field itself.
   const [active, setActive] = useState(-1);
-  // Also pins the header; see the `pinned` argument below.
+  // Also pins the header; see the end.
   const [focused, setFocused] = useState(false);
 
   // Whatever was on screen is gone by the time the next page is. Keyed on the
@@ -262,7 +251,7 @@ export function SongSearchBox({
     );
   };
 
-  return frame(
+  const box = (
     // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: tracks focus leaving its children; nothing here is pressed.
     <div
       ref={wrapper}
@@ -313,9 +302,14 @@ export function SongSearchBox({
           {panelBody()}
         </div>
       )}
-    </div>,
-    open || focused,
+    </div>
   );
+
+  if (inSheet) return box;
+  // Held on screen while the results are up, and while the field is focused
+  // too: on iOS, focusing a field can scroll the page, which would hide the
+  // header before the panel opens.
+  return <SearchHeader pinned={open || focused}>{box}</SearchHeader>;
 }
 
 /**

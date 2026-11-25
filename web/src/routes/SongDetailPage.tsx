@@ -4,15 +4,9 @@ import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { ChartColumn, Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
-import {
-  useDeleteSong,
-  useList,
-  useLists,
-  useSong,
-  useSongLists,
-  useToggleSongInList,
-} from "@/api/hooks";
+import { useDeleteSong, useLists, useSong, useSongLists, useToggleSongInList } from "@/api/hooks";
 import { useRecordSongClick } from "@/api/recordSongClick";
+import { useListPosition } from "@/api/useListPosition";
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ListSongNavBar, ListSongSwipe } from "@/components/ListSongNav";
@@ -36,14 +30,14 @@ import {
   drawnFontSize,
   storeFontSize,
 } from "@/lib/fontSize";
-import { listInView, listPosition, songRefFromPath, songRefHref } from "@/lib/listContext";
+import { songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Recording, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { headerBarPadding } from "@/components/SearchHeader";
 import { sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
-import { Link, usePathname, useRouter, useSearchParams } from "@/lib/navigation";
-import { useChromeTucked } from "@/lib/scrollChrome";
+import { Link, useRouter } from "@/lib/navigation";
+import { stickyBarClasses, useStickyBar } from "@/components/stickyBar";
 import { useStoredState } from "@/lib/useStoredState";
 import { FirstRecordingBadge, RecordingNotes, RecordingsSheet } from "@/components/RecordingsSheet";
 
@@ -118,12 +112,13 @@ function SongUnavailable({ message }: { message: string }) {
  */
 function SongArticle() {
   // From the address, not `useParams`: Next merges the params of every active
-  // segment, and the list kept beside the song is one (see `listInView`).
-  const pathname = usePathname();
-  const id = songRefFromPath(pathname) ?? undefined;
+  // segment, and the list kept beside the song is one (see `listInView`). The
+  // list this song is read from, if any, as the pane beside it reads it; a
+  // failure just leaves the page without list navigation. Located by the
+  // address, so the bar stays up while the next song loads.
+  const { ref: id, position } = useListPosition();
   const router = useRouter();
   const signIn = useSignInHref();
-  const params = useSearchParams();
   const { user, loading: sessionLoading } = useAuth();
 
   // No `isError`, deliberately; see the guard below.
@@ -136,11 +131,6 @@ function SongArticle() {
   useRecordSongClick(id, !sessionLoading && Boolean(fullSong));
   const deleteSong = useDeleteSong();
 
-  // The list this song is read from, if any, as the pane beside it reads it
-  // (`listInView`). A failure just leaves the page without list navigation.
-  const listId = listInView(pathname, params) ?? undefined;
-  const { data: contextList } = useList(listId, !sessionLoading);
-
   // The whole article is the surface the paging swipe is read across.
   const surface = useRef<HTMLElement>(null);
   // The lyrics, under the tools. A new song opens at the top; the list beside
@@ -150,8 +140,6 @@ function SongArticle() {
   useLayoutEffect(() => {
     lyrics.current?.scrollTo({ top: 0, behavior: "instant" });
   }, [id]);
-
-  const tucked = useChromeTucked();
 
   const [listSheetOpen, setListSheetOpen] = useState(false);
   const [recordingsOpen, setRecordingsOpen] = useState(false);
@@ -189,9 +177,6 @@ function SongArticle() {
     return <SongUnavailable message={errorMessage(error, "This song could not be loaded.")} />;
   }
 
-  // Located by the address, so the bar stays up while the next song loads.
-  const position = contextList && id ? listPosition(contextList, id) : null;
-
   return (
     // Full width of the reading pane once the list is beside it. The phone keeps
     // the column.
@@ -205,23 +190,7 @@ function SongArticle() {
     >
       {/* The title alone; nameless while in flight. */}
       <PageTitle name={song?.title} />
-      {/* Beside the list, Back leaves and this bar is the header: it stays
-          put, and the lyrics scroll under it, so the scrollbar starts at the
-          title. Its height follows the search header, chips included, so the
-          two borders stay one line.
-
-          On a phone it is the page's only top bar, so it is a thin sticky one,
-          which hides on the way down and returns on the way up together with
-          the bottom bar (`useChromeTucked`), but never while it holds focus. */}
-      <div
-        className={cn(
-          "@3xl/app:shrink-0 @3xl/app:border-b @3xl/app:border-line @3xl/app:bg-canvas @3xl/app:pt-safe",
-          "@3xl/app:min-h-[var(--sticky-header-height,0px)]",
-          "max-md:sticky max-md:top-0 max-md:z-sticky max-md:border-b max-md:border-line max-md:bg-canvas/90 max-md:pt-safe max-md:backdrop-blur",
-          "max-md:motion-safe:transition-transform max-md:motion-safe:duration-200",
-          tucked && "max-md:-translate-y-full max-md:focus-within:translate-y-0",
-        )}
-      >
+      <SongToolsBar>
         <div
           className={cn(
             "flex items-center gap-2 max-md:py-1 md:@max-3xl/app:py-4",
@@ -272,7 +241,7 @@ function SongArticle() {
             </MoreActionsMenu>
           </div>
         </div>
-      </div>
+      </SongToolsBar>
       <div
         ref={lyrics}
         className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain"
@@ -413,6 +382,39 @@ function SongArticle() {
         </div>
       </div>
     </article>
+  );
+}
+
+/**
+ * The row of Back and the song's tools.
+ *
+ * Beside the list, Back leaves and this bar is the header: it stays put, and
+ * the lyrics scroll under it, so the scrollbar starts at the title. Its height
+ * follows the search header, chips included, so the two borders stay one line.
+ *
+ * On a phone it is the page's only top bar, so it is a thin sticky one, with
+ * `StickyHeader`'s chrome and its tuck, and it publishes its height for the
+ * root's scroll padding as that header would (`useStickyBar`). Only there:
+ * beside the list it reads the height the catalog's header publishes.
+ */
+function SongToolsBar({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useStickyBar(ref, { phoneOnly: true });
+
+  return (
+    <div
+      ref={ref}
+      // "phone": index.css keeps focus inside it from scrolling where it is
+      // stuck, and leaves it alone where it is an ordinary row.
+      data-sticky-header="phone"
+      className={cn(
+        "@3xl/app:shrink-0 @3xl/app:border-b @3xl/app:border-line @3xl/app:bg-canvas @3xl/app:pt-safe",
+        "@3xl/app:min-h-[var(--sticky-header-height,0px)]",
+        stickyBarClasses({ phoneOnly: true }),
+      )}
+    >
+      {children}
+    </div>
   );
 }
 

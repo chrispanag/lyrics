@@ -94,7 +94,7 @@ export function MenuHeader() {
   return (
     <>
       <div aria-hidden className="pt-safe md:hidden" />
-      <StickyHeader mobileOnly>
+      <StickyHeader collapsedOnly>
         <div className={headerColumn}>
           <MenuButton />
         </div>

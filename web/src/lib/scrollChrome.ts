@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect } from "react";
 
 /*
  * Whether a phone's chrome is tucked away: the top bars hidden and the bottom
@@ -6,15 +6,23 @@ import { useSyncExternalStore } from "react";
  * any scroll up, at the top of the page, and whenever a bar asks (a tap on the
  * pill, focus moving into the bar).
  *
- * One answer for the whole page, read through `useChromeTucked`, so every bar
- * moves on the same scroll. Each bar listening for itself would start counting
- * from wherever the page was when it mounted, and a song's top bar and the
- * bottom bar could then disagree about which way the reader last went.
+ * One answer for the whole page, so every bar moves on the same scroll. Each
+ * bar listening for itself would start counting from wherever the page was
+ * when it mounted, and a song's top bar and the bottom bar could then disagree
+ * about which way the reader last went.
+ *
+ * The answer is `data-chrome-tucked` on <html>, which index.css draws from,
+ * not React state: a tuck happens on every change of scroll direction, and
+ * drawing it through React would re-render each bar and the page holding one,
+ * for a change that is only a transform. Nothing React renders reads it.
  *
  * Below `md` only, but the store does not know that: each bar applies it under
  * `max-md:`, or is not on screen from `md` up at all, so nothing here has to
  * follow a window resized across the breakpoint.
  */
+
+/** What index.css keys the tucked chrome on. */
+export const CHROME_TUCKED_ATTRIBUTE = "data-chrome-tucked";
 
 /** Movement smaller than this is momentum-scroll jitter, not a direction. */
 const JITTER_PX = 8;
@@ -24,12 +32,12 @@ const TOP_PX = 80;
 
 let tucked = false;
 let lastY = 0;
-const listeners = new Set<() => void>();
+let bars = 0;
 
 function set(next: boolean): void {
   if (next === tucked) return;
   tucked = next;
-  for (const listener of listeners) listener();
+  document.documentElement.toggleAttribute(CHROME_TUCKED_ATTRIBUTE, next);
 }
 
 function onScroll(): void {
@@ -44,32 +52,27 @@ function onScroll(): void {
  * the last, and the state starts over then: a page with no bar left has no
  * direction to remember, and a stale "tucked" would greet the next one.
  */
-function subscribe(listener: () => void): () => void {
-  if (listeners.size === 0) {
+function register(): () => void {
+  if (bars === 0) {
     lastY = window.scrollY;
     window.addEventListener("scroll", onScroll, { passive: true });
   }
-  listeners.add(listener);
+  bars += 1;
   return () => {
-    listeners.delete(listener);
-    if (listeners.size > 0) return;
+    bars -= 1;
+    if (bars > 0) return;
     window.removeEventListener("scroll", onScroll);
-    tucked = false;
+    set(false);
   };
 }
 
-function snapshot(): boolean {
-  return tucked;
-}
-
-/** A server, and the first render in a browser, draw the chrome out. */
-function serverSnapshot(): boolean {
-  return false;
-}
-
-/** Whether the chrome is tucked away. See the module comment. */
-export function useChromeTucked(): boolean {
-  return useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+/**
+ * Takes part in the page's tucking, for a bar index.css moves with it. In an
+ * effect, so a server and the first render in a browser draw the chrome out.
+ * Returns nothing: the bar re-renders for none of it.
+ */
+export function useChromeScroll(): void {
+  useEffect(register, []);
 }
 
 /**

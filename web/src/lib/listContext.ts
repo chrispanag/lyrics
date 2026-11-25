@@ -181,6 +181,11 @@ export interface ListPosition {
   nextHref?: string | undefined;
 }
 
+/** Where a song sits in its list, as a reader is shown it: "3 of 20". */
+export function positionLabel({ index, total }: ListPosition): string {
+  return `${index + 1} of ${total}`;
+}
+
 /**
  * Locates a song in a list, as the addresses around it. Null when the song is
  * not in the list, which leaves the page without list navigation, not an error.

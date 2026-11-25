@@ -217,7 +217,7 @@ const onAPhone: Story = {
 
 /** The phone's chrome, found by what index.css and the page key on. */
 function chrome() {
-  const tools = document.querySelector<HTMLElement>(".max-md\\:sticky");
+  const tools = document.querySelector<HTMLElement>('[data-sticky-header="phone"]');
   const bar = document.querySelector<HTMLElement>(".bottom-bar");
   const tabs = document.querySelector<HTMLElement>(".bottom-bar-tabs");
   const row = document.querySelector<HTMLElement>(".bottom-bar-row");
@@ -227,9 +227,9 @@ function chrome() {
 }
 
 /** Scrolls far enough down that the chrome tucks away, and waits it out. */
-async function tuck(bar: HTMLElement) {
+async function tuck() {
   window.scrollTo({ top: 600, behavior: "instant" });
-  await waitFor(() => expect(bar).toHaveAttribute("data-tucked"));
+  await waitFor(() => expect(document.documentElement).toHaveAttribute("data-chrome-tucked"));
   await settled();
 }
 
@@ -244,7 +244,7 @@ export const PhoneChrome: Story = {
   ...onAPhone,
   play: async ({ canvas }) => {
     await canvas.findByText(LAST_LINE);
-    const { tools, bar, tabs, row, pill } = chrome();
+    const { tools, tabs, row, pill } = chrome();
 
     // No search header: the tools bar is the only bar above the song.
     await expect(canvas.queryByRole("combobox", { name: /search songs/i })).toBeNull();
@@ -252,29 +252,38 @@ export const PhoneChrome: Story = {
     await expect(top.top).toBe(0);
     await expect(top.height).toBeLessThanOrEqual(56);
     await expect(within(tools).getByRole("button", { name: "Back" })).toBeVisible();
+    // The only bar above the song publishes its height, so a control reached
+    // by Tab scrolls clear of it.
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue("--sticky-header-height")).toBe(
+        `${tools.offsetHeight}px`,
+      ),
+    );
     await expect(getComputedStyle(row).opacity).toBe("1");
     await expect(getComputedStyle(pill).opacity).toBe("0");
     // The room between the bars at the top of the page: more than the old
     // stack above the title left, even with the bottom bar out.
     const atTop = tabs.getBoundingClientRect().top - top.bottom;
     await expect(atTop).toBeGreaterThan(844 - 141);
+    const classes = [tools.className, tabs.className];
 
-    await tuck(bar);
+    await tuck();
 
+    // Drawn from the attribute on <html>: the page rendered nothing for it.
+    await expect([tools.className, tabs.className]).toEqual(classes);
     await expect(tools.getBoundingClientRect().bottom).toBeLessThanOrEqual(0);
     await expect(getComputedStyle(row).opacity).toBe("0");
     await expect(getComputedStyle(pill).opacity).toBe("1");
     await expect(pill).toHaveTextContent("Μακρύ τραγούδι");
     // Everything above the pill's surface is the lyrics': its hit area
     // reaches higher, but draws nothing there.
-    const scrolled = tabs.getBoundingClientRect().top;
-    // Measured: 733px at the top, 812px scrolled (800 with the 36px pill).
+    const scrolled = tabs.getBoundingClientRect().top; // Measured: 733px at the top, 812px scrolled (800 with the 36px pill).
     await expect(scrolled).toBeGreaterThan(atTop + 50);
     await expect(scrolled).toBeGreaterThanOrEqual(805);
 
     // Back up, and both return.
     window.scrollTo({ top: 400, behavior: "instant" });
-    await waitFor(() => expect(bar).not.toHaveAttribute("data-tucked"));
+    await waitFor(() => expect(document.documentElement).not.toHaveAttribute("data-chrome-tucked"));
     await settled();
     await expect(tools.getBoundingClientRect().top).toBe(0);
     await expect(getComputedStyle(row).opacity).toBe("1");
@@ -290,10 +299,10 @@ export const PhonePill: Story = {
   ...onAPhone,
   play: async ({ canvas }) => {
     await canvas.findByText(LAST_LINE);
-    const { bar, tabs, pill } = chrome();
+    const { tabs, pill } = chrome();
     await expect(getComputedStyle(tabs).scale).toBe("1");
 
-    await tuck(bar);
+    await tuck();
 
     // The same surface, shrunk where it stood, not a second one faded in.
     await expect(chrome().tabs).toBe(tabs);
