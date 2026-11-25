@@ -9,9 +9,14 @@
    screen. `:focus-visible`, not `:focus-within`: Chrome on Android focuses a
    tapped button or link, and that focus outlives the tap, so a bar would stay
    out until the reader tapped elsewhere. A text field always matches
-   `:focus-visible`, so typing in a bar holds it too. Used under `max-md:`, as
+   `:focus-visible`, so typing in a bar holds it too, and so does a menu opened
+   from it, whose trigger a tap leaves without visible focus: tucked, the bar
+   would slide away from under the open panel. Used under `max-md:`, as
    `stickyBarClasses` does. */
-@custom-variant chrome-tucked (:root[data-chrome-tucked] &:not(:has(:focus-visible)));
+@custom-variant chrome-tucked (
+  :root[data-chrome-tucked]
+    &:not(:has(:focus-visible, [aria-haspopup="menu"][aria-expanded="true"]))
+);
 
 /* `inline` because `--font-inter` is set by next/font on <html>; see
    app/layout.tsx. */
@@ -440,9 +445,9 @@
    only while it shows.
 
    While the reader types in a field anywhere on the page (`:read-write`,
-   which a checkbox or a button never is), the bar is out of the way
-   altogether: a phone's keyboard pushes it up to sit on top of the keys, over
-   what the field finds. */
+   which a checkbox or a button never is) on a touch screen, the bar is out of
+   the way altogether: a phone's keyboard pushes it up to sit on top of the
+   keys, over what the field finds. */
 @layer components {
   .bottom-bar-tabs {
     border-radius: calc(infinity * 1px);
@@ -471,8 +476,13 @@
       }
     }
   }
-  :root:has(:read-write:focus) .bottom-bar {
-    visibility: hidden;
+  /* Only where a touch screen means an on-screen keyboard: in a narrow window
+     with a real keyboard nothing covers the field, and a hidden bar would drop
+     out of the Tab order while the field has focus. */
+  @media (pointer: coarse) {
+    :root:has(:read-write:focus) .bottom-bar {
+      visibility: hidden;
+    }
   }
   @media (prefers-reduced-motion: no-preference) {
     .bottom-bar-tabs {
