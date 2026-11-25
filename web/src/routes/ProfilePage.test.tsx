@@ -215,6 +215,23 @@ describe("ProfilePage", () => {
 
     expect(logout).toHaveBeenCalledOnce();
   });
+
+  // A phone's bottom bar has no Admin tab; the console is reached from here.
+  // jsdom has no breakpoints: `md:hidden` is what leaves it to the column at a
+  // desk.
+  it("leads an admin to the console, on a phone", () => {
+    renderWithProviders(<ProfilePage />, { user: makeUser({ role: "admin" }) });
+
+    const link = screen.getByRole("link", { name: "Admin console" });
+    expect(link).toHaveAttribute("href", "/admin");
+    expect(link.parentElement).toHaveClass("md:hidden");
+  });
+
+  it("offers no console to anyone else", () => {
+    renderWithProviders(<ProfilePage />, { user: makeUser({ role: "contributor" }) });
+
+    expect(screen.queryByRole("link", { name: "Admin console" })).not.toBeInTheDocument();
+  });
 });
 
 describe("ProfilePage pictures", () => {

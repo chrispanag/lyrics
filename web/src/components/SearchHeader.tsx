@@ -23,7 +23,8 @@ const headerColumn = cn("mx-auto", contentWidth, headerBarPadding);
  *
  * It owns the sticky chrome, the column, the field's `flex-1` share and the
  * leading hamburger, so no page can make the field move under the finger
- * between screens. See "Frontend" in CLAUDE.md.
+ * between screens. The hamburger shows only from `md` up with the column
+ * collapsed (index.css); a phone's navigation is the bottom bar.
  *
  * `trailing` is not a reserved slot: with nothing beside it the field takes the
  * full width and stays centered. A trailing control must keep a fixed width,
@@ -80,19 +81,24 @@ export function ToolbarHeader({ children }: { children: ReactNode }) {
 
 /**
  * The same bar for a screen with no search box of its own: the hamburger, in
- * the place every other screen keeps it. `mobileOnly`, since at a desk the
- * sidebar is the navigation until the reader collapses it, and then this bar
- * is the way back.
+ * the place every other screen keeps it. From `md` up only, and only while the
+ * column is collapsed, since the open column is the navigation and the bar
+ * is then the way back to it. Below `md` the bottom bar is the navigation, and
+ * all that is left here is the room the notch takes, which the bar's own
+ * safe-area padding used to keep clear.
  *
  * Applied by the `(menu)` route group's layout, not per page, so no screen or state
  * can forget it.
  */
 export function MenuHeader() {
   return (
-    <StickyHeader mobileOnly>
-      <div className={headerColumn}>
-        <MenuButton />
-      </div>
-    </StickyHeader>
+    <>
+      <div aria-hidden className="pt-safe md:hidden" />
+      <StickyHeader collapsedOnly>
+        <div className={headerColumn}>
+          <MenuButton />
+        </div>
+      </StickyHeader>
+    </>
   );
 }

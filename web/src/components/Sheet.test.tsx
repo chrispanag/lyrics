@@ -48,7 +48,7 @@ describe("Sheet", () => {
 
     expect(screen.getByRole("dialog", { name: "Example" })).toBeInTheDocument();
     expect(modalIsOpen()).toBe(true);
-    // CSS holds the page still under a dialog; a `<body>` lock is the drawer's.
+    // CSS holds the page still under a dialog, with no `<body>` lock.
     expect(document.body.style.overflow).toBe("");
   });
 

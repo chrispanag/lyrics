@@ -28,19 +28,39 @@ const PANEL_SIZE = 6;
 /** The chrome of the panel's one-line answers, which differ only in what they say. */
 const noteChrome = "px-4 py-3 text-sm";
 
+/** Search the catalog from a song, in the header above it. */
+export function SongSearch() {
+  return <SongSearchBox />;
+}
+
 /**
- * Search the catalog from a song, and step straight into what comes back.
+ * Search the catalog, and step straight into what comes back: the field and
+ * its results. Above a song (`panel`) the box sits in its own search header,
+ * which the box's state pins, and the results drop down over the page; in the
+ * phone's search sheet (`sheet`) they sit under the field and fill the sheet,
+ * which is the whole screen and has nothing to dismiss them for.
  *
  * Focus never leaves the field: the highlight is `aria-activedescendant` and
  * rows are `tabIndex={-1}`, so `useArrowKeyPaging` (which stands down for a
  * focused field) can never page the list from under the panel. See "Frontend"
  * in CLAUDE.md.
  *
- * Closed by a `pointerdown` listener, never a full-screen transparent element.
+ * The panel is closed by a `pointerdown` listener, never a full-screen
+ * transparent element.
  *
- * Renders its own header because its own state decides when that is pinned.
+ * `onEscape` takes Escape from the field, which otherwise only closes the
+ * panel.
  */
-export function SongSearch() {
+export function SongSearchBox({
+  variant = "panel",
+  onEscape,
+  autoFocus,
+}: {
+  variant?: "panel" | "sheet";
+  onEscape?: () => void;
+  autoFocus?: boolean;
+}) {
+  const inSheet = variant === "sheet";
   const router = useRouter();
   const pathname = usePathname();
   const navigationKey = useNavigationKey();
@@ -52,7 +72,7 @@ export function SongSearch() {
   const [dismissed, setDismissed] = useState(false);
   // The highlighted row; -1 is the field itself.
   const [active, setActive] = useState(-1);
-  // Also pins the header; see the `pinned` argument below.
+  // Also pins the header; see the end.
   const [focused, setFocused] = useState(false);
 
   // Whatever was on screen is gone by the time the next page is. Keyed on the
@@ -117,7 +137,8 @@ export function SongSearch() {
       // Browsers empty a `type="search"` field on Escape; the text must stay.
       // jsdom has no such default, so no spec can see this.
       event.preventDefault();
-      dismiss();
+      if (onEscape) onEscape();
+      else dismiss();
       return;
     }
 
@@ -156,7 +177,8 @@ export function SongSearch() {
   };
 
   useEffect(() => {
-    if (!open) return;
+    // The sheet is all search: a press anywhere in it is not a press away.
+    if (!open || inSheet) return;
 
     // `pointerdown` rather than `click`, so the panel is out of the way before
     // the press it was covering is delivered.
@@ -167,7 +189,7 @@ export function SongSearch() {
 
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [dismiss, open]);
+  }, [dismiss, inSheet, open]);
 
   // Keeps the highlighted row in view with a phone keyboard up. Optional call:
   // jsdom has no `scrollIntoView`.
@@ -188,7 +210,8 @@ export function SongSearch() {
             id={listboxId}
             role="listbox"
             aria-label="Song search results"
-            className="max-h-[50dvh] overflow-y-auto overscroll-contain py-1"
+            // In the sheet, the sheet's body is what scrolls.
+            className={cn("py-1", !inSheet && "max-h-[50dvh] overflow-y-auto overscroll-contain")}
           >
             {results.map((song, index) => {
               const { href, replace } = step(song);
@@ -228,59 +251,65 @@ export function SongSearch() {
     );
   };
 
-  return (
-    // Pinned while focused too: on iOS, focusing a field can scroll the page,
-    // which would hide the header before the panel opens.
-    <SearchHeader pinned={open || focused}>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: tracks focus leaving its children; nothing here is pressed. */}
-      <div
-        ref={wrapper}
-        className="relative"
-        // Closes the panel when a reader Tabs away. Ignores a null
-        // `relatedTarget` (window blur, or Safari not focusing a clicked link),
-        // which would unmount the row before its click lands.
-        onBlur={(event) => {
-          const next = event.relatedTarget;
-          if (!(next instanceof Node)) return;
-          if (wrapper.current?.contains(next)) return;
-          dismiss();
+  const box = (
+    // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: tracks focus leaving its children; nothing here is pressed.
+    <div
+      ref={wrapper}
+      className="relative"
+      // Closes the panel when a reader Tabs away. Ignores a null
+      // `relatedTarget` (window blur, or Safari not focusing a clicked link),
+      // which would unmount the row before its click lands. Not in the sheet,
+      // where the only other control is Close.
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (inSheet || !(next instanceof Node)) return;
+        if (wrapper.current?.contains(next)) return;
+        dismiss();
+      }}
+    >
+      <SearchField
+        value={draft}
+        onChange={(next) => {
+          setDraft(next);
+          setDismissed(false);
+          setActive(-1);
         }}
-      >
-        <SearchField
-          value={draft}
-          onChange={(next) => {
-            setDraft(next);
-            setDismissed(false);
-            setActive(-1);
-          }}
-          onKeyDown={onKeyDown}
-          onFocus={() => setFocused(true)}
-          // Unguarded: losing the caret to nowhere still counts.
-          onBlur={() => setFocused(false)}
-          role="combobox"
-          // Both only while the listbox is rendered: the "nothing matched" and
-          // "unavailable" notes are status messages, not the combobox's popup,
-          // and expanded with nothing to control is announced as a popup that
-          // is not there.
-          aria-expanded={listShown}
-          aria-controls={listShown ? listboxId : undefined}
-          aria-autocomplete="list"
-          aria-activedescendant={listShown && activeSong ? optionId(listboxId, active) : undefined}
-        />
+        onKeyDown={onKeyDown}
+        onFocus={() => setFocused(true)}
+        // Unguarded: losing the caret to nowhere still counts.
+        onBlur={() => setFocused(false)}
+        // The sheet's: a reader opens it to type. It mounts once the dialog
+        // is open (`Sheet`), so this lands inside it.
+        autoFocus={autoFocus}
+        role="combobox"
+        // Both only while the listbox is rendered: the "nothing matched" and
+        // "unavailable" notes are status messages, not the combobox's popup,
+        // and expanded with nothing to control is announced as a popup that
+        // is not there.
+        aria-expanded={listShown}
+        aria-controls={listShown ? listboxId : undefined}
+        aria-autocomplete="list"
+        aria-activedescendant={listShown && activeSong ? optionId(listboxId, active) : undefined}
+      />
 
-        {open && (
-          <div
-            className={cn(
-              "absolute inset-x-0 top-full z-dropdown mt-2 overflow-hidden rounded-card border shadow-popover",
-              "border-line-strong bg-surface",
-            )}
-          >
-            {panelBody()}
-          </div>
-        )}
-      </div>
-    </SearchHeader>
+      {open && (
+        <div
+          className={cn(
+            "overflow-hidden rounded-card border border-line-strong bg-surface",
+            inSheet ? "mt-3" : "absolute inset-x-0 top-full z-dropdown mt-2 shadow-popover",
+          )}
+        >
+          {panelBody()}
+        </div>
+      )}
+    </div>
   );
+
+  if (inSheet) return box;
+  // Held on screen while the results are up, and while the field is focused
+  // too: on iOS, focusing a field can scroll the page, which would hide the
+  // header before the panel opens.
+  return <SearchHeader pinned={open || focused}>{box}</SearchHeader>;
 }
 
 /**

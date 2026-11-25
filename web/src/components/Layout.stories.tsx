@@ -6,12 +6,13 @@ import { Page } from "./Page";
 import { MenuHeader } from "./SearchHeader";
 import { applyNavCollapsed, storeNavCollapsed } from "@/lib/navCollapsed";
 import { makeUser } from "@/test/handlers";
+import { phoneGlobals, phoneParameters } from "@/test/phone";
 
 /**
- * The app's shell: the sidebar from `md` up, and below it the drawer the
- * hamburger opens. The sidebar collapses on a desk too, and the hamburger is
- * what opens it again. Story tests run at 1200×900 unless a story names a
- * viewport, which `DrawerOpen` does.
+ * The app's shell: the sidebar from `md` up, and below it the bottom bar. The
+ * sidebar collapses on a desk too, and the menu button is what opens it again.
+ * Story tests run at 1200×900 unless a story names a viewport, as the phone
+ * ones do.
  */
 
 /** Stories start with the column open, whatever an earlier one stored. */
@@ -38,8 +39,20 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A guest gets the profile link (the theme switch lives there) and Sign in. */
-export const Guest: Story = {};
+/** The phone's bar, which a desk never draws. */
+const bottomBar = (canvas: ReturnType<typeof within>) =>
+  canvas.queryByRole("navigation", { name: "Navigation" });
+
+/**
+ * A guest gets the profile link (the theme switch lives there) and Sign in.
+ * At a desk the column is the navigation, and the phone's bar is not drawn.
+ */
+export const Guest: Story = {
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("complementary")).toBeVisible();
+    await expect(bottomBar(canvas)).toBeNull();
+  },
+};
 
 export const SignedIn: Story = {
   parameters: {
@@ -56,27 +69,7 @@ export const Admin: Story = {
   },
 };
 
-/**
- * The drawer is modal only while open, and inert while closed so its links
- * are not a second copy of the navigation in the tab order.
- */
-export const DrawerOpen: Story = {
-  parameters: { user: makeUser({ display_name: "Christos" }) },
-  // The hamburger is hidden while the column is open at a desk; the addon
-  // sizes the test browser from this.
-  globals: { viewport: { value: "mobile1", isRotated: false } },
-  play: async ({ canvas }) => {
-    const trigger = canvas.getByRole("button", { name: "Open menu" });
-    await userEvent.click(trigger);
-
-    const drawer = canvas.getByRole("dialog", { name: "Navigation" });
-    await expect(drawer).toBeVisible();
-    await expect(trigger).toHaveAttribute("aria-expanded", "true");
-    await expect(within(drawer).getByRole("link", { name: /Christos/ })).toBeVisible();
-  },
-};
-
-/** Collapsed, the column leaves the layout and the hamburger brings it back. */
+/** Collapsed, the column leaves the layout and the menu button brings it back. */
 export const Collapsed: Story = {
   parameters: { user: makeUser({ display_name: "Christos" }) },
   loaders: [
@@ -105,5 +98,63 @@ export const Collapsed: Story = {
       }
     });
     await expect(canvas.getByRole("button", { name: "Open menu" })).toBeVisible();
+  },
+};
+
+/**
+ * A phone: no column, no menu button and no bar above the page, and the bottom
+ * bar holding the navigation and Search.
+ */
+export const PhoneSignedIn: Story = {
+  parameters: {
+    ...phoneParameters,
+    user: makeUser({ display_name: "Μαρία Φαραντούρη", role: "contributor" }),
+    route: "/lists",
+  },
+  globals: phoneGlobals,
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("complementary")).toBeNull();
+    await expect(canvas.queryByRole("button", { name: "Open menu" })).toBeNull();
+
+    const bar = bottomBar(canvas);
+    if (!bar) throw new Error("No bottom bar on a phone.");
+    await expect(bar).toBeVisible();
+    await expect(within(bar).getByRole("link", { name: "Lists" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await expect(within(bar).getByRole("link", { name: "Profile" })).toBeVisible();
+    await expect(within(bar).getByRole("button", { name: "Search" })).toBeVisible();
+  },
+};
+
+/** A guest's bar: Browse and Profile, which holds Sign in and the theme. */
+export const PhoneGuest: Story = {
+  parameters: phoneParameters,
+  globals: phoneGlobals,
+  play: async ({ canvas }) => {
+    const bar = bottomBar(canvas);
+    if (!bar) throw new Error("No bottom bar on a phone.");
+    await expect(within(bar).queryByRole("link", { name: "Lists" })).toBeNull();
+    await expect(within(bar).getByRole("link", { name: "Profile" })).toBeVisible();
+  },
+};
+
+/** An admin's console has no tab: Profile leads there, and stays lit inside it. */
+export const PhoneAdmin: Story = {
+  parameters: {
+    ...phoneParameters,
+    user: makeUser({ display_name: "Christos", role: "admin" }),
+    route: "/admin/genres",
+  },
+  globals: phoneGlobals,
+  play: async ({ canvas }) => {
+    const bar = bottomBar(canvas);
+    if (!bar) throw new Error("No bottom bar on a phone.");
+    await expect(within(bar).queryByRole("link", { name: "Admin" })).toBeNull();
+    await expect(within(bar).getByRole("link", { name: "Profile" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   },
 };

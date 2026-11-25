@@ -35,7 +35,7 @@ describe("SearchHeader", () => {
   });
 
   // First child, so the field's left edge is the same on every screen.
-  it("leads the row with the drawer's trigger, on any page that renders it", () => {
+  it("leads the row with the menu button, on any page that renders it", () => {
     render(header(<button type="button">Filters</button>));
 
     expect(row().firstElementChild).toBe(screen.getByRole("button", { name: "Open menu" }));

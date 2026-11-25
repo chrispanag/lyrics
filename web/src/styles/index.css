@@ -4,6 +4,11 @@
    alone, so the in-app toggle can override the system preference. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* A phone's chrome while tucked away (`lib/scrollChrome` sets the attribute),
+   except a bar holding focus: a control reached by Tab must be on screen. Used
+   under `max-md:`, as `stickyBarClasses` does. */
+@custom-variant chrome-tucked (:root[data-chrome-tucked] &:not(:focus-within));
+
 /* `inline` because `--font-inter` is set by next/font on <html>; see
    app/layout.tsx. */
 @theme inline {
@@ -164,7 +169,7 @@
 
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
-  /* The dimming behind a modal: sheets and the drawer. A literal, not a
+  /* The dimming behind a modal sheet. A literal, not a
      `var()` of a token on :root, because it is painted on `::backdrop`, which
      inherits nothing before Safari 17.4 — a variable there resolves to
      nothing and the sheet loses its dim. `inline` writes the value itself
@@ -241,7 +246,7 @@
        too. */
     @apply scheme-light dark:scheme-dark;
     /* Keeps a control reached by Tab from landing under the sticky header,
-       whose height `StickyHeader` measures into this property; screens without
+       whose height `useStickyBar` measures into this property; screens without
        one leave it unset. Below `md` as well, although the header hides on the
        way down and the padding then leaves a gap above the target: Shift+Tab
        scrolls up, which brings the header back over it, and a gap is cosmetic
@@ -253,12 +258,23 @@
      padded band by definition, so focusing it reads as obscured and the page
      scrolls — Chromium centers it, half a viewport up — while the header stays
      put. That is every Shift+Tab into the search box and every modal handing
-     focus back to the button that opened it (the filter sheet, the drawer). A
+     focus back to the button that opened it (the filter sheet). A
      negative margin as deep as the padding moves the target out of the band.
      `:focus` only, so the search panel's rows keep their own `scrollIntoView`
      inside the listbox. */
   [data-sticky-header] :focus {
     scroll-margin-top: calc(-1 * var(--sticky-header-height, 0px));
+  }
+  /* A song's tools bar is stuck on a phone and is the reading pane's own
+     header beside the list, but in between it is an ordinary row under the
+     sticky search header, and a control in it must clear that header like
+     any other. */
+  @media (width >= 48rem) {
+    @container app (width < 48rem) {
+      [data-sticky-header="phone"] :focus {
+        scroll-margin-top: 0;
+      }
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -388,110 +404,99 @@
   }
 }
 
-@layer components {
-  /* The phone's navigation drawer — see `MobileNavDrawer`. A modal `<dialog>`
-     filling the viewport that is itself a horizontal scroller with two snap
-     stops: the sheet, and a viewport-wide spacer after it. Swiping between
-     them is the browser's own scrolling, momentum and all, and `mandatory`
-     means it always settles fully open or fully closed. It is the same idea as
-     `dialog-viewport` above, a dialog that is its own scroller so the page
-     behind never scrolls, turned sideways. The UA's modal box is
-     reset because the scroller has to reach every edge to be swiped anywhere.
+/* What the bottom bar takes from the foot of a phone's screen. The gap under
+   it is the home indicator, or a small margin where there is none; the pill
+   hangs from the same line. The clearance is the expanded bar (58px) with
+   room to spare, plus that gap: what a control reached by Tab, the swipe hint
+   and the end of a page keep clear of. */
+@layer base {
+  :root {
+    --bottom-bar-gap: max(--spacing(2), env(safe-area-inset-bottom));
+    --bottom-bar-clearance: calc(--spacing(18) + var(--bottom-bar-gap));
+  }
+}
 
-     The dialog is the scroller, rather than holding one, so the dim's timeline
-     is `scroll(self)`: a named timeline declared on a child needs
-     `timeline-scope` to reach the dialog, and WebKit, which parses that,
-     resolves no timeline through it and leaves the dim off. */
-  .nav-drawer {
-    /* `w-72 max-w-[85%]` as it was: the strip of page left showing is what
-       says a tap there dismisses. */
-    --drawer-width: min(18rem, 85vw);
-    inset: 0;
-    width: auto;
-    height: auto;
-    max-width: none;
-    max-height: none;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    grid-template-columns: var(--drawer-width) 100%;
-    overflow-x: scroll;
-    overflow-y: hidden;
-    /* Neither axis chains into the page underneath at either stop. */
-    overscroll-behavior: none;
-    /* And a vertical swipe is no pan at all, since iOS Safari chains one from
-       a box that cannot scroll that way whatever `overscroll-behavior` says —
-       on the dim, or on the sheet outside its own scroller. A scroll container
-       resets `touch-action` for what is inside it, so the sheet's list still
-       scrolls (see `MobileNavDrawer`). `pinch-zoom` for the reason
-       `[data-dialog-dismiss]` keeps it: a reader who needs to zoom must still
-       be able to. */
-    touch-action: pan-x pinch-zoom;
-    scrollbar-width: none;
-    scroll-snap-type: x mandatory;
+/* A phone's bottom bar — see `BottomBar`. Expanded it is the tabs; tucked
+   (`data-chrome-tucked` on <html>, while the reader scrolls down) the tabs'
+   surface shrinks, from its bottom edge, to the pill's face, by the scale
+   `BottomBar` measures into `--pill-sx` and `--pill-sy`. The tabs fade as it
+   shrinks and the words saying where the reader is fade in on it. Only
+   `opacity` and `scale` move, and only where motion is welcome; under reduced
+   motion the change is instant.
+
+   Scaled unevenly, a round end turns oval, so the shrunk surface's radius is
+   divided by its scale, to come out at half the face's 24px on each axis. Not
+   transitioned: the shape is exact at rest, and the brief oval in between
+   is the price of animating only the transform.
+
+   Tucked is only how it looks. The tabs stay focusable and in the
+   accessibility tree, and while focus is inside them the bar is drawn
+   expanded whatever the scroll says, so a control reached by Tab is never
+   one the reader cannot see. The pill takes presses only while it shows. */
+@layer components {
+  .bottom-bar-tabs {
+    border-radius: calc(infinity * 1px);
+    transform-origin: bottom center;
+    /* At rest too, so the surface is not a new stacking context only once it moves. */
+    scale: 1;
+    pointer-events: auto;
   }
-  /* WebKit before `scrollbar-width`, as for `dialog-viewport`. */
-  .nav-drawer::-webkit-scrollbar {
-    display: none;
+  .bottom-bar-pill {
+    opacity: 0;
+    pointer-events: none;
   }
-  /* The list inside the sheet is a pixel taller than its box, so iOS treats
-     it as a scroller and a vertical swipe stays here (see MobileNavDrawer).
-     That pixel paints a scrollbar down the sheet whenever the drawer is
-     open. Scrolling stays; the bar is hidden. */
-  .nav-drawer-list {
-    scrollbar-width: none;
-  }
-  .nav-drawer-list::-webkit-scrollbar {
-    display: none;
-  }
-  /* Only while open: a `display` on the class would beat the UA's
-     `display: none` for a closed dialog. */
-  .nav-drawer[open] {
-    display: grid;
-  }
-  .nav-drawer::after {
-    content: "";
-    scroll-snap-align: end;
-    /* Opens on the closed stop, so opening is one scroll to the sheet. Chromium
-       only so far; the component jumps there itself elsewhere. */
-    /* biome-ignore lint/correctness/noUnknownProperty: newer than Biome's property list. */
-    scroll-initial-target: nearest;
-  }
-  /* The scrim and the blur the drawer always had, faded by how far the
-     sheet is on screen rather than by a timer, so the dim follows the finger.
-     ::backdrop inherits the progress from the dialog. */
-  .nav-drawer::backdrop {
-    background: --theme(--color-scrim inline);
-    backdrop-filter: blur(8px);
-    opacity: var(--drawer-backdrop, 0);
-  }
-  .nav-drawer-sheet {
-    /* `svh`, so the iOS toolbar resizing mid-swipe does not resize the sheet. */
-    height: 100svh;
-    scroll-snap-align: start;
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    .nav-drawer {
-      scroll-behavior: smooth;
+  :root[data-chrome-tucked] .bottom-bar:not(:focus-within) {
+    .bottom-bar-tabs {
+      scale: var(--pill-sx, 0.4) var(--pill-sy, 0.4);
+      border-radius: calc(0.75rem / var(--pill-sx, 0.4)) / calc(0.75rem / var(--pill-sy, 0.4));
+      pointer-events: none;
+    }
+    .bottom-bar-row {
+      opacity: 0;
+    }
+    .bottom-bar-pill {
+      opacity: 1;
+      pointer-events: auto;
     }
   }
-  /* Gated because a browser without scroll timelines would run the animation
-     on the document timeline, fill it backwards and pin the dim fully on. There
-     the component writes `--drawer-backdrop` from a scroll listener instead. */
-  @supports (animation-timeline: scroll()) {
-    .nav-drawer {
-      animation: nav-drawer-backdrop linear both;
-      animation-timeline: scroll(self x);
+  @media (prefers-reduced-motion: no-preference) {
+    .bottom-bar-tabs {
+      transition: scale 200ms ease-out;
+    }
+    /* Gone before the surface is small enough to squeeze them. */
+    .bottom-bar-row {
+      transition: opacity 120ms ease-out;
+    }
+    .bottom-bar-pill {
+      transition: opacity 150ms ease-out;
+    }
+    /* The words arrive as the surface does, not on the full-width bar. */
+    :root[data-chrome-tucked] .bottom-bar:not(:focus-within) .bottom-bar-pill {
+      transition-delay: 80ms;
     }
   }
 }
 
+/* Below `md` the bottom bar floats over the page's foot. A control reached by
+   Tab scrolls clear of it, as `scroll-padding-top` keeps one clear of a sticky
+   header. */
+@media (width < 48rem) {
+  html {
+    scroll-padding-bottom: var(--bottom-bar-clearance);
+  }
+}
+
+/* The look every sticky top bar shares (`stickyBarClasses`): a page's header,
+   and a song's tools bar on a phone. A utility, so the song's can be applied
+   under `max-md:` alone. The slide it eases is the tuck; see the
+   `chrome-tucked` variant. */
+@utility sticky-bar {
+  @apply sticky top-0 z-sticky border-b border-line bg-canvas/90 pt-safe backdrop-blur motion-safe:transition-transform motion-safe:duration-200;
+}
+
 /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the edges
    of the viewport, so anything pinned to one of them needs the inset added:
-   the sheet's scrolling body, and the navigation drawer, which reaches both
-   edges of the screen. */
+   the sheet's scrolling body, the sticky headers, and the bottom bar. */
 @utility pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -499,32 +504,14 @@
   padding-top: env(safe-area-inset-top);
 }
 
-/* The drawer's open fraction, from 1 with the sheet on screen to 0 with it
-   gone. Registered as a number so the scroll-driven animation can interpolate
-   it; unregistered, it would jump from one end to the other. */
-@property --drawer-backdrop {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 0;
-}
-
-/* Scroll position 0 is the sheet, so the dim starts full. */
-@keyframes nav-drawer-backdrop {
-  from {
-    --drawer-backdrop: 1;
-  }
-  to {
-    --drawer-backdrop: 0;
-  }
-}
-
 /* The navigation column, and the button that brings it back.
    From `md` (48rem) up the column is part of the layout, unless the reader has
    collapsed it: `data-nav-collapsed` on <html>, set before first paint by
-   `NAV_COLLAPSED_BOOT_SCRIPT`. Collapsed, the header's menu button — the same
-   one a phone uses to open the drawer — is the way to open the column again,
-   and a screen whose only header was that button gets the bar back too.
-   Unlayered, so these beat the button's `inline-flex`.
+   `NAV_COLLAPSED_BOOT_SCRIPT`. Collapsed, the header's menu button is the way
+   to open the column again, and a screen whose only header was that button
+   gets the bar back too. Below `md` the button and that bar are not drawn at
+   all: the bottom bar is a phone's navigation. Unlayered, so these beat the
+   button's `inline-flex`.
 
    `display` cannot move, so the phone keeps the column at `display: none` and
    a desk slides its width. The panel inside stays at `--nav-width` (the old
@@ -539,6 +526,12 @@
 }
 .nav-sidebar-panel {
   width: var(--nav-width);
+}
+@media (width < 48rem) {
+  .nav-menu-button,
+  .nav-menu-header {
+    display: none;
+  }
 }
 @media (min-width: 48rem) {
   .nav-sidebar {
@@ -597,7 +590,8 @@
   }
 }
 
-/* The shell's bottom padding (`pb-12`, and `pb-8` from `md`). Once the content
+/* The shell's bottom padding (the bottom bar's clearance and a little more
+   below `md`, `pb-8` from it; see `Layout`). Once the content
    column is wide enough for the list and the lyrics — `@3xl`, the same 48rem —
    the reader fills the viewport and scrolls inside its panes, and the padding
    would only make the window scroll past them. Only around the reader: every

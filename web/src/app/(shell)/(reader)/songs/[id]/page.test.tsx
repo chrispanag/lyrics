@@ -189,8 +189,9 @@ describe("a song's server-rendered document", () => {
 });
 
 describe("a song the API says does not exist", () => {
-  // The page's own words, under the search header that carries the hamburger:
-  // a dead song link is no reason to strand a phone without its navigation.
+  // The page's own words, under the search header that carries the way back to
+  // a collapsed column (a phone's navigation is the shell's bottom bar): a
+  // dead song link is no reason to strand a reader without it.
   it("is named as not available, with the way to the navigation", () => {
     const html = renderToString(
       <TestProviders route="/songs/no-such-song">

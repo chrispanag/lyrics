@@ -23,6 +23,12 @@ const fieldClasses = cn(
   "search-own-clear h-12 w-full rounded-card pl-10 pr-10 text-base",
 );
 
+/**
+ * Marks the catalog's own field, which a phone's Search button focuses on
+ * Browse rather than opening a second search over it (`BottomBar`).
+ */
+export const CATALOG_SEARCH_ATTRIBUTE = "data-catalog-search";
+
 export function SearchField({
   value,
   onChange,
