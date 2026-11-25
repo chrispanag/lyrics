@@ -5,9 +5,18 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* A phone's chrome while tucked away (`lib/scrollChrome` sets the attribute),
-   except a bar holding focus: a control reached by Tab must be on screen. Used
-   under `max-md:`, as `stickyBarClasses` does. */
-@custom-variant chrome-tucked (:root[data-chrome-tucked] &:not(:focus-within));
+   except a bar holding visible focus: a control reached by Tab must be on
+   screen. `:focus-visible`, not `:focus-within`: Chrome on Android focuses a
+   tapped button or link, and that focus outlives the tap, so a bar would stay
+   out until the reader tapped elsewhere. A text field always matches
+   `:focus-visible`, so typing in a bar holds it too, and so does a menu opened
+   from it, whose trigger a tap leaves without visible focus: tucked, the bar
+   would slide away from under the open panel. Used under `max-md:`, as
+   `stickyBarClasses` does. */
+@custom-variant chrome-tucked (
+  :root[data-chrome-tucked]
+    &:not(:has(:focus-visible, [aria-haspopup="menu"][aria-expanded="true"]))
+);
 
 /* `inline` because `--font-inter` is set by next/font on <html>; see
    app/layout.tsx. */
@@ -430,9 +439,15 @@
    is the price of animating only the transform.
 
    Tucked is only how it looks. The tabs stay focusable and in the
-   accessibility tree, and while focus is inside them the bar is drawn
+   accessibility tree, and while visible focus is inside them the bar is drawn
    expanded whatever the scroll says, so a control reached by Tab is never
-   one the reader cannot see. The pill takes presses only while it shows. */
+   one the reader cannot see (see `chrome-tucked`). The pill takes presses
+   only while it shows.
+
+   While the reader types in a field anywhere on the page (`:read-write`,
+   which a checkbox or a button never is) on a touch screen, the bar is out of
+   the way altogether: a phone's keyboard pushes it up to sit on top of the
+   keys, over what the field finds. */
 @layer components {
   .bottom-bar-tabs {
     border-radius: calc(infinity * 1px);
@@ -445,18 +460,28 @@
     opacity: 0;
     pointer-events: none;
   }
-  :root[data-chrome-tucked] .bottom-bar:not(:focus-within) {
-    .bottom-bar-tabs {
-      scale: var(--pill-sx, 0.4) var(--pill-sy, 0.4);
-      border-radius: calc(0.75rem / var(--pill-sx, 0.4)) / calc(0.75rem / var(--pill-sy, 0.4));
-      pointer-events: none;
+  .bottom-bar {
+    @variant chrome-tucked {
+      .bottom-bar-tabs {
+        scale: var(--pill-sx, 0.4) var(--pill-sy, 0.4);
+        border-radius: calc(0.75rem / var(--pill-sx, 0.4)) / calc(0.75rem / var(--pill-sy, 0.4));
+        pointer-events: none;
+      }
+      .bottom-bar-row {
+        opacity: 0;
+      }
+      .bottom-bar-pill {
+        opacity: 1;
+        pointer-events: auto;
+      }
     }
-    .bottom-bar-row {
-      opacity: 0;
-    }
-    .bottom-bar-pill {
-      opacity: 1;
-      pointer-events: auto;
+  }
+  /* Only where a touch screen means an on-screen keyboard: in a narrow window
+     with a real keyboard nothing covers the field, and a hidden bar would drop
+     out of the Tab order while the field has focus. */
+  @media (pointer: coarse) {
+    :root:has(:read-write:focus) .bottom-bar {
+      visibility: hidden;
     }
   }
   @media (prefers-reduced-motion: no-preference) {
@@ -471,8 +496,12 @@
       transition: opacity 150ms ease-out;
     }
     /* The words arrive as the surface does, not on the full-width bar. */
-    :root[data-chrome-tucked] .bottom-bar:not(:focus-within) .bottom-bar-pill {
-      transition-delay: 80ms;
+    .bottom-bar {
+      @variant chrome-tucked {
+        .bottom-bar-pill {
+          transition-delay: 80ms;
+        }
+      }
     }
   }
 }
