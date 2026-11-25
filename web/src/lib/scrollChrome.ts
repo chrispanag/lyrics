@@ -33,11 +33,12 @@ export const CHROME_TUCKED_ATTRIBUTE = "data-chrome-tucked";
 const TUCK_PX = 40;
 
 /**
- * How far up brings it back: little, since a reader reaching for the bars
- * scrolls up a touch and expects them at once. Less than this is
- * momentum-scroll jitter.
+ * How far up is a turn: little, since a reader reaching for the bars scrolls
+ * up a touch and expects them at once. Less than this is momentum-scroll
+ * jitter, or the fractional offsets of a phone's toolbar resizing, and turns
+ * nothing either way.
  */
-const REVEAL_PX = 8;
+const TURN_PX = 8;
 
 /** Within this of the top, the chrome is always out: there is nothing to give room to. */
 const TOP_PX = 80;
@@ -51,19 +52,19 @@ const END_PX = 24;
 
 let tucked = false;
 /**
- * Where the current stretch started: the last turn against the way the chrome
- * is drawn (a step down while tucked, a step up while out), so each threshold
- * counts from the turn, however slowly the reader got there.
+ * Where the current stretch started, so each threshold counts from the turn,
+ * however slowly the reader got there: while out, the lowest the page has been
+ * since it last turned up; while tucked, the furthest it has gone down.
  */
 let anchorY = 0;
-/** The offset at the last event, to tell which way this one went. */
-let lastY = 0;
+/** While out, the furthest down since `anchorY`: a turn up is measured from here. */
+let peakY = 0;
 let bars = 0;
 
 /** Starts the count over from where the page is. */
 function anchorAt(y: number): void {
   anchorY = y;
-  lastY = y;
+  peakY = y;
 }
 
 function set(next: boolean): void {
@@ -80,11 +81,14 @@ function atEnd(y: number): boolean {
 
 function onScroll(): void {
   const y = window.scrollY;
-  const turned = tucked ? y > lastY : y < lastY;
   if (y <= TOP_PX || atEnd(y)) set(false);
-  else if (tucked ? anchorY - y > REVEAL_PX : y - anchorY > TUCK_PX) set(!tucked);
-  else if (!turned) {
-    lastY = y;
+  else if (tucked) {
+    // Still going down moves the count's start with it; a turn up brings it back.
+    if (y <= anchorY && anchorY - y <= TURN_PX) return;
+    if (y < anchorY) set(false);
+  } else if (y - anchorY > TUCK_PX) set(true);
+  else if (y >= anchorY && peakY - y <= TURN_PX) {
+    peakY = Math.max(peakY, y);
     return;
   }
   anchorAt(y);

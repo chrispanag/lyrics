@@ -477,6 +477,7 @@
       }
       .bottom-bar-row {
         opacity: 0;
+        pointer-events: none;
       }
       .bottom-bar-pill {
         opacity: 1;
@@ -502,9 +503,17 @@
       transition: scale var(--duration-chrome) var(--ease-chrome);
     }
     /* Coming back: the words go, then the tabs fade in on a surface that is
-       most of the way to full size. */
+       most of the way to full size. Until they start to show they take no
+       presses, so a second tap on the pill does not land on a tab the reader
+       cannot see yet; they stay in the tab order and the accessibility tree
+       throughout. A transition, not an animation, so a page's first paint is
+       not held up; where `allow-discrete` is unsupported the presses simply
+       come back at once. */
     .bottom-bar-row {
-      transition: opacity 150ms ease-out 100ms;
+      transition:
+        opacity 150ms ease-out 100ms,
+        pointer-events 0s 100ms;
+      transition-behavior: allow-discrete;
     }
     .bottom-bar-pill {
       transition: opacity 80ms ease-out;
@@ -513,7 +522,9 @@
     .bottom-bar {
       @variant chrome-tucked {
         .bottom-bar-row {
-          transition: opacity 80ms ease-out;
+          transition:
+            opacity 80ms ease-out,
+            pointer-events 0s;
         }
         .bottom-bar-pill {
           transition: opacity 150ms ease-out 100ms;

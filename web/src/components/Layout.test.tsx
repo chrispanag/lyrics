@@ -9,6 +9,7 @@ import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "./SearchField";
 import { MenuHeader } from "./SearchHeader";
 import { NAV_COLLAPSED_ATTRIBUTE } from "@/lib/navCollapsed";
 import { modalIsOpen } from "@/lib/modal";
+import { Link } from "@/lib/navigation";
 import { CHROME_TUCKED_ATTRIBUTE } from "@/lib/scrollChrome";
 import { catalogList } from "@/test/catalog";
 import { API, list, listById, makeList, makeSong, makeUser } from "@/test/handlers";
@@ -248,6 +249,14 @@ describe("Bottom bar", () => {
     scrollToY(145);
     expect(tucked()).toBe(true);
 
+    // From the top again: a wobble up of a few pixels on the way down is no
+    // turn, so the count runs on from 80.
+    scrollToY(80);
+    scrollToY(110);
+    scrollToY(105);
+    scrollToY(125);
+    expect(tucked()).toBe(true);
+
     // Further down moves the turn with it, so the way back counts from there.
     scrollToY(600);
     scrollToY(590);
@@ -269,14 +278,21 @@ describe("Bottom bar", () => {
     expect(tucked()).toBe(false);
   });
 
-  // The offset does not move here, so no scroll event brings it back.
+  // The offset does not move here, so no scroll event brings it back. A link
+  // on the page, not a tab: focus arriving in the bar would bring it back
+  // whatever the navigation did.
   it("comes back on a new screen", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<Layout />, { user: makeUser() });
+    renderWithProviders(
+      <Layout>
+        <Link href="/lists">Your lists</Link>
+      </Layout>,
+      { user: makeUser() },
+    );
     scrollDown();
     expect(tucked()).toBe(true);
 
-    await user.click(within(bar()).getByRole("link", { name: "Lists" }));
+    await user.click(screen.getByRole("link", { name: "Your lists" }));
 
     await waitFor(() => expect(tucked()).toBe(false));
   });
