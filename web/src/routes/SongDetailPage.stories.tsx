@@ -233,7 +233,7 @@ async function tuck() {
   await settled();
 }
 
-/** Waits out the bars' 200ms slide and fade. */
+/** Waits out the bars' slide and fades (`--duration-chrome`, 250ms). */
 const settled = () => new Promise((resolve) => setTimeout(resolve, 400));
 
 /**
@@ -282,12 +282,15 @@ export const PhoneChrome: Story = {
     await expect(scrolled).toBeGreaterThan(atTop + 50);
     await expect(scrolled).toBeGreaterThanOrEqual(805);
 
-    // Back up, and both return.
+    // Back up, and both return. The tabs take no presses until they start to
+    // show, so a second tap on the pill cannot land on one unseen.
     window.scrollTo({ top: 400, behavior: "instant" });
     await waitFor(() => expect(document.documentElement).not.toHaveAttribute("data-chrome-tucked"));
+    await expect(getComputedStyle(row).pointerEvents).toBe("none");
     await settled();
     await expect(tools.getBoundingClientRect().top).toBe(0);
     await expect(getComputedStyle(row).opacity).toBe("1");
+    await expect(getComputedStyle(row).pointerEvents).toBe("auto");
   },
 };
 

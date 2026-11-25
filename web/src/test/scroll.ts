@@ -10,18 +10,22 @@ export function setScrollY(y: number): void {
   Object.defineProperty(window, "scrollY", { value: y, configurable: true });
 }
 
+/** Scrolls the window to an offset, as a reader's scroll would. */
+export function scrollToY(y: number): void {
+  setScrollY(y);
+  fireEvent.scroll(window);
+}
+
 /**
- * Scrolls down past the header's 80px floor and 8px jitter threshold. Callers
+ * Scrolls down past the chrome's 80px floor and 40px tuck threshold. Callers
  * must `setScrollY(0)` in a `beforeEach`: the property outlives the render, and
  * a stale offset makes this no movement at all.
  */
 export function scrollDown(): void {
-  setScrollY(200);
-  fireEvent.scroll(window);
+  scrollToY(200);
 }
 
 /** Back to the top, which is what brings a hidden header back. */
 export function scrollUp(): void {
-  setScrollY(0);
-  fireEvent.scroll(window);
+  scrollToY(0);
 }

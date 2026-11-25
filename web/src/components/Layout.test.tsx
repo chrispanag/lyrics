@@ -9,13 +9,14 @@ import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "./SearchField";
 import { MenuHeader } from "./SearchHeader";
 import { NAV_COLLAPSED_ATTRIBUTE } from "@/lib/navCollapsed";
 import { modalIsOpen } from "@/lib/modal";
+import { Link } from "@/lib/navigation";
 import { CHROME_TUCKED_ATTRIBUTE } from "@/lib/scrollChrome";
 import { catalogList } from "@/test/catalog";
 import { API, list, listById, makeList, makeSong, makeUser } from "@/test/handlers";
 import { recordRequests } from "@/test/requests";
 import { renderWithProviders } from "@/test/render";
 import { CurrentAddress } from "@/test/routes";
-import { scrollDown, scrollUp, setScrollY } from "@/test/scroll";
+import { scrollDown, scrollToY, scrollUp, setScrollY } from "@/test/scroll";
 import { server } from "@/test/server";
 
 // The chrome's scroll state reads the offset when its first bar mounts.
@@ -217,22 +218,83 @@ describe("Bottom bar", () => {
   it("does not move for a small scroll, or near the top", () => {
     renderWithProviders(<Layout />);
 
-    setScrollY(6);
-    fireEvent.scroll(window);
+    scrollToY(6);
     expect(tucked()).toBe(false);
 
-    setScrollY(60);
-    fireEvent.scroll(window);
+    scrollToY(60);
     expect(tucked()).toBe(false);
 
-    setScrollY(300);
-    fireEvent.scroll(window);
+    scrollToY(300);
     expect(tucked()).toBe(true);
 
     // Back up, but by less than the jitter.
-    setScrollY(295);
-    fireEvent.scroll(window);
+    scrollToY(295);
     expect(tucked()).toBe(true);
+  });
+
+  // A nudge while reading is not a decision to read on; reaching for the bars
+  // is a touch up, and they come at once.
+  it("tucks only after a stretch down, counted from the turn, and comes back on a touch up", () => {
+    renderWithProviders(<Layout />);
+
+    // From the edge of the top, where the chrome is always out.
+    scrollToY(80);
+    scrollToY(115);
+    expect(tucked()).toBe(false);
+
+    // A turn up and back down starts the count over from the highest point.
+    scrollToY(100);
+    scrollToY(135);
+    expect(tucked()).toBe(false);
+    scrollToY(145);
+    expect(tucked()).toBe(true);
+
+    // From the top again: a wobble up of a few pixels on the way down is no
+    // turn, so the count runs on from 80.
+    scrollToY(80);
+    scrollToY(110);
+    scrollToY(105);
+    scrollToY(125);
+    expect(tucked()).toBe(true);
+
+    // Further down moves the turn with it, so the way back counts from there.
+    scrollToY(600);
+    scrollToY(590);
+    expect(tucked()).toBe(false);
+  });
+
+  // As Safari's toolbar does: the reader has finished, and iOS's bounce at the
+  // end reads as a short scroll up anyway.
+  it("comes back at the end of the page", () => {
+    renderWithProviders(<Layout />);
+    vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(
+      window.innerHeight + 1000,
+    );
+
+    scrollToY(500);
+    expect(tucked()).toBe(true);
+
+    scrollToY(990);
+    expect(tucked()).toBe(false);
+  });
+
+  // The offset does not move here, so no scroll event brings it back. A link
+  // on the page, not a tab: focus arriving in the bar would bring it back
+  // whatever the navigation did.
+  it("comes back on a new screen", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <Layout>
+        <Link href="/lists">Your lists</Link>
+      </Layout>,
+      { user: makeUser() },
+    );
+    scrollDown();
+    expect(tucked()).toBe(true);
+
+    await user.click(screen.getByRole("link", { name: "Your lists" }));
+
+    await waitFor(() => expect(tucked()).toBe(false));
   });
 
   it("comes back when anything in it takes focus", () => {

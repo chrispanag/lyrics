@@ -32,6 +32,14 @@
   --font-lyrics:
     "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
 
+  /* How a phone's chrome moves as it tucks and comes back: the top bars'
+     slide and the bottom bar's shrink, so they move as one. Fast off the mark
+     and a long, soft settle, as iOS moves its own bars; `ease-out` stops dead
+     by comparison. `ease-chrome` as a utility. The bottom bar's fades are
+     timed against the duration. */
+  --ease-chrome: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-chrome: 250ms;
+
   --color-brand-50: oklch(0.97 0.02 45);
   --color-brand-100: oklch(0.94 0.04 45);
   --color-brand-200: oklch(0.88 0.07 45);
@@ -469,6 +477,7 @@
       }
       .bottom-bar-row {
         opacity: 0;
+        pointer-events: none;
       }
       .bottom-bar-pill {
         opacity: 1;
@@ -484,22 +493,41 @@
       visibility: hidden;
     }
   }
+  /* Each way round, what is leaving goes at once and what is arriving waits
+     for the surface: the tabs and the words both sit on a surface scaled
+     unevenly between the two sizes, and seen there they look squashed.
+     A transition is the one set on the state being entered, so the rules out
+     are the bar coming back, and the tucked ones are the bar shrinking. */
   @media (prefers-reduced-motion: no-preference) {
     .bottom-bar-tabs {
-      transition: scale 200ms ease-out;
+      transition: scale var(--duration-chrome) var(--ease-chrome);
     }
-    /* Gone before the surface is small enough to squeeze them. */
+    /* Coming back: the words go, then the tabs fade in on a surface that is
+       most of the way to full size. Until they start to show they take no
+       presses, so a second tap on the pill does not land on a tab the reader
+       cannot see yet; they stay in the tab order and the accessibility tree
+       throughout. A transition, not an animation, so a page's first paint is
+       not held up; where `allow-discrete` is unsupported the presses simply
+       come back at once. */
     .bottom-bar-row {
-      transition: opacity 120ms ease-out;
+      transition:
+        opacity 150ms ease-out 100ms,
+        pointer-events 0s 100ms;
+      transition-behavior: allow-discrete;
     }
     .bottom-bar-pill {
-      transition: opacity 150ms ease-out;
+      transition: opacity 80ms ease-out;
     }
-    /* The words arrive as the surface does, not on the full-width bar. */
+    /* Shrinking: the tabs go, then the words arrive as the surface does. */
     .bottom-bar {
       @variant chrome-tucked {
+        .bottom-bar-row {
+          transition:
+            opacity 80ms ease-out,
+            pointer-events 0s;
+        }
         .bottom-bar-pill {
-          transition-delay: 80ms;
+          transition: opacity 150ms ease-out 100ms;
         }
       }
     }
@@ -520,7 +548,7 @@
    under `max-md:` alone. The slide it eases is the tuck; see the
    `chrome-tucked` variant. */
 @utility sticky-bar {
-  @apply sticky top-0 z-sticky border-b border-line bg-canvas/90 pt-safe backdrop-blur motion-safe:transition-transform motion-safe:duration-200;
+  @apply sticky top-0 z-sticky border-b border-line bg-canvas/90 pt-safe backdrop-blur motion-safe:transition-transform motion-safe:duration-(--duration-chrome) motion-safe:ease-chrome;
 }
 
 /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the edges

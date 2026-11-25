@@ -20,6 +20,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { applyNavCollapsed, storeNavCollapsed, storedNavCollapsed } from "@/lib/navCollapsed";
 import { Link, NavLink, usePathname, useSearchParams } from "@/lib/navigation";
+import { revealChrome } from "@/lib/scrollChrome";
 
 /**
  * The lit and pressable treatments shared by the nav links and the identity
@@ -64,11 +65,14 @@ function showNavigation() {
 export function Layout({ children }: { children?: ReactNode }) {
   const pathname = usePathname();
 
-  // Route changes start at the top. Keyed on `pathname` so a filter written
-  // into the query string does not scroll the catalog.
+  // Route changes start at the top, with the chrome out. Keyed on `pathname`
+  // so a filter written into the query string does not scroll the catalog.
+  // The reveal does not wait for the scroll's event, which a page already at
+  // the top never fires.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the key is the trigger, not a value read.
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
+    revealChrome();
   }, [pathname]);
 
   // The boot script paints the stored choice. A tree mounted without that
