@@ -263,9 +263,10 @@ describe("Bottom bar", () => {
     expect(tucked()).toBe(false);
   });
 
-  // As Safari's toolbar does: the reader has finished, and iOS's bounce at the
-  // end reads as a short scroll up anyway.
-  it("comes back at the end of the page", () => {
+  // A flick that tucks it on the way down must not bring it straight back on
+  // arrival, nor iOS's bounce past the end, whose way back reads as a scroll
+  // up. A touch up brings it out there as anywhere.
+  it("stays as it is at the end of the page, through the bounce", () => {
     renderWithProviders(<Layout />);
     vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(
       window.innerHeight + 1000,
@@ -274,7 +275,20 @@ describe("Bottom bar", () => {
     scrollToY(500);
     expect(tucked()).toBe(true);
 
+    // At the very end, then a bounce past it and back.
+    scrollToY(1000);
+    expect(tucked()).toBe(true);
+    scrollToY(1040);
+    scrollToY(1000);
+    expect(tucked()).toBe(true);
+
     scrollToY(990);
+    expect(tucked()).toBe(false);
+
+    // Out, the bounce's way down is no stretch down either.
+    scrollToY(1000);
+    scrollToY(1060);
+    scrollToY(1000);
     expect(tucked()).toBe(false);
   });
 

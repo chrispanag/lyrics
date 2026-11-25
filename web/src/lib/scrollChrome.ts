@@ -3,9 +3,8 @@ import { useEffect } from "react";
 /*
  * Whether a phone's chrome is tucked away: the top bars hidden and the bottom
  * bar shrunk to its small pill. Tucked once the reader has scrolled down a
- * little way, back on any scroll up, at the top and the end of the page, and
- * whenever something asks (a tap on the pill, focus moving into a bar, a new
- * screen).
+ * little way, back on any scroll up, at the top of the page, and whenever
+ * something asks (a tap on the pill, focus moving into a bar, a new screen).
  *
  * One answer for the whole page, so every bar moves on the same scroll. Each
  * bar listening for itself would start counting from wherever the page was
@@ -13,7 +12,7 @@ import { useEffect } from "react";
  * about which way the reader last went.
  *
  * The answer is `data-chrome-tucked` on <html>, which index.css draws from,
- * not React state: a tuck happens on every change of scroll direction, and
+ * not React state: the chrome tucks and comes back over and over in a read, and
  * drawing it through React would re-render each bar and the page holding one,
  * for a change that is only a transform. Nothing React renders reads it.
  *
@@ -43,13 +42,6 @@ const TURN_PX = 8;
 /** Within this of the top, the chrome is always out: there is nothing to give room to. */
 const TOP_PX = 80;
 
-/**
- * Within this of the end, the chrome is out too, as Safari's toolbar is: the
- * reader has finished and the tabs are what comes next. It also keeps iOS's
- * bounce at the end, which reads as a short scroll up, from flicking it out.
- */
-const END_PX = 24;
-
 let tucked = false;
 /**
  * Where the current stretch started, so each threshold counts from the turn,
@@ -73,15 +65,26 @@ function set(next: boolean): void {
   document.documentElement.toggleAttribute(CHROME_TUCKED_ATTRIBUTE, next);
 }
 
-/** Whether `y` is at the end of a page that scrolls at all. */
-function atEnd(y: number): boolean {
+/**
+ * Whether `y` is past the end of a page that scrolls at all: iOS's bounce,
+ * whose way back reads as a scroll up and would bring the chrome out, and
+ * whose way out would tuck it. The `overscroll-behavior` in index.css is on
+ * <body>, which the spec does not carry to the page's own scroller, so it is
+ * not counted on to stop the bounce.
+ */
+function pastEnd(y: number): boolean {
   const end = document.documentElement.scrollHeight - window.innerHeight;
-  return end > 0 && y >= end - END_PX;
+  return end > 0 && y > end;
 }
 
+/*
+ * The end of a page brings nothing out: a flick that tucks the chrome on its
+ * way down would bring it straight back on arrival.
+ */
 function onScroll(): void {
   const y = window.scrollY;
-  if (y <= TOP_PX || atEnd(y)) set(false);
+  if (y <= TOP_PX) set(false);
+  else if (pastEnd(y)) return;
   else if (tucked) {
     // Still going down moves the count's start with it; a turn up brings it back.
     if (y <= anchorY && anchorY - y <= TURN_PX) return;
