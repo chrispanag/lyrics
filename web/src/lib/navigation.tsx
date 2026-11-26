@@ -200,10 +200,16 @@ type LinkProps = Omit<ComponentPropsWithoutRef<"a">, "href"> & {
    * for nothing. Left out, the router decides, as it does for ordinary links.
    */
   prefetch?: false | undefined;
+  /**
+   * Called instead of navigating when a plain click leads to the address
+   * already showing. Left out, such a click replaces the entry, as any link
+   * to it does.
+   */
+  onShowing?: (() => void) | undefined;
 };
 
 /** A link inside the app. `href` is a path, with a search string if it needs one. */
-export function Link({ href, replace, onClick, ...rest }: LinkProps) {
+export function Link({ href, replace, onClick, onShowing, ...rest }: LinkProps) {
   const { Link: BackendLink } = useBackend();
   const { noteNavigation } = useContext(HistoryContext);
   // Decided here rather than left to the router: a link to the address
@@ -212,9 +218,13 @@ export function Link({ href, replace, onClick, ...rest }: LinkProps) {
 
   const onPress = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
-    if (!event.defaultPrevented && isPlainClick(event)) {
-      noteNavigation(href, replace ? "replace" : "push");
+    if (event.defaultPrevented || !isPlainClick(event)) return;
+    if (same && onShowing) {
+      event.preventDefault();
+      onShowing();
+      return;
     }
+    noteNavigation(href, replace ? "replace" : "push");
   };
 
   return <BackendLink href={href} replace={Boolean(replace) || same} onClick={onPress} {...rest} />;
@@ -224,7 +234,7 @@ export function Link({ href, replace, onClick, ...rest }: LinkProps) {
  * Whether the browser leaves this click to the page: the main button, no
  * modifier asking for a new tab or window, and no other target.
  */
-export function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
+function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
   const target = event.currentTarget.getAttribute("target");
   return (
     event.button === 0 &&
@@ -493,7 +503,7 @@ function withSearch(pathname: string, search: string): string {
 }
 
 /** Whether two in-app addresses are the same screen, hash aside. */
-export function sameAddress(href: string, current: string): boolean {
+function sameAddress(href: string, current: string): boolean {
   const a = new URL(href, ORIGIN + current);
   const b = new URL(current, ORIGIN);
   return a.pathname === b.pathname && a.search === b.search;

@@ -350,6 +350,19 @@ describe("Bottom bar", () => {
       );
       expect(window.scrollTo).not.toHaveBeenCalledWith({ top: 0 });
     });
+
+    // Lit with filters set, Browse still clears them: the plain catalog is
+    // another address.
+    it("still leads to its screen from the same one filtered", async () => {
+      const user = userEvent.setup();
+      renderAt("/?q=thalassa");
+      vi.mocked(window.scrollTo).mockClear();
+
+      await user.click(within(bar()).getByRole("link", { name: "Browse" }));
+
+      await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(/^Now at \/$/));
+      expect(window.scrollTo).not.toHaveBeenCalledWith({ top: 0 });
+    });
   });
 
   it("comes back when anything in it takes focus", () => {
