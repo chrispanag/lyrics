@@ -239,6 +239,17 @@ function chrome() {
   return { tools, bar, tabs, row, pill };
 }
 
+/**
+ * Waits for `bar` to publish its height as `--sticky-header-height`, which it
+ * does from a ResizeObserver, so a frame after it is drawn.
+ */
+const published = (bar: HTMLElement) =>
+  waitFor(() =>
+    expect(document.documentElement.style.getPropertyValue("--sticky-header-height")).toBe(
+      `${bar.offsetHeight}px`,
+    ),
+  );
+
 /** Scrolls far enough down that the chrome tucks away, and waits it out. */
 async function tuck() {
   window.scrollTo({ top: 600, behavior: "instant" });
@@ -270,11 +281,7 @@ export const PhoneChrome: Story = {
     await expect(within(tools).getByRole("button", { name: "Back" })).toBeVisible();
     // The only bar above the song publishes its height, so a control reached
     // by Tab scrolls clear of it.
-    await waitFor(() =>
-      expect(document.documentElement.style.getPropertyValue("--sticky-header-height")).toBe(
-        `${tools.offsetHeight}px`,
-      ),
-    );
+    await published(tools);
     await expect(getComputedStyle(row).opacity).toBe("1");
     await expect(getComputedStyle(pill).opacity).toBe("0");
     // The room between the bars at the top of the page: more than the old
@@ -564,16 +571,13 @@ export const WideDetailsColumn: Story = {
   ...atADesk(1440, 900, false),
   play: async ({ canvas }) => {
     const { details, lyrics, title } = await songParts(canvas);
-    // The column's height takes off the catalog header's, which that header
-    // publishes from a ResizeObserver, so not before a frame is laid out: under
-    // load the song can render first, and the column is then the header's
-    // height too tall for the pane.
-    const header = canvas.getByRole("searchbox", { name: "Search songs" }).closest("header");
-    await waitFor(() =>
-      expect(document.documentElement.style.getPropertyValue("--sticky-header-height")).toBe(
-        `${header?.offsetHeight}px`,
-      ),
-    );
+    // The column's height takes off the catalog header's, published a frame
+    // late: under load the song can render first, and the column is then the
+    // header's height too tall for the pane. The catalog's is the one
+    // <header>; the song's own bar is a <div> at a desk.
+    const header = document.querySelector<HTMLElement>("header[data-sticky-header]");
+    if (!header) throw new Error("The catalog's header is missing.");
+    await published(header);
 
     // Beside, not above: the lyrics against the pane's left edge, the column
     // against its right, not a pair centered in it.
