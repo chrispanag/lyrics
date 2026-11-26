@@ -96,7 +96,7 @@ function getNarrow<T extends HTMLElement>(elements: T[]): T {
 /** The details column's own block: what only a wide pane shows. */
 function columnBlock(): HTMLElement {
   const details = screen.getByRole("complementary", { name: "Song details" });
-  const block = details.querySelector<HTMLElement>('[data-tier="column"]');
+  const block = details.querySelector<HTMLElement>(':scope > [data-tier="column"]');
   if (!block) throw new Error("The details column has no block of its own.");
   return block;
 }
@@ -1781,7 +1781,13 @@ describe("SongDetailPage details column", () => {
     await screen.findByText("η αγάπη μου κοιμάται");
     const column = columnBlock();
     expect(column).toHaveClass("hidden", "@3xl/song:block");
-    expect(within(column).getByRole("button", { name: "Play video" })).toBeInTheDocument();
+    // Every block of the column under a heading of its own.
+    expect(screen.getByRole("heading", { level: 2, name: "Credits" })).toHaveAttribute(
+      "data-tier",
+      "column",
+    );
+    const video = within(column).getByRole("region", { name: "Video" });
+    expect(within(video).getByRole("button", { name: "Play video" })).toBeInTheDocument();
     const recordings = within(column).getByRole("region", { name: "Recordings" });
     expect(within(recordings).getAllByRole("listitem")).toHaveLength(2);
     const stats = within(column).getByRole("region", { name: "Stats" });
@@ -1809,6 +1815,30 @@ describe("SongDetailPage details column", () => {
     const lyrics = screen.getByRole("region", { name: "Lyrics" });
     expect(title.compareDocumentPosition(details)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(details.compareDocumentPosition(lyrics)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("heads no credits for a song with none to show beside the lyrics", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(
+          makeSong({
+            credits: [],
+            release_year: null,
+            recordings: [
+              makeRecording({ id: "r1", performers: [] }),
+              makeRecording({ id: "r2", is_first: false, performers: [] }),
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderDetail();
+
+    await screen.findByText("η αγάπη μου κοιμάται");
+    expect(screen.queryByRole("heading", { name: "Credits" })).toBeNull();
+    // The narrow tier's recordings line is still there.
+    expect(screen.getByRole("button", { name: "Show all 2 recordings" })).toBeInTheDocument();
   });
 
   it("offers no player for a song without a video id", async () => {
