@@ -443,9 +443,13 @@
    A typed number (`@property`), so the settle at rest is eased like any
    transform, and every value drawn from it moves in step. Neither property
    inherits, so a frame of the scroll restyles the bar alone, not everything
-   inside it (a header's search results, say); a part of a bar that draws from
-   it asks for it (`inherit`). While the reader's
-   scroll moves it (`data-chrome-scrubbing`) it is not eased. Under reduced
+   inside it (a header's search results, say). A part of a bar that draws
+   from it reads an inherited copy the bar sets, as the bottom bar's read
+   `--bar-progress`, never `--chrome-progress: inherit`: WebKit does not
+   always restyle such an `inherit` when the bar's value changes, and drew
+   the bottom bar left halfway, its pill over its tabs on a see-through
+   surface. While the reader's scroll moves it (`data-chrome-scrubbing`) it
+   is not eased. Under reduced
    motion it does not follow the scroll: out or tucked, at once, as
    `data-chrome-tucked` says. A bar holding visible focus or an open menu is
    drawn out whatever the scroll says, by the selector `chrome-tucked` holds it
@@ -519,12 +523,9 @@
   initial-value: 0;
 }
 @layer components {
-  /* The bar's `--chrome-progress`, for its parts. Inherited the ordinary way:
-     WebKit does not always restyle an element whose own value is `inherit` of
-     a non-inherited registered property when the parent's changes, and drew
-     a bar left halfway, the pill over the tabs on a see-through surface. The
-     bar's subtree is a few dozen elements, so restyling it with each frame of
-     a scroll costs little; the top bars keep the non-inherited one. */
+  /* The bar's `--chrome-progress`, inherited the ordinary way by its parts
+     (see `chrome-follows`). Its subtree is a few dozen elements, so restyling
+     it with each frame of a scroll costs little. */
   .bottom-bar {
     --bar-progress: var(--chrome-progress);
   }
