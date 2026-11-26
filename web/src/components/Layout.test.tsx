@@ -10,7 +10,12 @@ import { MenuHeader } from "./SearchHeader";
 import { NAV_COLLAPSED_ATTRIBUTE } from "@/lib/navCollapsed";
 import { modalIsOpen } from "@/lib/modal";
 import { Link } from "@/lib/navigation";
-import { CHROME_TUCKED_ATTRIBUTE } from "@/lib/scrollChrome";
+import {
+  CHROME_PROGRESS_PROPERTY,
+  CHROME_SCRUBBING_ATTRIBUTE,
+  CHROME_TUCKED_ATTRIBUTE,
+  revealChrome,
+} from "@/lib/scrollChrome";
 import { catalogList } from "@/test/catalog";
 import { API, list, listById, makeList, makeSong, makeUser } from "@/test/handlers";
 import { recordRequests } from "@/test/requests";
@@ -213,6 +218,13 @@ describe("Bottom bar", () => {
     expect(within(bar()).getByRole("link", { name: "Lists" })).toBeInTheDocument();
   });
 
+  /** The bar's own box, which `lib/scrollChrome` writes the progress on. */
+  const shell = () => bar().parentElement as HTMLElement;
+  const progress = () => Number(shell().style.getPropertyValue(CHROME_PROGRESS_PROPERTY));
+  const scrubbing = () => shell().hasAttribute(CHROME_SCRUBBING_ATTRIBUTE);
+  /** The scroll coming to rest, as a browser with `scrollend` says it. */
+  const rest = () => fireEvent(window, new Event("scrollend"));
+
   // Momentum scrolling jitters by a few pixels either way, and the first
   // stretch of a page has nothing to give room to.
   it("does not move for a small scroll, or near the top", () => {
@@ -220,47 +232,117 @@ describe("Bottom bar", () => {
 
     scrollToY(6);
     expect(tucked()).toBe(false);
+    expect(progress()).toBe(0);
 
     scrollToY(60);
     expect(tucked()).toBe(false);
+    expect(progress()).toBe(0);
 
     scrollToY(300);
     expect(tucked()).toBe(true);
+    expect(progress()).toBe(1);
 
     // Back up, but by less than the jitter.
     scrollToY(295);
     expect(tucked()).toBe(true);
+    rest();
+    expect(tucked()).toBe(true);
+    expect(progress()).toBe(1);
   });
 
-  // A nudge while reading is not a decision to read on; reaching for the bars
-  // is a touch up, and they come at once.
-  it("tucks only after a stretch down, counted from the turn, and comes back on a touch up", () => {
+  // As Safari's toolbar: the bar shrinks with the scroll itself, from the
+  // edge of the top, and grows with it on the way back.
+  it("follows the scroll pixel for pixel, and is not eased while it does", () => {
+    renderWithProviders(<Layout />);
+    expect(scrubbing()).toBe(false);
+
+    scrollToY(80);
+    expect(progress()).toBe(0);
+    scrollToY(90);
+    expect(progress()).toBe(0.25);
+    expect(scrubbing()).toBe(true);
+    scrollToY(100);
+    expect(progress()).toBe(0.5);
+    // Not yet tucked: the top bars wait for the whole stretch.
+    expect(tucked()).toBe(false);
+    scrollToY(120);
+    expect(progress()).toBe(1);
+    expect(tucked()).toBe(true);
+
+    // Further down holds it at the end; the way back counts from wherever the
+    // reader turned.
+    scrollToY(400);
+    scrollToY(390);
+    expect(progress()).toBe(0.75);
+    expect(tucked()).toBe(false);
+    scrollToY(395);
+    expect(progress()).toBe(0.875);
+  });
+
+  // Never more tucked than the reader has scrolled past the top's floor, so a
+  // flick down from the top starts the shrink there rather than jumping.
+  it("tucks no further than the reader is past the top's floor", () => {
     renderWithProviders(<Layout />);
 
-    // From the edge of the top, where the chrome is always out.
-    scrollToY(80);
-    scrollToY(115);
-    expect(tucked()).toBe(false);
-
-    // A turn up and back down starts the count over from the highest point.
+    scrollToY(60);
+    expect(progress()).toBe(0);
     scrollToY(100);
-    scrollToY(135);
-    expect(tucked()).toBe(false);
-    scrollToY(145);
-    expect(tucked()).toBe(true);
-
-    // From the top again: a wobble up of a few pixels on the way down is no
-    // turn, so the count runs on from 80.
-    scrollToY(80);
+    expect(progress()).toBe(0.5);
     scrollToY(110);
-    scrollToY(105);
-    scrollToY(125);
+    expect(progress()).toBe(0.75);
+  });
+
+  // Once the scroll rests it finishes the way the reader went: tucked from
+  // halfway down, out after a touch up.
+  it("settles at one end when the scroll comes to rest", () => {
+    renderWithProviders(<Layout />);
+
+    // Less than halfway down: back out.
+    scrollToY(80);
+    scrollToY(95);
+    rest();
+    expect(progress()).toBe(0);
+    expect(tucked()).toBe(false);
+    expect(scrubbing()).toBe(false);
+
+    // Halfway down: the rest of the way.
+    scrollToY(115);
+    rest();
+    expect(progress()).toBe(1);
     expect(tucked()).toBe(true);
 
-    // Further down moves the turn with it, so the way back counts from there.
-    scrollToY(600);
-    scrollToY(590);
+    // A touch up: out.
+    scrollToY(105);
+    rest();
+    expect(progress()).toBe(0);
     expect(tucked()).toBe(false);
+  });
+
+  // A finger held on the screen leaves the bar where the scroll put it;
+  // where the browser has no `scrollend`, a pause in the scroll events after
+  // the finger lifts is the rest.
+  it("waits for the finger to lift before it settles", () => {
+    vi.useFakeTimers();
+    try {
+      renderWithProviders(<Layout />);
+
+      fireEvent.touchStart(window);
+      scrollToY(80);
+      scrollToY(110);
+      act(() => vi.advanceTimersByTime(1000));
+      rest();
+      expect(progress()).toBe(0.75);
+      expect(scrubbing()).toBe(true);
+
+      fireEvent.touchEnd(window);
+      act(() => vi.advanceTimersByTime(100));
+      expect(progress()).toBe(0.75);
+      act(() => vi.advanceTimersByTime(100));
+      expect(progress()).toBe(1);
+      expect(tucked()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // A flick that tucks it on the way down must not bring it straight back on
@@ -281,15 +363,30 @@ describe("Bottom bar", () => {
     scrollToY(1040);
     scrollToY(1000);
     expect(tucked()).toBe(true);
+    expect(progress()).toBe(1);
 
-    scrollToY(990);
+    scrollToY(960);
     expect(tucked()).toBe(false);
+    expect(progress()).toBe(0);
+  });
 
-    // Out, the bounce's way down is no stretch down either.
+  // Brought out at the end (a tap on the pill), the bounce's way out is no
+  // stretch down either.
+  it("stays out at the end of the page, through the bounce", () => {
+    renderWithProviders(<Layout />);
+    vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(
+      window.innerHeight + 1000,
+    );
     scrollToY(1000);
+    expect(tucked()).toBe(true);
+
+    act(() => revealChrome());
     scrollToY(1060);
     scrollToY(1000);
+    rest();
+
     expect(tucked()).toBe(false);
+    expect(progress()).toBe(0);
   });
 
   // The offset does not move here, so no scroll event brings it back. A link

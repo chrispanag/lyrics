@@ -1,9 +1,9 @@
-import { useEffect } from "react";
+import { type RefObject, useEffect } from "react";
 
 /*
- * Whether a phone's chrome is tucked away: the top bars hidden and the bottom
+ * How far a phone's chrome is tucked away: the top bars hidden and the bottom
  * bar shrunk to its small pill. Tucked once the reader has scrolled down a
- * little way, back on any scroll up, at the top of the page, and whenever
+ * little way, back on a scroll up, at the top of the page, and whenever
  * something asks (a tap on the pill, focus moving into a bar, a new screen).
  *
  * One answer for the whole page, so every bar moves on the same scroll. Each
@@ -11,10 +11,18 @@ import { useEffect } from "react";
  * when it mounted, and a song's top bar and the bottom bar could then disagree
  * about which way the reader last went.
  *
- * The answer is `data-chrome-tucked` on <html>, which index.css draws from,
- * not React state: the chrome tucks and comes back over and over in a read, and
- * drawing it through React would re-render each bar and the page holding one,
- * for a change that is only a transform. Nothing React renders reads it.
+ * The answer comes in two forms, neither of them React state: the chrome moves
+ * over and over in a read, and drawing it through React would re-render each
+ * bar and the page holding one, for a change that is only a transform.
+ *
+ * - `data-chrome-tucked` on <html>: tucked or not. The top bars slide by it,
+ *   and it decides which of the bottom bar's tabs and pill takes presses.
+ * - `--chrome-scroll-progress` on a bar that follows it (the bottom bar): how far
+ *   tucked, from 0 to 1. While the reader scrolls it follows the scroll pixel
+ *   for pixel over `RANGE_PX`, as Safari's toolbar does, with
+ *   `data-chrome-scrubbing` on the bar so index.css does not ease it. Once the
+ *   scroll comes to rest it settles at one end or the other, which index.css
+ *   eases.
  *
  * Below `md` only, but the store does not know that: each bar applies it under
  * `max-md:`, or is not on screen from `md` up at all, so nothing here has to
@@ -24,45 +32,76 @@ import { useEffect } from "react";
 /** What index.css keys the tucked chrome on. */
 export const CHROME_TUCKED_ATTRIBUTE = "data-chrome-tucked";
 
-/**
- * How far the reader must scroll down, in one go, before the chrome tucks: a
- * nudge while reading is not a decision to read on, and the bars leaving for
- * one would flicker.
- */
-const TUCK_PX = 40;
+/** How far tucked, 0 out to 1 tucked, on each bar that follows the scroll. */
+export const CHROME_PROGRESS_PROPERTY = "--chrome-scroll-progress";
+
+/** On a bar following the scroll while the reader moves it, so index.css does not ease it. */
+export const CHROME_SCRUBBING_ATTRIBUTE = "data-chrome-scrubbing";
 
 /**
- * How far up is a turn: little, since a reader reaching for the bars scrolls
- * up a touch and expects them at once. Less than this is momentum-scroll
- * jitter, or the fractional offsets of a phone's toolbar resizing, and turns
- * nothing either way.
+ * How far a scroll takes the chrome from out to tucked, or back. Also how far
+ * the reader must go down before the top bars leave: a nudge while reading is
+ * not a decision to read on.
+ */
+const RANGE_PX = 40;
+
+/**
+ * How far up brings tucked chrome out: little, since a reader reaching for the
+ * bars scrolls up a touch and expects them. Less than this is momentum-scroll
+ * jitter, or the fractional offsets of a phone's toolbar resizing, and leaves
+ * the chrome tucked.
  */
 const TURN_PX = 8;
+const TURN = TURN_PX / RANGE_PX;
 
-/** Within this of the top, the chrome is always out: there is nothing to give room to. */
+/**
+ * Within this of the top the chrome is always out: there is nothing to give
+ * room to. Below it the chrome tucks by no more than the reader has scrolled
+ * past it, so it starts to shrink from here rather than jumping.
+ */
 const TOP_PX = 80;
 
-let tucked = false;
 /**
- * Where the current stretch started, so each threshold counts from the turn,
- * however slowly the reader got there: while out, the lowest the page has been
- * since it last turned up; while tucked, the furthest it has gone down.
+ * How long without a scroll event counts as the scroll coming to rest, where
+ * the browser does not say so with `scrollend`. Momentum scrolling keeps
+ * firing scroll events, so this is only ever the gap between two of them.
  */
-let anchorY = 0;
-/** While out, the furthest down since `anchorY`: a turn up is measured from here. */
-let peakY = 0;
+const SETTLE_MS = 150;
+
+let tucked = false;
+/** 0 out to 1 tucked: anywhere between while scrubbing, at rest 0 or 1. */
+let progress = 0;
+let scrubbing = false;
+let lastY = 0;
+let goingDown = false;
+/** A finger on the screen holds the chrome where the scroll left it, as Safari does. */
+let touching = false;
+let settleTimer: ReturnType<typeof setTimeout> | undefined;
 let bars = 0;
+const followers = new Set<HTMLElement>();
 
-/** Starts the count over from where the page is. */
-function anchorAt(y: number): void {
-  anchorY = y;
-  peakY = y;
-}
-
-function set(next: boolean): void {
+function setTucked(next: boolean): void {
   if (next === tucked) return;
   tucked = next;
   document.documentElement.toggleAttribute(CHROME_TUCKED_ATTRIBUTE, next);
+}
+
+/**
+ * Under reduced motion nothing follows the scroll: the chrome is out or
+ * tucked, at once, as the attribute says.
+ */
+function reducedMotion(): boolean {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
+
+function draw(bar: HTMLElement): void {
+  const shown = reducedMotion() ? Number(tucked) : progress;
+  bar.style.setProperty(CHROME_PROGRESS_PROPERTY, String(shown));
+  bar.toggleAttribute(CHROME_SCRUBBING_ATTRIBUTE, scrubbing);
+}
+
+function drawAll(): void {
+  for (const bar of followers) draw(bar);
 }
 
 /**
@@ -78,41 +117,98 @@ function pastEnd(y: number): boolean {
 }
 
 /*
- * The end of a page brings nothing out: a flick that tucks the chrome on its
- * way down would bring it straight back on arrival.
+ * The end of a page moves nothing: a flick that tucks the chrome on its way
+ * down would bring it straight back on the bounce.
  */
 function onScroll(): void {
   const y = window.scrollY;
-  if (y <= TOP_PX) set(false);
-  else if (pastEnd(y)) return;
-  else if (tucked) {
-    // Still going down moves the count's start with it; a turn up brings it back.
-    if (y <= anchorY && anchorY - y <= TURN_PX) return;
-    if (y < anchorY) set(false);
-  } else if (y - anchorY > TUCK_PX) set(true);
-  else if (y >= anchorY && peakY - y <= TURN_PX) {
-    peakY = Math.max(peakY, y);
-    return;
-  }
-  anchorAt(y);
+  if (pastEnd(y)) return;
+  const dy = y - lastY;
+  lastY = y;
+  if (dy === 0) return;
+  goingDown = dy > 0;
+
+  const ceiling = Math.min(1, Math.max(0, (y - TOP_PX) / RANGE_PX));
+  progress = Math.min(ceiling, Math.max(0, progress + dy / RANGE_PX));
+  if (progress >= 1) setTucked(true);
+  else if (progress === 0 || (!goingDown && progress <= 1 - TURN)) setTucked(false);
+
+  scrubbing = true;
+  drawAll();
+  scheduleSettle();
 }
 
 /**
- * The page's scroll listener is installed for the first bar and removed with
- * the last, and the state starts over then: a page with no bar left has no
+ * Where the chrome comes to rest once the scroll does, by the way the reader
+ * last went: on the way down, tucked from halfway; on the way up, out after a
+ * touch.
+ */
+function settle(): void {
+  clearTimeout(settleTimer);
+  if (!scrubbing) return;
+  const next = goingDown ? progress >= 0.5 : progress > 1 - TURN;
+  setTucked(next);
+  progress = Number(next);
+  scrubbing = false;
+  drawAll();
+}
+
+function scheduleSettle(): void {
+  clearTimeout(settleTimer);
+  if (!touching) settleTimer = setTimeout(settle, SETTLE_MS);
+}
+
+function onScrollEnd(): void {
+  if (!touching) settle();
+}
+
+function onTouchStart(): void {
+  touching = true;
+  clearTimeout(settleTimer);
+}
+
+function onTouchEnd(): void {
+  touching = false;
+  scheduleSettle();
+}
+
+const listeners: [string, () => void][] = [
+  ["scroll", onScroll],
+  ["scrollend", onScrollEnd],
+  ["touchstart", onTouchStart],
+  ["touchend", onTouchEnd],
+  ["touchcancel", onTouchEnd],
+];
+
+/** Out, with nothing in flight, counting from where the page is. */
+function reset(): void {
+  clearTimeout(settleTimer);
+  lastY = window.scrollY;
+  progress = 0;
+  scrubbing = false;
+  setTucked(false);
+  drawAll();
+}
+
+/**
+ * The page's listeners are installed for the first bar and removed with the
+ * last, and the state starts over then: a page with no bar left has no
  * direction to remember, and a stale "tucked" would greet the next one.
  */
 function register(): () => void {
   if (bars === 0) {
-    anchorAt(window.scrollY);
-    window.addEventListener("scroll", onScroll, { passive: true });
+    touching = false;
+    reset();
+    for (const [type, listener] of listeners) {
+      window.addEventListener(type, listener, { passive: true });
+    }
   }
   bars += 1;
   return () => {
     bars -= 1;
     if (bars > 0) return;
-    window.removeEventListener("scroll", onScroll);
-    set(false);
+    for (const [type, listener] of listeners) window.removeEventListener(type, listener);
+    reset();
   };
 }
 
@@ -120,9 +216,23 @@ function register(): () => void {
  * Takes part in the page's tucking, for a bar index.css moves with it. In an
  * effect, so a server and the first render in a browser draw the chrome out.
  * Returns nothing: the bar re-renders for none of it.
+ *
+ * `follower` is a bar drawn from the progress rather than the attribute alone:
+ * `--chrome-scroll-progress` and `data-chrome-scrubbing` are written to it.
  */
-export function useChromeScroll(): void {
-  useEffect(register, []);
+export function useChromeScroll(follower?: RefObject<HTMLElement | null>): void {
+  useEffect(() => {
+    const unregister = register();
+    const bar = follower?.current;
+    if (bar) {
+      followers.add(bar);
+      draw(bar);
+    }
+    return () => {
+      if (bar) followers.delete(bar);
+      unregister();
+    };
+  }, [follower]);
 }
 
 /**
@@ -131,8 +241,7 @@ export function useChromeScroll(): void {
  * from here.
  */
 export function revealChrome(): void {
-  anchorAt(window.scrollY);
-  set(false);
+  reset();
 }
 
 /**

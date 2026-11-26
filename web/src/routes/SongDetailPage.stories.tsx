@@ -283,6 +283,17 @@ export const PhoneChrome: Story = {
     await expect(atTop).toBeGreaterThan(844 - 141);
     const classes = [tools.className, tabs.className];
 
+    // A little way down, the bottom bar is partway to the pill, as far as the
+    // scroll has taken it: 20px past the top's 80px floor is half its 40px.
+    // A finger held on the screen keeps it there.
+    window.dispatchEvent(new Event("touchstart"));
+    window.scrollTo({ top: 100, behavior: "instant" });
+    await waitFor(() => expect(chrome().bar).toHaveAttribute("data-chrome-scrubbing"));
+    const [sx] = getComputedStyle(tabs).scale.split(" ").map(Number);
+    await expect(sx).toBeGreaterThan(0.4);
+    await expect(sx).toBeLessThan(0.9);
+    window.dispatchEvent(new Event("touchend"));
+
     await tuck();
 
     // Drawn from the attribute on <html>: the page rendered nothing for it.
@@ -357,19 +368,22 @@ export const PhonePill: Story = {
 };
 
 /**
- * The shrink is a transition on the surface's `scale`, and only where motion
- * is welcome: under reduced motion the bar changes at once. The test browser
+ * The settle at rest is a transition on the bar's `--chrome-progress`, which
+ * the surface's scale and every fade are drawn from, and only where motion is
+ * welcome: under reduced motion the bar changes at once. The test browser
  * cannot be put in reduced motion from a story, so this reads the style
- * sheet: every rule that transitions the surface sits in a
+ * sheet: every rule that transitions the bar sits in a
  * `prefers-reduced-motion: no-preference` block.
  */
 export const PhoneMorphMotion: Story = {
   ...onAPhone,
   play: async ({ canvas }) => {
     await canvas.findByText(LAST_LINE);
-    const { tabs } = chrome();
+    const { bar } = chrome();
     if (matchMedia("(prefers-reduced-motion: no-preference)").matches) {
-      await expect(getComputedStyle(tabs).transitionProperty.split(", ")).toContain("scale");
+      await expect(getComputedStyle(bar).transitionProperty.split(", ")).toContain(
+        "--chrome-progress",
+      );
     }
 
     const transitions: { media: string[] }[] = [];
@@ -377,7 +391,7 @@ export const PhoneMorphMotion: Story = {
       for (const rule of Array.from(rules)) {
         if (rule instanceof CSSMediaRule) walk(rule.cssRules, [...media, rule.conditionText]);
         else if (rule instanceof CSSStyleRule) {
-          if (rule.selectorText.includes(".bottom-bar-tabs") && rule.style.transition) {
+          if (/\.bottom-bar(?![-\w])/.test(rule.selectorText) && rule.style.transition) {
             transitions.push({ media });
           }
           if (rule.cssRules.length > 0) walk(rule.cssRules, media);
