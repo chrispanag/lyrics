@@ -400,14 +400,14 @@ export const PhoneMorphMotion: Story = {
         await expect(getComputedStyle(eased).transitionProperty.split(", ")).toContain(
           "--chrome-progress",
         );
-      }
-      // Following the scroll is eased too, briefly: drawn as is, a flick
-      // popped the bars from one end to the other.
-      bar.setAttribute("data-chrome-scrubbing", "");
-      try {
-        await expect(getComputedStyle(bar).transitionDuration).toBe("0.1s");
-      } finally {
-        bar.removeAttribute("data-chrome-scrubbing");
+        // Following the scroll is eased too, briefly: drawn as is, a flick
+        // popped the bars from one end to the other.
+        eased.setAttribute("data-chrome-scrubbing", "");
+        try {
+          await expect(getComputedStyle(eased).transitionDuration).toBe("0.1s");
+        } finally {
+          eased.removeAttribute("data-chrome-scrubbing");
+        }
       }
     }
 
@@ -420,7 +420,10 @@ export const PhoneMorphMotion: Story = {
       for (const rule of Array.from(rules)) {
         if (rule instanceof CSSMediaRule) walk(rule.cssRules, [...media, rule.conditionText]);
         else if (rule instanceof CSSStyleRule) {
-          if (rule.selectorText.includes("chrome-follows") && rule.style.transition) {
+          // A rule setting only the duration counts too: unguarded, it would
+          // ease every property (`transition-property` defaults to `all`).
+          const eases = rule.style.transition || rule.style.transitionDuration;
+          if (rule.selectorText.includes("chrome-follows") && eases) {
             transitions.push({ media });
           }
           if (rule.style.getPropertyValue("--chrome-progress").trim() === "inherit") {

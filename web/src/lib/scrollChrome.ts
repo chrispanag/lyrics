@@ -21,9 +21,10 @@ import { type RefObject, useEffect } from "react";
  * - `--chrome-scroll-progress` on each bar that moves with it: how far
  *   tucked, from 0 to 1. While the reader scrolls it follows the scroll pixel
  *   for pixel over `RANGE_PX`, as Safari's toolbar does, with
- *   `data-chrome-scrubbing` on the bar, which index.css follows on a short
- *   ease. Once the scroll comes to rest it settles at one end or the other,
- *   which index.css eases as long as the bars' other moves. Under reduced motion index.css draws only the attribute.
+ *   `data-chrome-scrubbing` on the bar, which index.css draws on a short ease
+ *   (`--duration-chrome-follow`). Once the scroll comes to rest it settles at
+ *   one end or the other, which index.css eases over `--duration-chrome`.
+ *   Under reduced motion index.css draws only the attribute.
  *   Written on the bar rather than <html>: a custom property changed on the
  *   root restyles the whole page, on every frame of a scroll.
  *

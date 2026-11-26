@@ -458,12 +458,11 @@
    a see-through surface. While the reader's scroll moves it
    (`data-chrome-scrubbing`) it follows on a short ease
    (`--duration-chrome-follow`), each scroll event taking the ease up from
-   wherever it has the bar. Under reduced motion it does
-   not follow the scroll: out or tucked, at once, as
-   `data-chrome-tucked` says. A bar holding visible focus or an open menu is
-   drawn out whatever the scroll says, by the selector `chrome-tucked` holds it
-   with: a control reached by Tab must be on screen, and a menu must not lose
-   its trigger. */
+   wherever it has the bar. Under reduced motion it does not follow the
+   scroll: out or tucked, at once, as `data-chrome-tucked` says. A bar holding
+   visible focus or an open menu is drawn out whatever the scroll says, by the
+   selector `chrome-tucked` holds it with: a control reached by Tab must be on
+   screen, and a menu must not lose its trigger. */
 @property --chrome-scroll-progress {
   syntax: "<number>";
   inherits: false;
