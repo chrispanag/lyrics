@@ -33,8 +33,8 @@ import { revealChrome, scrollToTop, useChromeScroll } from "@/lib/scrollChrome";
  * pill's size does the face's own surface take over from it. Collapsed is
  * only how it looks: the tabs stay in the accessibility tree and in the tab
  * order, and reaching one brings the bar back. Styles are `.bottom-bar` in
- * index.css, drawn from `--chrome-scroll-progress` on the bar and `data-chrome-tucked`
- * on <html>, so a tuck re-renders nothing here.
+ * index.css, drawn from the scroll by `chrome-follows` and from
+ * `data-chrome-tucked` on <html>, so a tuck re-renders nothing here.
  */
 export function BottomBar() {
   const { user } = useAuth();
@@ -79,7 +79,7 @@ export function BottomBar() {
         ref={barRef}
         // Presses through its own margins land on the page; the tabs and the
         // pill take theirs back (index.css).
-        className="bottom-bar pointer-events-none fixed inset-x-0 bottom-0 z-sticky flex justify-center px-4 pb-(--bottom-bar-gap) md:hidden"
+        className="bottom-bar chrome-follows pointer-events-none fixed inset-x-0 bottom-0 z-sticky flex justify-center px-4 pb-(--bottom-bar-gap) md:hidden"
       >
         {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: tracks focus arriving in its links; nothing here is pressed. */}
         <nav

@@ -15,9 +15,10 @@ import { type RefObject, useEffect } from "react";
  * over and over in a read, and drawing it through React would re-render each
  * bar and the page holding one, for a change that is only a transform.
  *
- * - `data-chrome-tucked` on <html>: tucked or not. The top bars slide by it,
- *   and it decides which of the bottom bar's tabs and pill takes presses.
- * - `--chrome-scroll-progress` on a bar that follows it (the bottom bar): how far
+ * - `data-chrome-tucked` on <html>: tucked or not. It decides which of the
+ *   bottom bar's tabs and pill takes presses, and is all a reader who asks
+ *   for less motion sees.
+ * - `--chrome-scroll-progress` on each bar that moves with it: how far
  *   tucked, from 0 to 1. While the reader scrolls it follows the scroll pixel
  *   for pixel over `RANGE_PX`, as Safari's toolbar does, with
  *   `data-chrome-scrubbing` on the bar so index.css does not ease it. Once the
@@ -41,8 +42,10 @@ export const CHROME_PROGRESS_PROPERTY = "--chrome-scroll-progress";
 export const CHROME_SCRUBBING_ATTRIBUTE = "data-chrome-scrubbing";
 
 /**
- * How far a scroll takes the chrome from out to tucked, or back. The top bars
- * leave once it is all the way tucked, and come back after `TURN_PX` up.
+ * How far a scroll takes the chrome from out to tucked, or back: the bottom
+ * bar from its tabs to its pill, a top bar from in place to out of sight.
+ * `data-chrome-tucked` is set once it is all the way tucked, and cleared after
+ * `TURN_PX` up.
  */
 const RANGE_PX = 40;
 
@@ -81,7 +84,7 @@ let turnY = 0;
 /** A finger on the screen holds the chrome where the scroll left it, as Safari does. */
 let touching = false;
 let settleTimer: ReturnType<typeof setTimeout> | undefined;
-let bars = 0;
+/** The bars on the page that move with the chrome; the listeners live while there are any. */
 const followers = new Set<HTMLElement>();
 
 function setTucked(next: boolean): void {
@@ -216,44 +219,39 @@ export function revealChrome(): void {
  * last, and the state starts over then: a page with no bar left has no
  * direction to remember, and a stale "tucked" would greet the next one.
  */
-function register(): () => void {
-  if (bars === 0) {
+function register(bar: HTMLElement): () => void {
+  if (followers.size === 0) {
     touching = false;
     revealChrome();
     for (const [type, listener] of listeners) {
       window.addEventListener(type, listener, { passive: true });
     }
   }
-  bars += 1;
+  followers.add(bar);
+  draw(bar);
   return () => {
-    bars -= 1;
-    if (bars > 0) return;
+    followers.delete(bar);
+    // A bar that stays on the page (a header pinned) keeps nothing stale.
+    bar.style.removeProperty(CHROME_PROGRESS_PROPERTY);
+    bar.removeAttribute(CHROME_SCRUBBING_ATTRIBUTE);
+    if (followers.size > 0) return;
     for (const [type, listener] of listeners) window.removeEventListener(type, listener);
     revealChrome();
   };
 }
 
 /**
- * Takes part in the page's tucking, for a bar index.css moves with it. In an
- * effect, so a server and the first render in a browser draw the chrome out.
- * Returns nothing: the bar re-renders for none of it.
- *
- * `follower` is a bar drawn from the progress rather than the attribute alone:
- * `--chrome-scroll-progress` and `data-chrome-scrubbing` are written to it.
+ * Moves `bar` with the page's tucking: `--chrome-scroll-progress` and
+ * `data-chrome-scrubbing` are written to it, which index.css draws from
+ * (`chrome-follows`). `null` for a bar that stays put, which takes no part.
+ * In an effect, so a server and the first render in a browser draw the chrome
+ * out. Returns nothing: the bar re-renders for none of it.
  */
-export function useChromeScroll(follower?: RefObject<HTMLElement | null>): void {
+export function useChromeScroll(bar: RefObject<HTMLElement | null> | null): void {
   useEffect(() => {
-    const unregister = register();
-    const bar = follower?.current;
-    if (bar) {
-      followers.add(bar);
-      draw(bar);
-    }
-    return () => {
-      if (bar) followers.delete(bar);
-      unregister();
-    };
-  }, [follower]);
+    const element = bar?.current;
+    return element ? register(element) : undefined;
+  }, [bar]);
 }
 
 /**

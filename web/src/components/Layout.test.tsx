@@ -790,8 +790,11 @@ describe("StickyHeader", () => {
   // whole class names are matched.
   const header = () => screen.getByText("Search").closest("header");
   const tucked = () => document.documentElement.hasAttribute(CHROME_TUCKED_ATTRIBUTE);
-  /** The slide, under `max-md:` only, and held while the header has focus (index.css). */
-  const TUCKS = "max-md:chrome-tucked:-translate-y-full";
+  /**
+   * The slide, under `max-md:` only, following the scroll's progress and held
+   * while the header has focus (index.css).
+   */
+  const TUCKS = "max-md:chrome-follows max-md:chrome-slides-up";
 
   it("gets out of the way on the way down, and only on a phone", () => {
     render(<StickyHeader>Search</StickyHeader>);
@@ -812,11 +815,50 @@ describe("StickyHeader", () => {
     expect(tucked()).toBe(false);
   });
 
+  // As the bottom bar does: partway out of sight while the scroll is partway,
+  // not eased while the reader moves it.
+  it("follows the scroll", () => {
+    render(<StickyHeader>Search</StickyHeader>);
+    const progress = () => header()?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY);
+
+    scrollToY(100);
+    expect(progress()).toBe("0.5");
+    expect(header()).toHaveAttribute(CHROME_SCRUBBING_ATTRIBUTE);
+
+    scrollToY(80);
+    expect(progress()).toBe("0");
+  });
+
   it("stays put while it is pinned", () => {
-    render(<StickyHeader pinned>Search</StickyHeader>);
+    // Beside a bar that tucks, so the page's tucking is running.
+    render(
+      <>
+        <StickyHeader pinned>Search</StickyHeader>
+        <StickyHeader>Tools</StickyHeader>
+      </>,
+    );
 
     expect(header()).toHaveClass("sticky-bar");
-    expect(header()).not.toHaveClass(TUCKS);
+    // One at a time: a negated `toHaveClass` of several passes when any is missing.
+    for (const name of TUCKS.split(" ")) expect(header()).not.toHaveClass(name);
+    // Nothing reads the progress there, so none is written.
+    scrollToY(100);
+    expect(
+      screen.getByText("Tools").closest("header")?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY),
+    ).toBe("0.5");
+    expect(header()?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY)).toBe("");
+  });
+
+  // A header pinned partway through a scroll keeps nothing the slide drew from.
+  it("lets go of the progress once it is pinned", () => {
+    const { rerender } = render(<StickyHeader>Search</StickyHeader>);
+    scrollToY(100);
+    expect(header()).toHaveAttribute(CHROME_SCRUBBING_ATTRIBUTE);
+
+    rerender(<StickyHeader pinned>Search</StickyHeader>);
+
+    expect(header()?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY)).toBe("");
+    expect(header()).not.toHaveAttribute(CHROME_SCRUBBING_ATTRIBUTE);
   });
 
   // Nothing is left behind for the next page, whose bars start out.
