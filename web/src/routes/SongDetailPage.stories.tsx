@@ -1,11 +1,24 @@
 import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
+import { HttpResponse, http } from "msw";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { SongDetailPage } from "./SongDetailPage";
+import { SongsPane } from "./SongsPane";
 import { Layout } from "@/components/Layout";
+import { ReaderSplit } from "@/components/ReaderSplit";
+import { applyNavCollapsed, storeNavCollapsed } from "@/lib/navCollapsed";
 import { catalogList, catalogSongs, entechno } from "@/test/catalog";
-import { listById, makeRecording, makeSong, makeUser, songByRef } from "@/test/handlers";
-import { phoneGlobals, phoneParameters } from "@/test/phone";
+import {
+  API,
+  list,
+  listById,
+  makePopularity,
+  makeRecording,
+  makeSong,
+  makeUser,
+  songByRef,
+} from "@/test/handlers";
+import { deskViewport, phoneGlobals, phoneParameters } from "@/test/viewport";
 
 const documented = makeSong({
   id: "song-9",
@@ -434,5 +447,167 @@ export const PhoneInAList: Story = {
     await expect(hint.getBoundingClientRect().bottom).toBeLessThanOrEqual(
       bar.getBoundingClientRect().top,
     );
+  },
+};
+
+/*
+ * A desk, in the shell with the catalog beside the song, as the reader route
+ * lays them out. The song's own pane decides the tier, not the window: the
+ * navigation column and the list take their share first.
+ */
+
+/** The shell, and the catalog and the song side by side in it. */
+const besideTheList: Decorator = (Story) => (
+  <Layout>
+    <ReaderSplit catalog={<SongsPane />}>
+      <Story />
+    </ReaderSplit>
+  </Layout>
+);
+
+/** Documented, and long enough to scroll: what the details column is for. */
+const wideSong = makeSong({
+  ...documented,
+  id: "song-12",
+  slug: "megalo-tragoydi",
+  title: "Μεγάλο τραγούδι",
+  lyrics: longSong.lyrics ?? "",
+  popularity: makePopularity({
+    anonymous_clicks: 120,
+    authenticated_clicks: 4,
+    list_adds: 7,
+    list_users: 5,
+  }),
+});
+
+/**
+ * `wideSong` beside the list, in a desk window of the given size with the
+ * navigation open or put away, which is put back open after.
+ */
+function atADesk(width: number, height: number, navCollapsed: boolean): Story {
+  const desk = deskViewport(width, height);
+  return {
+    parameters: { ...desk.parameters, route: "/songs/megalo-tragoydi" },
+    globals: desk.globals,
+    decorators: [besideTheList],
+    beforeEach({ msw }) {
+      msw.use(
+        songByRef(wideSong),
+        http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list(catalogSongs))),
+      );
+      storeNavCollapsed(navCollapsed);
+      applyNavCollapsed(navCollapsed);
+      return () => {
+        storeNavCollapsed(false);
+        applyNavCollapsed(false);
+      };
+    },
+  };
+}
+
+/** Waits for the whole song, then finds the parts the desk stories measure. */
+async function songParts(canvas: ReturnType<typeof within>) {
+  await canvas.findByText(LAST_LINE);
+  return {
+    details: canvas.getByRole("complementary", { name: "Song details" }),
+    lyrics: canvas.getByRole("region", { name: "Lyrics" }),
+    title: canvas.getByRole("heading", { level: 1, name: "Μεγάλο τραγούδι" }),
+  };
+}
+
+/** The lyrics' own scroller: the first ancestor that scrolls. */
+function scrollerOf(element: HTMLElement): HTMLElement {
+  let node = element.parentElement;
+  while (node && getComputedStyle(node).overflowY !== "auto") node = node.parentElement;
+  if (!node) throw new Error("The lyrics have no scroller.");
+  return node;
+}
+
+/**
+ * 1440×900 with the navigation open: the song's pane is 51rem, past `@3xl`,
+ * so the details sit in a sticky column beside the lyrics, which start right
+ * under the title. The recordings and tallies are shown in place, so the
+ * buttons for their sheets are put away.
+ */
+export const WideDetailsColumn: Story = {
+  ...atADesk(1440, 900, false),
+  play: async ({ canvas }) => {
+    const { details, lyrics, title } = await songParts(canvas);
+
+    // Beside, not above.
+    await expect(details.getBoundingClientRect().left).toBeGreaterThan(
+      lyrics.getBoundingClientRect().right,
+    );
+    // The lyrics start under the title, not under the credits.
+    const gap = lyrics.getBoundingClientRect().top - title.getBoundingClientRect().bottom;
+    await expect(gap).toBeGreaterThanOrEqual(0);
+    await expect(gap).toBeLessThan(40);
+
+    await expect(within(details).getByRole("region", { name: "Recordings" })).toBeVisible();
+    await expect(within(details).getByText("Χάρις Αλεξίου")).toBeVisible();
+    const stats = within(details).getByRole("region", { name: "Stats" });
+    await expect(stats).toBeVisible();
+    await expect(within(stats).getByText("Views").closest("div")).toHaveTextContent("124");
+    await expect(within(details).getByRole("button", { name: "Play video" })).toBeVisible();
+
+    // What the column replaces is put away, out of the accessibility tree too.
+    // The only Stats left is the column's heading; the recordings' own watch
+    // links stay, but not the one under the lyrics.
+    await expect(canvas.queryByRole("button", { name: "Stats" })).toBeNull();
+    await expect(canvas.queryByRole("button", { name: /show all/i })).toBeNull();
+    for (const link of canvas.getAllByRole("link", { name: /watch on youtube/i })) {
+      await expect(details).toContainElement(link);
+    }
+
+    // Sticky: the lyrics scroll away under it, and it stays where it was.
+    const scroller = scrollerOf(lyrics);
+    const before = details.getBoundingClientRect().top;
+    scroller.scrollTo({ top: 800, behavior: "instant" });
+    await waitFor(() =>
+      expect(title.getBoundingClientRect().bottom).toBeLessThan(
+        scroller.getBoundingClientRect().top,
+      ),
+    );
+    const after = details.getBoundingClientRect();
+    await expect(Math.abs(after.top - before)).toBeLessThanOrEqual(1);
+    await expect(after.bottom).toBeLessThanOrEqual(window.innerHeight);
+    await expect(within(details).getByRole("region", { name: "Stats" })).toBeVisible();
+  },
+};
+
+/**
+ * 1100×900 with the navigation put away: the song's pane is about 45rem, too
+ * narrow for the column but wider than a comfortable line, so the title and
+ * the lyrics share one 40rem column centered in the pane, the details above
+ * the lyrics as on a phone.
+ */
+export const CenteredColumn: Story = {
+  ...atADesk(1100, 900, true),
+  play: async ({ canvas }) => {
+    const { details, lyrics, title } = await songParts(canvas);
+    const article = canvas.getByRole("article");
+    // The navigation slides shut once the shell has read the stored choice;
+    // the pane has its width once the list is the wider one beside it.
+    await waitFor(() => expect(article.getBoundingClientRect().left).toBe(384));
+    const pane = article.getBoundingClientRect();
+    const column = lyrics.getBoundingClientRect();
+
+    // About 40rem, and as far from either edge of the pane.
+    await expect(Math.abs(column.width - 640)).toBeLessThanOrEqual(1);
+    await expect(pane.width).toBeGreaterThan(column.width + 32);
+    await expect(
+      Math.abs(column.left - pane.left - (pane.right - column.right)),
+    ).toBeLessThanOrEqual(16);
+    // The title on the same column.
+    await expect(Math.abs(title.getBoundingClientRect().left - column.left)).toBeLessThanOrEqual(1);
+
+    // No column beside it: the details sit above the lyrics, and its own
+    // block, and the player, are not drawn.
+    await expect(details.getBoundingClientRect().bottom).toBeLessThanOrEqual(column.top);
+    await expect(within(details).queryByRole("region", { name: "Recordings" })).toBeNull();
+    await expect(within(details).queryByRole("region", { name: "Stats" })).toBeNull();
+    await expect(canvas.queryByRole("button", { name: "Play video" })).toBeNull();
+    await expect(canvas.getByRole("button", { name: "Stats" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Show all 2 recordings" })).toBeVisible();
   },
 };

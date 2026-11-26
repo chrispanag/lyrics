@@ -71,6 +71,16 @@ export function watchUrl(videoId: string): string {
   return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
 }
 
+/** The player for a stored video id, from the no-cookie host, playing at once. */
+export function embedUrl(videoId: string): string {
+  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1`;
+}
+
+/** YouTube's thumbnail for a stored video id. */
+export function thumbnailUrl(videoId: string): string {
+  return `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
+}
+
 /** `strings.Trim(path, "/")`, which is what the server splits its segments off. */
 function trimSlashes(path: string): string {
   return path.replace(/^\/+|\/+$/g, "");

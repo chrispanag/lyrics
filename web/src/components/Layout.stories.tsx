@@ -6,7 +6,7 @@ import { Page } from "./Page";
 import { MenuHeader } from "./SearchHeader";
 import { applyNavCollapsed, storeNavCollapsed } from "@/lib/navCollapsed";
 import { makeUser } from "@/test/handlers";
-import { phoneGlobals, phoneParameters } from "@/test/phone";
+import { phoneGlobals, phoneParameters } from "@/test/viewport";
 
 /**
  * The app's shell: the sidebar from `md` up, and below it the bottom bar. The

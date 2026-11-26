@@ -4,8 +4,7 @@ import type { NextConfig } from "next";
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  // The app renders no third-party HTML, so framing it serves no purpose and
-  // only enables clickjacking.
+  // Nothing needs to frame the app, so allowing it would only enable clickjacking.
   { key: "X-Frame-Options", value: "DENY" },
 ];
 

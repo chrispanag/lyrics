@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { extractVideoId } from "./youtube";
+import { embedUrl, extractVideoId, thumbnailUrl, watchUrl } from "./youtube";
 
 describe("extractVideoId", () => {
   // Every shape here is one `parseYouTubeURL` accepts; the preview must agree.
@@ -44,5 +44,23 @@ describe("extractVideoId", () => {
     { what: "nothing at all", pasted: "   " },
   ])("refuses $what", ({ pasted }) => {
     expect(extractVideoId(pasted)).toBeNull();
+  });
+});
+
+// Written out once here, so the specs that render them can use the helpers.
+describe("a stored id's addresses", () => {
+  it("points at YouTube's watch page, player and thumbnail", () => {
+    expect(watchUrl("dQw4w9WgXcQ")).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    expect(embedUrl("dQw4w9WgXcQ")).toBe(
+      "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1",
+    );
+    expect(thumbnailUrl("dQw4w9WgXcQ")).toBe("https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg");
+  });
+
+  // An id is always eleven safe characters; encoded anyway, so none of them
+  // can step out of YouTube's path.
+  it("encodes the id", () => {
+    expect(embedUrl("../a?b")).toBe("https://www.youtube-nocookie.com/embed/..%2Fa%3Fb?autoplay=1");
+    expect(thumbnailUrl("../a?b")).toBe("https://i.ytimg.com/vi/..%2Fa%3Fb/hqdefault.jpg");
   });
 });

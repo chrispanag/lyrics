@@ -1,4 +1,5 @@
 import { SquarePlay } from "lucide-react";
+import type { ComponentProps } from "react";
 
 import { buttonClasses } from "@/components/buttonStyles";
 import { watchUrl } from "@/lib/youtube";
@@ -9,9 +10,14 @@ import { watchUrl } from "@/lib/youtube";
  * Takes the id, never `youtube_url`: the importer stores URLs unvalidated, while
  * an id is always eleven safe characters, so the destination cannot be elsewhere.
  */
-export function WatchOnYouTube({ videoId, className }: { videoId: string; className?: string }) {
+export function WatchOnYouTube({
+  videoId,
+  className,
+  ...rest
+}: { videoId: string } & Omit<ComponentProps<"a">, "href" | "target" | "rel" | "children">) {
   return (
     <a
+      {...rest}
       href={watchUrl(videoId)}
       target="_blank"
       // noreferrer: the new tab need not learn which song page sent it.

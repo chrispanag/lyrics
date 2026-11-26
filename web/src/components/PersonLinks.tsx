@@ -14,7 +14,7 @@ export function PersonLinks({
   onNavigate,
 }: {
   people: { person_id: string; name: string }[];
-  onNavigate?: () => void;
+  onNavigate?: (() => void) | undefined;
 }) {
   return (
     <>
