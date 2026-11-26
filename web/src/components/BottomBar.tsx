@@ -79,7 +79,7 @@ export function BottomBar() {
         ref={barRef}
         // Presses through its own margins land on the page; the tabs and the
         // pill take theirs back (index.css).
-        className="bottom-bar pointer-events-none fixed inset-x-0 bottom-0 z-sticky flex justify-center px-4 pb-(--bottom-bar-gap) md:hidden"
+        className="bottom-bar chrome-follows pointer-events-none fixed inset-x-0 bottom-0 z-sticky flex justify-center px-4 pb-(--bottom-bar-gap) md:hidden"
       >
         {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: tracks focus arriving in its links; nothing here is pressed. */}
         <nav

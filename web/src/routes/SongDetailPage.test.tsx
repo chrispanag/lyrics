@@ -1706,7 +1706,7 @@ describe("SongDetailPage tools bar on a phone", () => {
   it("hides on the way down and returns on the way up", async () => {
     renderDetail();
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
-    expect(toolsBar()).toHaveClass("max-md:chrome-tucked:-translate-y-full");
+    expect(toolsBar()).toHaveClass("max-md:chrome-follows", "max-md:chrome-slides-up");
 
     scrollDown();
     expect(tucked()).toBe(true);

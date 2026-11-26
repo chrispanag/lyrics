@@ -15,9 +15,10 @@ import { type RefObject, useEffect } from "react";
  * over and over in a read, and drawing it through React would re-render each
  * bar and the page holding one, for a change that is only a transform.
  *
- * - `data-chrome-tucked` on <html>: tucked or not. The top bars slide by it,
- *   and it decides which of the bottom bar's tabs and pill takes presses.
- * - `--chrome-scroll-progress` on a bar that follows it (the bottom bar): how far
+ * - `data-chrome-tucked` on <html>: tucked or not. It decides which of the
+ *   bottom bar's tabs and pill takes presses, and is all a reader who asks
+ *   for less motion sees.
+ * - `--chrome-scroll-progress` on each bar that follows it (every bar): how far
  *   tucked, from 0 to 1. While the reader scrolls it follows the scroll pixel
  *   for pixel over `RANGE_PX`, as Safari's toolbar does, with
  *   `data-chrome-scrubbing` on the bar so index.css does not ease it. Once the
@@ -41,8 +42,10 @@ export const CHROME_PROGRESS_PROPERTY = "--chrome-scroll-progress";
 export const CHROME_SCRUBBING_ATTRIBUTE = "data-chrome-scrubbing";
 
 /**
- * How far a scroll takes the chrome from out to tucked, or back. The top bars
- * leave once it is all the way tucked, and come back after `TURN_PX` up.
+ * How far a scroll takes the chrome from out to tucked, or back: the bottom
+ * bar from its tabs to its pill, a top bar from in place to out of sight.
+ * `data-chrome-tucked` is set once it is all the way tucked, and cleared after
+ * `TURN_PX` up.
  */
 const RANGE_PX = 40;
 

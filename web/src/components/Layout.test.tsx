@@ -790,8 +790,11 @@ describe("StickyHeader", () => {
   // whole class names are matched.
   const header = () => screen.getByText("Search").closest("header");
   const tucked = () => document.documentElement.hasAttribute(CHROME_TUCKED_ATTRIBUTE);
-  /** The slide, under `max-md:` only, and held while the header has focus (index.css). */
-  const TUCKS = "max-md:chrome-tucked:-translate-y-full";
+  /**
+   * The slide, under `max-md:` only, following the scroll's progress and held
+   * while the header has focus (index.css).
+   */
+  const TUCKS = "max-md:chrome-follows max-md:chrome-slides-up";
 
   it("gets out of the way on the way down, and only on a phone", () => {
     render(<StickyHeader>Search</StickyHeader>);
@@ -810,6 +813,20 @@ describe("StickyHeader", () => {
     scrollUp();
 
     expect(tucked()).toBe(false);
+  });
+
+  // As the bottom bar does: partway out of sight while the scroll is partway,
+  // not eased while the reader moves it.
+  it("follows the scroll", () => {
+    render(<StickyHeader>Search</StickyHeader>);
+    const progress = () => header()?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY);
+
+    scrollToY(100);
+    expect(progress()).toBe("0.5");
+    expect(header()).toHaveAttribute(CHROME_SCRUBBING_ATTRIBUTE);
+
+    scrollToY(80);
+    expect(progress()).toBe("0");
   });
 
   it("stays put while it is pinned", () => {

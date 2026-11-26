@@ -7,10 +7,11 @@ import { useChromeScroll } from "@/lib/scrollChrome";
  * The chrome every sticky top bar shares: `StickyHeader`'s, and a song's tools
  * bar, which is one only on a phone (`phoneOnly`). The look is the
  * `sticky-bar` utility in index.css; `tucks` adds the slide out of the way
- * with the rest of the phone's chrome, which index.css draws from
- * `data-chrome-tucked` on <html> (`lib/scrollChrome`), below `md` only, and
- * never while the bar holds visible focus or an open menu: a Tab into it must
- * land on screen, and a menu must not lose its trigger (`chrome-tucked`).
+ * with the rest of the phone's chrome, below `md` only. It follows the scroll
+ * as the bottom bar does (`chrome-follows`, from the progress
+ * `lib/scrollChrome` writes on the bar), and never while the bar holds visible
+ * focus or an open menu: a Tab into it must land on screen, and a menu must
+ * not lose its trigger.
  *
  * Two literal spellings rather than a prefix glued on, since Tailwind finds
  * its classes by reading the source.
@@ -24,13 +25,14 @@ export function stickyBarClasses({
 } = {}): string {
   return cn(
     phoneOnly ? "max-md:sticky-bar" : "sticky-bar",
-    tucks && "max-md:chrome-tucked:-translate-y-full",
+    tucks && "max-md:chrome-follows max-md:chrome-slides-up",
   );
 }
 
 /**
  * What a sticky top bar does besides its look (`stickyBarClasses`): takes part
- * in the phone's tucking (`useChromeScroll`), and publishes its height as
+ * in the phone's tucking (`useChromeScroll`, which writes the progress its
+ * slide follows on the bar), and publishes its height as
  * `--sticky-header-height` on <html>, which the root's `scroll-padding-top`
  * reads, so a control reached by Tab is scrolled clear of the bar rather than
  * to the viewport edge underneath it. Measured rather than written down: the
@@ -46,7 +48,7 @@ export function useStickyBar(
   ref: RefObject<HTMLElement | null>,
   { phoneOnly = false }: { phoneOnly?: boolean } = {},
 ): void {
-  useChromeScroll();
+  useChromeScroll(ref);
 
   useEffect(() => {
     const bar = ref.current;

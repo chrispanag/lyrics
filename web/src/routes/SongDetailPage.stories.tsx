@@ -292,6 +292,9 @@ export const PhoneChrome: Story = {
     const [sx] = getComputedStyle(tabs).scale.split(" ").map(Number);
     await expect(sx).toBeGreaterThan(0.4);
     await expect(sx).toBeLessThan(0.9);
+    // And the tools bar partway out of sight with it, by half its height.
+    const slid = tools.getBoundingClientRect();
+    await expect(slid.top).toBeCloseTo(-slid.height / 2, 0);
     window.dispatchEvent(new Event("touchend"));
 
     await tuck();
@@ -368,22 +371,25 @@ export const PhonePill: Story = {
 };
 
 /**
- * The settle at rest is a transition on the bar's `--chrome-progress`, which
- * the surface's scale and every fade are drawn from, and only where motion is
- * welcome: under reduced motion the bar changes at once. The test browser
- * cannot be put in reduced motion from a story, so this reads the style
- * sheet: every rule that transitions the bar sits in a
+ * The settle at rest is a transition on each bar's `--chrome-progress`
+ * (`chrome-follows`), which the bottom bar's scale and fades and the top bar's
+ * slide are drawn from, and only where motion is welcome: under reduced
+ * motion the bars change at once. The test browser cannot be put in reduced
+ * motion from a story, so this reads the style sheet: every rule that
+ * transitions a bar's progress sits in a
  * `prefers-reduced-motion: no-preference` block.
  */
 export const PhoneMorphMotion: Story = {
   ...onAPhone,
   play: async ({ canvas }) => {
     await canvas.findByText(LAST_LINE);
-    const { bar } = chrome();
+    const { bar, tools } = chrome();
     if (matchMedia("(prefers-reduced-motion: no-preference)").matches) {
-      await expect(getComputedStyle(bar).transitionProperty.split(", ")).toContain(
-        "--chrome-progress",
-      );
+      for (const eased of [bar, tools]) {
+        await expect(getComputedStyle(eased).transitionProperty.split(", ")).toContain(
+          "--chrome-progress",
+        );
+      }
     }
 
     const transitions: { media: string[] }[] = [];
@@ -391,7 +397,7 @@ export const PhoneMorphMotion: Story = {
       for (const rule of Array.from(rules)) {
         if (rule instanceof CSSMediaRule) walk(rule.cssRules, [...media, rule.conditionText]);
         else if (rule instanceof CSSStyleRule) {
-          if (/\.bottom-bar(?![-\w])/.test(rule.selectorText) && rule.style.transition) {
+          if (rule.selectorText.includes("chrome-follows") && rule.style.transition) {
             transitions.push({ media });
           }
           if (rule.cssRules.length > 0) walk(rule.cssRules, media);
