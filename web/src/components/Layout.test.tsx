@@ -331,6 +331,20 @@ describe("Bottom bar", () => {
     expect(tucked()).toBe(false);
   });
 
+  // Brought out mid-bounce (a tap on the tab), the way back to the top is no
+  // stretch down either.
+  it("stays out at the top when brought out in the bounce", () => {
+    renderWithProviders(<Layout />);
+
+    setScrollY(-30);
+    act(() => revealChrome());
+    scrollToY(0);
+    scrollEnd();
+
+    expect(progress()).toBe(0);
+    expect(tucked()).toBe(false);
+  });
+
   // Jitter up at the end of a scroll down is no turn: it settles as down.
   it("settles by the way the reader went, not by the jitter", () => {
     renderWithProviders(<Layout />);

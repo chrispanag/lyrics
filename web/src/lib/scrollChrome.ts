@@ -104,8 +104,9 @@ function drawAll(): void {
  * bounce.
  */
 function pastEdge(y: number): boolean {
+  if (y < 0) return true;
   const end = document.documentElement.scrollHeight - window.innerHeight;
-  return y < 0 || (end > 0 && y > end);
+  return end > 0 && y > end;
 }
 
 /*
@@ -116,7 +117,8 @@ function pastEdge(y: number): boolean {
 function onScroll(): void {
   const y = window.scrollY;
   if (pastEdge(y)) return;
-  const dy = y - lastY;
+  const prevY = lastY;
+  const dy = y - prevY;
   lastY = y;
   if (dy === 0) return;
   // Jitter the other way is no turn, so the settle does not read it as one.
@@ -133,7 +135,7 @@ function onScroll(): void {
   const next =
     dy > 0
       ? Math.min(1, progress + dy / RANGE_PX)
-      : Math.max(0, Math.min((progress * y) / (y - dy), progress + dy / RANGE_PX));
+      : Math.max(0, Math.min((progress * y) / prevY, progress + dy / RANGE_PX));
   if (next >= 1) setTucked(true);
   else if (!goingDown && next <= 1 - TURN) setTucked(false);
 
@@ -193,11 +195,13 @@ const listeners: [string, (event: Event) => void][] = [
 /**
  * Brings the chrome back without a scroll: a tap on the pill, focus moving
  * into a bar, or a new screen. Out, with nothing in flight, and the next
- * scroll down tucks it again, measured from here.
+ * scroll down tucks it again, measured from here. Called in iOS's bounce
+ * above the top, it measures from the top itself: the bounce's way back to 0
+ * would otherwise read as a stretch down and tuck the chrome there.
  */
 export function revealChrome(): void {
   clearTimeout(settleTimer);
-  lastY = window.scrollY;
+  lastY = Math.max(0, window.scrollY);
   turnY = lastY;
   progress = 0;
   scrubbing = false;
