@@ -22,6 +22,7 @@ import { recordRequests } from "@/test/requests";
 import { renderWithProviders } from "@/test/render";
 import { CurrentAddress } from "@/test/routes";
 import {
+  dragToY,
   scrollDown,
   scrollEnd,
   scrollToY,
@@ -393,13 +394,41 @@ describe("Bottom bar", () => {
   // A finger held on the screen leaves the bar where the scroll put it;
   // where the browser has no `scrollend`, a pause in the scroll events after
   // the finger lifts is the rest.
+  // A flick covers the stretch in a frame or two: the chrome eases there, as
+  // Safari's toolbar animates on a flick, rather than popping from one end to
+  // the other. Eased until the scroll rests, so a flick slowing down never
+  // drops the ease mid-way.
+  it("eases a flick rather than following it as is", () => {
+    renderWithProviders(<Layout />);
+
+    dragToY(10);
+    expect(progress()).toBe(0.25);
+    expect(scrubbing()).toBe(true);
+
+    // 20px in one step: half the stretch.
+    scrollToY(30);
+    expect(progress()).toBe(0.75);
+    expect(scrubbing()).toBe(false);
+
+    // Slowing to a drag in the same scroll stays eased.
+    scrollToY(32);
+    expect(progress()).toBe(0.8);
+    expect(scrubbing()).toBe(false);
+
+    // At rest it settles, and the next drag is followed as is again.
+    scrollEnd();
+    expect(progress()).toBe(1);
+    dragToY(10);
+    expect(scrubbing()).toBe(true);
+  });
+
   it("waits for the finger to lift before it settles", () => {
     vi.useFakeTimers();
     try {
       renderWithProviders(<Layout />);
 
       fireEvent.touchStart(window);
-      scrollToY(30);
+      dragToY(30);
       act(() => vi.advanceTimersByTime(1000));
       scrollEnd();
       expect(progress()).toBe(0.75);
@@ -843,7 +872,7 @@ describe("StickyHeader", () => {
     render(<StickyHeader>Search</StickyHeader>);
     const progress = () => header()?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY);
 
-    scrollToY(20);
+    dragToY(20);
     expect(progress()).toBe("0.5");
     expect(header()).toHaveAttribute(CHROME_SCRUBBING_ATTRIBUTE);
 
@@ -874,7 +903,7 @@ describe("StickyHeader", () => {
   // A header pinned partway through a scroll keeps nothing the slide drew from.
   it("lets go of the progress once it is pinned", () => {
     const { rerender } = render(<StickyHeader>Search</StickyHeader>);
-    scrollToY(20);
+    dragToY(20);
     expect(header()).toHaveAttribute(CHROME_SCRUBBING_ATTRIBUTE);
 
     rerender(<StickyHeader pinned>Search</StickyHeader>);

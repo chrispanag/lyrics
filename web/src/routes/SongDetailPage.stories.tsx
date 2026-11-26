@@ -251,11 +251,29 @@ const published = (bar: HTMLElement) =>
     ),
   );
 
-/** Scrolls far enough down that the chrome tucks away, and waits it out. */
+/**
+ * Flicks far enough down that the chrome tucks away, and waits it out. A
+ * flick is eased, not drawn as the scroll has it.
+ */
 async function tuck() {
   window.scrollTo({ top: 600, behavior: "instant" });
   await waitFor(() => expect(document.documentElement).toHaveAttribute("data-chrome-tucked"));
+  await expect(chrome().bar).not.toHaveAttribute("data-chrome-scrubbing");
   await settled();
+}
+
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
+/** Drags the page to `y` a few pixels a frame, as a finger does, not a flick. */
+async function dragTo(y: number) {
+  const from = window.scrollY;
+  for (let at = from + 4; at <= y; at = Math.min(y, at + 4)) {
+    window.scrollTo({ top: at, behavior: "instant" });
+    // One frame for the scroll event, one for the chrome to draw it.
+    await nextFrame();
+    await nextFrame();
+    if (at === y) break;
+  }
 }
 
 /**
@@ -295,7 +313,7 @@ export const PhoneChrome: Story = {
     // scroll has taken it: 20px down is half its 40px.
     // A finger held on the screen keeps it there.
     window.dispatchEvent(new Event("touchstart"));
-    window.scrollTo({ top: 20, behavior: "instant" });
+    await dragTo(20);
     await waitFor(() => expect(chrome().bar).toHaveAttribute("data-chrome-scrubbing"));
     const [sx] = getComputedStyle(tabs).scale.split(" ").map(Number);
     await expect(sx).toBeGreaterThan(0.4);
