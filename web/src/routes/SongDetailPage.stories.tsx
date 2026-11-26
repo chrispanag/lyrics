@@ -241,7 +241,8 @@ function chrome() {
 
 /**
  * Waits for `bar` to publish its height as `--sticky-header-height`, which it
- * does from a ResizeObserver, so a frame after it is drawn.
+ * does from a ResizeObserver: before the browser paints, so a reader never
+ * sees it missing, but after React commits, so a story measuring at once can.
  */
 const published = (bar: HTMLElement) =>
   waitFor(() =>
@@ -571,10 +572,11 @@ export const WideDetailsColumn: Story = {
   ...atADesk(1440, 900, false),
   play: async ({ canvas }) => {
     const { details, lyrics, title } = await songParts(canvas);
-    // The column's height takes off the catalog header's, published a frame
-    // late: under load the song can render first, and the column is then the
-    // header's height too tall for the pane. The catalog's is the one
-    // <header>; the song's own bar is a <div> at a desk.
+    // The column's height takes off the catalog header's (`published`): under
+    // load the song can render first, and the column is then the header's
+    // height too tall for the pane. The catalog's is the one
+    // <header> that publishes: the song's own <header> does not, and its
+    // tools bar is a <div>.
     const header = document.querySelector<HTMLElement>("header[data-sticky-header]");
     if (!header) throw new Error("The catalog's header is missing.");
     await published(header);
