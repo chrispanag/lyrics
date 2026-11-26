@@ -33,7 +33,8 @@ export function YouTubePlayer({ videoId, title }: { videoId: string; title: stri
           allow="autoplay; encrypted-media; picture-in-picture"
           allowFullScreen
           // YouTube refuses to play an embed that names no origin (error 153).
-          // The site's own policy may send none, so the player asks for one.
+          // The deployed site is served `same-origin`, whatever `next.config.ts`
+          // says, which sends YouTube nothing; the frame sets its own policy.
           referrerPolicy="strict-origin-when-cross-origin"
           className="absolute inset-0 size-full border-0 focus-visible:-outline-offset-4"
         />

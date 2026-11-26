@@ -450,7 +450,7 @@ function SongToolsBar({ children }: { children: ReactNode }) {
 const SONG_COLUMNS = cn(
   "p-4",
   "@2xl/song:mx-auto @2xl/song:max-w-168",
-  "@3xl/song:mx-0 @3xl/song:grid @3xl/song:max-w-none @3xl/song:grid-cols-[minmax(0,40rem)_16rem] @3xl/song:grid-rows-[auto_1fr] @3xl/song:justify-between @3xl/song:gap-x-8",
+  "@3xl/song:grid @3xl/song:max-w-none @3xl/song:grid-cols-[minmax(0,40rem)_16rem] @3xl/song:grid-rows-[auto_1fr] @3xl/song:justify-between @3xl/song:gap-x-8",
   "@5xl/song:grid-cols-[minmax(0,40rem)_20rem]",
 );
 
