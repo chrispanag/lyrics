@@ -508,10 +508,14 @@
 
    The tabs' surface shrinks, from its bottom edge, to the pill's face, by the
    scale `BottomBar` measures into `--pill-sx` and `--pill-sy`. The tabs fade
-   in the first stretch of the shrink, and in the last the face fades in with
-   its own surface, border and shadow, drawn at full size, and the shrunk one
-   fades out under it: scaled, its 1px border and its shadow were thinner than
-   any other in the app. Growing, the same in reverse.
+   in the first stretch of the shrink, and the pill's words fade in through
+   the middle of it, held in the middle of the shrinking surface, so the
+   surface is never an empty capsule while a slow scroll holds it halfway. In
+   the last stretch the face's own surface, border and shadow, drawn at full
+   size, fade in, and the shrunk one fades out under it: scaled, its 1px
+   border and its shadow were thinner than any other in the app. Only there,
+   where the two are all but one size, so no ring shows inside a ring.
+   Growing, the same in reverse.
 
    Scaled unevenly, a round end turns oval, so the surface's horizontal radius
    is divided by the scale it has at that moment, from its measured
@@ -535,18 +539,28 @@
   /* The bar's `--chrome-progress`, inherited the ordinary way by its parts
      (see `chrome-follows`). Its subtree is a few dozen elements, so restyling
      it with each frame of a scroll costs little. */
+  /* The surface's scale is worked out here, from the measures `BottomBar`
+     writes on the bar, so the pill's words beside the surface can follow it.
+
+     A press is answered by the bar's own shading and scale, so not also by
+     the browser's tap highlight, a long press's link preview, or a selection
+     of a tab's label, none of which a phone's own tab bar draws. */
   .bottom-bar {
     --bar-progress: var(--chrome-progress);
+    --bar-sx: calc(1 + (var(--pill-sx, 0.4) - 1) * var(--bar-progress));
+    --bar-sy: calc(1 + (var(--pill-sy, 0.4) - 1) * var(--bar-progress));
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
   /* Each part that moves is its own layer from the start, as a top bar is
      (`chrome-slides-up`). */
   .bottom-bar-tabs {
     will-change: scale, opacity;
-    --bar-sx: calc(1 + (var(--pill-sx, 0.4) - 1) * var(--bar-progress));
-    --bar-sy: calc(1 + (var(--pill-sy, 0.4) - 1) * var(--bar-progress));
     scale: var(--bar-sx) var(--bar-sy);
     border-radius: calc(var(--bar-height, 3.625rem) * var(--bar-sy) / var(--bar-sx) / 2) / 50%;
-    opacity: clamp(0, (1 - var(--bar-progress)) * 10, 1);
+    opacity: clamp(0, (1 - var(--bar-progress)) * 20, 1);
     transform-origin: bottom center;
     pointer-events: auto;
   }
@@ -555,9 +569,21 @@
     opacity: clamp(0, 1 - var(--bar-progress) / 0.3, 1);
   }
   .bottom-bar-pill {
-    will-change: opacity;
-    opacity: clamp(0, (var(--bar-progress) - 0.7) / 0.25, 1);
     pointer-events: none;
+  }
+  /* The pill's words, in the vertical middle of the shrinking surface: the
+     face hangs from the surface's bottom edge, and the surface comes down to
+     the face's height only at the end. */
+  .bottom-bar-pill-words {
+    will-change: opacity, translate;
+    opacity: clamp(0, (var(--bar-progress) - 0.45) / 0.35, 1);
+    translate: 0 calc((var(--bar-height, 3.625rem) * var(--bar-sy) - 100%) / -2);
+  }
+  /* The face's own surface, in as the shrunk one goes (`.bottom-bar-tabs`),
+     a little ahead of it, so the two together never let the page through. */
+  .bottom-bar-pill-face::before {
+    will-change: opacity;
+    opacity: clamp(0, (var(--bar-progress) - 0.93) / 0.06, 1);
   }
   .bottom-bar {
     @variant chrome-tucked {

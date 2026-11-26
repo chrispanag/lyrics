@@ -650,9 +650,10 @@ describe("Bottom bar", () => {
       try {
         renderWithProviders(<Layout />, { route: "/profile" });
 
-        const surface = bar();
-        expect(Number(surface.style.getPropertyValue("--pill-sx"))).toBeCloseTo(1 / 3);
-        expect(surface.style.getPropertyValue("--pill-sy")).toBe("0.4");
+        // On the whole bar, which the pill's words read the surface's scale from too.
+        const measured = bar().closest<HTMLElement>(".bottom-bar");
+        expect(Number(measured?.style.getPropertyValue("--pill-sx"))).toBeCloseTo(1 / 3);
+        expect(measured?.style.getPropertyValue("--pill-sy")).toBe("0.4");
       } finally {
         restore();
       }
@@ -664,8 +665,8 @@ describe("Bottom bar", () => {
       try {
         renderWithProviders(<Layout />, { route: "/profile" });
 
-        const surface = bar();
-        expect(surface.style.getPropertyValue("--pill-sx")).toBe("");
+        const measured = bar().closest<HTMLElement>(".bottom-bar");
+        expect(measured?.style.getPropertyValue("--pill-sx")).toBe("");
       } finally {
         restore();
       }

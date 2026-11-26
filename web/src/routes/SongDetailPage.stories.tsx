@@ -235,8 +235,11 @@ function chrome() {
   const tabs = document.querySelector<HTMLElement>(".bottom-bar-tabs");
   const row = document.querySelector<HTMLElement>(".bottom-bar-row");
   const pill = document.querySelector<HTMLElement>(".bottom-bar-pill");
-  if (!tools || !bar || !tabs || !row || !pill) throw new Error("The phone's chrome is missing.");
-  return { tools, bar, tabs, row, pill };
+  const words = document.querySelector<HTMLElement>(".bottom-bar-pill-words");
+  if (!tools || !bar || !tabs || !row || !pill || !words) {
+    throw new Error("The phone's chrome is missing.");
+  }
+  return { tools, bar, tabs, row, pill, words };
 }
 
 /**
@@ -272,7 +275,7 @@ export const PhoneChrome: Story = {
   ...onAPhone,
   play: async ({ canvas }) => {
     await canvas.findByText(LAST_LINE);
-    const { tools, tabs, row, pill } = chrome();
+    const { tools, tabs, row, pill, words } = chrome();
 
     // No search header: the tools bar is the only bar above the song.
     await expect(canvas.queryByRole("combobox", { name: /search songs/i })).toBeNull();
@@ -284,7 +287,7 @@ export const PhoneChrome: Story = {
     // by Tab scrolls clear of it.
     await published(tools);
     await expect(getComputedStyle(row).opacity).toBe("1");
-    await expect(getComputedStyle(pill).opacity).toBe("0");
+    await expect(getComputedStyle(words).opacity).toBe("0");
     // The room between the bars at the top of the page: more than the old
     // stack above the title left, even with the bottom bar out.
     const atTop = tabs.getBoundingClientRect().top - top.bottom;
@@ -305,6 +308,12 @@ export const PhoneChrome: Story = {
       // And the tools bar partway out of sight with it, by half its height.
       const slid = tools.getBoundingClientRect();
       expect(slid.top).toBeCloseTo(-slid.height / 2, 0);
+      // The pill's words are coming in, in the middle of the shrinking
+      // surface, so it is never an empty capsule while the scroll holds it.
+      expect(Number(getComputedStyle(words).opacity)).toBeGreaterThan(0);
+      const surface = tabs.getBoundingClientRect();
+      const said = words.getBoundingClientRect();
+      expect(said.top + said.height / 2).toBeCloseTo(surface.top + surface.height / 2, 0);
     });
     window.dispatchEvent(new Event("touchend"));
 
@@ -314,7 +323,7 @@ export const PhoneChrome: Story = {
     await expect([tools.className, tabs.className]).toEqual(classes);
     await expect(tools.getBoundingClientRect().bottom).toBeLessThanOrEqual(0);
     await expect(getComputedStyle(row).opacity).toBe("0");
-    await expect(getComputedStyle(pill).opacity).toBe("1");
+    await expect(getComputedStyle(words).opacity).toBe("1");
     await expect(pill).toHaveTextContent("Μακρύ τραγούδι");
     // Everything above the pill's surface is the lyrics': its hit area
     // reaches higher, but draws nothing there.
@@ -365,8 +374,11 @@ export const PhonePill: Story = {
     const words = face.getBoundingClientRect();
     await expect(Math.abs(words.top - surface.top)).toBeLessThan(1);
     await expect(Math.abs(words.width - surface.width)).toBeLessThan(1);
-    await expect(getComputedStyle(face).borderTopWidth).toBe("1px");
-    await expect(getComputedStyle(face).boxShadow).not.toBe("none");
+    // The face's own surface, on its `::before`, drawn in full at rest.
+    const own = getComputedStyle(face, "::before");
+    await expect(own.borderTopWidth).toBe("1px");
+    await expect(own.boxShadow).not.toBe("none");
+    await expect(own.opacity).toBe("1");
 
     // A thumb's height to press, the surface inside it.
     const target = pill.getBoundingClientRect();
