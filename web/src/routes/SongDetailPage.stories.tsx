@@ -524,6 +524,17 @@ function scrollerOf(element: HTMLElement): HTMLElement {
 }
 
 /**
+ * The pane's left and right edges as the content sees them: the lyrics'
+ * scroller less its scrollbar, which a window that always shows one draws
+ * between the details column and the pane's edge.
+ */
+function paneEdges(lyrics: HTMLElement): { left: number; right: number } {
+  const scroller = scrollerOf(lyrics);
+  const left = scroller.getBoundingClientRect().left + scroller.clientLeft;
+  return { left, right: left + scroller.clientWidth };
+}
+
+/**
  * 1440×900 with the navigation open: the song's pane is 51rem, past `@3xl`,
  * so the details sit in a sticky column beside the lyrics, which start right
  * under the title. The recordings and tallies are shown in place, so the
@@ -534,10 +545,14 @@ export const WideDetailsColumn: Story = {
   play: async ({ canvas }) => {
     const { details, lyrics, title } = await songParts(canvas);
 
-    // Beside, not above.
+    // Beside, not above: the lyrics against the pane's left edge, the column
+    // against its right, not a pair centered in it.
     await expect(details.getBoundingClientRect().left).toBeGreaterThan(
       lyrics.getBoundingClientRect().right,
     );
+    const pane = paneEdges(lyrics);
+    await expect(lyrics.getBoundingClientRect().left - pane.left).toBeLessThanOrEqual(24);
+    await expect(pane.right - details.getBoundingClientRect().right).toBeLessThanOrEqual(24);
     // The lyrics start under the title, not under the credits.
     const gap = lyrics.getBoundingClientRect().top - title.getBoundingClientRect().bottom;
     await expect(gap).toBeGreaterThanOrEqual(0);
@@ -572,6 +587,32 @@ export const WideDetailsColumn: Story = {
     await expect(Math.abs(after.top - before)).toBeLessThanOrEqual(1);
     await expect(after.bottom).toBeLessThanOrEqual(window.innerHeight);
     await expect(within(details).getByRole("region", { name: "Stats" })).toBeVisible();
+  },
+};
+
+/**
+ * 1920×1080 with the navigation put away: the song's pane is 96rem, far wider
+ * than the lyrics and the column need. The lyrics keep to the pane's left edge
+ * at 40rem, the column to its right, and the room left over is between them,
+ * not around a centered pair.
+ */
+export const WideDetailsColumnFullWidth: Story = {
+  ...atADesk(1920, 1080, true),
+  play: async ({ canvas }) => {
+    const { details, lyrics } = await songParts(canvas);
+    const article = canvas.getByRole("article");
+    // The navigation slides shut once the shell has read the stored choice.
+    await waitFor(() => expect(article.getBoundingClientRect().left).toBe(384));
+    const pane = paneEdges(lyrics);
+    const column = lyrics.getBoundingClientRect();
+    const aside = details.getBoundingClientRect();
+
+    // Past the 64rem a centered pair would have been held to.
+    await expect(pane.right - pane.left).toBeGreaterThan(1024);
+    await expect(Math.abs(column.width - 640)).toBeLessThanOrEqual(1);
+    await expect(column.left - pane.left).toBeLessThanOrEqual(24);
+    await expect(pane.right - aside.right).toBeLessThanOrEqual(24);
+    await expect(aside.left - column.right).toBeGreaterThan(32);
   },
 };
 

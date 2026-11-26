@@ -439,16 +439,19 @@ function SongToolsBar({ children }: { children: ReactNode }) {
  * - From `@2xl` (42rem), wider than a comfortable line: the same column held
  *   to 40rem and centered in the pane, rather than run out to its left edge.
  * - From `@3xl` (48rem): the details move beside the lyrics, a sticky column
- *   on the right, and the lyrics start right under the title. 48rem leaves the
- *   lyrics at least 26rem beside a 16rem column, which a pane reaches in a
- *   1280px window with the navigation put away, or a 1440px one with it open.
- *   From `@5xl` (64rem) the column widens to 20rem; the lyrics stay at 40rem.
+ *   on the right, and the lyrics start right under the title. The pane's full
+ *   width: the lyrics against its left edge, the column against its right, and
+ *   the room left over between them rather than around a centered pair. 48rem
+ *   leaves the lyrics at least 26rem beside a 16rem column, which a pane
+ *   reaches in a 1280px window with the navigation put away, or a 1440px one
+ *   with it open. From `@5xl` (64rem) the column widens to 20rem; the lyrics
+ *   stay at most 40rem.
  */
 const SONG_COLUMNS = cn(
   "p-4",
   "@2xl/song:mx-auto @2xl/song:max-w-168",
-  "@3xl/song:grid @3xl/song:max-w-240 @3xl/song:grid-cols-[minmax(0,1fr)_16rem] @3xl/song:grid-rows-[auto_1fr] @3xl/song:gap-x-8",
-  "@5xl/song:max-w-256 @5xl/song:grid-cols-[minmax(0,1fr)_20rem]",
+  "@3xl/song:grid @3xl/song:max-w-none @3xl/song:grid-cols-[minmax(0,40rem)_16rem] @3xl/song:grid-rows-[auto_1fr] @3xl/song:justify-between @3xl/song:gap-x-8",
+  "@5xl/song:grid-cols-[minmax(0,40rem)_20rem]",
 );
 
 /**
