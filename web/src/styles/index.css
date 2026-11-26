@@ -39,6 +39,13 @@
      timed against the duration. */
   --ease-chrome: cubic-bezier(0.32, 0.72, 0, 1);
   --duration-chrome: 250ms;
+  /* While the reader's scroll moves the chrome: short, so the bars keep up
+     with the finger, but eased, so a step between scroll events is not
+     drawn as a jump. A phone's browser sends scroll events at 60Hz while it
+     scrolls at 120Hz, and a flick covers the bars' whole 40px stretch in a
+     frame or two; drawn as is, the bars stepped behind the page, and popped
+     from one end to the other on a flick. */
+  --duration-chrome-follow: 100ms;
 
   --color-brand-50: oklch(0.97 0.02 45);
   --color-brand-100: oklch(0.94 0.04 45);
@@ -449,12 +456,13 @@
    WebKit does not always restyle such an `inherit` when the bar's value
    changes, and drew the bottom bar left halfway, its pill over its tabs on
    a see-through surface. While the reader's scroll moves it
-   (`data-chrome-scrubbing`) it is not eased. Under reduced motion it does
-   not follow the scroll: out or tucked, at once, as
-   `data-chrome-tucked` says. A bar holding visible focus or an open menu is
-   drawn out whatever the scroll says, by the selector `chrome-tucked` holds it
-   with: a control reached by Tab must be on screen, and a menu must not lose
-   its trigger. */
+   (`data-chrome-scrubbing`) it follows on a short ease
+   (`--duration-chrome-follow`), each scroll event taking the ease up from
+   wherever it has the bar. Under reduced motion it does not follow the
+   scroll: out or tucked, at once, as `data-chrome-tucked` says. A bar holding
+   visible focus or an open menu is drawn out whatever the scroll says, by the
+   selector `chrome-tucked` holds it with: a control reached by Tab must be on
+   screen, and a menu must not lose its trigger. */
 @property --chrome-scroll-progress {
   syntax: "<number>";
   inherits: false;
@@ -476,7 +484,7 @@
   @media (prefers-reduced-motion: no-preference) {
     transition: --chrome-progress var(--duration-chrome) var(--ease-chrome);
     &[data-chrome-scrubbing] {
-      transition: none;
+      transition-duration: var(--duration-chrome-follow);
     }
   }
   &:has(:focus-visible, [aria-haspopup="menu"][aria-expanded="true"]) {

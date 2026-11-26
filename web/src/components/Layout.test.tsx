@@ -282,7 +282,7 @@ describe("Bottom bar", () => {
 
   // As Safari's toolbar: the bar shrinks with the scroll itself, from the
   // first pixel down, and grows with it on the way back.
-  it("follows the scroll pixel for pixel, and is not eased while it does", () => {
+  it("follows the scroll pixel for pixel, scrubbing while it does", () => {
     renderWithProviders(<Layout />);
     expect(scrubbing()).toBe(false);
 
@@ -838,7 +838,7 @@ describe("StickyHeader", () => {
   });
 
   // As the bottom bar does: partway out of sight while the scroll is partway,
-  // not eased while the reader moves it.
+  // scrubbing while the reader moves it.
   it("follows the scroll", () => {
     render(<StickyHeader>Search</StickyHeader>);
     const progress = () => header()?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY);

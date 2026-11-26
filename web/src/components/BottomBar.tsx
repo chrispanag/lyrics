@@ -26,7 +26,7 @@ import { revealChrome, scrollToTop, useChromeScroll } from "@/lib/scrollChrome";
  * While the reader scrolls down it shrinks to a small pill saying where they
  * are, and it comes back on a scroll up, at the top of the page, on a tap on
  * the pill, and when focus moves into it (`lib/scrollChrome`). It shrinks and
- * grows with the scroll itself, pixel for pixel, as Safari's toolbar does, and
+ * grows with the scroll itself, on a short ease, as Safari's toolbar does, and
  * once the scroll comes to rest it finishes the way the reader went. The bar's own
  * surface shrinks into the pill, rather than one fading out as the other fades
  * in, so the eye follows it down and sees where the tabs went; only at the

@@ -297,12 +297,15 @@ export const PhoneChrome: Story = {
     window.dispatchEvent(new Event("touchstart"));
     window.scrollTo({ top: 20, behavior: "instant" });
     await waitFor(() => expect(chrome().bar).toHaveAttribute("data-chrome-scrubbing"));
-    const [sx] = getComputedStyle(tabs).scale.split(" ").map(Number);
-    await expect(sx).toBeGreaterThan(0.4);
-    await expect(sx).toBeLessThan(0.9);
-    // And the tools bar partway out of sight with it, by half its height.
-    const slid = tools.getBoundingClientRect();
-    await expect(slid.top).toBeCloseTo(-slid.height / 2, 0);
+    // Following the scroll on a short ease, so once that has run.
+    await waitFor(() => {
+      const [sx] = getComputedStyle(tabs).scale.split(" ").map(Number);
+      expect(sx).toBeGreaterThan(0.4);
+      expect(sx).toBeLessThan(0.9);
+      // And the tools bar partway out of sight with it, by half its height.
+      const slid = tools.getBoundingClientRect();
+      expect(slid.top).toBeCloseTo(-slid.height / 2, 0);
+    });
     window.dispatchEvent(new Event("touchend"));
 
     await tuck();
@@ -397,6 +400,14 @@ export const PhoneMorphMotion: Story = {
         await expect(getComputedStyle(eased).transitionProperty.split(", ")).toContain(
           "--chrome-progress",
         );
+        // Following the scroll is eased too, briefly: drawn as is, a flick
+        // popped the bars from one end to the other.
+        eased.setAttribute("data-chrome-scrubbing", "");
+        try {
+          await expect(getComputedStyle(eased).transitionDuration).toBe("0.1s");
+        } finally {
+          eased.removeAttribute("data-chrome-scrubbing");
+        }
       }
     }
 
@@ -409,7 +420,10 @@ export const PhoneMorphMotion: Story = {
       for (const rule of Array.from(rules)) {
         if (rule instanceof CSSMediaRule) walk(rule.cssRules, [...media, rule.conditionText]);
         else if (rule instanceof CSSStyleRule) {
-          if (rule.selectorText.includes("chrome-follows") && rule.style.transition) {
+          // A rule setting only the duration counts too: unguarded, it would
+          // ease every property (`transition-property` defaults to `all`).
+          const eases = rule.style.transition || rule.style.transitionDuration;
+          if (rule.selectorText.includes("chrome-follows") && eases) {
             transitions.push({ media });
           }
           if (rule.style.getPropertyValue("--chrome-progress").trim() === "inherit") {
