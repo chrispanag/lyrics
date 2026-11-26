@@ -341,6 +341,8 @@ export function Sheet({
       // already dropped its content (`shown`).
       className={cn(
         "dialog-viewport border-0 p-0 text-inherit backdrop:bg-scrim backdrop:backdrop-blur-sm",
+        // The dim stays for less transparency; the blur through it goes.
+        "reduced-transparency:backdrop:backdrop-blur-none",
         "backdrop:transition-opacity backdrop:duration-200 backdrop:starting:opacity-0",
       )}
     >
