@@ -74,6 +74,23 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
 }
 
 /**
+ * What a narrow pane shows of `elements`. jsdom applies no CSS, so the details
+ * column's own block, `hidden` until the pane is wide enough for it, is in the
+ * DOM here too; this leaves out whatever sits under a `hidden`.
+ */
+function shownNarrow<T extends HTMLElement>(elements: T[]): T[] {
+  return elements.filter((element) => !element.closest(".hidden"));
+}
+
+/** The details column's own block: what only a wide pane shows. */
+function columnOnly(): HTMLElement {
+  const details = screen.getByRole("complementary", { name: "Song details" });
+  const block = details.querySelector<HTMLElement>(":scope > .hidden");
+  if (!block) throw new Error("The details column has no block of its own.");
+  return block;
+}
+
+/**
  * Drives a one-finger horizontal swipe across an element in client coordinates
  * (jsdom lays nothing out; `window.innerWidth` is 1024). Dispatched inside the
  * song so it reaches the article by bubbling. `fingers` is the touch count the
@@ -168,8 +185,8 @@ describe("SongDetailPage popularity", () => {
 
     const stats = await screen.findByRole("button", { name: "Stats" });
     await waitFor(() => expect(stats).toBeEnabled());
-    // Off the page until asked for.
-    expect(screen.queryByText("4 times")).not.toBeInTheDocument();
+    // Off a narrow page until asked for.
+    expect(shownNarrow(screen.queryAllByText("4 times"))).toHaveLength(0);
     await userEvent.click(stats);
 
     const sheet = await screen.findByRole("dialog", { name: "Stats" });
@@ -339,10 +356,11 @@ describe("SongDetailPage", () => {
     const addToList = screen.getByRole("button", { name: /add to list/i });
     // Back, then the tools, inside the bar.
     const bar = addToList.parentElement?.parentElement?.parentElement;
-    const scroller = title.closest("header")?.parentElement?.parentElement;
+    // The header, the reading column's head, the columns, and their scroller.
+    const scroller = title.closest("header")?.parentElement?.parentElement?.parentElement;
 
     expect(title.closest("header")).toHaveAttribute("lang", "el");
-    expect(title.closest("header")).toContainElement(screen.getByText("Μίκης Θεοδωράκης"));
+    expect(screen.getByText("Μίκης Θεοδωράκης").closest("[lang]")).toHaveAttribute("lang", "el");
     expect(bar).toHaveClass("@3xl/app:shrink-0");
     expect(bar).not.toContainElement(title);
     expect(scroller).toHaveClass("@3xl/app:overflow-y-auto");
@@ -730,11 +748,10 @@ describe("SongDetailPage recordings", () => {
     renderDetail();
 
     expect(await screen.findByText("Performed by")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Γιώργος Νταλάρας" })).toHaveAttribute(
-      "href",
-      "/?person=person-2",
-    );
-    expect(screen.getByText("1971")).toBeInTheDocument();
+    const performers = shownNarrow(screen.getAllByRole("link", { name: "Γιώργος Νταλάρας" }));
+    expect(performers).toHaveLength(1);
+    expect(performers[0]).toHaveAttribute("href", "/?person=person-2");
+    expect(shownNarrow(screen.getAllByText("1971"))).toHaveLength(1);
   });
 
   // The commonest recording: a year and nobody named, so no "Performed by" row.
@@ -745,7 +762,7 @@ describe("SongDetailPage recordings", () => {
 
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
     expect(screen.queryByText("Performed by")).not.toBeInTheDocument();
-    expect(screen.getByText("1964")).toBeInTheDocument();
+    expect(shownNarrow(screen.getAllByText("1964"))).toHaveLength(1);
   });
 
   // Both halves of the video gate, per recording; see the pair above.
@@ -754,10 +771,9 @@ describe("SongDetailPage recordings", () => {
 
     renderDetail();
 
-    expect(await screen.findByRole("link", { name: /watch on youtube/i })).toHaveAttribute(
-      "href",
-      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    );
+    const links = shownNarrow(await screen.findAllByRole("link", { name: /watch on youtube/i }));
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute("href", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
   });
 
   it("offers no watch link for a recording whose link never parsed", async () => {
@@ -781,11 +797,12 @@ describe("SongDetailPage recordings", () => {
 
     renderDetail();
 
-    expect(await screen.findByText("Columbia")).toBeInTheDocument();
-    expect(screen.getByText("First recording")).toBeInTheDocument();
-    expect(screen.getByText("Recorded in Athens.")).toBeInTheDocument();
-    expect(screen.getAllByText("1964")).toHaveLength(1);
-    expect(screen.getAllByText("Γιώργος Νταλάρας")).toHaveLength(1);
+    await screen.findAllByText("Columbia");
+    expect(shownNarrow(screen.getAllByText("Columbia"))).toHaveLength(1);
+    expect(shownNarrow(screen.getAllByText("First recording"))).toHaveLength(1);
+    expect(shownNarrow(screen.getAllByText("Recorded in Athens."))).toHaveLength(1);
+    expect(shownNarrow(screen.getAllByText("1964"))).toHaveLength(1);
+    expect(shownNarrow(screen.getAllByText("Γιώργος Νταλάρας"))).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /show all/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: /recordings/i })).not.toBeInTheDocument();
   });
@@ -812,8 +829,8 @@ describe("SongDetailPage recordings", () => {
     expect(
       await screen.findByRole("button", { name: "Show all 2 recordings" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Columbia")).not.toBeInTheDocument();
-    expect(screen.queryByText(/first recording/i)).not.toBeInTheDocument();
+    expect(shownNarrow(screen.queryAllByText("Columbia"))).toHaveLength(0);
+    expect(shownNarrow(screen.queryAllByText(/first recording/i))).toHaveLength(0);
   });
 
   it("offers nothing to open when the song has no recordings", async () => {
@@ -1755,5 +1772,201 @@ describe("SongDetailPage tools bar on a phone", () => {
     expect(tucked()).toBe(false);
 
     expect(commits).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * The details column a wide pane puts beside the lyrics. jsdom has no
+ * container queries, so the column's own block is in the DOM at every width:
+ * these read it directly, and read the narrow-only controls' classes for what
+ * a wide pane hides.
+ */
+describe("SongDetailPage details column", () => {
+  it("holds the recordings, the player and the tallies, in place of their buttons", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(
+          makeSong({
+            youtube_video_id: "dQw4w9WgXcQ",
+            recordings: [
+              makeRecording({ id: "r1", label: "Columbia", youtube_video_id: "dQw4w9WgXcQ" }),
+              makeRecording({ id: "r2", is_first: false, release_year: 1988 }),
+            ],
+            popularity: {
+              anonymous_clicks: 40,
+              authenticated_clicks: 2,
+              list_adds: 3,
+              list_users: 2,
+              score: 50,
+            },
+          }),
+        ),
+      ),
+      http.post(`${API}/api/v1/songs/:id/clicks`, () => new Promise(() => {})),
+    );
+
+    renderDetail();
+
+    await screen.findByText("η αγάπη μου κοιμάται");
+    const column = columnOnly();
+    expect(column).toHaveClass("hidden", "@3xl/song:block");
+    expect(within(column).getByRole("button", { name: "Play video" })).toBeInTheDocument();
+    const recordings = within(column).getByRole("region", { name: "Recordings" });
+    expect(within(recordings).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(recordings).getByText("Columbia")).toBeInTheDocument();
+    const stats = within(column).getByRole("region", { name: "Stats" });
+    expect(within(stats).getByText("Views").closest("div")).toHaveTextContent("42");
+    expect(within(stats).getByText("In lists of").closest("div")).toHaveTextContent("2 people");
+
+    // What the column makes redundant is put away where it shows.
+    expect(screen.getByRole("button", { name: "Stats" })).toHaveClass("@3xl/song:hidden");
+    expect(screen.getByRole("button", { name: "Show all 2 recordings" })).toHaveClass(
+      "@3xl/song:hidden",
+    );
+    const watch = shownNarrow(screen.getAllByRole("link", { name: /watch on youtube/i }));
+    expect(watch).toHaveLength(1);
+    expect(watch[0]).toHaveClass("@3xl/song:hidden");
+  });
+
+  // After the lyrics would put the credits after the song on a phone, where
+  // the column is the block under the title.
+  it("comes after the title and before the lyrics", async () => {
+    renderDetail();
+
+    const title = await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    const details = screen.getByRole("complementary", { name: "Song details" });
+    const lyrics = screen.getByRole("region", { name: "Lyrics" });
+    expect(title.compareDocumentPosition(details)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(details.compareDocumentPosition(lyrics)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("offers no player for a song without a video id", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(
+          makeSong({ youtube_url: "https://example.com/not-a-video", youtube_video_id: null }),
+        ),
+      ),
+    );
+
+    renderDetail();
+
+    await screen.findByText("η αγάπη μου κοιμάται");
+    expect(within(columnOnly()).queryByRole("button", { name: "Play video" })).toBeNull();
+  });
+
+  // The card's tallies are as old as the list it came from; the column waits
+  // for the song's own rather than show a count that then jumps.
+  it("shows no tallies from the cached card while the full read is on its way", async () => {
+    const [held, release] = deferred();
+    const { lyrics: _lyrics, ...card } = makeSong({
+      popularity: {
+        anonymous_clicks: 6,
+        authenticated_clicks: 0,
+        list_adds: 2,
+        list_users: 2,
+        score: 10,
+      },
+    });
+    const queryClient = testQueryClient();
+    queryClient.setQueryData(keys.songs({}), {
+      data: [card],
+      meta: { total: 1, limit: 20, offset: 0 },
+    });
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, async () => {
+        await held;
+        return HttpResponse.json(
+          makeSong({
+            popularity: {
+              anonymous_clicks: 9,
+              authenticated_clicks: 0,
+              list_adds: 2,
+              list_users: 2,
+              score: 13,
+            },
+          }),
+        );
+      }),
+      http.post(`${API}/api/v1/songs/:id/clicks`, () => new Promise(() => {})),
+    );
+
+    renderDetail({ route: "/songs/thalassa-platia", queryClient });
+
+    // The card's credits are up already; its tallies are not.
+    expect(screen.getByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
+    const stats = within(columnOnly()).getByRole("region", { name: "Stats" });
+    expect(within(stats).queryByText("Views")).toBeNull();
+    expect(stats).not.toHaveTextContent("6");
+
+    release();
+    await waitFor(() =>
+      expect(within(stats).getByText("Views").closest("div")).toHaveTextContent("9"),
+    );
+  });
+
+  // Started on one song, the player does not keep playing it under the next.
+  // The next song is a card already in the cache, so the column stays up
+  // through the step and only the reset can bring the thumbnail back.
+  it("puts the player back to its thumbnail when the address moves to another song", async () => {
+    const user = userEvent.setup();
+    const { lyrics: _lyrics, ...next } = makeSong({
+      id: "song-2",
+      slug: "song-2",
+      title: "Άλλο",
+      youtube_video_id: "abcdefghijk",
+    });
+    const queryClient = testQueryClient();
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, ({ params }) =>
+        params.id === "song-2"
+          ? new Promise(() => {})
+          : HttpResponse.json(makeSong({ youtube_video_id: "dQw4w9WgXcQ" })),
+      ),
+    );
+    const router: { push?: (href: string) => void } = {};
+    function Router() {
+      const { push } = useRouter();
+      useEffect(() => {
+        router.push = push;
+      }, [push]);
+      return null;
+    }
+    renderWithProviders(
+      <TestRoutes
+        routes={{
+          "/songs/:id": (
+            <>
+              <SongDetailPage />
+              <Router />
+            </>
+          ),
+        }}
+      />,
+      { route: "/songs/song-1", queryClient },
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Play video" }));
+    expect(screen.getByTitle("Θάλασσα Πλατιά on YouTube")).toHaveAttribute(
+      "src",
+      "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1",
+    );
+
+    // Seeded at the step: the test client drops unobserved data at once.
+    act(() => {
+      queryClient.setQueryData(keys.songs({}), {
+        data: [next],
+        meta: { total: 1, limit: 20, offset: 0 },
+      });
+      router.push?.("/songs/song-2");
+    });
+
+    await screen.findByRole("heading", { name: "Άλλο" });
+    expect(document.querySelector("iframe")).toBeNull();
+    const play = screen.getByRole("button", { name: "Play video" });
+    expect(play.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
+    );
   });
 });

@@ -17,7 +17,7 @@ import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { actionLabel, buttonClasses } from "@/components/buttonStyles";
 import { MenuItem, MoreActionsMenu } from "@/components/MoreActionsMenu";
-import { SongStatsSheet } from "@/components/SongStatsSheet";
+import { SongStats, SongStatsSheet } from "@/components/SongStatsSheet";
 import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton, Spinner } from "@/components/ui";
 import { browseHref } from "@/lib/browse";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
@@ -39,7 +39,13 @@ import { recordingCount, songCount } from "@/lib/format";
 import { Link, useRouter } from "@/lib/navigation";
 import { stickyBarClasses, useStickyBar } from "@/components/stickyBar";
 import { useStoredState } from "@/lib/useStoredState";
-import { FirstRecordingBadge, RecordingNotes, RecordingsSheet } from "@/components/RecordingsSheet";
+import {
+  FirstRecordingBadge,
+  RecordingList,
+  RecordingNotes,
+  RecordingsSheet,
+} from "@/components/RecordingsSheet";
+import { YouTubePlayer } from "@/components/YouTubePlayer";
 
 /**
  * The catalog's search box above a song, from `md` up while the list is put
@@ -179,12 +185,18 @@ function SongArticle() {
 
   return (
     // Full width of the reading pane once the list is beside it. The phone keeps
-    // the column.
+    // the column. Beside the list it is also the `song` container, which the
+    // reading column and the details column are laid out by (`SONG_COLUMNS`):
+    // the pane's own width, not the window's, decides, since the list and the
+    // navigation take a varying share of the window. Only there: below it no
+    // `song` container exists, so none of those queries match and a phone or
+    // a lone pane keeps the single column it has always had.
     <article
       ref={surface}
       aria-busy={isLoading || isPlaceholderData}
       className={cn(
         "mx-auto @3xl/app:mx-0 @3xl/app:flex @3xl/app:min-h-0 @3xl/app:max-w-none @3xl/app:flex-1 @3xl/app:flex-col",
+        "@3xl/app:@container/song",
         contentWidth,
       )}
     >
@@ -202,8 +214,15 @@ function SongArticle() {
               the tools share its center. */}
           <div className="ml-auto flex items-center gap-1 @3xl/app:h-12">
             {/* For everyone. The card a reader clicked already carries the
-                tallies, so this need not wait for the full read. */}
-            <Button variant="ghost" size="sm" disabled={!song} onClick={() => setStatsOpen(true)}>
+                tallies, so this need not wait for the full read. Not where
+                the details column shows the tallies themselves. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!song}
+              onClick={() => setStatsOpen(true)}
+              className="@3xl/song:hidden"
+            >
               <ChartColumn aria-hidden className="size-4" />
               <span className={actionLabel}>Stats</span>
             </Button>
@@ -246,140 +265,133 @@ function SongArticle() {
         ref={lyrics}
         className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain"
       >
-        <div className="p-4">
-          {position && (
-            <>
-              <ListSongNavBar position={position} />
-              {/* The swipe waits for the song: its once-per-device hint must not be
-              spent on a song that fails to load. */}
-              {fullSong && <ListSongSwipe position={position} surface={surface} />}
-            </>
-          )}
-
-          {song ? (
-            <SongHeader song={song} onShowRecordings={() => setRecordingsOpen(true)} />
-          ) : (
-            // Shaped like `SongHeader` so the text-size controls below do not move
-            // as the song arrives; change the two together. The plain wrapper stops
-            // `space-y-*`'s margin collapsing the recordings line's `mt-2`. No
-            // `rounded-full` on the chip: `cn` is a plain join.
-            <div className="mb-5 space-y-3">
-              <Skeleton className="h-9 w-2/3" />
-              <div>
-                <div className="space-y-1">
-                  <Skeleton className="h-5 w-1/2" />
-                  <Skeleton className="h-5 w-1/3" />
-                </div>
-                <Skeleton className="mt-2 h-5 w-36" />
-              </div>
-              <Skeleton className="h-6 w-20" />
-            </div>
-          )}
-
-          <section aria-label="Lyrics">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className={sectionLabel}>Lyrics</h2>
-              {/* A fieldset is the native group; preflight zeroes its border, margin
-              and padding. Named by `aria-label`, not a <legend>: the controls
-              are icons, and a visible "Text size" would crowd the heading row. */}
-              <fieldset className="flex items-center gap-1" aria-label="Text size">
-                <Type aria-hidden className="mr-1 size-4 text-fg-subtle" />
-                <button
-                  type="button"
-                  onClick={() => setFontSize(fontSizeIndex - 1)}
-                  disabled={fontSizeIndex === 0}
-                  aria-label="Decrease text size"
-                  className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
-                >
-                  <Minus aria-hidden className="size-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFontSize(fontSizeIndex + 1)}
-                  disabled={fontSizeIndex === FONT_SIZES.length - 1}
-                  aria-label="Increase text size"
-                  className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
-                >
-                  <Plus aria-hidden className="size-4" />
-                </button>
-              </fieldset>
-            </div>
-
-            {!fullSong ? (
-              <Skeleton className="h-64 w-full" />
-            ) : fullSong.lyrics?.trim() ? (
-              // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
-              <p
-                lang={fullSong.language}
-                className="lyrics-size leading-loose text-fg"
-                style={{ fontFamily: "var(--font-lyrics)" }}
-              >
-                <LyricsLines lyrics={fullSong.lyrics} />
-              </p>
-            ) : (
-              <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>
+        <div className={SONG_COLUMNS}>
+          {/* The title, and the list's bar above it: the reading column's head. */}
+          <div className="@3xl/song:col-start-1 @3xl/song:row-start-1 @3xl/song:mb-5">
+            {position && (
+              <>
+                <ListSongNavBar position={position} />
+                {/* The swipe waits for the song: its once-per-device hint must not be
+                spent on a song that fails to load. */}
+                {fullSong && <ListSongSwipe position={position} surface={surface} />}
+              </>
             )}
-          </section>
+            {song ? <SongTitle song={song} /> : <Skeleton className="h-9 w-2/3" />}
+          </div>
 
-          {/* Gated on the id, never the URL; see WatchOnYouTube. */}
-          {song?.youtube_video_id && (
-            <WatchOnYouTube videoId={song.youtube_video_id} className="mt-6" />
-          )}
+          <SongDetails
+            song={song}
+            fullSong={fullSong}
+            onShowRecordings={() => setRecordingsOpen(true)}
+          />
 
-          {song?.notes && (
-            <section className={cn(panelChrome, "mt-8")}>
-              <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
-              <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
+          <div className="@3xl/song:col-start-1 @3xl/song:row-start-2">
+            <section aria-label="Lyrics">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className={sectionLabel}>Lyrics</h2>
+                {/* A fieldset is the native group; preflight zeroes its border, margin
+                and padding. Named by `aria-label`, not a <legend>: the controls
+                are icons, and a visible "Text size" would crowd the heading row. */}
+                <fieldset className="flex items-center gap-1" aria-label="Text size">
+                  <Type aria-hidden className="mr-1 size-4 text-fg-subtle" />
+                  <button
+                    type="button"
+                    onClick={() => setFontSize(fontSizeIndex - 1)}
+                    disabled={fontSizeIndex === 0}
+                    aria-label="Decrease text size"
+                    className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
+                  >
+                    <Minus aria-hidden className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFontSize(fontSizeIndex + 1)}
+                    disabled={fontSizeIndex === FONT_SIZES.length - 1}
+                    aria-label="Increase text size"
+                    className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
+                  >
+                    <Plus aria-hidden className="size-4" />
+                  </button>
+                </fieldset>
+              </div>
+
+              {!fullSong ? (
+                <Skeleton className="h-64 w-full" />
+              ) : fullSong.lyrics?.trim() ? (
+                // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
+                <p
+                  lang={fullSong.language}
+                  className="lyrics-size leading-loose text-fg"
+                  style={{ fontFamily: "var(--font-lyrics)" }}
+                >
+                  <LyricsLines lyrics={fullSong.lyrics} />
+                </p>
+              ) : (
+                <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>
+              )}
             </section>
-          )}
 
-          {/* Needs only the id, so Add to list works while the song is loading. */}
-          {user && id && (
-            <AddToListSheet
-              songId={id}
-              open={listSheetOpen}
-              onClose={() => setListSheetOpen(false)}
-            />
-          )}
+            {/* Gated on the id, never the URL; see WatchOnYouTube. The details
+                column plays the video in place instead. */}
+            {song?.youtube_video_id && (
+              <WatchOnYouTube videoId={song.youtube_video_id} className="mt-6 @3xl/song:hidden" />
+            )}
 
-          {song && (
-            <SongStatsSheet song={song} open={statsOpen} onClose={() => setStatsOpen(false)} />
-          )}
-
-          {song && (
-            <RecordingsSheet
-              recordings={song.recordings}
-              language={song.language}
-              // Only reachable past one recording: a refetch that leaves one
-              // closes it rather than stranding it with nothing to return to.
-              open={recordingsOpen && song.recordings.length > 1}
-              onClose={() => setRecordingsOpen(false)}
-            />
-          )}
-
-          {song && (
-            <ConfirmSheet
-              open={confirmDelete}
-              onClose={() => {
-                setConfirmDelete(false);
-                // The sheet stays mounted, so a stale refusal would show on reopen.
-                deleteSong.reset();
-              }}
-              title="Delete this song?"
-              pending={deleteSong.isPending}
-              // A refused delete is otherwise silent.
-              error={
-                deleteSong.isError
-                  ? errorMessage(deleteSong.error, "This song could not be deleted.")
-                  : undefined
-              }
-              onConfirm={() => deleteSong.mutate(song.id, { onSuccess: () => router.push("/") })}
-            >
-              “{song.title}” will be removed for everyone, along with its place in any lists. This
-              cannot be undone.
-            </ConfirmSheet>
-          )}
+            {song?.notes && (
+              <section className={cn(panelChrome, "mt-8")}>
+                <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
+                <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
+              </section>
+            )}
+          </div>
         </div>
+
+        {/* Needs only the id, so Add to list works while the song is loading. */}
+        {user && id && (
+          <AddToListSheet
+            songId={id}
+            open={listSheetOpen}
+            onClose={() => setListSheetOpen(false)}
+          />
+        )}
+
+        {song && (
+          <SongStatsSheet song={song} open={statsOpen} onClose={() => setStatsOpen(false)} />
+        )}
+
+        {song && (
+          <RecordingsSheet
+            recordings={song.recordings}
+            language={song.language}
+            // Only reachable past one recording: a refetch that leaves one
+            // closes it rather than stranding it with nothing to return to.
+            open={recordingsOpen && song.recordings.length > 1}
+            onClose={() => setRecordingsOpen(false)}
+          />
+        )}
+
+        {song && (
+          <ConfirmSheet
+            open={confirmDelete}
+            onClose={() => {
+              setConfirmDelete(false);
+              // The sheet stays mounted, so a stale refusal would show on reopen.
+              deleteSong.reset();
+            }}
+            title="Delete this song?"
+            pending={deleteSong.isPending}
+            // A refused delete is otherwise silent.
+            error={
+              deleteSong.isError
+                ? errorMessage(deleteSong.error, "This song could not be deleted.")
+                : undefined
+            }
+            onConfirm={() => deleteSong.mutate(song.id, { onSuccess: () => router.push("/") })}
+          >
+            “{song.title}” will be removed for everyone, along with its place in any lists. This
+            cannot be undone.
+          </ConfirmSheet>
+        )}
       </div>
     </article>
   );
@@ -419,11 +431,124 @@ function SongToolsBar({ children }: { children: ReactNode }) {
 }
 
 /**
- * A song's title, credits, genres and its recordings: a lone one inline, or the
- * way into several. The skeleton in `SongArticle` mirrors its spacing; change
- * both together.
+ * The song's content under its tools, in the reading pane's `song` container
+ * (see `SongArticle`), in three tiers by the pane's width:
+ *
+ * - Narrow, and on a phone, where there is no `song` container: one column,
+ *   the details above the lyrics.
+ * - From `@2xl` (42rem), wider than a comfortable line: the same column held
+ *   to 40rem and centered in the pane, rather than run out to its left edge.
+ * - From `@3xl` (48rem): the details move beside the lyrics, a sticky column
+ *   on the right, and the lyrics start right under the title. 48rem leaves the
+ *   lyrics at least 26rem beside a 16rem column, which a pane reaches in a
+ *   1280px window with the navigation put away, or a 1440px one with it open.
+ *   From `@5xl` (64rem) the column widens to 20rem; the lyrics stay at 40rem.
+ *
+ * One tree for all three: the details are a grid item placed in the second
+ * column, not a second copy, so nothing is in the page twice.
  */
-function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: () => void }) {
+const SONG_COLUMNS = cn(
+  "p-4",
+  "@2xl/song:mx-auto @2xl/song:max-w-168",
+  "@3xl/song:grid @3xl/song:max-w-240 @3xl/song:grid-cols-[minmax(0,1fr)_16rem] @3xl/song:grid-rows-[auto_1fr] @3xl/song:gap-x-8",
+  "@5xl/song:max-w-256 @5xl/song:grid-cols-[minmax(0,1fr)_20rem]",
+);
+
+/** The song's title, in the song's own language: the title is content too. */
+function SongTitle({ song }: { song: Song }) {
+  return (
+    <header lang={song.language}>
+      <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">{song.title}</h1>
+      {song.alt_title && <p className="mt-1 text-lg text-fg-muted">{song.alt_title}</p>}
+    </header>
+  );
+}
+
+/**
+ * What is known about a song besides its words: credits, year and genres, and
+ * its recordings, a lone one inline or the way into several. Under the title
+ * in a narrow pane; beside the lyrics in a wide one (`SONG_COLUMNS`), where it
+ * also plays the video and shows the recordings and tallies in place of the
+ * sheets, whose buttons are hidden there.
+ *
+ * Ahead of the lyrics in the DOM in every tier, because in a narrow pane it is
+ * ahead of them on screen, and one tree cannot be in two places: moving it
+ * after the lyrics would have a phone read the credits after the song they
+ * head. Beside the lyrics it is a labeled landmark, a step to skip.
+ *
+ * Credits and recordings come from the card while the full read is on its way,
+ * as the header always has. The tallies wait for the full read: the column
+ * shows them as the song page's own, and a card's are as old as its list.
+ *
+ * In a narrow pane the skeleton mirrors the real spacing, so the lyrics do not
+ * move as the song arrives; change the two together.
+ */
+function SongDetails({
+  song,
+  fullSong,
+  onShowRecordings,
+}: {
+  song: Song | undefined;
+  fullSong: Song | undefined;
+  onShowRecordings: () => void;
+}) {
+  return (
+    <aside
+      aria-label="Song details"
+      className={cn(
+        "mt-3 mb-5",
+        "@3xl/song:col-start-2 @3xl/song:row-span-2 @3xl/song:row-start-1 @3xl/song:m-0 @3xl/song:self-start",
+        // Sticky under the pane's header, which sits outside the lyrics'
+        // scroller, so the column's top is the scroller's. As tall as that
+        // scroller at most, the page's padding taken off, and scrolled on its
+        // own past that. The padding keeps a focused link's ring unclipped.
+        "@3xl/song:sticky @3xl/song:top-4 @3xl/song:max-h-[calc(100dvh-var(--sticky-header-height,0px)-2rem)] @3xl/song:overflow-y-auto @3xl/song:overscroll-y-contain @3xl/song:p-1",
+      )}
+    >
+      {song ? (
+        <>
+          <SongFacts song={song} onShowRecordings={onShowRecordings} />
+          <div className="hidden space-y-6 @3xl/song:mt-6 @3xl/song:block">
+            {song.youtube_video_id && (
+              <YouTubePlayer key={song.id} videoId={song.youtube_video_id} title={song.title} />
+            )}
+            {song.recordings.length > 0 && (
+              <section aria-labelledby="song-recordings" className="text-sm">
+                <h2 id="song-recordings" className={cn(sectionLabel, "mb-2")}>
+                  Recordings
+                </h2>
+                <RecordingList recordings={song.recordings} language={song.language} />
+              </section>
+            )}
+            <section aria-labelledby="song-stats" className="text-sm">
+              <h2 id="song-stats" className={cn(sectionLabel, "mb-2")}>
+                Stats
+              </h2>
+              {fullSong ? (
+                <SongStats popularity={fullSong.popularity} />
+              ) : (
+                <Skeleton className="h-24 w-full" />
+              )}
+            </section>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="space-y-1">
+            <Skeleton className="h-5 w-1/2" />
+            <Skeleton className="h-5 w-1/3" />
+          </div>
+          {/* No `rounded-full` on the chip: `cn` is a plain join. */}
+          <Skeleton className="mt-2 h-5 w-36" />
+          <Skeleton className="mt-3 h-6 w-20" />
+        </>
+      )}
+    </aside>
+  );
+}
+
+/** The credits, the recordings line and the genres, in the song's language. */
+function SongFacts({ song, onShowRecordings }: { song: Song; onShowRecordings: () => void }) {
   const creditsByRole = groupCredits(song.credits);
 
   // Performers come from the first recording; the year and video from the
@@ -434,12 +559,8 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
   const onlyRecording = song.recordings.length === 1 ? song.recordings[0] : undefined;
 
   return (
-    /* The song's own language: the title is content too. */
-    <header className="mb-5" lang={song.language}>
-      <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">{song.title}</h1>
-      {song.alt_title && <p className="mt-1 text-lg text-fg-muted">{song.alt_title}</p>}
-
-      <dl className="mt-3 space-y-1 text-sm">
+    <div lang={song.language}>
+      <dl className="space-y-1 text-sm">
         {/* Performers lead; the row is conditional, since most recordings
             name nobody. */}
         {performers.length > 0 && (
@@ -455,14 +576,17 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
         {year && <CreditRow label="Year">{year}</CreditRow>}
       </dl>
 
+      {/* Beside the lyrics the column lists every recording instead. */}
       {onlyRecording ? (
-        <OnlyRecording recording={onlyRecording} />
+        <div className="@3xl/song:hidden">
+          <OnlyRecording recording={onlyRecording} />
+        </div>
       ) : (
         song.recordings.length > 0 && (
           <button
             type="button"
             onClick={onShowRecordings}
-            className="mt-2 text-sm font-medium text-fg-accent hover:underline"
+            className="mt-2 text-sm font-medium text-fg-accent hover:underline @3xl/song:hidden"
           >
             Show all {recordingCount(song.recordings.length)}
           </button>
@@ -482,7 +606,7 @@ function SongHeader({ song, onShowRecordings }: { song: Song; onShowRecordings: 
           ))}
         </div>
       )}
-    </header>
+    </div>
   );
 }
 
@@ -608,7 +732,7 @@ function LyricsLines({ lyrics }: { lyrics: string }) {
     ));
 }
 
-/** One labeled row of the header's credits; the value is names or a year. */
+/** One labeled row of the song's credits; the value is names or a year. */
 function CreditRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex gap-2">
