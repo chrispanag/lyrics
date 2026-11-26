@@ -18,7 +18,7 @@ function Reader() {
   return (
     <>
       <Link href="/songs/a-song">Open the song</Link>
-      <button type="button" onClick={() => router.back()}>
+      <button type="button" onClick={() => router.back("/")}>
         Back
       </button>
       <CurrentAddress />

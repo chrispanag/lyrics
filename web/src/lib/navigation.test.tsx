@@ -1,8 +1,16 @@
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Link, pathMatches, useNavigationKey, useRouter, useSetSearchParams } from "./navigation";
+import {
+  Link,
+  NavigationProvider,
+  pathMatches,
+  useNavigationKey,
+  useRouter,
+  useSetSearchParams,
+} from "./navigation";
+import { recordingBackend } from "@/test/backend";
 import { renderWithProviders } from "@/test/render";
 import { CurrentAddress } from "@/test/routes";
 
@@ -48,7 +56,7 @@ function Probe() {
       >
         Write twice
       </button>
-      <button type="button" onClick={() => router.back()}>
+      <button type="button" onClick={() => router.back("/")}>
         Back
       </button>
       <p data-testid="back">{String(router.canGoBack())}</p>
@@ -149,6 +157,48 @@ describe("canGoBack", () => {
     fireEvent.click(screen.getByRole("link", { name: "Here" }));
 
     expect(canGoBack()).toBe("true");
+  });
+
+  // With the entry's index, Back to the screen the tab opened on reads as
+  // nothing behind again, so the app's Back cannot then leave the site.
+  it("follows the entry's index where the backend reads it", () => {
+    // The browser's held entries by key, oldest first; `current` is showing.
+    let entries = ["a", "b", "c", "d"];
+    let current = 3;
+    const historyEntry = (key?: string) => {
+      const index = key === undefined ? current : entries.indexOf(key);
+      const at = entries[index];
+      return at === undefined ? undefined : { key: at, index };
+    };
+    const backend = { ...recordingBackend(), historyEntry };
+    const { result } = renderHook(useRouter, {
+      wrapper: ({ children }) => (
+        <NavigationProvider backend={backend}>{children}</NavigationProvider>
+      ),
+    });
+    const router = result.current;
+
+    expect(router.canGoBack()).toBe(false);
+    entries.push("e");
+    current = 4;
+    expect(router.canGoBack()).toBe(true);
+    act(() => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    current = 3;
+    expect(router.canGoBack()).toBe(false);
+
+    // Past its cap the browser drops its oldest entries and every index moves
+    // down: the trail is still behind the entry showing.
+    entries = ["c", "d", "e", "f"];
+    current = 3;
+    expect(router.canGoBack()).toBe(true);
+    // The first entry dropped too: every entry left is this document's.
+    entries = ["e", "f"];
+    current = 1;
+    expect(router.canGoBack()).toBe(true);
+    current = 0;
+    expect(router.canGoBack()).toBe(false);
   });
 
   // An earlier page load of this site is not the app's trail: the editor would

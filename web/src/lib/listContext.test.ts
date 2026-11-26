@@ -6,7 +6,35 @@ import {
   songRefFromPath,
   songRefIsId,
   songSection,
+  upHref,
 } from "./listContext";
+
+// Back from a screen nothing in the app is behind: never off the site.
+describe("upHref", () => {
+  it.each([
+    ["/songs/agapi", "list=l1&q=x", "/lists/l1"],
+    ["/songs/agapi", "q=x&genre_slug=laiko", "/?q=x&genre_slug=laiko"],
+    ["/songs/agapi", "list=", "/"],
+    // Only the catalog's own filters, as every catalog address is built.
+    ["/songs/agapi", "utm_source=x&sort=newest", "/?sort=newest"],
+    ["/songs/agapi", "", "/"],
+    // A link's `?list=` stays inside `/lists`.
+    ["/songs/agapi", "list=../admin", "/lists/..%2Fadmin"],
+    ["/lists/l1", "", "/lists"],
+    ["/songs/new", "", "/"],
+    ["/profile", "", "/"],
+  ])("%s?%s goes up to %s", (pathname, search, up) => {
+    expect(upHref(pathname, new URLSearchParams(search), { signedIn: true })).toBe(up);
+  });
+
+  // A guest's lists are a sign-in page: a shared list goes up to the catalog.
+  it("sends a guest from a list to the catalog", () => {
+    expect(upHref("/lists/l1", new URLSearchParams(), { signedIn: false })).toBe("/");
+    expect(upHref("/songs/agapi", new URLSearchParams("list=l1"), { signedIn: false })).toBe(
+      "/lists/l1",
+    );
+  });
+});
 
 /*
  * The two halves of the id-to-slug redirect, pinned from both sides: too narrow

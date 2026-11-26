@@ -221,13 +221,10 @@ export function SongEditorPage() {
 
   /**
    * Leaves the editor by popping history: navigating to the song duplicates its
-   * entry and drops `?list=`. A fresh tab (`canGoBack()` false) has nothing
-   * behind it, so it replaces with the song instead. See CLAUDE.md, "Frontend".
+   * entry and drops `?list=`. A fresh tab has nothing behind it, so `back`
+   * replaces with the song instead. See CLAUDE.md, "Frontend".
    */
-  const leaveEditor = () => {
-    if (router.canGoBack()) router.back();
-    else router.replace(id ? songRefHref(id) : "/");
-  };
+  const leaveEditor = () => router.back(id ? songRefHref(id) : "/");
 
   const track =
     <T,>(setter: (value: T) => void) =>

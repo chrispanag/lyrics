@@ -1,3 +1,4 @@
+import { catalogQuery } from "@/lib/browse";
 import type { Song, SongList } from "@/lib/types";
 
 /*
@@ -88,6 +89,28 @@ export function listInView(
 ): string | null {
   if (songRefFromPath(pathname) !== null) return searchParams.get(LIST_PARAM) || null;
   return listRefFromPath(pathname);
+}
+
+/**
+ * Where Back goes when nothing in the app is behind the screen: the screen
+ * above it. A song goes to the list it is read from, or to the catalog with the
+ * filters it was opened under; a list goes to the reader's lists, or for a
+ * guest, whose lists ask them to sign in, to the catalog; anything else goes to
+ * the catalog.
+ */
+export function upHref(
+  pathname: string,
+  searchParams: Pick<URLSearchParams, "get">,
+  { signedIn }: { signedIn: boolean },
+): string {
+  if (songRefFromPath(pathname) === null) {
+    return listRefFromPath(pathname) && signedIn ? "/lists" : "/";
+  }
+  const listId = listInView(pathname, searchParams);
+  // Encoded: `?list=` is whatever the link said, and `../` would climb out of `/lists`.
+  if (listId) return listHref(encodeURIComponent(listId));
+  const query = catalogQuery(searchParams);
+  return query ? `/?${query}` : "/";
 }
 
 /**

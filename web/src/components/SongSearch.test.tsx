@@ -32,7 +32,7 @@ function renderSearch(route: string | string[] = "/songs/song-1") {
 function Back() {
   const router = useRouter();
   return (
-    <button type="button" onClick={() => router.back()}>
+    <button type="button" onClick={() => router.back("/")}>
       Back
     </button>
   );

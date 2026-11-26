@@ -69,6 +69,15 @@ export interface NavigationBackend {
    * paints at once. A hint: a router with nothing to load ignores it.
    */
   prefetch(href: string): void;
+  /**
+   * A browser history entry and where it sits now, where the router can read
+   * it (the Navigation API): the entry showing, or with `key` the entry it
+   * names. Undefined where the router cannot say, or the browser no longer
+   * holds that entry: it drops its oldest past a cap, which shifts every index
+   * down. With it `canGoBack` knows which way a Back or Forward went; without
+   * it, it can only know that one happened.
+   */
+  historyEntry?(key?: string): { key: string; index: number } | undefined;
   Link: ComponentType<BackendLinkProps>;
 }
 
@@ -120,7 +129,9 @@ export function useParams<T extends Record<string, string>>(): Partial<T> {
  * Not referentially stable, exactly as react-router's setter was not: an
  * effect that lists it re-runs after every write, so it needs a guard of its
  * own. A search-string write is not counted as a navigation (`useNavigationKey`,
- * `canGoBack`): it is the screen's own state, kept in the address.
+ * and `canGoBack` where the backend cannot read the entry's index): it is the
+ * screen's own state, kept in the address. Where it can, a pushed write is an
+ * entry like any other, and Back over it stays in the app.
  */
 export function useSetSearchParams(): (
   edit: (next: URLSearchParams) => void,
@@ -137,11 +148,13 @@ export function useSetSearchParams(): (
 export interface Router {
   push(href: string): void;
   replace(href: string): void;
-  back(): void;
   /**
-   * Whether `back()` stays in this app. False for an address opened in a fresh
-   * tab, where there is nothing behind it and Back would leave the site.
+   * Goes back, and never off the site: where nothing in the app is behind this
+   * entry (an address opened in a fresh tab, or Back already taken to the
+   * first screen), it replaces the entry with `fallback` instead.
    */
+  back(fallback: string): void;
+  /** Whether `back` would go back rather than replace with its fallback. */
   canGoBack(): boolean;
   /**
    * Loads `href` ahead of a navigation to it. On Next that is a server render
@@ -156,24 +169,27 @@ export function useRouter(): Router {
   const { push, replace, back, prefetch } = useBackend();
   const { noteNavigation, canGoBack } = useContext(HistoryContext);
 
-  return useMemo(
-    () => ({
+  return useMemo(() => {
+    const replaceWith = (href: string) => {
+      noteNavigation(href, "replace");
+      replace(href);
+    };
+    return {
       push(href) {
         // A push to the address showing replaces it, as a link to it does:
         // two identical entries in a row make Back appear to do nothing.
         if (noteNavigation(href, "push")) replace(href);
         else push(href);
       },
-      replace(href) {
-        noteNavigation(href, "replace");
-        replace(href);
+      replace: replaceWith,
+      back(fallback) {
+        if (canGoBack()) back();
+        else replaceWith(fallback);
       },
-      back,
       canGoBack,
       prefetch,
-    }),
-    [push, replace, back, prefetch, noteNavigation, canGoBack],
-  );
+    };
+  }, [push, replace, back, prefetch, noteNavigation, canGoBack]);
 }
 
 /**
@@ -321,6 +337,11 @@ const HistoryContext = createContext<HistoryState>({
  * would then pop to that other song after saving. Kept in memory, it reads a
  * reloaded editor as a fresh tab, which is the safe way to be wrong: the editor
  * replaces itself with its own song rather than popping somewhere unrelated.
+ *
+ * Where the backend reads the entry's index, the trail is the entries between
+ * the one this document loaded on and the one showing, so Back to the first
+ * screen reads as nothing behind again. Elsewhere any Back or Forward counts as
+ * a trail, and Back from the first screen would leave the site.
  */
 export function NavigationProvider({
   backend,
@@ -335,10 +356,18 @@ export function NavigationProvider({
   const hereRef = useRef(here);
   const movedRef = useRef(entriesBehind);
   const [revisits, setRevisits] = useState(0);
+  const { historyEntry } = backend;
+  const firstKeyRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     hereRef.current = here;
   }, [here]);
+
+  // The entry this document loaded on: read once, in the browser, and never
+  // again, or a later read would move the start of the trail.
+  useEffect(() => {
+    firstKeyRef.current ??= historyEntry?.()?.key;
+  }, [historyEntry]);
 
   // Back or Forward from inside the page means there is history to go to.
   useEffect(() => {
@@ -358,7 +387,14 @@ export function NavigationProvider({
     return same;
   }, []);
 
-  const canGoBack = useCallback(() => movedRef.current, []);
+  const canGoBack = useCallback(() => {
+    const firstKey = firstKeyRef.current;
+    const now = firstKey === undefined ? undefined : historyEntry?.();
+    if (firstKey === undefined || !now) return movedRef.current;
+    // Dropped only with every entry older than it, so each entry still held
+    // is this document's own, and only the oldest has nothing behind it.
+    return now.index > (historyEntry?.(firstKey)?.index ?? 0);
+  }, [historyEntry]);
 
   const value = useMemo(
     () => ({ noteNavigation, canGoBack, revisits }),
