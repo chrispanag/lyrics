@@ -134,3 +134,15 @@ export function revealChrome(): void {
   anchorAt(window.scrollY);
   set(false);
 }
+
+/**
+ * Back to the top of the page, with the chrome out: a tap on the tab already
+ * lit, as a phone's own apps do. Smooth, unless the reader asks for less
+ * motion. The chrome comes out at once rather than on the scroll's first
+ * steps, so the tap is answered where it was made.
+ */
+export function scrollToTop(): void {
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: 0, behavior: still ? "instant" : "smooth" });
+  revealChrome();
+}

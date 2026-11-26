@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronUp, ListMusic, Search } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 
 import { useSong } from "@/api/hooks";
 import { useListPosition } from "@/api/useListPosition";
@@ -13,9 +13,17 @@ import { SongSearchBox } from "@/components/SongSearch";
 import { Sheet } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { positionLabel } from "@/lib/listContext";
-import { NavLink, useNavigationKey, usePathname, useSearchParams } from "@/lib/navigation";
+import {
+  isPlainClick,
+  NavLink,
+  sameAddress,
+  useCurrentHref,
+  useNavigationKey,
+  usePathname,
+  useSearchParams,
+} from "@/lib/navigation";
 import type { User } from "@/lib/types";
-import { revealChrome, useChromeScroll } from "@/lib/scrollChrome";
+import { revealChrome, scrollToTop, useChromeScroll } from "@/lib/scrollChrome";
 
 /**
  * A phone's navigation and search, floating above the bottom edge: below `md`
@@ -237,11 +245,22 @@ function BarTab({ item, user, active }: { item: NavItem; user: User | null; acti
   // Only the Lists tab carries the handlers, and only a signed-in reader has it.
   const intent = useWarmLists();
   const Icon = item.barIcon ?? item.icon;
+  const here = useCurrentHref();
+
+  // A tab leading to the screen already showing goes back to its top instead,
+  // as a phone's own apps do. Only that exact screen: Lists lit on a list, or
+  // Browse lit on a song or with filters set, still leads back to its own.
+  const toTop = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!sameAddress(item.to, here) || !isPlainClick(event)) return;
+    event.preventDefault();
+    scrollToTop();
+  };
 
   return (
     <NavLink
       href={item.to}
       active={active}
+      onClick={toTop}
       {...(item.warmsLists ? intent : undefined)}
       className={({ isActive }) =>
         cn(

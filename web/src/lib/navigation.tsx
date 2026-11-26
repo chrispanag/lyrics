@@ -224,7 +224,7 @@ export function Link({ href, replace, onClick, ...rest }: LinkProps) {
  * Whether the browser leaves this click to the page: the main button, no
  * modifier asking for a new tab or window, and no other target.
  */
-function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
+export function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
   const target = event.currentTarget.getAttribute("target");
   return (
     event.button === 0 &&
@@ -493,7 +493,7 @@ function withSearch(pathname: string, search: string): string {
 }
 
 /** Whether two in-app addresses are the same screen, hash aside. */
-function sameAddress(href: string, current: string): boolean {
+export function sameAddress(href: string, current: string): boolean {
   const a = new URL(href, ORIGIN + current);
   const b = new URL(current, ORIGIN);
   return a.pathname === b.pathname && a.search === b.search;
