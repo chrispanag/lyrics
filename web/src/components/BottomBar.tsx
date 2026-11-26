@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronUp, ListMusic, Search } from "lucide-react";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useSong } from "@/api/hooks";
 import { useListPosition } from "@/api/useListPosition";
@@ -42,8 +42,7 @@ export function BottomBar() {
   const current = currentEntry(pathname, useSearchParams(), user, { phone: true });
   const navigationKey = useNavigationKey();
   const [searching, setSearching] = useState(false);
-  const barRef = useRef<HTMLDivElement>(null);
-  const { navRef, faceRef } = usePillScale(barRef);
+  const { barRef, navRef, faceRef } = usePillScale();
   useChromeScroll(barRef);
 
   // Any navigation closes the search, before the new screen is drawn: a result
@@ -93,7 +92,8 @@ export function BottomBar() {
           // Round, but by index.css, which rounds the shrunk pill too. No
           // backdrop blur: through a 95% surface it was all but invisible,
           // and it was recomputed on every frame of the shrink.
-          className={cn("bottom-bar-tabs flex w-full max-w-md p-1 shadow-popover", barSurface)}
+          // Its surface is the pill's face's too (index.css).
+          className="bottom-bar-tabs flex w-full max-w-md p-1 shadow-popover"
         >
           {/* One box to fade, apart from the surface, which stays. The tabs'
               own `transition` would outrank a fade set on each. */}
@@ -122,8 +122,8 @@ export function BottomBar() {
             the tab order; a tap on it brings the tabs back.
 
             The tabs' own surface shrinks to the face's size, carrying the
-            face's words in its middle, and the face's own surface (`before:`)
-            takes over from it there (index.css). The face is 24px, too small
+            face's words in its middle, and the face's own surface (its
+            `::before`) takes over from it there (index.css). The face is 24px, too small
             for a thumb, so the button around it is a full 44px, reaching 8px
             down into the gap under the bar and 12px up over the page. */}
         <button
@@ -139,8 +139,6 @@ export function BottomBar() {
               "bottom-bar-pill-face relative flex h-6 min-w-0 rounded-full px-2.5 text-xs leading-none font-medium text-fg-secondary",
               // A press gives a little, as a tab does (`idleTab`).
               "motion-safe:transition-[scale] motion-safe:group-active:scale-95",
-              "before:absolute before:inset-0 before:rounded-full before:shadow-raised",
-              pillSurface,
             )}
           >
             <span className="bottom-bar-pill-words relative flex min-w-0 items-center gap-1">
@@ -171,7 +169,8 @@ export function BottomBar() {
  * turned. Written straight to the style, since nothing React draws depends on
  * it.
  */
-function usePillScale(barRef: RefObject<HTMLElement | null>) {
+function usePillScale() {
+  const barRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const faceRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
@@ -191,17 +190,9 @@ function usePillScale(barRef: RefObject<HTMLElement | null>) {
     observer.observe(nav);
     observer.observe(face);
     return () => observer.disconnect();
-  }, [barRef]);
-  return { navRef, faceRef };
+  }, []);
+  return { barRef, navRef, faceRef };
 }
-
-/**
- * The bar's surface, which the pill's face draws too, on its `::before`:
- * index.css fades one into the other, so the two must match. Each has its own
- * shadow, sized to it.
- */
-const barSurface = "border border-line bg-surface/95";
-const pillSurface = "before:border before:border-line before:bg-surface/95";
 
 /**
  * A tab that is not lit, and Search: muted, shaded on a hover, and on a press

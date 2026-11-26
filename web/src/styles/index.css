@@ -538,9 +538,9 @@
 @layer components {
   /* The bar's `--chrome-progress`, inherited the ordinary way by its parts
      (see `chrome-follows`). Its subtree is a few dozen elements, so restyling
-     it with each frame of a scroll costs little. */
-  /* The surface's scale is worked out here, from the measures `BottomBar`
-     writes on the bar, so the pill's words beside the surface can follow it.
+     it with each frame of a scroll costs little. The surface's scale is worked
+     out here too, from the measures `BottomBar` writes on the bar, so the
+     pill's words beside the surface can follow it.
 
      A press is answered by the bar's own shading and scale, so not also by
      the browser's tap highlight, a long press's link preview, or a selection
@@ -551,8 +551,14 @@
     --bar-sy: calc(1 + (var(--pill-sy, 0.4) - 1) * var(--bar-progress));
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
+    @apply select-none;
+  }
+  /* The bar's surface, which the pill's face draws too, on its `::before`:
+     one fades into the other, so they are one rule. Each has its own shadow,
+     sized to it. */
+  .bottom-bar-tabs,
+  .bottom-bar-pill-face::before {
+    @apply border border-line bg-surface/95;
   }
   /* Each part that moves is its own layer from the start, as a top bar is
      (`chrome-slides-up`). */
@@ -582,6 +588,8 @@
   /* The face's own surface, in as the shrunk one goes (`.bottom-bar-tabs`),
      a little ahead of it, so the two together never let the page through. */
   .bottom-bar-pill-face::before {
+    content: "";
+    @apply absolute inset-0 rounded-full shadow-raised;
     will-change: opacity;
     opacity: clamp(0, (var(--bar-progress) - 0.93) / 0.06, 1);
   }

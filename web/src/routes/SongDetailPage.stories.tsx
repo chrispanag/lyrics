@@ -261,10 +261,7 @@ async function tuck() {
   await settled();
 }
 
-/**
- * Waits out the bars' slide and fades: `--duration-chrome` (250ms), and the
- * shrunk surface's 80ms fade after it.
- */
+/** Waits out the bars' settle, `--duration-chrome` (250ms), with room to spare. */
 const settled = () => new Promise((resolve) => setTimeout(resolve, 400));
 
 /**
@@ -368,12 +365,12 @@ export const PhonePill: Story = {
     // Measured: 24px.
     await expect(surface.height).toBeGreaterThanOrEqual(22);
     await expect(surface.height).toBeLessThanOrEqual(26);
-    // On the pill's words, which it frames.
+    // On the pill's face, which it frames.
     const face = pill.querySelector<HTMLElement>(".bottom-bar-pill-face");
     if (!face) throw new Error("The pill has no face.");
-    const words = face.getBoundingClientRect();
-    await expect(Math.abs(words.top - surface.top)).toBeLessThan(1);
-    await expect(Math.abs(words.width - surface.width)).toBeLessThan(1);
+    const faceBox = face.getBoundingClientRect();
+    await expect(Math.abs(faceBox.top - surface.top)).toBeLessThan(1);
+    await expect(Math.abs(faceBox.width - surface.width)).toBeLessThan(1);
     // The face's own surface, on its `::before`, drawn in full at rest.
     const own = getComputedStyle(face, "::before");
     await expect(own.borderTopWidth).toBe("1px");
