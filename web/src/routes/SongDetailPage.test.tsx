@@ -96,7 +96,7 @@ function getNarrow<T extends HTMLElement>(elements: T[]): T {
 /** The details column's own block: what only a wide pane shows. */
 function columnBlock(): HTMLElement {
   const details = screen.getByRole("complementary", { name: "Song details" });
-  const block = details.querySelector<HTMLElement>('[data-tier="column"]');
+  const block = details.querySelector<HTMLElement>(':scope > [data-tier="column"]');
   if (!block) throw new Error("The details column has no block of its own.");
   return block;
 }
@@ -1781,7 +1781,13 @@ describe("SongDetailPage details column", () => {
     await screen.findByText("η αγάπη μου κοιμάται");
     const column = columnBlock();
     expect(column).toHaveClass("hidden", "@3xl/song:block");
-    expect(within(column).getByRole("button", { name: "Play video" })).toBeInTheDocument();
+    // Every block of the column under a heading of its own.
+    expect(screen.getByRole("heading", { level: 2, name: "Credits" })).toHaveAttribute(
+      "data-tier",
+      "column",
+    );
+    const video = within(column).getByRole("region", { name: "Video" });
+    expect(within(video).getByRole("button", { name: "Play video" })).toBeInTheDocument();
     const recordings = within(column).getByRole("region", { name: "Recordings" });
     expect(within(recordings).getAllByRole("listitem")).toHaveLength(2);
     const stats = within(column).getByRole("region", { name: "Stats" });

@@ -558,6 +558,15 @@ export const WideDetailsColumn: Story = {
     await expect(gap).toBeGreaterThanOrEqual(0);
     await expect(gap).toBeLessThan(40);
 
+    // A rule on its left, the length of the pane however little it holds.
+    await expect(getComputedStyle(details).borderLeftWidth).toBe("1px");
+    const reading = scrollerOf(lyrics).getBoundingClientRect();
+    await expect(reading.bottom - details.getBoundingClientRect().bottom).toBeLessThanOrEqual(24);
+
+    // Every block under a heading.
+    for (const name of ["Credits", "Video", "Recordings", "Stats"]) {
+      await expect(within(details).getByRole("heading", { level: 2, name })).toBeVisible();
+    }
     await expect(within(details).getByRole("region", { name: "Recordings" })).toBeVisible();
     await expect(within(details).getByText("Χάρις Αλεξίου")).toBeVisible();
     const stats = within(details).getByRole("region", { name: "Stats" });
