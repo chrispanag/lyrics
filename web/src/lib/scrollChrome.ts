@@ -59,13 +59,6 @@ const TURN_PX = 8;
 const TURN = TURN_PX / RANGE_PX;
 
 /**
- * Within this of the top the chrome is always out: there is nothing to give
- * room to. Below it the chrome tucks by no more than the reader has scrolled
- * past it, so it starts to shrink from here rather than jumping.
- */
-const TOP_PX = 80;
-
-/**
  * How long without a scroll event counts as the scroll coming to rest, where
  * the browser does not say so with `scrollend`. Momentum scrolling keeps
  * firing scroll events, so this is only ever the gap between two of them.
@@ -103,25 +96,29 @@ function drawAll(): void {
 }
 
 /**
- * Whether `y` is past the end of a page that scrolls at all: iOS's bounce,
- * whose way back reads as a scroll up and would bring the chrome out, and
- * whose way out would tuck it. The `overscroll-behavior` in index.css is on
- * <body>, which the spec does not carry to the page's own scroller, so it is
- * not counted on to stop the bounce.
+ * Whether `y` is past either edge of the page: iOS's bounce. Past the end, its
+ * way back reads as a scroll up and would bring the chrome out; above the top,
+ * its way back reads as a scroll down and would tuck it. The
+ * `overscroll-behavior` in index.css is on <body>, which the spec does not
+ * carry to the page's own scroller, so it is not counted on to stop the
+ * bounce.
  */
-function pastEnd(y: number): boolean {
+function pastEdge(y: number): boolean {
+  if (y < 0) return true;
   const end = document.documentElement.scrollHeight - window.innerHeight;
   return end > 0 && y > end;
 }
 
 /*
- * The end of a page moves nothing: a flick that tucks the chrome on its way
- * down would bring it straight back on the bounce.
+ * A bounce moves nothing: a flick that tucks the chrome on its way down would
+ * bring it straight back on the bounce at the end, and letting go at the top
+ * would tuck it on the bounce there.
  */
 function onScroll(): void {
   const y = window.scrollY;
-  if (pastEnd(y)) return;
-  const dy = y - lastY;
+  if (pastEdge(y)) return;
+  const prevY = lastY;
+  const dy = y - prevY;
   lastY = y;
   if (dy === 0) return;
   // Jitter the other way is no turn, so the settle does not read it as one.
@@ -131,18 +128,14 @@ function onScroll(): void {
     turnY = y;
   }
 
-  // Near the top it is out by the floor, by a share of the way there on the
-  // way up, so it never jumps. On the way down it tucks no further than the
-  // reader is past the floor, but never back out: settled tucked within that
-  // stretch, it stays tucked rather than jumping halfway open.
-  const prevY = y - dy;
-  const upper =
+  // Pixel for pixel from the first one down, as Safari's toolbar. On the way
+  // up, pixel for pixel too, but never more tucked than its share of the way
+  // left to the top, so it is out exactly there: settled tucked within the
+  // first stretch, it would otherwise jump.
+  const next =
     dy > 0
-      ? Math.max(progress, Math.min(1, (y - TOP_PX) / RANGE_PX))
-      : prevY > TOP_PX
-        ? (progress * Math.max(0, y - TOP_PX)) / (prevY - TOP_PX)
-        : 0;
-  const next = Math.min(upper, Math.max(0, progress + dy / RANGE_PX));
+      ? Math.min(1, progress + dy / RANGE_PX)
+      : Math.max(0, Math.min((progress * y) / prevY, progress + dy / RANGE_PX));
   if (next >= 1) setTucked(true);
   else if (!goingDown && next <= 1 - TURN) setTucked(false);
 
@@ -202,11 +195,13 @@ const listeners: [string, (event: Event) => void][] = [
 /**
  * Brings the chrome back without a scroll: a tap on the pill, focus moving
  * into a bar, or a new screen. Out, with nothing in flight, and the next
- * scroll down tucks it again, measured from here.
+ * scroll down tucks it again, measured from here. Called in iOS's bounce
+ * above the top, it measures from the top itself: the bounce's way back to 0
+ * would otherwise read as a stretch down and tuck the chrome there.
  */
 export function revealChrome(): void {
   clearTimeout(settleTimer);
-  lastY = window.scrollY;
+  lastY = Math.max(0, window.scrollY);
   turnY = lastY;
   progress = 0;
   scrubbing = false;
