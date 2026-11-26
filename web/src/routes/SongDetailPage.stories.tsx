@@ -534,10 +534,14 @@ export const WideDetailsColumn: Story = {
   play: async ({ canvas }) => {
     const { details, lyrics, title } = await songParts(canvas);
 
-    // Beside, not above.
+    // Beside, not above: the lyrics against the pane's left edge, the column
+    // against its right, not a pair centered in it.
     await expect(details.getBoundingClientRect().left).toBeGreaterThan(
       lyrics.getBoundingClientRect().right,
     );
+    const pane = canvas.getByRole("article").getBoundingClientRect();
+    await expect(lyrics.getBoundingClientRect().left - pane.left).toBeLessThanOrEqual(24);
+    await expect(pane.right - details.getBoundingClientRect().right).toBeLessThanOrEqual(24);
     // The lyrics start under the title, not under the credits.
     const gap = lyrics.getBoundingClientRect().top - title.getBoundingClientRect().bottom;
     await expect(gap).toBeGreaterThanOrEqual(0);

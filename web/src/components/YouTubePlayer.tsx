@@ -32,6 +32,9 @@ export function YouTubePlayer({ videoId, title }: { videoId: string; title: stri
           title={`${title} on YouTube`}
           allow="autoplay; encrypted-media; picture-in-picture"
           allowFullScreen
+          // YouTube refuses to play an embed that names no origin (error 153).
+          // The site's own policy may send none, so the player asks for one.
+          referrerPolicy="strict-origin-when-cross-origin"
           className="absolute inset-0 size-full border-0 focus-visible:-outline-offset-4"
         />
       ) : (
