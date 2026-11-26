@@ -251,29 +251,11 @@ const published = (bar: HTMLElement) =>
     ),
   );
 
-/**
- * Flicks far enough down that the chrome tucks away, and waits it out. A
- * flick is eased, not drawn as the scroll has it.
- */
+/** Scrolls far enough down that the chrome tucks away, and waits it out. */
 async function tuck() {
   window.scrollTo({ top: 600, behavior: "instant" });
   await waitFor(() => expect(document.documentElement).toHaveAttribute("data-chrome-tucked"));
-  await expect(chrome().bar).not.toHaveAttribute("data-chrome-scrubbing");
   await settled();
-}
-
-const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
-
-/** Drags the page to `y` a few pixels a frame, as a finger does, not a flick. */
-async function dragTo(y: number) {
-  const from = window.scrollY;
-  for (let at = from + 4; at <= y; at = Math.min(y, at + 4)) {
-    window.scrollTo({ top: at, behavior: "instant" });
-    // One frame for the scroll event, one for the chrome to draw it.
-    await nextFrame();
-    await nextFrame();
-    if (at === y) break;
-  }
 }
 
 /**
@@ -313,14 +295,17 @@ export const PhoneChrome: Story = {
     // scroll has taken it: 20px down is half its 40px.
     // A finger held on the screen keeps it there.
     window.dispatchEvent(new Event("touchstart"));
-    await dragTo(20);
+    window.scrollTo({ top: 20, behavior: "instant" });
     await waitFor(() => expect(chrome().bar).toHaveAttribute("data-chrome-scrubbing"));
-    const [sx] = getComputedStyle(tabs).scale.split(" ").map(Number);
-    await expect(sx).toBeGreaterThan(0.4);
-    await expect(sx).toBeLessThan(0.9);
-    // And the tools bar partway out of sight with it, by half its height.
-    const slid = tools.getBoundingClientRect();
-    await expect(slid.top).toBeCloseTo(-slid.height / 2, 0);
+    // Following the scroll on a short ease, so once that has run.
+    await waitFor(() => {
+      const [sx] = getComputedStyle(tabs).scale.split(" ").map(Number);
+      expect(sx).toBeGreaterThan(0.4);
+      expect(sx).toBeLessThan(0.9);
+      // And the tools bar partway out of sight with it, by half its height.
+      const slid = tools.getBoundingClientRect();
+      expect(slid.top).toBeCloseTo(-slid.height / 2, 0);
+    });
     window.dispatchEvent(new Event("touchend"));
 
     await tuck();
@@ -415,6 +400,14 @@ export const PhoneMorphMotion: Story = {
         await expect(getComputedStyle(eased).transitionProperty.split(", ")).toContain(
           "--chrome-progress",
         );
+      }
+      // Following the scroll is eased too, briefly: drawn as is, a flick
+      // popped the bars from one end to the other.
+      bar.setAttribute("data-chrome-scrubbing", "");
+      try {
+        await expect(getComputedStyle(bar).transitionDuration).toBe("0.1s");
+      } finally {
+        bar.removeAttribute("data-chrome-scrubbing");
       }
     }
 

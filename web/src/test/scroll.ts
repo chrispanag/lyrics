@@ -30,20 +30,6 @@ export function scrollToY(y: number): void {
 }
 
 /**
- * Scrolls a finger's drag to an offset, in steps of `step` pixels from where
- * the window is: a step of more than a few pixels is a flick, which the chrome
- * eases rather than following as is (`lib/scrollChrome`).
- */
-export function dragToY(y: number, step = 5): void {
-  const from = window.scrollY;
-  const direction = Math.sign(y - from);
-  for (let at = from + direction * step; direction * (y - at) > 0; at += direction * step) {
-    scrollToY(at);
-  }
-  scrollToY(y);
-}
-
-/**
  * Scrolls down past the chrome's 40px stretch. Callers must `setScrollY(0)` in
  * a `beforeEach`: the property outlives the render, and a stale offset makes
  * this no movement at all.

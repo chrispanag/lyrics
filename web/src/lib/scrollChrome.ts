@@ -21,9 +21,9 @@ import { type RefObject, useEffect } from "react";
  * - `--chrome-scroll-progress` on each bar that moves with it: how far
  *   tucked, from 0 to 1. While the reader scrolls it follows the scroll pixel
  *   for pixel over `RANGE_PX`, as Safari's toolbar does, with
- *   `data-chrome-scrubbing` on the bar so index.css does not ease it. Once the
- *   scroll comes to rest it settles at one end or the other, which index.css
- *   eases. Under reduced motion index.css draws only the attribute.
+ *   `data-chrome-scrubbing` on the bar, which index.css follows on a short
+ *   ease. Once the scroll comes to rest it settles at one end or the other,
+ *   which index.css eases as long as the bars' other moves. Under reduced motion index.css draws only the attribute.
  *   Written on the bar rather than <html>: a custom property changed on the
  *   root restyles the whole page, on every frame of a scroll.
  *
@@ -38,7 +38,7 @@ export const CHROME_TUCKED_ATTRIBUTE = "data-chrome-tucked";
 /** How far tucked, 0 out to 1 tucked, on each bar that follows the scroll. */
 export const CHROME_PROGRESS_PROPERTY = "--chrome-scroll-progress";
 
-/** On a bar following the scroll while the reader moves it, so index.css does not ease it. */
+/** On a bar following the scroll while the reader moves it, which index.css eases briefly. */
 export const CHROME_SCRUBBING_ATTRIBUTE = "data-chrome-scrubbing";
 
 /**
@@ -65,24 +65,10 @@ const TURN = TURN_PX / RANGE_PX;
  */
 const SETTLE_MS = 150;
 
-/**
- * A step this far in one scroll event is a flick, not a drag: the chrome
- * eases to where the scroll has put it rather than jumping there, as Safari's
- * toolbar animates on a flick. A fast flick covers the whole 40px stretch in
- * a frame or two; drawn as is, the bars would pop from one end to the other.
- * A phone's browser also sends scroll events at 60Hz while it scrolls at
- * 120Hz, so a bar drawn as is steps behind the page at every other frame,
- * which shows most when it moves far each step.
- */
-const FLICK = 0.3;
-
 let tucked = false;
 /** 0 out to 1 tucked: anywhere between while scrubbing, at rest 0 or 1. */
 let progress = 0;
-/** A scroll has moved the chrome since it last came to rest. */
 let scrubbing = false;
-/** That scroll had a flick in it: eased from there until it comes to rest. */
-let flicking = false;
 let lastY = 0;
 /** Which way the reader last went, turning only after `TURN_PX` the other way. */
 let goingDown = false;
@@ -96,9 +82,7 @@ const followers = new Set<HTMLElement>();
 
 function draw(bar: HTMLElement): void {
   bar.style.setProperty(CHROME_PROGRESS_PROPERTY, String(progress));
-  // Eased while flicking: dropping the easing as a flick slows would jump
-  // the bar from where the ease had it to where the scroll is.
-  bar.toggleAttribute(CHROME_SCRUBBING_ATTRIBUTE, scrubbing && !flicking);
+  bar.toggleAttribute(CHROME_SCRUBBING_ATTRIBUTE, scrubbing);
 }
 
 /**
@@ -175,7 +159,6 @@ function onScroll(): void {
   // Scrolling on past either end changes nothing drawn, and leaves a settle
   // still easing to run its course.
   if (next !== progress) {
-    if (Math.abs(next - progress) > FLICK) flicking = true;
     progress = next;
     scrubbing = true;
     drawNextFrame();
@@ -195,7 +178,6 @@ function settle(): void {
   tucked = next;
   progress = Number(next);
   scrubbing = false;
-  flicking = false;
   drawAll();
 }
 
@@ -240,7 +222,6 @@ export function revealChrome(): void {
   turnY = lastY;
   progress = 0;
   scrubbing = false;
-  flicking = false;
   tucked = false;
   drawAll();
 }
