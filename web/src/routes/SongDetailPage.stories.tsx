@@ -292,10 +292,10 @@ export const PhoneChrome: Story = {
     const classes = [tools.className, tabs.className];
 
     // A little way down, the bottom bar is partway to the pill, as far as the
-    // scroll has taken it: 20px past the top's 80px floor is half its 40px.
+    // scroll has taken it: 20px down is half its 40px.
     // A finger held on the screen keeps it there.
     window.dispatchEvent(new Event("touchstart"));
-    window.scrollTo({ top: 100, behavior: "instant" });
+    window.scrollTo({ top: 20, behavior: "instant" });
     await waitFor(() => expect(chrome().bar).toHaveAttribute("data-chrome-scrubbing"));
     const [sx] = getComputedStyle(tabs).scale.split(" ").map(Number);
     await expect(sx).toBeGreaterThan(0.4);

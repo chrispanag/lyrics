@@ -59,13 +59,6 @@ const TURN_PX = 8;
 const TURN = TURN_PX / RANGE_PX;
 
 /**
- * Within this of the top the chrome is always out: there is nothing to give
- * room to. Below it the chrome tucks by no more than the reader has scrolled
- * past it, so it starts to shrink from here rather than jumping.
- */
-const TOP_PX = 80;
-
-/**
  * How long without a scroll event counts as the scroll coming to rest, where
  * the browser does not say so with `scrollend`. Momentum scrolling keeps
  * firing scroll events, so this is only ever the gap between two of them.
@@ -131,17 +124,10 @@ function onScroll(): void {
     turnY = y;
   }
 
-  // Near the top it is out by the floor, by a share of the way there on the
-  // way up, so it never jumps. On the way down it tucks no further than the
-  // reader is past the floor, but never back out: settled tucked within that
-  // stretch, it stays tucked rather than jumping halfway open.
-  const prevY = y - dy;
-  const upper =
-    dy > 0
-      ? Math.max(progress, Math.min(1, (y - TOP_PX) / RANGE_PX))
-      : prevY > TOP_PX
-        ? (progress * Math.max(0, y - TOP_PX)) / (prevY - TOP_PX)
-        : 0;
+  // From the first pixel down, as Safari's toolbar. At the top it is always
+  // out, and on the way up it is out by then, by a share of what is left at
+  // each step: settled tucked within the stretch, it would otherwise jump.
+  const upper = dy > 0 ? 1 : y <= 0 ? 0 : (progress * y) / (y - dy);
   const next = Math.min(upper, Math.max(0, progress + dy / RANGE_PX));
   if (next >= 1) setTucked(true);
   else if (!goingDown && next <= 1 - TURN) setTucked(false);

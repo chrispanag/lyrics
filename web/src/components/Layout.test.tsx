@@ -230,18 +230,9 @@ describe("Bottom bar", () => {
   const progress = () => Number(shell().style.getPropertyValue(CHROME_PROGRESS_PROPERTY));
   const scrubbing = () => shell().hasAttribute(CHROME_SCRUBBING_ATTRIBUTE);
 
-  // Momentum scrolling jitters by a few pixels either way, and the first
-  // stretch of a page has nothing to give room to.
-  it("does not move for a small scroll, or near the top", () => {
+  // Momentum scrolling jitters by a few pixels either way.
+  it("stays tucked through a little jitter up", () => {
     renderWithProviders(<Layout />);
-
-    scrollToY(6);
-    expect(tucked()).toBe(false);
-    expect(progress()).toBe(0);
-
-    scrollToY(60);
-    expect(tucked()).toBe(false);
-    expect(progress()).toBe(0);
 
     scrollToY(300);
     expect(tucked()).toBe(true);
@@ -256,21 +247,21 @@ describe("Bottom bar", () => {
   });
 
   // As Safari's toolbar: the bar shrinks with the scroll itself, from the
-  // edge of the top, and grows with it on the way back.
+  // first pixel down, and grows with it on the way back.
   it("follows the scroll pixel for pixel, and is not eased while it does", () => {
     renderWithProviders(<Layout />);
     expect(scrubbing()).toBe(false);
 
-    scrollToY(80);
-    expect(progress()).toBe(0);
-    scrollToY(90);
-    expect(progress()).toBe(0.25);
+    scrollToY(1);
+    expect(progress()).toBe(0.025);
     expect(scrubbing()).toBe(true);
-    scrollToY(100);
+    scrollToY(10);
+    expect(progress()).toBe(0.25);
+    scrollToY(20);
     expect(progress()).toBe(0.5);
-    // Not yet tucked: the top bars wait for the whole stretch.
+    // Not yet tucked: that waits for the whole stretch.
     expect(tucked()).toBe(false);
-    scrollToY(120);
+    scrollToY(40);
     expect(progress()).toBe(1);
     expect(tucked()).toBe(true);
 
@@ -284,33 +275,20 @@ describe("Bottom bar", () => {
     expect(progress()).toBe(0.875);
   });
 
-  // Never more tucked than the reader has scrolled past the top's floor, so a
-  // flick down from the top starts the shrink there rather than jumping.
-  it("tucks no further than the reader is past the top's floor", () => {
+  // Settled tucked within the first stretch, the way up shares out what is
+  // left, so it is out by the top without a jump.
+  it("comes out by the top without a jump", () => {
     renderWithProviders(<Layout />);
 
-    scrollToY(60);
-    expect(progress()).toBe(0);
-    scrollToY(100);
-    expect(progress()).toBe(0.5);
-    scrollToY(110);
-    expect(progress()).toBe(0.75);
-  });
-
-  // Settled tucked just past the floor, the way up shares out what is left,
-  // rather than dropping to the floor's limit at once.
-  it("comes out by the top's floor without a jump", () => {
-    renderWithProviders(<Layout />);
-
-    scrollToY(100);
+    scrollToY(20);
     scrollEnd();
     expect(progress()).toBe(1);
 
-    scrollToY(99);
+    scrollToY(19);
     expect(progress()).toBe(0.95);
-    scrollToY(90);
+    scrollToY(10);
     expect(progress()).toBe(0.5);
-    scrollToY(80);
+    scrollToY(0);
     expect(progress()).toBe(0);
   });
 
@@ -320,37 +298,34 @@ describe("Bottom bar", () => {
     renderWithProviders(<Layout />);
 
     // Less than halfway down: back out.
-    scrollToY(80);
-    scrollToY(95);
+    scrollToY(15);
     scrollEnd();
     expect(progress()).toBe(0);
     expect(tucked()).toBe(false);
     expect(scrubbing()).toBe(false);
 
     // Halfway down: the rest of the way.
-    scrollToY(115);
+    scrollToY(35);
     scrollEnd();
     expect(progress()).toBe(1);
     expect(tucked()).toBe(true);
 
     // A touch up: out.
-    scrollToY(105);
+    scrollToY(25);
     scrollEnd();
     expect(progress()).toBe(0);
     expect(tucked()).toBe(false);
   });
 
-  // Settled tucked a little way past the top's floor, a scroll on down holds
-  // it tucked rather than opening it to as far as the floor allows.
+  // Settled tucked within the first stretch, a scroll on down holds it tucked.
   it("stays tucked on down from where it settled near the top", () => {
     renderWithProviders(<Layout />);
 
-    scrollToY(80);
-    scrollToY(100);
+    scrollToY(20);
     scrollEnd();
     expect(progress()).toBe(1);
 
-    scrollToY(102);
+    scrollToY(22);
     expect(progress()).toBe(1);
     expect(tucked()).toBe(true);
   });
@@ -359,9 +334,8 @@ describe("Bottom bar", () => {
   it("settles by the way the reader went, not by the jitter", () => {
     renderWithProviders(<Layout />);
 
-    scrollToY(80);
-    scrollToY(105);
-    scrollToY(104);
+    scrollToY(25);
+    scrollToY(24);
     scrollEnd();
     expect(progress()).toBe(1);
     expect(tucked()).toBe(true);
@@ -376,8 +350,7 @@ describe("Bottom bar", () => {
       renderWithProviders(<Layout />);
 
       fireEvent.touchStart(window);
-      scrollToY(80);
-      scrollToY(110);
+      scrollToY(30);
       act(() => vi.advanceTimersByTime(1000));
       scrollEnd();
       expect(progress()).toBe(0.75);
@@ -821,11 +794,11 @@ describe("StickyHeader", () => {
     render(<StickyHeader>Search</StickyHeader>);
     const progress = () => header()?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY);
 
-    scrollToY(100);
+    scrollToY(20);
     expect(progress()).toBe("0.5");
     expect(header()).toHaveAttribute(CHROME_SCRUBBING_ATTRIBUTE);
 
-    scrollToY(80);
+    scrollToY(0);
     expect(progress()).toBe("0");
   });
 
@@ -842,7 +815,7 @@ describe("StickyHeader", () => {
     // One at a time: a negated `toHaveClass` of several passes when any is missing.
     for (const name of TUCKS.split(" ")) expect(header()).not.toHaveClass(name);
     // Nothing reads the progress there, so none is written.
-    scrollToY(100);
+    scrollToY(20);
     expect(
       screen.getByText("Tools").closest("header")?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY),
     ).toBe("0.5");

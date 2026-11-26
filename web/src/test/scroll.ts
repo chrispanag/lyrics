@@ -18,7 +18,7 @@ export function scrollToY(y: number): void {
 }
 
 /**
- * Scrolls down past the chrome's 80px floor and its 40px stretch. Callers
+ * Scrolls down past the chrome's 40px stretch. Callers
  * must `setScrollY(0)` in a `beforeEach`: the property outlives the render, and
  * a stale offset makes this no movement at all.
  */
