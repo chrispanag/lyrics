@@ -18,21 +18,15 @@ export function setScrollY(y: number): void {
  */
 export function scrollToY(y: number): void {
   setScrollY(y);
-  const frames: FrameRequestCallback[] = [];
-  const request = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-    frames.push(callback);
-    return frames.length;
-  });
-  const cancel = vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
-    frames[id - 1] = () => {};
+  const frame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    callback(performance.now());
+    return 0;
   });
   try {
     fireEvent.scroll(window);
   } finally {
-    request.mockRestore();
-    cancel.mockRestore();
+    frame.mockRestore();
   }
-  for (const callback of frames) callback(performance.now());
 }
 
 /**

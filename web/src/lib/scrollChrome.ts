@@ -80,38 +80,33 @@ let settleTimer: ReturnType<typeof setTimeout> | undefined;
 /** The bars on the page that move with the chrome; the listeners live while there are any. */
 const followers = new Set<HTMLElement>();
 
-function setTucked(next: boolean): void {
-  if (next === tucked) return;
-  tucked = next;
-  document.documentElement.toggleAttribute(CHROME_TUCKED_ATTRIBUTE, next);
-}
-
 function draw(bar: HTMLElement): void {
   bar.style.setProperty(CHROME_PROGRESS_PROPERTY, String(progress));
   bar.toggleAttribute(CHROME_SCRUBBING_ATTRIBUTE, scrubbing);
 }
 
-/** A scroll's drawing, waiting for the next frame; 0 when none is. */
-let frame = 0;
-
-/** Draws every bar now, and anything a scroll left for the next frame with it. */
+/**
+ * The one place the store writes to the page: the attribute on <html> and
+ * every bar's progress, from the state as it is now.
+ */
 function drawAll(): void {
-  if (frame) {
-    cancelAnimationFrame(frame);
-    frame = 0;
-  }
+  document.documentElement.toggleAttribute(CHROME_TUCKED_ATTRIBUTE, tucked);
   for (const bar of followers) draw(bar);
 }
 
+let framePending = false;
+
 /**
- * A scroll draws once a frame, however many scroll events the frame brings
- * (a phone can send more than one): only the last one's progress is ever
- * seen, and each write restyles the bars.
+ * A scroll only reads (the offset, the page's height) and leaves its writes
+ * for the frame: a write in one scroll event would make the next one's read
+ * of the page's height force a layout first. One frame however many scroll
+ * events come before it, though a browser sends at most one a frame anyway.
  */
 function drawNextFrame(): void {
-  if (frame) return;
-  frame = requestAnimationFrame(() => {
-    frame = 0;
+  if (framePending) return;
+  framePending = true;
+  requestAnimationFrame(() => {
+    framePending = false;
     drawAll();
   });
 }
@@ -157,8 +152,8 @@ function onScroll(): void {
     dy > 0
       ? Math.min(1, progress + dy / RANGE_PX)
       : Math.max(0, Math.min((progress * y) / prevY, progress + dy / RANGE_PX));
-  if (next >= 1) setTucked(true);
-  else if (!goingDown && next <= 1 - TURN) setTucked(false);
+  if (next >= 1) tucked = true;
+  else if (!goingDown && next <= 1 - TURN) tucked = false;
 
   // Scrolling on past either end changes nothing drawn, and leaves a settle
   // still easing to run its course.
@@ -179,7 +174,7 @@ function settle(): void {
   clearTimeout(settleTimer);
   if (!scrubbing) return;
   const next = goingDown ? progress >= 0.5 : progress > 1 - TURN;
-  setTucked(next);
+  tucked = next;
   progress = Number(next);
   scrubbing = false;
   drawAll();
@@ -226,7 +221,7 @@ export function revealChrome(): void {
   turnY = lastY;
   progress = 0;
   scrubbing = false;
-  setTucked(false);
+  tucked = false;
   drawAll();
 }
 
