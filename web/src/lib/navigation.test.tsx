@@ -1,8 +1,16 @@
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Link, pathMatches, useNavigationKey, useRouter, useSetSearchParams } from "./navigation";
+import {
+  Link,
+  NavigationProvider,
+  pathMatches,
+  useNavigationKey,
+  useRouter,
+  useSetSearchParams,
+} from "./navigation";
+import { recordingBackend } from "@/test/backend";
 import { renderWithProviders } from "@/test/render";
 import { CurrentAddress } from "@/test/routes";
 
@@ -149,6 +157,38 @@ describe("canGoBack", () => {
     fireEvent.click(screen.getByRole("link", { name: "Here" }));
 
     expect(canGoBack()).toBe("true");
+  });
+
+  // With the entry's index, Back to the screen the tab opened on reads as
+  // nothing behind again, so the app's Back cannot then leave the site.
+  it("follows the entry's index where the backend reads it", () => {
+    let index = 3;
+    const backend = { ...recordingBackend(), entryIndex: () => index };
+    function Reader() {
+      return <p data-testid="back">{String(useRouter().canGoBack())}</p>;
+    }
+    const { rerender } = render(
+      <NavigationProvider backend={backend}>
+        <Reader />
+      </NavigationProvider>,
+    );
+    const read = () => {
+      rerender(
+        <NavigationProvider backend={backend}>
+          <Reader key={index} />
+        </NavigationProvider>,
+      );
+      return canGoBack();
+    };
+
+    expect(read()).toBe("false");
+    index = 4;
+    expect(read()).toBe("true");
+    act(() => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    index = 3;
+    expect(read()).toBe("false");
   });
 
   // An earlier page load of this site is not the app's trail: the editor would

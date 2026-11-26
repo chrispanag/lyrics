@@ -91,6 +91,25 @@ export function listInView(
 }
 
 /**
+ * Where Back goes when nothing in the app is behind the screen: the screen
+ * above it. A song goes to the list it is read from, or to the catalog with the
+ * filters it was opened under; a list goes to the lists; anything else goes to
+ * the catalog.
+ */
+export function upHref(pathname: string, searchParams: Pick<URLSearchParams, "toString">): string {
+  if (songRefFromPath(pathname) !== null) {
+    const params = new URLSearchParams(searchParams.toString());
+    const listId = params.get(LIST_PARAM);
+    if (listId) return listHref(listId);
+    params.delete(LIST_PARAM);
+    const query = params.toString();
+    return query ? `/?${query}` : "/";
+  }
+  if (listRefFromPath(pathname) !== null) return "/lists";
+  return "/";
+}
+
+/**
  * The navigation entry a song belongs to, or undefined off a song, where the
  * path decides. A song has no entry of its own: it is read from a list or from
  * the catalog, and the entry lit is the one whose songs sit beside it.

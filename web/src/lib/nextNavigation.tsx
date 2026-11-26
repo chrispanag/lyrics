@@ -32,6 +32,15 @@ function NextBackendLink({ href, replace, ...rest }: BackendLinkProps) {
   return <NextLink href={href} replace={replace} scroll={false} {...(rest as object)} />;
 }
 
+/** The Navigation API's index for the entry showing, where the browser has one. */
+function entryIndex(): number | undefined {
+  const navigation = (window as { navigation?: { currentEntry?: { index?: unknown } | null } })
+    .navigation;
+  const index = navigation?.currentEntry?.index;
+  // -1 is an entry the API cannot place, such as one after `document.open()`.
+  return typeof index === "number" && index >= 0 ? index : undefined;
+}
+
 /** Mounts the seam on Next's router. Once, in the root layout's providers. */
 export function NextNavigation({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -61,6 +70,7 @@ export function NextNavigation({ children }: { children: ReactNode }) {
       // payload is held for `staleTimes.static` (five minutes), and a
       // navigation to the same href, by link or by `replace`, is answered from it.
       prefetch: (href: string) => router.prefetch(href, { kind: FULL_PREFETCH }),
+      entryIndex,
     }),
     [router],
   );

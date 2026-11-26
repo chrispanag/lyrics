@@ -108,8 +108,9 @@ describe("SongEditorPage", () => {
     // The address it came in on, verbatim.
     expect(await screen.findByText("Address: /songs/song-1")).toBeInTheDocument();
 
+    // Nothing in the app is behind the song, so Back goes up, never to the form.
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(screen.getByText("Address: /songs/song-1")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Catalog" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Edit song" })).not.toBeInTheDocument();
   });
 

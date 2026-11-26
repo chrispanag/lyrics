@@ -6,7 +6,23 @@ import {
   songRefFromPath,
   songRefIsId,
   songSection,
+  upHref,
 } from "./listContext";
+
+// Back from a screen nothing in the app is behind: never off the site.
+describe("upHref", () => {
+  it.each([
+    ["/songs/agapi", "list=l1&q=x", "/lists/l1"],
+    ["/songs/agapi", "q=x&genre_slug=laiko", "/?q=x&genre_slug=laiko"],
+    ["/songs/agapi", "list=", "/"],
+    ["/songs/agapi", "", "/"],
+    ["/lists/l1", "", "/lists"],
+    ["/songs/new", "", "/"],
+    ["/profile", "", "/"],
+  ])("%s?%s goes up to %s", (pathname, search, up) => {
+    expect(upHref(pathname, new URLSearchParams(search))).toBe(up);
+  });
+});
 
 /*
  * The two halves of the id-to-slug redirect, pinned from both sides: too narrow

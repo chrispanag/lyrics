@@ -69,6 +69,13 @@ export interface NavigationBackend {
    * paints at once. A hint: a router with nothing to load ignores it.
    */
   prefetch(href: string): void;
+  /**
+   * The index of the browser's history entry showing, where the router can
+   * read it (the Navigation API's `currentEntry.index`), or undefined. With it
+   * `canGoBack` knows which way a Back or Forward went; without it, it can only
+   * know that one happened.
+   */
+  entryIndex?(): number | undefined;
   Link: ComponentType<BackendLinkProps>;
 }
 
@@ -321,6 +328,11 @@ const HistoryContext = createContext<HistoryState>({
  * would then pop to that other song after saving. Kept in memory, it reads a
  * reloaded editor as a fresh tab, which is the safe way to be wrong: the editor
  * replaces itself with its own song rather than popping somewhere unrelated.
+ *
+ * Where the backend reads the entry's index, the trail is the entries between
+ * the one this document loaded on and the one showing, so Back to the first
+ * screen reads as nothing behind again. Elsewhere any Back or Forward counts as
+ * a trail, and Back from the first screen would leave the site.
  */
 export function NavigationProvider({
   backend,
@@ -335,10 +347,17 @@ export function NavigationProvider({
   const hereRef = useRef(here);
   const movedRef = useRef(entriesBehind);
   const [revisits, setRevisits] = useState(0);
+  const { entryIndex } = backend;
+  const firstEntryRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     hereRef.current = here;
   }, [here]);
+
+  // The entry this document loaded on: read once, in the browser.
+  useEffect(() => {
+    firstEntryRef.current = entryIndex?.();
+  }, [entryIndex]);
 
   // Back or Forward from inside the page means there is history to go to.
   useEffect(() => {
@@ -358,7 +377,12 @@ export function NavigationProvider({
     return same;
   }, []);
 
-  const canGoBack = useCallback(() => movedRef.current, []);
+  const canGoBack = useCallback(() => {
+    const first = firstEntryRef.current;
+    const now = entryIndex?.();
+    if (first !== undefined && now !== undefined) return now > first;
+    return movedRef.current;
+  }, [entryIndex]);
 
   const value = useMemo(
     () => ({ noteNavigation, canGoBack, revisits }),
