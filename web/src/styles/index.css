@@ -462,7 +462,7 @@
   initial-value: 0;
 }
 @utility chrome-follows {
-  --chrome-progress: var(--chrome-scroll-progress, 0);
+  --chrome-progress: var(--chrome-scroll-progress);
   @media (prefers-reduced-motion: reduce) {
     --chrome-progress: 0;
     @variant chrome-tucked {

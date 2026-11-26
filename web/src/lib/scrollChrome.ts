@@ -231,6 +231,9 @@ function register(bar: HTMLElement): () => void {
   draw(bar);
   return () => {
     followers.delete(bar);
+    // A bar that stays on the page (a header pinned) keeps nothing stale.
+    bar.style.removeProperty(CHROME_PROGRESS_PROPERTY);
+    bar.removeAttribute(CHROME_SCRUBBING_ATTRIBUTE);
     if (followers.size > 0) return;
     for (const [type, listener] of listeners) window.removeEventListener(type, listener);
     revealChrome();

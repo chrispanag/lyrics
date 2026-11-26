@@ -830,13 +830,35 @@ describe("StickyHeader", () => {
   });
 
   it("stays put while it is pinned", () => {
-    render(<StickyHeader pinned>Search</StickyHeader>);
+    // Beside a bar that tucks, so the page's tucking is running.
+    render(
+      <>
+        <StickyHeader pinned>Search</StickyHeader>
+        <StickyHeader>Tools</StickyHeader>
+      </>,
+    );
 
     expect(header()).toHaveClass("sticky-bar");
-    expect(header()).not.toHaveClass(TUCKS);
+    // One at a time: a negated `toHaveClass` of several passes when any is missing.
+    for (const name of TUCKS.split(" ")) expect(header()).not.toHaveClass(name);
     // Nothing reads the progress there, so none is written.
     scrollToY(100);
+    expect(
+      screen.getByText("Tools").closest("header")?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY),
+    ).toBe("0.5");
     expect(header()?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY)).toBe("");
+  });
+
+  // A header pinned partway through a scroll keeps nothing the slide drew from.
+  it("lets go of the progress once it is pinned", () => {
+    const { rerender } = render(<StickyHeader>Search</StickyHeader>);
+    scrollToY(100);
+    expect(header()).toHaveAttribute(CHROME_SCRUBBING_ATTRIBUTE);
+
+    rerender(<StickyHeader pinned>Search</StickyHeader>);
+
+    expect(header()?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY)).toBe("");
+    expect(header()).not.toHaveAttribute(CHROME_SCRUBBING_ATTRIBUTE);
   });
 
   // Nothing is left behind for the next page, whose bars start out.
