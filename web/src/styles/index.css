@@ -513,29 +513,40 @@
    which a checkbox or a button never is) on a touch screen, the bar is out of
    the way altogether: a phone's keyboard pushes it up to sit on top of the
    keys, over what the field finds. */
+@property --bar-progress {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
 @layer components {
+  /* The bar's `--chrome-progress`, for its parts. Inherited the ordinary way:
+     WebKit does not always restyle an element whose own value is `inherit` of
+     a non-inherited registered property when the parent's changes, and drew
+     a bar left halfway, the pill over the tabs on a see-through surface. The
+     bar's subtree is a few dozen elements, so restyling it with each frame of
+     a scroll costs little; the top bars keep the non-inherited one. */
+  .bottom-bar {
+    --bar-progress: var(--chrome-progress);
+  }
   /* Each part that moves is its own layer from the start, as a top bar is
      (`chrome-slides-up`). */
   .bottom-bar-tabs {
     will-change: scale, opacity;
-    --chrome-progress: inherit;
-    --bar-sx: calc(1 + (var(--pill-sx, 0.4) - 1) * var(--chrome-progress));
-    --bar-sy: calc(1 + (var(--pill-sy, 0.4) - 1) * var(--chrome-progress));
+    --bar-sx: calc(1 + (var(--pill-sx, 0.4) - 1) * var(--bar-progress));
+    --bar-sy: calc(1 + (var(--pill-sy, 0.4) - 1) * var(--bar-progress));
     scale: var(--bar-sx) var(--bar-sy);
     border-radius: calc(var(--bar-height, 3.625rem) * var(--bar-sy) / var(--bar-sx) / 2) / 50%;
-    opacity: clamp(0, (1 - var(--chrome-progress)) * 10, 1);
+    opacity: clamp(0, (1 - var(--bar-progress)) * 10, 1);
     transform-origin: bottom center;
     pointer-events: auto;
   }
   .bottom-bar-row {
     will-change: opacity;
-    --chrome-progress: inherit;
-    opacity: clamp(0, 1 - var(--chrome-progress) / 0.3, 1);
+    opacity: clamp(0, 1 - var(--bar-progress) / 0.3, 1);
   }
   .bottom-bar-pill {
     will-change: opacity;
-    --chrome-progress: inherit;
-    opacity: clamp(0, (var(--chrome-progress) - 0.7) / 0.25, 1);
+    opacity: clamp(0, (var(--bar-progress) - 0.7) / 0.25, 1);
     pointer-events: none;
   }
   .bottom-bar {
