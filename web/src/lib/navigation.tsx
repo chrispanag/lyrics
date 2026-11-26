@@ -144,11 +144,13 @@ export function useSetSearchParams(): (
 export interface Router {
   push(href: string): void;
   replace(href: string): void;
-  back(): void;
   /**
-   * Whether `back()` stays in this app. False for an address opened in a fresh
-   * tab, where there is nothing behind it and Back would leave the site.
+   * Goes back, and never off the site: where nothing in the app is behind this
+   * entry (an address opened in a fresh tab, or Back already taken to the
+   * first screen), it replaces the entry with `fallback` instead.
    */
+  back(fallback: string): void;
+  /** Whether `back` would go back rather than replace with its fallback. */
   canGoBack(): boolean;
   /**
    * Loads `href` ahead of a navigation to it. On Next that is a server render
@@ -175,7 +177,13 @@ export function useRouter(): Router {
         noteNavigation(href, "replace");
         replace(href);
       },
-      back,
+      back(fallback) {
+        if (canGoBack()) back();
+        else {
+          noteNavigation(fallback, "replace");
+          replace(fallback);
+        }
+      },
       canGoBack,
       prefetch,
     }),

@@ -1,3 +1,4 @@
+import { catalogQuery } from "@/lib/browse";
 import type { Song, SongList } from "@/lib/types";
 
 /*
@@ -96,17 +97,12 @@ export function listInView(
  * filters it was opened under; a list goes to the lists; anything else goes to
  * the catalog.
  */
-export function upHref(pathname: string, searchParams: Pick<URLSearchParams, "toString">): string {
-  if (songRefFromPath(pathname) !== null) {
-    const params = new URLSearchParams(searchParams.toString());
-    const listId = params.get(LIST_PARAM);
-    if (listId) return listHref(listId);
-    params.delete(LIST_PARAM);
-    const query = params.toString();
-    return query ? `/?${query}` : "/";
-  }
-  if (listRefFromPath(pathname) !== null) return "/lists";
-  return "/";
+export function upHref(pathname: string, searchParams: Pick<URLSearchParams, "get">): string {
+  if (songRefFromPath(pathname) === null) return listRefFromPath(pathname) ? "/lists" : "/";
+  const listId = listInView(pathname, searchParams);
+  if (listId) return listHref(listId);
+  const query = catalogQuery(searchParams);
+  return query ? `/?${query}` : "/";
 }
 
 /**

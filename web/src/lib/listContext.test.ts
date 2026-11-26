@@ -15,6 +15,8 @@ describe("upHref", () => {
     ["/songs/agapi", "list=l1&q=x", "/lists/l1"],
     ["/songs/agapi", "q=x&genre_slug=laiko", "/?q=x&genre_slug=laiko"],
     ["/songs/agapi", "list=", "/"],
+    // Only the catalog's own filters, as every catalog address is built.
+    ["/songs/agapi", "utm_source=x&sort=newest", "/?sort=newest"],
     ["/songs/agapi", "", "/"],
     ["/lists/l1", "", "/lists"],
     ["/songs/new", "", "/"],

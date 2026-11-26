@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -56,7 +56,7 @@ function Probe() {
       >
         Write twice
       </button>
-      <button type="button" onClick={() => router.back()}>
+      <button type="button" onClick={() => router.back("/")}>
         Back
       </button>
       <p data-testid="back">{String(router.canGoBack())}</p>
@@ -164,31 +164,21 @@ describe("canGoBack", () => {
   it("follows the entry's index where the backend reads it", () => {
     let index = 3;
     const backend = { ...recordingBackend(), entryIndex: () => index };
-    function Reader() {
-      return <p data-testid="back">{String(useRouter().canGoBack())}</p>;
-    }
-    const { rerender } = render(
-      <NavigationProvider backend={backend}>
-        <Reader />
-      </NavigationProvider>,
-    );
-    const read = () => {
-      rerender(
-        <NavigationProvider backend={backend}>
-          <Reader key={index} />
-        </NavigationProvider>,
-      );
-      return canGoBack();
-    };
+    const { result } = renderHook(useRouter, {
+      wrapper: ({ children }) => (
+        <NavigationProvider backend={backend}>{children}</NavigationProvider>
+      ),
+    });
+    const router = result.current;
 
-    expect(read()).toBe("false");
+    expect(router.canGoBack()).toBe(false);
     index = 4;
-    expect(read()).toBe("true");
+    expect(router.canGoBack()).toBe(true);
     act(() => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     index = 3;
-    expect(read()).toBe("false");
+    expect(router.canGoBack()).toBe(false);
   });
 
   // An earlier page load of this site is not the app's trail: the editor would
