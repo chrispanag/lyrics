@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useId, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, type Ref, useId, useLayoutEffect, useRef, useState } from "react";
 import { ChartColumn, Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
@@ -142,9 +142,12 @@ function SongArticle() {
   // The lyrics, under the tools. A new song opens at the top; the list beside
   // it keeps its own place.
   const lyrics = useRef<HTMLDivElement>(null);
+  // The details column beside them scrolls on its own, so it starts over too.
+  const details = useRef<HTMLElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: id is the trigger.
   useLayoutEffect(() => {
     lyrics.current?.scrollTo({ top: 0, behavior: "instant" });
+    details.current?.scrollTo({ top: 0, behavior: "instant" });
   }, [id]);
 
   const [listSheetOpen, setListSheetOpen] = useState(false);
@@ -276,6 +279,7 @@ function SongArticle() {
           </div>
 
           <SongDetails
+            ref={details}
             song={song}
             fullSong={fullSong}
             onShowRecordings={() => setRecordingsOpen(true)}
@@ -330,11 +334,7 @@ function SongArticle() {
             {/* Gated on the id, never the URL; see WatchOnYouTube. The details
                 column plays the video in place instead. */}
             {song?.youtube_video_id && (
-              <WatchOnYouTube
-                videoId={song.youtube_video_id}
-                {...narrowOnly}
-                className={cn("mt-6", narrowOnly.className)}
-              />
+              <WatchOnYouTube videoId={song.youtube_video_id} {...onTier(narrowOnly, "mt-6")} />
             )}
 
             {song?.notes && (
@@ -460,6 +460,11 @@ type Tier = { className: string; "data-tier": "narrow" | "column" };
 const narrowOnly: Tier = { className: "@3xl/song:hidden", "data-tier": "narrow" };
 const columnOnly: Tier = { className: "hidden @3xl/song:block", "data-tier": "column" };
 
+/** A tier's props, its classes after an element's own. */
+function onTier(tier: Tier, className: string): Tier {
+  return { ...tier, className: cn(className, tier.className) };
+}
+
 /** The song's title, in the song's own language: the title is content too. */
 function SongTitle({ song }: { song: Song }) {
   return (
@@ -477,21 +482,25 @@ function SongTitle({ song }: { song: Song }) {
  * One tree for every tier, so it is ahead of the lyrics in the DOM even beside
  * them: a phone reads the credits first.
  *
- * The tallies wait for the full read, since a cached card's are as old as its
- * list. The skeleton mirrors the narrow tier's facts, so the lyrics under them
+ * The tallies wait for the full read: in view from the start, a cached card's
+ * older numbers would change in front of the reader. The Stats sheet shows the
+ * card's, since it opens only on a press. The skeleton mirrors the narrow tier's facts, so the lyrics under them
  * do not move as the song arrives; change the two together.
  */
 function SongDetails({
+  ref,
   song,
   fullSong,
   onShowRecordings,
 }: {
+  ref: Ref<HTMLElement>;
   song: Song | undefined;
   fullSong: Song | undefined;
   onShowRecordings: () => void;
 }) {
   return (
     <aside
+      ref={ref}
       aria-label="Song details"
       className={cn(
         "mt-3 mb-5",
@@ -504,7 +513,7 @@ function SongDetails({
       {song ? (
         <>
           <SongFacts song={song} onShowRecordings={onShowRecordings} />
-          <div {...columnOnly} className={cn("space-y-6 @3xl/song:mt-6", columnOnly.className)}>
+          <div {...onTier(columnOnly, "space-y-6 @3xl/song:mt-6")}>
             {song.youtube_video_id && (
               <YouTubePlayer key={song.id} videoId={song.youtube_video_id} title={song.title} />
             )}
@@ -587,11 +596,7 @@ function SongFacts({ song, onShowRecordings }: { song: Song; onShowRecordings: (
           <button
             type="button"
             onClick={onShowRecordings}
-            {...narrowOnly}
-            className={cn(
-              "mt-2 text-sm font-medium text-fg-accent hover:underline",
-              narrowOnly.className,
-            )}
+            {...onTier(narrowOnly, "mt-2 text-sm font-medium text-fg-accent hover:underline")}
           >
             Show all {recordingCount(song.recordings.length)}
           </button>
@@ -700,7 +705,7 @@ function OnlyRecording({ recording, tier }: { recording: Recording; tier: Tier }
   if (!recording.label && !recording.is_first && !recording.notes) return null;
 
   return (
-    <div {...tier} className={cn("mt-2", tier.className)}>
+    <div {...onTier(tier, "mt-2")}>
       {(recording.label || recording.is_first) && (
         <p className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
           {recording.label}

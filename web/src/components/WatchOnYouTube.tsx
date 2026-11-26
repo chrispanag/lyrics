@@ -1,4 +1,5 @@
 import { SquarePlay } from "lucide-react";
+import type { ComponentProps } from "react";
 
 import { buttonClasses } from "@/components/buttonStyles";
 import { watchUrl } from "@/lib/youtube";
@@ -12,15 +13,11 @@ import { watchUrl } from "@/lib/youtube";
 export function WatchOnYouTube({
   videoId,
   className,
-  ...data
-}: {
-  videoId: string;
-  className?: string;
-  "data-tier"?: string;
-}) {
+  ...rest
+}: { videoId: string } & Omit<ComponentProps<"a">, "href" | "target" | "rel" | "children">) {
   return (
     <a
-      {...data}
+      {...rest}
       href={watchUrl(videoId)}
       target="_blank"
       // noreferrer: the new tab need not learn which song page sent it.
