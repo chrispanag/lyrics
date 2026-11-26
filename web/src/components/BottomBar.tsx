@@ -24,14 +24,17 @@ import { revealChrome, scrollToTop, useChromeScroll } from "@/lib/scrollChrome";
  * lit by the same rule (`currentEntry`).
  *
  * While the reader scrolls down it shrinks to a small pill saying where they
- * are, and it comes back on any scroll up, at the top of the page, on a tap on
- * the pill, and when focus moves into it (`lib/scrollChrome`). The bar's own
+ * are, and it comes back on a scroll up, at the top of the page, on a tap on
+ * the pill, and when focus moves into it (`lib/scrollChrome`). It shrinks and
+ * grows with the scroll itself, pixel for pixel, as Safari's toolbar does, and
+ * once the scroll comes to rest it finishes the way the reader went. The bar's own
  * surface shrinks into the pill, rather than one fading out as the other fades
  * in, so the eye follows it down and sees where the tabs went; only at the
  * pill's size does the face's own surface take over from it. Collapsed is
  * only how it looks: the tabs stay in the accessibility tree and in the tab
  * order, and reaching one brings the bar back. Styles are `.bottom-bar` in
- * index.css, keyed on `data-chrome-tucked`, so a tuck re-renders nothing here.
+ * index.css, drawn from `--chrome-scroll-progress` on the bar and `data-chrome-tucked`
+ * on <html>, so a tuck re-renders nothing here.
  */
 export function BottomBar() {
   const { user } = useAuth();
@@ -40,7 +43,8 @@ export function BottomBar() {
   const navigationKey = useNavigationKey();
   const [searching, setSearching] = useState(false);
   const { navRef, faceRef } = usePillScale();
-  useChromeScroll();
+  const barRef = useRef<HTMLDivElement>(null);
+  useChromeScroll(barRef);
 
   // Any navigation closes the search, before the new screen is drawn: a result
   // chosen, Enter, or "See all". Keyed on the navigation, not the pathname, so
@@ -72,6 +76,7 @@ export function BottomBar() {
   return (
     <>
       <div
+        ref={barRef}
         // Presses through its own margins land on the page; the tabs and the
         // pill take theirs back (index.css).
         className="bottom-bar pointer-events-none fixed inset-x-0 bottom-0 z-sticky flex justify-center px-4 pb-(--bottom-bar-gap) md:hidden"
@@ -154,9 +159,11 @@ export function BottomBar() {
 /**
  * Measures how far the tabs' surface shrinks to become the pill: the face's
  * width and height over the surface's, as `--pill-sx` and `--pill-sy` on the
- * surface itself, which index.css scales it by. Remeasured whenever either
- * changes size: the song's title arriving, a phone turned. Written straight to
- * the style, since nothing React draws depends on it.
+ * surface itself, which index.css scales it by, and the surface's height as
+ * `--bar-height`, which keeps its ends round at every size in between.
+ * Remeasured whenever either changes size: the song's title arriving, a phone
+ * turned. Written straight to the style, since nothing React draws depends on
+ * it.
  */
 function usePillScale() {
   const navRef = useRef<HTMLElement>(null);
@@ -171,6 +178,7 @@ function usePillScale() {
       if (!nav.offsetWidth || !nav.offsetHeight) return;
       nav.style.setProperty("--pill-sx", String(face.offsetWidth / nav.offsetWidth));
       nav.style.setProperty("--pill-sy", String(face.offsetHeight / nav.offsetHeight));
+      nav.style.setProperty("--bar-height", `${nav.offsetHeight}px`);
     };
     const observer = new ResizeObserver(measure);
     observer.observe(nav);
