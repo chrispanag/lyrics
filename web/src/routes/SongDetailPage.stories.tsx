@@ -564,6 +564,16 @@ export const WideDetailsColumn: Story = {
   ...atADesk(1440, 900, false),
   play: async ({ canvas }) => {
     const { details, lyrics, title } = await songParts(canvas);
+    // The column's height takes off the catalog header's, which that header
+    // publishes from a ResizeObserver, so not before a frame is laid out: under
+    // load the song can render first, and the column is then the header's
+    // height too tall for the pane.
+    const header = canvas.getByRole("searchbox", { name: "Search songs" }).closest("header");
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue("--sticky-header-height")).toBe(
+        `${header?.offsetHeight}px`,
+      ),
+    );
 
     // Beside, not above: the lyrics against the pane's left edge, the column
     // against its right, not a pair centered in it.
