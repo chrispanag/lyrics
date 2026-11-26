@@ -282,7 +282,6 @@ describe("Bottom bar", () => {
 
   // As Safari's toolbar: the bar shrinks with the scroll itself, from the
   // first pixel down, and grows with it on the way back.
-
   it("follows the scroll pixel for pixel, and is not eased while it does", () => {
     renderWithProviders(<Layout />);
     expect(scrubbing()).toBe(false);

@@ -153,7 +153,8 @@ function onScroll(): void {
       ? Math.min(1, progress + dy / RANGE_PX)
       : Math.max(0, Math.min((progress * y) / prevY, progress + dy / RANGE_PX));
   if (next >= 1) tucked = true;
-  else if (!goingDown && next <= 1 - TURN) tucked = false;
+  // All the way out is never tucked, whichever way the reader last turned.
+  else if (next === 0 || (!goingDown && next <= 1 - TURN)) tucked = false;
 
   // Scrolling on past either end changes nothing drawn, and leaves a settle
   // still easing to run its course.
@@ -233,6 +234,9 @@ export function revealChrome(): void {
 function register(bar: HTMLElement): () => void {
   if (followers.size === 0) {
     touching = false;
+    // A frame asked for and never run (a spec's stubbed one) would hold back
+    // every frame after it. One still to come only draws the state as it is.
+    framePending = false;
     revealChrome();
     for (const [type, listener] of listeners) {
       window.addEventListener(type, listener, { passive: true });
