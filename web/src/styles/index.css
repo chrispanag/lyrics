@@ -18,6 +18,11 @@
     &:not(:has(:focus-visible, [aria-haspopup="menu"][aria-expanded="true"]))
 );
 
+/* A reader who asks the system for less transparency: the app's see-through
+   surfaces (the sticky headers, the bottom bar, the swipe hint) are drawn
+   solid for them. */
+@custom-variant reduced-transparency (@media (prefers-reduced-transparency: reduce));
+
 /* `inline` because `--font-inter` is set by next/font on <html>; see
    app/layout.tsx. */
 @theme inline {
@@ -325,12 +330,14 @@
     overscroll-behavior-y: none;
   }
 
-  /* Where the page is: a lit tab, the sidebar's current entry, the song open
-     in the list. Each draws it with a background, which forced colors paints
-     over, so there it is an outline. Before the focus ring, which takes the
-     outline over while the same control has focus. */
+  /* Where the page is, and which toggles are on: a lit tab, the sidebar's
+     current entry, the song open in the list, a filter chip that is set. Each
+     draws it with a background, which forced colors paints over, so there it
+     is an outline. Placed before the focus ring, so the ring wins while the
+     same control has focus. */
   @media (forced-colors: active) {
-    [aria-current="page"] {
+    [aria-current="page"],
+    [aria-pressed="true"] {
       outline: 1px solid;
       outline-offset: -1px;
     }
@@ -569,11 +576,7 @@
      sized to it. */
   .bottom-bar-tabs,
   .bottom-bar-pill-face::before {
-    @apply border border-line bg-surface/95;
-    /* Solid for a reader who asks for less transparency. */
-    @media (prefers-reduced-transparency: reduce) {
-      @apply bg-surface;
-    }
+    @apply border border-line bg-surface/95 reduced-transparency:bg-surface;
   }
   /* Each part that moves is its own layer from the start, as a top bar is
      (`chrome-slides-up`). */
@@ -664,6 +667,7 @@
    under `max-md:` alone. The slide out of the way is `chrome-slides-up`. */
 @utility sticky-bar {
   @apply sticky top-0 z-sticky border-b border-line bg-canvas/90 pt-safe backdrop-blur;
+  @apply reduced-transparency:bg-canvas reduced-transparency:backdrop-blur-none;
 }
 
 /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the edges

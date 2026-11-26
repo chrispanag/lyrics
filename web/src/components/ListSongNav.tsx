@@ -154,7 +154,7 @@ export function ListSongSwipe({
           directions get an arrow. */}
       <span
         className={cn(
-          "flex items-center gap-1.5 rounded-full bg-inverse/95 px-3 py-1.5 text-xs font-medium text-fg-inverse shadow-popover transition-opacity duration-700",
+          "flex items-center gap-1.5 rounded-full bg-inverse/95 reduced-transparency:bg-inverse px-3 py-1.5 text-xs font-medium text-fg-inverse shadow-popover transition-opacity duration-700",
           hinting ? "opacity-100" : "opacity-0",
         )}
       >
