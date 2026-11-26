@@ -39,6 +39,9 @@ export function stickyBarClasses({
  * catalog's filter chips change the height, and a bar the layout has put away
  * is `display: none` and measures 0.
  *
+ * A bar that does not tuck (`tucks: false`) takes no part in it: nothing would read
+ * the progress written on it.
+ *
  * A `phoneOnly` bar publishes only while it is sticky. Elsewhere it is an
  * ordinary row, or, for a song's tools beside the list, the pane's header,
  * which reads the variable to match the catalog's header; publishing its own
@@ -46,9 +49,9 @@ export function stickyBarClasses({
  */
 export function useStickyBar(
   ref: RefObject<HTMLElement | null>,
-  { phoneOnly = false }: { phoneOnly?: boolean } = {},
+  { phoneOnly = false, tucks = true }: { phoneOnly?: boolean; tucks?: boolean } = {},
 ): void {
-  useChromeScroll(ref);
+  useChromeScroll(tucks ? ref : null);
 
   useEffect(() => {
     const bar = ref.current;

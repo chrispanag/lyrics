@@ -11,8 +11,8 @@
    out until the reader tapped elsewhere. A text field always matches
    `:focus-visible`, so typing in a bar holds it too, and so does a menu opened
    from it, whose trigger a tap leaves without visible focus: tucked, the bar
-   would slide away from under the open panel. Used under `max-md:`, as
-   `stickyBarClasses` does. */
+   would slide away from under the open panel. The same hold draws a bar out
+   in `chrome-follows`, which repeats the selector: the two must agree. */
 @custom-variant chrome-tucked (
   :root[data-chrome-tucked]
     &:not(:has(:focus-visible, [aria-haspopup="menu"][aria-expanded="true"]))
@@ -441,15 +441,24 @@
    bar's slide (`chrome-slides-up`).
 
    A typed number (`@property`), so the settle at rest is eased like any
-   transform, and every value drawn from it moves in step. While the reader's
+   transform, and every value drawn from it moves in step. Neither property
+   inherits, so a frame of the scroll restyles the bar alone, not everything
+   inside it (a header's search results, say); a part of a bar that draws from
+   it asks for it (`inherit`). While the reader's
    scroll moves it (`data-chrome-scrubbing`) it is not eased. Under reduced
    motion it does not follow the scroll: out or tucked, at once, as
    `data-chrome-tucked` says. A bar holding visible focus or an open menu is
-   drawn out whatever the scroll says, as `chrome-tucked` holds it: a control
-   reached by Tab must be on screen, and a menu must not lose its trigger. */
+   drawn out whatever the scroll says, by the selector `chrome-tucked` holds it
+   with: a control reached by Tab must be on screen, and a menu must not lose
+   its trigger. */
+@property --chrome-scroll-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
 @property --chrome-progress {
   syntax: "<number>";
-  inherits: true;
+  inherits: false;
   initial-value: 0;
 }
 @utility chrome-follows {
@@ -493,7 +502,7 @@
 
    Tucked is only how it looks. The tabs stay focusable and in the
    accessibility tree, and the bar is drawn expanded while it holds visible
-   focus. Which of tabs and pill takes presses is `data-chrome-tucked`, which
+   focus or an open menu. Which of tabs and pill takes presses is `data-chrome-tucked`, which
    the progress settles with.
 
    While the reader types in a field anywhere on the page (`:read-write`,
@@ -502,6 +511,7 @@
    keys, over what the field finds. */
 @layer components {
   .bottom-bar-tabs {
+    --chrome-progress: inherit;
     --bar-sx: calc(1 + (var(--pill-sx, 0.4) - 1) * var(--chrome-progress));
     --bar-sy: calc(1 + (var(--pill-sy, 0.4) - 1) * var(--chrome-progress));
     scale: var(--bar-sx) var(--bar-sy);
@@ -511,9 +521,11 @@
     pointer-events: auto;
   }
   .bottom-bar-row {
+    --chrome-progress: inherit;
     opacity: clamp(0, 1 - var(--chrome-progress) / 0.3, 1);
   }
   .bottom-bar-pill {
+    --chrome-progress: inherit;
     opacity: clamp(0, (var(--chrome-progress) - 0.7) / 0.25, 1);
     pointer-events: none;
   }

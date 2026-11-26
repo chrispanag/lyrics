@@ -834,6 +834,9 @@ describe("StickyHeader", () => {
 
     expect(header()).toHaveClass("sticky-bar");
     expect(header()).not.toHaveClass(TUCKS);
+    // Nothing reads the progress there, so none is written.
+    scrollToY(100);
+    expect(header()?.style.getPropertyValue(CHROME_PROGRESS_PROPERTY)).toBe("");
   });
 
   // Nothing is left behind for the next page, whose bars start out.

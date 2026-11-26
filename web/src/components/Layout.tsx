@@ -274,7 +274,7 @@ export function StickyHeader({
   collapsedOnly?: boolean;
 }) {
   const ref = useRef<HTMLElement>(null);
-  useStickyBar(ref);
+  useStickyBar(ref, { tucks: !pinned });
 
   return (
     <header
