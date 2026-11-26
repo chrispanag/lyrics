@@ -508,20 +508,24 @@ function SongDetails({
       className={cn(
         "mt-3 mb-5",
         "@3xl/song:col-start-2 @3xl/song:row-span-2 @3xl/song:row-start-1 @3xl/song:m-0 @3xl/song:self-start",
-        // Sticky in the lyrics' scroller, as tall as what it shows of them,
-        // and scrolled on its own past that. Its full height, not its
-        // content's, so the rule on its left runs the pane's length as the
-        // one between the list and the song does. The padding keeps a focus
-        // ring unclipped.
+        // Sticky in the lyrics' scroller and as tall as its view, so the rule
+        // on its left runs the pane's length like the one beside the list;
+        // scrolled on its own past that. The padding keeps a focus ring
+        // unclipped.
         "@3xl/song:sticky @3xl/song:top-4 @3xl/song:h-[calc(100dvh-var(--sticky-header-height,0px)-2rem)] @3xl/song:overflow-y-auto @3xl/song:overscroll-y-contain @3xl/song:border-l @3xl/song:border-line @3xl/song:p-1 @3xl/song:pl-6",
       )}
     >
       {song ? (
         <>
-          {/* Named in the column only: under the title it needs no heading. */}
-          <ColumnSection title="Credits" headingTier={columnOnly}>
+          {/* Named in the column only: under the title it needs no heading.
+              Nor over nothing, where the column puts the recordings line away. */}
+          {hasColumnFacts(song) ? (
+            <ColumnSection title="Credits" headingTier={columnOnly}>
+              <SongFacts song={song} onShowRecordings={onShowRecordings} />
+            </ColumnSection>
+          ) : (
             <SongFacts song={song} onShowRecordings={onShowRecordings} />
-          </ColumnSection>
+          )}
           <div {...onTier(columnOnly, "space-y-6 @3xl/song:mt-6")}>
             {song.youtube_video_id && (
               <ColumnSection title="Video">
@@ -579,6 +583,20 @@ function ColumnSection({
       </h2>
       {children}
     </section>
+  );
+}
+
+/**
+ * Whether `SongFacts` shows anything in the details column, where its
+ * recordings line is put away. The same rows as `SongFacts`; change the two
+ * together.
+ */
+function hasColumnFacts(song: Song): boolean {
+  return (
+    songPerformers(song).length > 0 ||
+    groupCredits(song.credits).length > 0 ||
+    Boolean(song.release_year) ||
+    song.genres.length > 0
   );
 }
 

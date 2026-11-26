@@ -43,7 +43,7 @@ export function YouTubePlayer({ videoId, title }: { videoId: string; title: stri
           type="button"
           onClick={() => setPlaying(true)}
           // The ring drawn inside: the frame clips its corners, and the column
-          // clips its sides.
+          // scroller clips its right edge.
           className="group absolute inset-0 flex items-center justify-center focus-visible:-outline-offset-4"
         >
           <img
