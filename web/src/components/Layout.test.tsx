@@ -633,7 +633,11 @@ describe("Bottom bar", () => {
     }
 
     // On the whole bar, which the pill's words read the surface's scale from too.
-    const measuredBar = () => bar().closest<HTMLElement>(".bottom-bar");
+    const measuredBar = () => {
+      const measured = bar().closest<HTMLElement>(".bottom-bar");
+      if (!measured) throw new Error("The bottom bar is missing.");
+      return measured;
+    };
 
     // index.css shrinks the tabs' surface by these to the pill's face; the
     // stories measure the result in a real browser.
@@ -654,8 +658,8 @@ describe("Bottom bar", () => {
         renderWithProviders(<Layout />, { route: "/profile" });
 
         const measured = measuredBar();
-        expect(Number(measured?.style.getPropertyValue("--pill-sx"))).toBeCloseTo(1 / 3);
-        expect(measured?.style.getPropertyValue("--pill-sy")).toBe("0.4");
+        expect(Number(measured.style.getPropertyValue("--pill-sx"))).toBeCloseTo(1 / 3);
+        expect(measured.style.getPropertyValue("--pill-sy")).toBe("0.4");
       } finally {
         restore();
       }
@@ -668,7 +672,7 @@ describe("Bottom bar", () => {
         renderWithProviders(<Layout />, { route: "/profile" });
 
         const measured = measuredBar();
-        expect(measured?.style.getPropertyValue("--pill-sx")).toBe("");
+        expect(measured.style.getPropertyValue("--pill-sx")).toBe("");
       } finally {
         restore();
       }

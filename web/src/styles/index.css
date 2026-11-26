@@ -566,7 +566,7 @@
     will-change: scale, opacity;
     scale: var(--bar-sx) var(--bar-sy);
     border-radius: calc(var(--bar-height, 3.625rem) * var(--bar-sy) / var(--bar-sx) / 2) / 50%;
-    opacity: clamp(0, (1 - var(--bar-progress)) * 20, 1);
+    opacity: clamp(0, (1 - var(--bar-progress)) * 50, 1);
     transform-origin: bottom center;
     pointer-events: auto;
   }
@@ -582,16 +582,20 @@
      the face's height only at the end. */
   .bottom-bar-pill-words {
     will-change: opacity, translate;
-    opacity: clamp(0, (var(--bar-progress) - 0.45) / 0.35, 1);
+    /* From where the tabs' row has faded (`.bottom-bar-row`, 0.3), so no stretch
+       of the shrink is an empty capsule. */
+    opacity: clamp(0, (var(--bar-progress) - 0.3) / 0.35, 1);
     translate: 0 calc((var(--bar-height, 3.625rem) * var(--bar-sy) - 100%) / -2);
   }
-  /* The face's own surface, in as the shrunk one goes (`.bottom-bar-tabs`),
-     a little ahead of it, so the two together never let the page through. */
+  /* The face's own surface, in all the way (by 0.98) before the shrunk one
+     (`.bottom-bar-tabs`) starts to go, so the page never shows through the
+     pill as it settles. The cost is a faint ring inside the shrunk surface
+     for those few percent, where the two are all but one size. */
   .bottom-bar-pill-face::before {
     content: "";
     @apply absolute inset-0 rounded-full shadow-raised;
     will-change: opacity;
-    opacity: clamp(0, (var(--bar-progress) - 0.93) / 0.06, 1);
+    opacity: clamp(0, (var(--bar-progress) - 0.94) / 0.04, 1);
   }
   .bottom-bar {
     @variant chrome-tucked {
