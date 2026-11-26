@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { Profiler } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Layout, StickyHeader } from "./Layout";
 import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "./SearchField";
@@ -312,18 +312,6 @@ describe("Bottom bar", () => {
   });
 
   describe("a tap on the tab already lit", () => {
-    /**
-     * The reader's motion setting, which jsdom has no `matchMedia` to answer.
-     * Set and removed by hand: `vi.unstubAllGlobals` would also take the
-     * setup's own stubs.
-     */
-    const prefersLessMotion = (matches: boolean) => {
-      window.matchMedia = vi.fn((media: string) => ({ matches, media }) as MediaQueryList);
-    };
-    afterEach(() => {
-      Reflect.deleteProperty(window, "matchMedia");
-    });
-
     const renderAt = (route: string) =>
       renderWithProviders(
         <Layout>
@@ -332,10 +320,10 @@ describe("Bottom bar", () => {
         { route, user: makeUser() },
       );
 
-    // As a phone's own apps do, and with the bars out at once.
-    it("goes back to the top of its screen, smoothly, rather than reloading it", async () => {
+    // As a phone's own apps do, and with the bars out at once. Smooth, or a
+    // jump under reduced motion, is the root's `scroll-behavior` (index.css).
+    it("goes back to the top of its screen rather than reloading it", async () => {
       const user = userEvent.setup();
-      prefersLessMotion(false);
       renderAt("/lists");
       scrollDown();
       // The shell's own scroll to the top of a new screen, on mount.
@@ -343,26 +331,14 @@ describe("Bottom bar", () => {
 
       await user.click(within(bar()).getByRole("link", { name: "Lists" }));
 
-      expect(window.scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 0, behavior: "smooth" });
+      expect(window.scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 0 });
       expect(tucked()).toBe(false);
-      expect(screen.getByTestId("location")).toHaveTextContent("Now at /lists");
-    });
-
-    it("jumps there, under reduced motion", async () => {
-      const user = userEvent.setup();
-      prefersLessMotion(true);
-      renderAt("/lists");
-      vi.mocked(window.scrollTo).mockClear();
-
-      await user.click(within(bar()).getByRole("link", { name: "Lists" }));
-
-      expect(window.scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 0, behavior: "instant" });
+      expect(screen.getByTestId("location")).toHaveTextContent(/^Now at \/lists$/);
     });
 
     // Lit on a list, Lists still leads back to the reader's lists.
     it("still leads to its screen from one below it", async () => {
       const user = userEvent.setup();
-      prefersLessMotion(false);
       server.use(listById(makeList()));
       renderAt("/lists/list-1");
       vi.mocked(window.scrollTo).mockClear();
@@ -370,10 +346,9 @@ describe("Bottom bar", () => {
       await user.click(within(bar()).getByRole("link", { name: "Lists" }));
 
       await waitFor(() =>
-        expect(screen.getByTestId("location")).toHaveTextContent("Now at /lists"),
+        expect(screen.getByTestId("location")).toHaveTextContent(/^Now at \/lists$/),
       );
-      expect(screen.getByTestId("location")).not.toHaveTextContent("list-1");
-      expect(window.scrollTo).not.toHaveBeenCalledWith({ top: 0, behavior: "smooth" });
+      expect(window.scrollTo).not.toHaveBeenCalledWith({ top: 0 });
     });
   });
 
