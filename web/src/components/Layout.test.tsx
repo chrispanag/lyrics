@@ -248,6 +248,30 @@ describe("Bottom bar", () => {
 
   // As Safari's toolbar: the bar shrinks with the scroll itself, from the
   // first pixel down, and grows with it on the way back.
+  // A phone can send more than one scroll event a frame; each write restyles
+  // the bars, and only the last is ever seen.
+  it("draws a scroll once a frame", () => {
+    renderWithProviders(<Layout />);
+    const frames: FrameRequestCallback[] = [];
+    const request = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => frames.push(callback));
+    try {
+      for (const y of [5, 10, 20]) {
+        setScrollY(y);
+        fireEvent.scroll(window);
+      }
+      expect(progress()).toBe(0);
+      expect(frames).toHaveLength(1);
+
+      act(() => frames[0]?.(performance.now()));
+      expect(progress()).toBe(0.5);
+      expect(scrubbing()).toBe(true);
+    } finally {
+      request.mockRestore();
+    }
+  });
+
   it("follows the scroll pixel for pixel, and is not eased while it does", () => {
     renderWithProviders(<Layout />);
     expect(scrubbing()).toBe(false);

@@ -91,8 +91,29 @@ function draw(bar: HTMLElement): void {
   bar.toggleAttribute(CHROME_SCRUBBING_ATTRIBUTE, scrubbing);
 }
 
+/** A scroll's drawing, waiting for the next frame; 0 when none is. */
+let frame = 0;
+
+/** Draws every bar now, and anything a scroll left for the next frame with it. */
 function drawAll(): void {
+  if (frame) {
+    cancelAnimationFrame(frame);
+    frame = 0;
+  }
   for (const bar of followers) draw(bar);
+}
+
+/**
+ * A scroll draws once a frame, however many scroll events the frame brings
+ * (a phone can send more than one): only the last one's progress is ever
+ * seen, and each write restyles the bars.
+ */
+function drawNextFrame(): void {
+  if (frame) return;
+  frame = requestAnimationFrame(() => {
+    frame = 0;
+    drawAll();
+  });
 }
 
 /**
@@ -144,7 +165,7 @@ function onScroll(): void {
   if (next !== progress) {
     progress = next;
     scrubbing = true;
-    drawAll();
+    drawNextFrame();
   }
   if (scrubbing) scheduleSettle();
 }
