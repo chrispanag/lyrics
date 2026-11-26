@@ -20,7 +20,7 @@
 
 /* A reader who asks the system for less transparency: the app's see-through
    surfaces (the sticky headers, the bottom bar, the swipe hint) are drawn
-   solid for them. */
+   solid for them, and a modal's dim is not blurred. */
 @custom-variant reduced-transparency (@media (prefers-reduced-transparency: reduce));
 
 /* `inline` because `--font-inter` is set by next/font on <html>; see
@@ -532,8 +532,9 @@
    the last stretch the face's own surface, border and shadow, drawn at full
    size, fade in, and the shrunk one fades out under it: scaled, its 1px
    border and its shadow were thinner than any other in the app. Only there,
-   where the two are all but one size, so no ring shows inside a ring.
-   Growing, the same in reverse.
+   where the two are close in size, so a ring inside a ring shows only for
+   that last stretch, and only while a scroll holds it there. Growing, the
+   same in reverse.
 
    Scaled unevenly, a round end turns oval, so the surface's horizontal radius
    is divided by the scale it has at that moment, from its measured
