@@ -96,24 +96,26 @@ function drawAll(): void {
 }
 
 /**
- * Whether `y` is past the end of a page that scrolls at all: iOS's bounce,
- * whose way back reads as a scroll up and would bring the chrome out, and
- * whose way out would tuck it. The `overscroll-behavior` in index.css is on
- * <body>, which the spec does not carry to the page's own scroller, so it is
- * not counted on to stop the bounce.
+ * Whether `y` is past either edge of the page: iOS's bounce. Past the end, its
+ * way back reads as a scroll up and would bring the chrome out; above the top,
+ * its way back reads as a scroll down and would tuck it. The
+ * `overscroll-behavior` in index.css is on <body>, which the spec does not
+ * carry to the page's own scroller, so it is not counted on to stop the
+ * bounce.
  */
-function pastEnd(y: number): boolean {
+function pastEdge(y: number): boolean {
   const end = document.documentElement.scrollHeight - window.innerHeight;
-  return end > 0 && y > end;
+  return y < 0 || (end > 0 && y > end);
 }
 
 /*
- * The end of a page moves nothing: a flick that tucks the chrome on its way
- * down would bring it straight back on the bounce.
+ * A bounce moves nothing: a flick that tucks the chrome on its way down would
+ * bring it straight back on the bounce at the end, and letting go at the top
+ * would tuck it on the bounce there.
  */
 function onScroll(): void {
   const y = window.scrollY;
-  if (pastEnd(y)) return;
+  if (pastEdge(y)) return;
   const dy = y - lastY;
   lastY = y;
   if (dy === 0) return;
@@ -124,11 +126,14 @@ function onScroll(): void {
     turnY = y;
   }
 
-  // From the first pixel down, as Safari's toolbar. At the top it is always
-  // out, and on the way up it is out by then, by a share of what is left at
-  // each step: settled tucked within the stretch, it would otherwise jump.
-  const upper = dy > 0 ? 1 : y <= 0 ? 0 : (progress * y) / (y - dy);
-  const next = Math.min(upper, Math.max(0, progress + dy / RANGE_PX));
+  // Pixel for pixel from the first one down, as Safari's toolbar. On the way
+  // up, pixel for pixel too, but never more tucked than its share of the way
+  // left to the top, so it is out exactly there: settled tucked within the
+  // first stretch, it would otherwise jump.
+  const next =
+    dy > 0
+      ? Math.min(1, progress + dy / RANGE_PX)
+      : Math.max(0, Math.min((progress * y) / (y - dy), progress + dy / RANGE_PX));
   if (next >= 1) setTucked(true);
   else if (!goingDown && next <= 1 - TURN) setTucked(false);
 

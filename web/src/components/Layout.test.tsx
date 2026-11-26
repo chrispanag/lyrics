@@ -317,17 +317,18 @@ describe("Bottom bar", () => {
     expect(tucked()).toBe(false);
   });
 
-  // Settled tucked within the first stretch, a scroll on down holds it tucked.
-  it("stays tucked on down from where it settled near the top", () => {
+  // iOS's bounce above the top: letting go there reads as a scroll down on
+  // the way back, which must not tuck the chrome.
+  it("stays out through the bounce at the top", () => {
     renderWithProviders(<Layout />);
 
-    scrollToY(20);
+    scrollToY(-30);
+    scrollToY(-10);
+    scrollToY(0);
     scrollEnd();
-    expect(progress()).toBe(1);
 
-    scrollToY(22);
-    expect(progress()).toBe(1);
-    expect(tucked()).toBe(true);
+    expect(progress()).toBe(0);
+    expect(tucked()).toBe(false);
   });
 
   // Jitter up at the end of a scroll down is no turn: it settles as down.
@@ -825,7 +826,7 @@ describe("StickyHeader", () => {
   // A header pinned partway through a scroll keeps nothing the slide drew from.
   it("lets go of the progress once it is pinned", () => {
     const { rerender } = render(<StickyHeader>Search</StickyHeader>);
-    scrollToY(100);
+    scrollToY(20);
     expect(header()).toHaveAttribute(CHROME_SCRUBBING_ATTRIBUTE);
 
     rerender(<StickyHeader pinned>Search</StickyHeader>);
