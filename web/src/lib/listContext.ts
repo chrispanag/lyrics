@@ -94,13 +94,21 @@ export function listInView(
 /**
  * Where Back goes when nothing in the app is behind the screen: the screen
  * above it. A song goes to the list it is read from, or to the catalog with the
- * filters it was opened under; a list goes to the lists; anything else goes to
+ * filters it was opened under; a list goes to the reader's lists, or for a
+ * guest, whose lists ask them to sign in, to the catalog; anything else goes to
  * the catalog.
  */
-export function upHref(pathname: string, searchParams: Pick<URLSearchParams, "get">): string {
-  if (songRefFromPath(pathname) === null) return listRefFromPath(pathname) ? "/lists" : "/";
+export function upHref(
+  pathname: string,
+  searchParams: Pick<URLSearchParams, "get">,
+  { signedIn }: { signedIn: boolean },
+): string {
+  if (songRefFromPath(pathname) === null) {
+    return listRefFromPath(pathname) && signedIn ? "/lists" : "/";
+  }
   const listId = listInView(pathname, searchParams);
-  if (listId) return listHref(listId);
+  // Encoded: `?list=` is whatever the link said, and `../` would climb out of `/lists`.
+  if (listId) return listHref(encodeURIComponent(listId));
   const query = catalogQuery(searchParams);
   return query ? `/?${query}` : "/";
 }

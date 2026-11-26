@@ -162,8 +162,15 @@ describe("canGoBack", () => {
   // With the entry's index, Back to the screen the tab opened on reads as
   // nothing behind again, so the app's Back cannot then leave the site.
   it("follows the entry's index where the backend reads it", () => {
-    let index = 3;
-    const backend = { ...recordingBackend(), entryIndex: () => index };
+    // The browser's held entries by key, oldest first; `current` is showing.
+    let entries = ["a", "b", "c", "d"];
+    let current = 3;
+    const historyEntry = (key?: string) => {
+      const index = key === undefined ? current : entries.indexOf(key);
+      const at = entries[index];
+      return at === undefined ? undefined : { key: at, index };
+    };
+    const backend = { ...recordingBackend(), historyEntry };
     const { result } = renderHook(useRouter, {
       wrapper: ({ children }) => (
         <NavigationProvider backend={backend}>{children}</NavigationProvider>
@@ -172,12 +179,25 @@ describe("canGoBack", () => {
     const router = result.current;
 
     expect(router.canGoBack()).toBe(false);
-    index = 4;
+    entries.push("e");
+    current = 4;
     expect(router.canGoBack()).toBe(true);
     act(() => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
-    index = 3;
+    current = 3;
+    expect(router.canGoBack()).toBe(false);
+
+    // Past its cap the browser drops its oldest entries and every index moves
+    // down: the trail is still behind the entry showing.
+    entries = ["c", "d", "e", "f"];
+    current = 3;
+    expect(router.canGoBack()).toBe(true);
+    // The first entry dropped too: every entry left is this document's.
+    entries = ["e", "f"];
+    current = 1;
+    expect(router.canGoBack()).toBe(true);
+    current = 0;
     expect(router.canGoBack()).toBe(false);
   });
 

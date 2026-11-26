@@ -18,11 +18,21 @@ describe("upHref", () => {
     // Only the catalog's own filters, as every catalog address is built.
     ["/songs/agapi", "utm_source=x&sort=newest", "/?sort=newest"],
     ["/songs/agapi", "", "/"],
+    // A link's `?list=` stays inside `/lists`.
+    ["/songs/agapi", "list=../admin", "/lists/..%2Fadmin"],
     ["/lists/l1", "", "/lists"],
     ["/songs/new", "", "/"],
     ["/profile", "", "/"],
   ])("%s?%s goes up to %s", (pathname, search, up) => {
-    expect(upHref(pathname, new URLSearchParams(search))).toBe(up);
+    expect(upHref(pathname, new URLSearchParams(search), { signedIn: true })).toBe(up);
+  });
+
+  // A guest's lists are a sign-in page: a shared list goes up to the catalog.
+  it("sends a guest from a list to the catalog", () => {
+    expect(upHref("/lists/l1", new URLSearchParams(), { signedIn: false })).toBe("/");
+    expect(upHref("/songs/agapi", new URLSearchParams("list=l1"), { signedIn: false })).toBe(
+      "/lists/l1",
+    );
   });
 });
 

@@ -1,6 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "@/lib/navigation";
 
+import { useAuth } from "@/auth/useAuth";
 import { cn } from "@/lib/cn";
 import { upHref } from "@/lib/listContext";
 
@@ -15,11 +16,12 @@ export function BackButton({ className }: { className?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
 
   return (
     <button
       type="button"
-      onClick={() => router.back(upHref(pathname, searchParams))}
+      onClick={() => router.back(upHref(pathname, searchParams, { signedIn: Boolean(user) }))}
       className={cn(
         "-ml-2 flex items-center gap-1 rounded-compact p-2 text-sm text-fg-tertiary hover:bg-subtle",
         className,
