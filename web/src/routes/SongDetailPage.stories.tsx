@@ -401,12 +401,19 @@ export const PhoneMorphMotion: Story = {
     }
 
     const transitions: { media: string[] }[] = [];
+    // A part that asks for its bar's progress with `inherit` is left behind
+    // by WebKit (index.css, `chrome-follows`); Chromium draws it right, so
+    // only the style sheet shows the mistake here.
+    const inheritsProgress: string[] = [];
     const walk = (rules: CSSRuleList, media: string[]) => {
       for (const rule of Array.from(rules)) {
         if (rule instanceof CSSMediaRule) walk(rule.cssRules, [...media, rule.conditionText]);
         else if (rule instanceof CSSStyleRule) {
           if (rule.selectorText.includes("chrome-follows") && rule.style.transition) {
             transitions.push({ media });
+          }
+          if (rule.style.getPropertyValue("--chrome-progress").trim() === "inherit") {
+            inheritsProgress.push(rule.selectorText);
           }
           if (rule.cssRules.length > 0) walk(rule.cssRules, media);
         } else if ("cssRules" in rule) walk((rule as CSSGroupingRule).cssRules, media);
@@ -419,6 +426,7 @@ export const PhoneMorphMotion: Story = {
         // A cross-origin sheet (a font's) cannot be read, and is not ours.
       }
     }
+    await expect(inheritsProgress).toEqual([]);
     await expect(transitions.length).toBeGreaterThan(0);
     for (const { media } of transitions) {
       await expect(

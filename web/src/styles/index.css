@@ -442,15 +442,15 @@
 
    A typed number (`@property`), so the settle at rest is eased like any
    transform, and every value drawn from it moves in step. Neither property
-   inherits, so a frame of the scroll restyles the bar alone, not everything
-   inside it (a header's search results, say). A part of a bar that draws
-   from it reads an inherited copy the bar sets, as the bottom bar's read
-   `--bar-progress`, never `--chrome-progress: inherit`: WebKit does not
-   always restyle such an `inherit` when the bar's value changes, and drew
-   the bottom bar left halfway, its pill over its tabs on a see-through
-   surface. While the reader's scroll moves it (`data-chrome-scrubbing`) it
-   is not eased. Under reduced
-   motion it does not follow the scroll: out or tucked, at once, as
+   inherits, so a frame of the scroll restyles a top bar alone, not
+   everything inside it (a header's search results, say). A part of a bar
+   that draws from it reads an inherited copy the bar sets, as the bottom
+   bar's parts read `--bar-progress`, never `--chrome-progress: inherit`:
+   WebKit does not always restyle such an `inherit` when the bar's value
+   changes, and drew the bottom bar left halfway, its pill over its tabs on
+   a see-through surface. While the reader's scroll moves it
+   (`data-chrome-scrubbing`) it is not eased. Under reduced motion it does
+   not follow the scroll: out or tucked, at once, as
    `data-chrome-tucked` says. A bar holding visible focus or an open menu is
    drawn out whatever the scroll says, by the selector `chrome-tucked` holds it
    with: a control reached by Tab must be on screen, and a menu must not lose
@@ -495,7 +495,8 @@
 
 /* A phone's bottom bar — see `BottomBar`. Expanded it is the tabs; tucked it
    is a small pill, and in between it is wherever the reader's scroll has put
-   it: everything here is drawn from `--chrome-progress` (`chrome-follows`).
+   it: everything here is drawn from `--chrome-progress` (`chrome-follows`),
+   through the copy its parts inherit, `--bar-progress`.
 
    The tabs' surface shrinks, from its bottom edge, to the pill's face, by the
    scale `BottomBar` measures into `--pill-sx` and `--pill-sy`. The tabs fade
