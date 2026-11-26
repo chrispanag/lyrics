@@ -18,6 +18,7 @@ import {
   listById,
   makeGenre,
   makeList,
+  makePopularity,
   makeRecording,
   makeSong,
   makeUser,
@@ -26,7 +27,8 @@ import {
 import { intersectAll, observedElements } from "@/test/intersection";
 import { songMatchesRef } from "@/lib/listContext";
 import { CHROME_TUCKED_ATTRIBUTE } from "@/lib/scrollChrome";
-import type { Recording } from "@/lib/types";
+import type { Recording, Song } from "@/lib/types";
+import { embedUrl, thumbnailUrl } from "@/lib/youtube";
 import { testQueryClient } from "@/test/providers";
 import { renderWithProviders } from "@/test/render";
 import { TestRoutes } from "@/test/routes";
@@ -74,20 +76,78 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
 }
 
 /**
- * What a narrow pane shows of `elements`. jsdom applies no CSS, so the details
- * column's own block, `hidden` until the pane is wide enough for it, is in the
- * DOM here too; this leaves out whatever sits under a `hidden`.
+ * The one element of `elements` a narrow pane shows, or null. jsdom applies no
+ * CSS, so the details column's own block, which only a wide pane shows, is in
+ * the DOM here too; this leaves out whatever sits in it.
  */
-function shownNarrow<T extends HTMLElement>(elements: T[]): T[] {
-  return elements.filter((element) => !element.closest(".hidden"));
+function queryNarrow<T extends HTMLElement>(elements: T[]): T | null {
+  const shown = elements.filter((element) => !element.closest('[data-tier="column"]'));
+  if (shown.length > 1) throw new Error(`${shown.length} elements shown in a narrow pane.`);
+  return shown[0] ?? null;
+}
+
+/** As `queryNarrow`, for an element that must be there. */
+function getNarrow<T extends HTMLElement>(elements: T[]): T {
+  const shown = queryNarrow(elements);
+  if (!shown) throw new Error("Nothing shown in a narrow pane.");
+  return shown;
 }
 
 /** The details column's own block: what only a wide pane shows. */
-function columnOnly(): HTMLElement {
+function columnBlock(): HTMLElement {
   const details = screen.getByRole("complementary", { name: "Song details" });
-  const block = details.querySelector<HTMLElement>(":scope > .hidden");
+  const block = details.querySelector<HTMLElement>('[data-tier="column"]');
   if (!block) throw new Error("The details column has no block of its own.");
   return block;
+}
+
+/**
+ * Renders the page with a handle on its router, to move the address as Back or
+ * Forward would: a click outside a modal sheet would be the sheet's to
+ * dismiss, not a navigation.
+ */
+function renderWithRouter(queryClient: ReturnType<typeof testQueryClient>) {
+  const router: { push?: (href: string) => void } = {};
+  function Router() {
+    const { push } = useRouter();
+    useEffect(() => {
+      router.push = push;
+    }, [push]);
+    return null;
+  }
+  renderWithProviders(
+    <TestRoutes
+      routes={{
+        "/songs/:id": (
+          <>
+            <SongDetailPage />
+            <Router />
+          </>
+        ),
+      }}
+    />,
+    { route: "/songs/song-1", queryClient },
+  );
+  return router;
+}
+
+/**
+ * Moves the address to `next`, a card seeded into the cache at the step (the
+ * test client drops unobserved data at once), so the page has a song to show
+ * while its full read is held.
+ */
+function stepTo(
+  router: { push?: (href: string) => void },
+  queryClient: ReturnType<typeof testQueryClient>,
+  next: Omit<Song, "lyrics">,
+) {
+  act(() => {
+    queryClient.setQueryData(keys.songs({}), {
+      data: [next],
+      meta: { total: 1, limit: 20, offset: 0 },
+    });
+    router.push?.(`/songs/${next.id}`);
+  });
 }
 
 /**
@@ -118,25 +178,27 @@ describe("SongDetailPage popularity", () => {
       http.get(`${API}/api/v1/songs/:id`, () =>
         HttpResponse.json(
           makeSong({
-            popularity: {
+            popularity: makePopularity({
               anonymous_clicks: 3,
               authenticated_clicks: 1,
               list_adds: 4,
               list_users: 2,
               score: 27,
-            },
+            }),
           }),
         ),
       ),
       http.post(`${API}/api/v1/songs/:id/clicks`, async ({ request }) => {
         bodies.push(await request.json());
-        return HttpResponse.json({
-          anonymous_clicks: 4,
-          authenticated_clicks: 1,
-          list_adds: 4,
-          list_users: 2,
-          score: 28,
-        });
+        return HttpResponse.json(
+          makePopularity({
+            anonymous_clicks: 4,
+            authenticated_clicks: 1,
+            list_adds: 4,
+            list_users: 2,
+            score: 28,
+          }),
+        );
       }),
     );
 
@@ -160,24 +222,26 @@ describe("SongDetailPage popularity", () => {
       http.get(`${API}/api/v1/songs/:id`, () =>
         HttpResponse.json(
           makeSong({
-            popularity: {
+            popularity: makePopularity({
               anonymous_clicks: 3,
               authenticated_clicks: 1,
               list_adds: 4,
               list_users: 1,
               score: 27,
-            },
+            }),
           }),
         ),
       ),
       http.post(`${API}/api/v1/songs/:id/clicks`, () =>
-        HttpResponse.json({
-          anonymous_clicks: 1203,
-          authenticated_clicks: 1,
-          list_adds: 4,
-          list_users: 1,
-          score: 1220,
-        }),
+        HttpResponse.json(
+          makePopularity({
+            anonymous_clicks: 1203,
+            authenticated_clicks: 1,
+            list_adds: 4,
+            list_users: 1,
+            score: 1220,
+          }),
+        ),
       ),
     );
 
@@ -186,7 +250,7 @@ describe("SongDetailPage popularity", () => {
     const stats = await screen.findByRole("button", { name: "Stats" });
     await waitFor(() => expect(stats).toBeEnabled());
     // Off a narrow page until asked for.
-    expect(shownNarrow(screen.queryAllByText("4 times"))).toHaveLength(0);
+    expect(queryNarrow(screen.queryAllByText("4 times"))).toBeNull();
     await userEvent.click(stats);
 
     const sheet = await screen.findByRole("dialog", { name: "Stats" });
@@ -204,13 +268,7 @@ describe("SongDetailPage popularity", () => {
   // offered before the full read with the lyrics arrives.
   it("offers Stats from the clicked card, before the full song arrives", async () => {
     const { lyrics: _lyrics, ...card } = makeSong({
-      popularity: {
-        anonymous_clicks: 6,
-        authenticated_clicks: 0,
-        list_adds: 2,
-        list_users: 2,
-        score: 10,
-      },
+      popularity: makePopularity({ anonymous_clicks: 6, list_adds: 2, list_users: 2, score: 10 }),
     });
     const queryClient = testQueryClient();
     queryClient.setQueryData(keys.songs({}), {
@@ -245,43 +303,14 @@ describe("SongDetailPage popularity", () => {
         params.id === "song-2" ? new Promise(() => {}) : HttpResponse.json(makeSong()),
       ),
     );
-    // The router itself, as Back or Forward moves it: a click outside the
-    // modal sheet would be the sheet's to dismiss, not a navigation.
-    const router: { push?: (href: string) => void } = {};
-    function Router() {
-      const { push } = useRouter();
-      useEffect(() => {
-        router.push = push;
-      }, [push]);
-      return null;
-    }
-    renderWithProviders(
-      <TestRoutes
-        routes={{
-          "/songs/:id": (
-            <>
-              <SongDetailPage />
-              <Router />
-            </>
-          ),
-        }}
-      />,
-      { route: "/songs/song-1", queryClient },
-    );
+    const router = renderWithRouter(queryClient);
 
     const stats = await screen.findByRole("button", { name: "Stats" });
     await waitFor(() => expect(stats).toBeEnabled());
     await user.click(stats);
     await screen.findByRole("dialog", { name: "Stats" });
 
-    // Seeded at the step: the test client drops unobserved data at once.
-    act(() => {
-      queryClient.setQueryData(keys.songs({}), {
-        data: [next],
-        meta: { total: 1, limit: 20, offset: 0 },
-      });
-      router.push?.("/songs/song-2");
-    });
+    stepTo(router, queryClient, next);
 
     // On the next song already, its card standing in, so only the reset can
     // have closed the sheet.
@@ -748,10 +777,11 @@ describe("SongDetailPage recordings", () => {
     renderDetail();
 
     expect(await screen.findByText("Performed by")).toBeInTheDocument();
-    const performers = shownNarrow(screen.getAllByRole("link", { name: "Γιώργος Νταλάρας" }));
-    expect(performers).toHaveLength(1);
-    expect(performers[0]).toHaveAttribute("href", "/?person=person-2");
-    expect(shownNarrow(screen.getAllByText("1971"))).toHaveLength(1);
+    expect(getNarrow(screen.getAllByRole("link", { name: "Γιώργος Νταλάρας" }))).toHaveAttribute(
+      "href",
+      "/?person=person-2",
+    );
+    expect(getNarrow(screen.getAllByText("1971"))).toBeInTheDocument();
   });
 
   // The commonest recording: a year and nobody named, so no "Performed by" row.
@@ -762,7 +792,7 @@ describe("SongDetailPage recordings", () => {
 
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
     expect(screen.queryByText("Performed by")).not.toBeInTheDocument();
-    expect(shownNarrow(screen.getAllByText("1964"))).toHaveLength(1);
+    expect(getNarrow(screen.getAllByText("1964"))).toBeInTheDocument();
   });
 
   // Both halves of the video gate, per recording; see the pair above.
@@ -771,9 +801,9 @@ describe("SongDetailPage recordings", () => {
 
     renderDetail();
 
-    const links = shownNarrow(await screen.findAllByRole("link", { name: /watch on youtube/i }));
-    expect(links).toHaveLength(1);
-    expect(links[0]).toHaveAttribute("href", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    expect(
+      getNarrow(await screen.findAllByRole("link", { name: /watch on youtube/i })),
+    ).toHaveAttribute("href", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
   });
 
   it("offers no watch link for a recording whose link never parsed", async () => {
@@ -797,12 +827,12 @@ describe("SongDetailPage recordings", () => {
 
     renderDetail();
 
-    await screen.findAllByText("Columbia");
-    expect(shownNarrow(screen.getAllByText("Columbia"))).toHaveLength(1);
-    expect(shownNarrow(screen.getAllByText("First recording"))).toHaveLength(1);
-    expect(shownNarrow(screen.getAllByText("Recorded in Athens."))).toHaveLength(1);
-    expect(shownNarrow(screen.getAllByText("1964"))).toHaveLength(1);
-    expect(shownNarrow(screen.getAllByText("Γιώργος Νταλάρας"))).toHaveLength(1);
+    const inline = getNarrow(await screen.findAllByText("Columbia")).closest("[data-tier]");
+    expect(inline).toHaveAttribute("data-tier", "narrow");
+    expect(inline).toHaveTextContent("First recording");
+    expect(inline).toHaveTextContent("Recorded in Athens.");
+    expect(getNarrow(screen.getAllByText("1964"))).toBeInTheDocument();
+    expect(getNarrow(screen.getAllByText("Γιώργος Νταλάρας"))).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /show all/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: /recordings/i })).not.toBeInTheDocument();
   });
@@ -829,8 +859,8 @@ describe("SongDetailPage recordings", () => {
     expect(
       await screen.findByRole("button", { name: "Show all 2 recordings" }),
     ).toBeInTheDocument();
-    expect(shownNarrow(screen.queryAllByText("Columbia"))).toHaveLength(0);
-    expect(shownNarrow(screen.queryAllByText(/first recording/i))).toHaveLength(0);
+    expect(queryNarrow(screen.queryAllByText("Columbia"))).toBeNull();
+    expect(queryNarrow(screen.queryAllByText(/first recording/i))).toBeNull();
   });
 
   it("offers nothing to open when the song has no recordings", async () => {
@@ -841,70 +871,11 @@ describe("SongDetailPage recordings", () => {
     expect(screen.queryByRole("button", { name: /show all/i })).not.toBeInTheDocument();
   });
 
-  // A row with only a year and `is_first`: the year is its text, so the right
-  // column must not repeat it.
-  it("names a year-only recording once", async () => {
-    const user = userEvent.setup();
-    withRecordings([
-      makeRecording({ performers: [], label: null, release_year: 1964 }),
-      makeRecording({ id: "r2", is_first: false, release_year: 1988 }),
-    ]);
-
-    renderDetail();
-
-    await user.click(await screen.findByRole("button", { name: /show all/i }));
-
-    const sheet = await screen.findByRole("dialog", { name: /recordings/i });
-    expect(within(sheet).getAllByText("1964")).toHaveLength(1);
-  });
-
-  // A row with its own text still shows the year beside it.
-  it("still shows the year beside a named recording", async () => {
-    const user = userEvent.setup();
-    withRecordings([
-      makeRecording({ release_year: 1971 }),
-      makeRecording({ id: "r2", is_first: false, release_year: 1988, performers: [] }),
-    ]);
-
-    renderDetail();
-
-    await user.click(await screen.findByRole("button", { name: /show all/i }));
-
-    const sheet = await screen.findByRole("dialog", { name: /recordings/i });
-    expect(within(sheet).getByText("Γιώργος Νταλάρας")).toBeInTheDocument();
-    expect(within(sheet).getByText("1971")).toBeInTheDocument();
-  });
-
+  // What each row says is `RecordingList`'s; see RecordingsSheet.test.tsx.
   it("lists every recording in the sheet", async () => {
     const user = userEvent.setup();
     withRecordings([
-      makeRecording({ id: "r1", release_year: 1964 }),
-      makeRecording({
-        id: "r2",
-        is_first: false,
-        release_year: 1988,
-        label: "Live στο Λυκαβηττό",
-        performers: [{ person_id: "person-3", name: "Χάρις Αλεξίου", position: 0 }],
-      }),
-    ]);
-
-    renderDetail();
-
-    await user.click(await screen.findByRole("button", { name: "Show all 2 recordings" }));
-
-    const sheet = await screen.findByRole("dialog", { name: /recordings/i });
-    expect(within(sheet).getByText("Γιώργος Νταλάρας")).toBeInTheDocument();
-    expect(within(sheet).getByText("Χάρις Αλεξίου")).toBeInTheDocument();
-    expect(within(sheet).getByText("Live στο Λυκαβηττό")).toBeInTheDocument();
-    // The count matters: keyed on index, the badge would also be on the 1964 row.
-    expect(within(sheet).getAllByText("First recording")).toHaveLength(1);
-  });
-
-  // No `is_first`, no badge: index 0 makes no claim.
-  it("badges no recording when none is marked", async () => {
-    const user = userEvent.setup();
-    withRecordings([
-      makeRecording({ is_first: false }),
+      makeRecording({ id: "r1" }),
       makeRecording({ id: "r2", is_first: false, release_year: 1988 }),
     ]);
 
@@ -913,7 +884,7 @@ describe("SongDetailPage recordings", () => {
     await user.click(await screen.findByRole("button", { name: "Show all 2 recordings" }));
 
     const sheet = await screen.findByRole("dialog", { name: /recordings/i });
-    expect(within(sheet).queryByText("First recording")).not.toBeInTheDocument();
+    expect(within(sheet).getAllByRole("listitem")).toHaveLength(2);
   });
 
   // The sheet renders inside the swiped article, so paging must stand down for
@@ -1778,8 +1749,8 @@ describe("SongDetailPage tools bar on a phone", () => {
 /*
  * The details column a wide pane puts beside the lyrics. jsdom has no
  * container queries, so the column's own block is in the DOM at every width:
- * these read it directly, and read the narrow-only controls' classes for what
- * a wide pane hides.
+ * these read it directly, and read the narrow-only controls' `data-tier` for
+ * what a wide pane hides.
  */
 describe("SongDetailPage details column", () => {
   it("holds the recordings, the player and the tallies, in place of their buttons", async () => {
@@ -1792,13 +1763,13 @@ describe("SongDetailPage details column", () => {
               makeRecording({ id: "r1", label: "Columbia", youtube_video_id: "dQw4w9WgXcQ" }),
               makeRecording({ id: "r2", is_first: false, release_year: 1988 }),
             ],
-            popularity: {
+            popularity: makePopularity({
               anonymous_clicks: 40,
               authenticated_clicks: 2,
               list_adds: 3,
               list_users: 2,
               score: 50,
-            },
+            }),
           }),
         ),
       ),
@@ -1808,24 +1779,24 @@ describe("SongDetailPage details column", () => {
     renderDetail();
 
     await screen.findByText("η αγάπη μου κοιμάται");
-    const column = columnOnly();
+    const column = columnBlock();
     expect(column).toHaveClass("hidden", "@3xl/song:block");
     expect(within(column).getByRole("button", { name: "Play video" })).toBeInTheDocument();
     const recordings = within(column).getByRole("region", { name: "Recordings" });
     expect(within(recordings).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(recordings).getByText("Columbia")).toBeInTheDocument();
     const stats = within(column).getByRole("region", { name: "Stats" });
     expect(within(stats).getByText("Views").closest("div")).toHaveTextContent("42");
-    expect(within(stats).getByText("In lists of").closest("div")).toHaveTextContent("2 people");
 
     // What the column makes redundant is put away where it shows.
-    expect(screen.getByRole("button", { name: "Stats" })).toHaveClass("@3xl/song:hidden");
-    expect(screen.getByRole("button", { name: "Show all 2 recordings" })).toHaveClass(
-      "@3xl/song:hidden",
+    expect(screen.getByRole("button", { name: "Stats" })).toHaveAttribute("data-tier", "narrow");
+    expect(screen.getByRole("button", { name: "Show all 2 recordings" })).toHaveAttribute(
+      "data-tier",
+      "narrow",
     );
-    const watch = shownNarrow(screen.getAllByRole("link", { name: /watch on youtube/i }));
-    expect(watch).toHaveLength(1);
-    expect(watch[0]).toHaveClass("@3xl/song:hidden");
+    expect(getNarrow(screen.getAllByRole("link", { name: /watch on youtube/i }))).toHaveAttribute(
+      "data-tier",
+      "narrow",
+    );
   });
 
   // After the lyrics would put the credits after the song on a phone, where
@@ -1852,7 +1823,7 @@ describe("SongDetailPage details column", () => {
     renderDetail();
 
     await screen.findByText("η αγάπη μου κοιμάται");
-    expect(within(columnOnly()).queryByRole("button", { name: "Play video" })).toBeNull();
+    expect(within(columnBlock()).queryByRole("button", { name: "Play video" })).toBeNull();
   });
 
   // The card's tallies are as old as the list it came from; the column waits
@@ -1860,13 +1831,7 @@ describe("SongDetailPage details column", () => {
   it("shows no tallies from the cached card while the full read is on its way", async () => {
     const [held, release] = deferred();
     const { lyrics: _lyrics, ...card } = makeSong({
-      popularity: {
-        anonymous_clicks: 6,
-        authenticated_clicks: 0,
-        list_adds: 2,
-        list_users: 2,
-        score: 10,
-      },
+      popularity: makePopularity({ anonymous_clicks: 6, list_adds: 2, list_users: 2, score: 10 }),
     });
     const queryClient = testQueryClient();
     queryClient.setQueryData(keys.songs({}), {
@@ -1878,13 +1843,12 @@ describe("SongDetailPage details column", () => {
         await held;
         return HttpResponse.json(
           makeSong({
-            popularity: {
+            popularity: makePopularity({
               anonymous_clicks: 9,
-              authenticated_clicks: 0,
               list_adds: 2,
               list_users: 2,
               score: 13,
-            },
+            }),
           }),
         );
       }),
@@ -1895,7 +1859,7 @@ describe("SongDetailPage details column", () => {
 
     // The card's credits are up already; its tallies are not.
     expect(screen.getByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
-    const stats = within(columnOnly()).getByRole("region", { name: "Stats" });
+    const stats = within(columnBlock()).getByRole("region", { name: "Stats" });
     expect(within(stats).queryByText("Views")).toBeNull();
     expect(stats).not.toHaveTextContent("6");
 
@@ -1924,49 +1888,19 @@ describe("SongDetailPage details column", () => {
           : HttpResponse.json(makeSong({ youtube_video_id: "dQw4w9WgXcQ" })),
       ),
     );
-    const router: { push?: (href: string) => void } = {};
-    function Router() {
-      const { push } = useRouter();
-      useEffect(() => {
-        router.push = push;
-      }, [push]);
-      return null;
-    }
-    renderWithProviders(
-      <TestRoutes
-        routes={{
-          "/songs/:id": (
-            <>
-              <SongDetailPage />
-              <Router />
-            </>
-          ),
-        }}
-      />,
-      { route: "/songs/song-1", queryClient },
-    );
+    const router = renderWithRouter(queryClient);
 
     await user.click(await screen.findByRole("button", { name: "Play video" }));
     expect(screen.getByTitle("Θάλασσα Πλατιά on YouTube")).toHaveAttribute(
       "src",
-      "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1",
+      embedUrl("dQw4w9WgXcQ"),
     );
 
-    // Seeded at the step: the test client drops unobserved data at once.
-    act(() => {
-      queryClient.setQueryData(keys.songs({}), {
-        data: [next],
-        meta: { total: 1, limit: 20, offset: 0 },
-      });
-      router.push?.("/songs/song-2");
-    });
+    stepTo(router, queryClient, next);
 
     await screen.findByRole("heading", { name: "Άλλο" });
     expect(document.querySelector("iframe")).toBeNull();
     const play = screen.getByRole("button", { name: "Play video" });
-    expect(play.querySelector("img")).toHaveAttribute(
-      "src",
-      "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
-    );
+    expect(play.querySelector("img")).toHaveAttribute("src", thumbnailUrl("abcdefghijk"));
   });
 });

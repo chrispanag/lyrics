@@ -46,6 +46,21 @@ describe("RecordingList", () => {
     expect(within(second).queryByRole("link", { name: /watch on youtube/i })).toBeNull();
   });
 
+  // No `is_first`, no badge: index 0 makes no claim.
+  it("badges no recording when none is marked", () => {
+    renderWithProviders(
+      <RecordingList
+        recordings={[
+          makeRecording({ is_first: false }),
+          makeRecording({ id: "r2", is_first: false }),
+        ]}
+        language="el"
+      />,
+    );
+
+    expect(screen.queryByText("First recording")).toBeNull();
+  });
+
   it("marks the contributor's words with the song's language", () => {
     renderWithProviders(<RecordingList recordings={recordings} language="el" />);
 

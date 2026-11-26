@@ -1,7 +1,16 @@
 import { HttpResponse, http } from "msw";
 
 import { songMatchesRef } from "@/lib/listContext";
-import type { Genre, ListResponse, Person, Recording, Song, SongList, User } from "@/lib/types";
+import type {
+  Genre,
+  ListResponse,
+  Person,
+  Recording,
+  Song,
+  SongList,
+  SongPopularity,
+  User,
+} from "@/lib/types";
 
 /** Base URL the client talks to under test. Exported so specs cannot drift from it. */
 export const API = "http://localhost:8080";
@@ -30,13 +39,19 @@ export function makeSong(overrides: Partial<Song> = {}): Song {
     updated_by: null,
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
-    popularity: {
-      anonymous_clicks: 0,
-      authenticated_clicks: 0,
-      list_adds: 0,
-      list_users: 0,
-      score: 0,
-    },
+    popularity: makePopularity(),
+    ...overrides,
+  };
+}
+
+/** A song's tallies, none counted unless an override says so. */
+export function makePopularity(overrides: Partial<SongPopularity> = {}): SongPopularity {
+  return {
+    anonymous_clicks: 0,
+    authenticated_clicks: 0,
+    list_adds: 0,
+    list_users: 0,
+    score: 0,
     ...overrides,
   };
 }

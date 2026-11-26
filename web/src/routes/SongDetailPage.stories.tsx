@@ -6,9 +6,19 @@ import { SongDetailPage } from "./SongDetailPage";
 import { SongsPane } from "./SongsPane";
 import { Layout } from "@/components/Layout";
 import { ReaderSplit } from "@/components/ReaderSplit";
+import { applyNavCollapsed, storeNavCollapsed } from "@/lib/navCollapsed";
 import { catalogList, catalogSongs, entechno } from "@/test/catalog";
-import { API, list, listById, makeRecording, makeSong, makeUser, songByRef } from "@/test/handlers";
-import { phoneGlobals, phoneParameters } from "@/test/phone";
+import {
+  API,
+  list,
+  listById,
+  makePopularity,
+  makeRecording,
+  makeSong,
+  makeUser,
+  songByRef,
+} from "@/test/handlers";
+import { deskViewport, phoneGlobals, phoneParameters } from "@/test/viewport";
 
 const documented = makeSong({
   id: "song-9",
@@ -446,24 +456,6 @@ export const PhoneInAList: Story = {
  * navigation column and the list take their share first.
  */
 
-/** A desk-sized viewport for a story, chosen through the same addon as a phone's. */
-function deskViewport(width: number, height: number) {
-  return {
-    parameters: {
-      viewport: {
-        options: {
-          desk: {
-            name: "Desk",
-            styles: { width: `${width}px`, height: `${height}px` },
-            type: "desktop",
-          },
-        },
-      },
-    },
-    globals: { viewport: { value: "desk", isRotated: false } },
-  } as const;
-}
-
 /** The shell, and the catalog and the song side by side in it. */
 const besideTheList: Decorator = (Story) => (
   <Layout>
@@ -480,24 +472,46 @@ const wideSong = makeSong({
   slug: "megalo-tragoydi",
   title: "Μεγάλο τραγούδι",
   lyrics: longSong.lyrics ?? "",
-  popularity: {
+  popularity: makePopularity({
     anonymous_clicks: 120,
     authenticated_clicks: 4,
     list_adds: 7,
     list_users: 5,
-    score: 150,
-  },
+  }),
 });
 
-/** The navigation column open or put away, for one story, and put back after. */
-function navigation(collapsed: boolean) {
-  return () => {
-    if (collapsed) localStorage.setItem("lyrics:nav-collapsed", "1");
-    else localStorage.removeItem("lyrics:nav-collapsed");
-    return () => {
-      localStorage.removeItem("lyrics:nav-collapsed");
-      document.documentElement.removeAttribute("data-nav-collapsed");
-    };
+/**
+ * `wideSong` beside the list, in a desk window of the given size with the
+ * navigation open or put away, which is put back open after.
+ */
+function atADesk(width: number, height: number, navCollapsed: boolean): Story {
+  const desk = deskViewport(width, height);
+  return {
+    parameters: { ...desk.parameters, route: "/songs/megalo-tragoydi" },
+    globals: desk.globals,
+    decorators: [besideTheList],
+    beforeEach({ msw }) {
+      msw.use(
+        songByRef(wideSong),
+        http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list(catalogSongs))),
+      );
+      storeNavCollapsed(navCollapsed);
+      applyNavCollapsed(navCollapsed);
+      return () => {
+        storeNavCollapsed(false);
+        applyNavCollapsed(false);
+      };
+    },
+  };
+}
+
+/** Waits for the whole song, then finds the parts the desk stories measure. */
+async function songParts(canvas: ReturnType<typeof within>) {
+  await canvas.findByText(LAST_LINE);
+  return {
+    details: canvas.getByRole("complementary", { name: "Song details" }),
+    lyrics: canvas.getByRole("region", { name: "Lyrics" }),
+    title: canvas.getByRole("heading", { level: 1, name: "Μεγάλο τραγούδι" }),
   };
 }
 
@@ -516,21 +530,9 @@ function scrollerOf(element: HTMLElement): HTMLElement {
  * buttons for their sheets are put away.
  */
 export const WideDetailsColumn: Story = {
-  ...deskViewport(1440, 900),
-  parameters: { ...deskViewport(1440, 900).parameters, route: "/songs/megalo-tragoydi" },
-  decorators: [besideTheList],
-  beforeEach({ msw }) {
-    msw.use(
-      songByRef(wideSong),
-      http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list(catalogSongs))),
-    );
-    return navigation(false)();
-  },
+  ...atADesk(1440, 900, false),
   play: async ({ canvas }) => {
-    await canvas.findByText(LAST_LINE);
-    const details = canvas.getByRole("complementary", { name: "Song details" });
-    const lyrics = canvas.getByRole("region", { name: "Lyrics" });
-    const title = canvas.getByRole("heading", { level: 1, name: "Μεγάλο τραγούδι" });
+    const { details, lyrics, title } = await songParts(canvas);
 
     // Beside, not above.
     await expect(details.getBoundingClientRect().left).toBeGreaterThan(
@@ -580,21 +582,9 @@ export const WideDetailsColumn: Story = {
  * the lyrics as on a phone.
  */
 export const CenteredColumn: Story = {
-  ...deskViewport(1100, 900),
-  parameters: { ...deskViewport(1100, 900).parameters, route: "/songs/megalo-tragoydi" },
-  decorators: [besideTheList],
-  beforeEach({ msw }) {
-    msw.use(
-      songByRef(wideSong),
-      http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list(catalogSongs))),
-    );
-    return navigation(true)();
-  },
+  ...atADesk(1100, 900, true),
   play: async ({ canvas }) => {
-    await canvas.findByText(LAST_LINE);
-    const details = canvas.getByRole("complementary", { name: "Song details" });
-    const lyrics = canvas.getByRole("region", { name: "Lyrics" });
-    const title = canvas.getByRole("heading", { level: 1, name: "Μεγάλο τραγούδι" });
+    const { details, lyrics, title } = await songParts(canvas);
     const article = canvas.getByRole("article");
     // The navigation slides shut once the shell has read the stored choice;
     // the pane has its width once the list is the wider one beside it.

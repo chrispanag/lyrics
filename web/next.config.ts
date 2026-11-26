@@ -4,9 +4,7 @@ import type { NextConfig } from "next";
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  // Nothing needs to frame the app, so allowing it would only enable
-  // clickjacking. (This is about others framing us; a song's YouTube player is
-  // a frame the app embeds, which this header does not govern.)
+  // Nothing needs to frame the app, so allowing it would only enable clickjacking.
   { key: "X-Frame-Options", value: "DENY" },
 ];
 

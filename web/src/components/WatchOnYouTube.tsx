@@ -9,9 +9,18 @@ import { watchUrl } from "@/lib/youtube";
  * Takes the id, never `youtube_url`: the importer stores URLs unvalidated, while
  * an id is always eleven safe characters, so the destination cannot be elsewhere.
  */
-export function WatchOnYouTube({ videoId, className }: { videoId: string; className?: string }) {
+export function WatchOnYouTube({
+  videoId,
+  className,
+  ...data
+}: {
+  videoId: string;
+  className?: string;
+  "data-tier"?: string;
+}) {
   return (
     <a
+      {...data}
       href={watchUrl(videoId)}
       target="_blank"
       // noreferrer: the new tab need not learn which song page sent it.
