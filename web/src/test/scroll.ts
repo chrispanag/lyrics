@@ -1,4 +1,5 @@
 import { fireEvent } from "@testing-library/react";
+import { vi } from "vitest";
 
 /*
  * Scrolling for `StickyHeader`'s specs. jsdom's `scrollY` has no setter, so it
@@ -28,4 +29,16 @@ export function scrollDown(): void {
 /** Back to the top, which is what brings a hidden header back. */
 export function scrollUp(): void {
   scrollToY(0);
+}
+
+/** The scroll coming to rest, as a browser with `scrollend` says it. */
+export function scrollEnd(): void {
+  fireEvent(window, new Event("scrollend"));
+}
+
+/** Gives the page `scrollable` pixels to scroll past the viewport. */
+export function setPageLength(scrollable: number): void {
+  vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(
+    window.innerHeight + scrollable,
+  );
 }

@@ -21,7 +21,14 @@ import { API, list, listById, makeList, makeSong, makeUser } from "@/test/handle
 import { recordRequests } from "@/test/requests";
 import { renderWithProviders } from "@/test/render";
 import { CurrentAddress } from "@/test/routes";
-import { scrollDown, scrollToY, scrollUp, setScrollY } from "@/test/scroll";
+import {
+  scrollDown,
+  scrollEnd,
+  scrollToY,
+  scrollUp,
+  setPageLength,
+  setScrollY,
+} from "@/test/scroll";
 import { server } from "@/test/server";
 
 // The chrome's scroll state reads the offset when its first bar mounts.
@@ -222,8 +229,6 @@ describe("Bottom bar", () => {
   const shell = () => bar().parentElement as HTMLElement;
   const progress = () => Number(shell().style.getPropertyValue(CHROME_PROGRESS_PROPERTY));
   const scrubbing = () => shell().hasAttribute(CHROME_SCRUBBING_ATTRIBUTE);
-  /** The scroll coming to rest, as a browser with `scrollend` says it. */
-  const rest = () => fireEvent(window, new Event("scrollend"));
 
   // Momentum scrolling jitters by a few pixels either way, and the first
   // stretch of a page has nothing to give room to.
@@ -245,7 +250,7 @@ describe("Bottom bar", () => {
     // Back up, but by less than the jitter.
     scrollToY(295);
     expect(tucked()).toBe(true);
-    rest();
+    scrollEnd();
     expect(tucked()).toBe(true);
     expect(progress()).toBe(1);
   });
@@ -300,20 +305,20 @@ describe("Bottom bar", () => {
     // Less than halfway down: back out.
     scrollToY(80);
     scrollToY(95);
-    rest();
+    scrollEnd();
     expect(progress()).toBe(0);
     expect(tucked()).toBe(false);
     expect(scrubbing()).toBe(false);
 
     // Halfway down: the rest of the way.
     scrollToY(115);
-    rest();
+    scrollEnd();
     expect(progress()).toBe(1);
     expect(tucked()).toBe(true);
 
     // A touch up: out.
     scrollToY(105);
-    rest();
+    scrollEnd();
     expect(progress()).toBe(0);
     expect(tucked()).toBe(false);
   });
@@ -330,7 +335,7 @@ describe("Bottom bar", () => {
       scrollToY(80);
       scrollToY(110);
       act(() => vi.advanceTimersByTime(1000));
-      rest();
+      scrollEnd();
       expect(progress()).toBe(0.75);
       expect(scrubbing()).toBe(true);
 
@@ -350,9 +355,7 @@ describe("Bottom bar", () => {
   // up. A touch up brings it out there as anywhere.
   it("stays as it is at the end of the page, through the bounce", () => {
     renderWithProviders(<Layout />);
-    vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(
-      window.innerHeight + 1000,
-    );
+    setPageLength(1000);
 
     scrollToY(500);
     expect(tucked()).toBe(true);
@@ -374,16 +377,14 @@ describe("Bottom bar", () => {
   // stretch down either.
   it("stays out at the end of the page, through the bounce", () => {
     renderWithProviders(<Layout />);
-    vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(
-      window.innerHeight + 1000,
-    );
+    setPageLength(1000);
     scrollToY(1000);
     expect(tucked()).toBe(true);
 
     act(() => revealChrome());
     scrollToY(1060);
     scrollToY(1000);
-    rest();
+    scrollEnd();
 
     expect(tucked()).toBe(false);
     expect(progress()).toBe(0);

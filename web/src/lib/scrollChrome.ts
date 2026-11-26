@@ -22,7 +22,9 @@ import { type RefObject, useEffect } from "react";
  *   for pixel over `RANGE_PX`, as Safari's toolbar does, with
  *   `data-chrome-scrubbing` on the bar so index.css does not ease it. Once the
  *   scroll comes to rest it settles at one end or the other, which index.css
- *   eases.
+ *   eases. Under reduced motion index.css draws only the attribute.
+ *   Written on the bar rather than <html>: a custom property changed on the
+ *   root restyles the whole page, on every frame of a scroll.
  *
  * Below `md` only, but the store does not know that: each bar applies it under
  * `max-md:`, or is not on screen from `md` up at all, so nothing here has to
@@ -86,17 +88,8 @@ function setTucked(next: boolean): void {
   document.documentElement.toggleAttribute(CHROME_TUCKED_ATTRIBUTE, next);
 }
 
-/**
- * Under reduced motion nothing follows the scroll: the chrome is out or
- * tucked, at once, as the attribute says.
- */
-function reducedMotion(): boolean {
-  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-}
-
 function draw(bar: HTMLElement): void {
-  const shown = reducedMotion() ? Number(tucked) : progress;
-  bar.style.setProperty(CHROME_PROGRESS_PROPERTY, String(shown));
+  bar.style.setProperty(CHROME_PROGRESS_PROPERTY, String(progress));
   bar.toggleAttribute(CHROME_SCRUBBING_ATTRIBUTE, scrubbing);
 }
 
@@ -129,12 +122,16 @@ function onScroll(): void {
   goingDown = dy > 0;
 
   const ceiling = Math.min(1, Math.max(0, (y - TOP_PX) / RANGE_PX));
-  progress = Math.min(ceiling, Math.max(0, progress + dy / RANGE_PX));
-  if (progress >= 1) setTucked(true);
-  else if (progress === 0 || (!goingDown && progress <= 1 - TURN)) setTucked(false);
+  const next = Math.min(ceiling, Math.max(0, progress + dy / RANGE_PX));
+  if (next >= 1) setTucked(true);
+  else if (!goingDown && next <= 1 - TURN) setTucked(false);
 
-  scrubbing = true;
-  drawAll();
+  // Scrolling on past either end changes nothing drawn.
+  if (next !== progress || !scrubbing) {
+    progress = next;
+    scrubbing = true;
+    drawAll();
+  }
   scheduleSettle();
 }
 
@@ -180,8 +177,12 @@ const listeners: [string, () => void][] = [
   ["touchcancel", onTouchEnd],
 ];
 
-/** Out, with nothing in flight, counting from where the page is. */
-function reset(): void {
+/**
+ * Brings the chrome back without a scroll: a tap on the pill, focus moving
+ * into a bar, or a new screen. Out, with nothing in flight, and the next
+ * scroll down tucks it again, measured from here.
+ */
+export function revealChrome(): void {
   clearTimeout(settleTimer);
   lastY = window.scrollY;
   progress = 0;
@@ -198,7 +199,7 @@ function reset(): void {
 function register(): () => void {
   if (bars === 0) {
     touching = false;
-    reset();
+    revealChrome();
     for (const [type, listener] of listeners) {
       window.addEventListener(type, listener, { passive: true });
     }
@@ -208,7 +209,7 @@ function register(): () => void {
     bars -= 1;
     if (bars > 0) return;
     for (const [type, listener] of listeners) window.removeEventListener(type, listener);
-    reset();
+    revealChrome();
   };
 }
 
@@ -233,15 +234,6 @@ export function useChromeScroll(follower?: RefObject<HTMLElement | null>): void 
       unregister();
     };
   }, [follower]);
-}
-
-/**
- * Brings the chrome back without a scroll: a tap on the pill, focus moving
- * into a bar, or a new screen. The next scroll down tucks it again, measured
- * from here.
- */
-export function revealChrome(): void {
-  reset();
 }
 
 /**

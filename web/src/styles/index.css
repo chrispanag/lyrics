@@ -473,14 +473,6 @@
   initial-value: 0;
 }
 @layer components {
-  /* From what `lib/scrollChrome` writes on the bar's own style, so a rule
-     here can still hold it out. */
-  .bottom-bar {
-    --chrome-progress: var(--chrome-scroll-progress, 0);
-  }
-  .bottom-bar:has(:focus-visible, [aria-haspopup="menu"][aria-expanded="true"]) {
-    --chrome-progress: 0;
-  }
   .bottom-bar-tabs {
     --bar-sx: calc(1 + (var(--pill-sx, 0.4) - 1) * var(--chrome-progress));
     --bar-sy: calc(1 + (var(--pill-sy, 0.4) - 1) * var(--chrome-progress));
@@ -497,7 +489,14 @@
     opacity: clamp(0, (var(--chrome-progress) - 0.7) / 0.25, 1);
     pointer-events: none;
   }
+  /* From what `lib/scrollChrome` writes on the bar's own style, so a rule
+     here can still hold it out. Under reduced motion it does not follow the
+     scroll: out or tucked, at once, as the attribute says. */
   .bottom-bar {
+    --chrome-progress: var(--chrome-scroll-progress, 0);
+    @media (prefers-reduced-motion: reduce) {
+      --chrome-progress: 0;
+    }
     @variant chrome-tucked {
       .bottom-bar-tabs,
       .bottom-bar-row {
@@ -506,7 +505,13 @@
       .bottom-bar-pill {
         pointer-events: auto;
       }
+      @media (prefers-reduced-motion: reduce) {
+        --chrome-progress: 1;
+      }
     }
+  }
+  .bottom-bar:has(:focus-visible, [aria-haspopup="menu"][aria-expanded="true"]) {
+    --chrome-progress: 0;
   }
   /* Only where a touch screen means an on-screen keyboard: in a narrow window
      with a real keyboard nothing covers the field, and a hidden bar would drop
@@ -517,12 +522,6 @@
     }
   }
   @media (prefers-reduced-motion: no-preference) {
-    .bottom-bar {
-      transition: --chrome-progress var(--duration-chrome) var(--ease-chrome);
-    }
-    .bottom-bar[data-chrome-scrubbing] {
-      transition: none;
-    }
     /* Coming back, the tabs take no presses until they start to show, so a
        second tap on the pill does not land on a tab the reader cannot see
        yet; they stay in the tab order and the accessibility tree throughout.
@@ -532,6 +531,10 @@
       transition-behavior: allow-discrete;
     }
     .bottom-bar {
+      transition: --chrome-progress var(--duration-chrome) var(--ease-chrome);
+      &[data-chrome-scrubbing] {
+        transition: none;
+      }
       @variant chrome-tucked {
         .bottom-bar-row {
           transition: pointer-events 0s;
