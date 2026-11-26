@@ -15,7 +15,7 @@ import { cn } from "@/lib/cn";
 import { positionLabel } from "@/lib/listContext";
 import { NavLink, useNavigationKey, usePathname, useSearchParams } from "@/lib/navigation";
 import type { User } from "@/lib/types";
-import { revealChrome, useChromeScroll } from "@/lib/scrollChrome";
+import { revealChrome, scrollToTop, useChromeScroll } from "@/lib/scrollChrome";
 
 /**
  * A phone's navigation and search, floating above the bottom edge: below `md`
@@ -242,6 +242,11 @@ function BarTab({ item, user, active }: { item: NavItem; user: User | null; acti
     <NavLink
       href={item.to}
       active={active}
+      // A tab leading to the screen already showing goes back to its top
+      // instead, as a phone's own apps do. Only that exact screen: Lists lit on
+      // a list, or Browse lit on a song or with filters set, still leads back
+      // to its own.
+      onShowing={scrollToTop}
       {...(item.warmsLists ? intent : undefined)}
       className={({ isActive }) =>
         cn(

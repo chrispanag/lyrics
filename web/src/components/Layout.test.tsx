@@ -311,6 +311,60 @@ describe("Bottom bar", () => {
     await waitFor(() => expect(tucked()).toBe(false));
   });
 
+  describe("a tap on the tab already lit", () => {
+    const renderAt = (route: string) =>
+      renderWithProviders(
+        <Layout>
+          <CurrentAddress />
+        </Layout>,
+        { route, user: makeUser() },
+      );
+
+    // As a phone's own apps do, and with the bars out at once. Smooth, or a
+    // jump under reduced motion, is the root's `scroll-behavior` (index.css).
+    it("goes back to the top of its screen rather than reloading it", async () => {
+      const user = userEvent.setup();
+      renderAt("/lists");
+      scrollDown();
+      // The shell's own scroll to the top of a new screen, on mount.
+      vi.mocked(window.scrollTo).mockClear();
+
+      await user.click(within(bar()).getByRole("link", { name: "Lists" }));
+
+      expect(window.scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 0 });
+      expect(tucked()).toBe(false);
+      expect(screen.getByTestId("location")).toHaveTextContent(/^Now at \/lists$/);
+    });
+
+    // Lit on a list, Lists still leads back to the reader's lists.
+    it("still leads to its screen from one below it", async () => {
+      const user = userEvent.setup();
+      server.use(listById(makeList()));
+      renderAt("/lists/list-1");
+      vi.mocked(window.scrollTo).mockClear();
+
+      await user.click(within(bar()).getByRole("link", { name: "Lists" }));
+
+      await waitFor(() =>
+        expect(screen.getByTestId("location")).toHaveTextContent(/^Now at \/lists$/),
+      );
+      expect(window.scrollTo).not.toHaveBeenCalledWith({ top: 0 });
+    });
+
+    // Lit with filters set, Browse still clears them: the plain catalog is
+    // another address.
+    it("still leads to its screen from the same one filtered", async () => {
+      const user = userEvent.setup();
+      renderAt("/?q=thalassa");
+      vi.mocked(window.scrollTo).mockClear();
+
+      await user.click(within(bar()).getByRole("link", { name: "Browse" }));
+
+      await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(/^Now at \/$/));
+      expect(window.scrollTo).not.toHaveBeenCalledWith({ top: 0 });
+    });
+  });
+
   it("comes back when anything in it takes focus", () => {
     renderWithProviders(<Layout />);
     scrollDown();
