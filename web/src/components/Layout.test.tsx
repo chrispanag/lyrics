@@ -246,6 +246,40 @@ describe("Bottom bar", () => {
     expect(progress()).toBe(1);
   });
 
+  // A scroll only reads, and leaves its writes for the frame: a write would
+  // make the next scroll's read of the page's height force a layout.
+  it("draws a scroll in the frame after it, once", () => {
+    renderWithProviders(<Layout />);
+    const frames: FrameRequestCallback[] = [];
+    const request = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => frames.push(callback));
+    try {
+      for (const y of [5, 10, 20]) {
+        setScrollY(y);
+        fireEvent.scroll(window);
+      }
+      expect(progress()).toBe(0);
+      expect(tucked()).toBe(false);
+      expect(frames).toHaveLength(1);
+
+      act(() => frames[0]?.(performance.now()));
+      expect(progress()).toBe(0.5);
+      expect(scrubbing()).toBe(true);
+
+      // The attribute on <html> waits for the frame too.
+      for (const y of [30, 40]) {
+        setScrollY(y);
+        fireEvent.scroll(window);
+      }
+      expect(tucked()).toBe(false);
+      act(() => frames[1]?.(performance.now()));
+      expect(tucked()).toBe(true);
+    } finally {
+      request.mockRestore();
+    }
+  });
+
   // As Safari's toolbar: the bar shrinks with the scroll itself, from the
   // first pixel down, and grows with it on the way back.
   it("follows the scroll pixel for pixel, and is not eased while it does", () => {

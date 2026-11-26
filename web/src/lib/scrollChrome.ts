@@ -80,19 +80,35 @@ let settleTimer: ReturnType<typeof setTimeout> | undefined;
 /** The bars on the page that move with the chrome; the listeners live while there are any. */
 const followers = new Set<HTMLElement>();
 
-function setTucked(next: boolean): void {
-  if (next === tucked) return;
-  tucked = next;
-  document.documentElement.toggleAttribute(CHROME_TUCKED_ATTRIBUTE, next);
-}
-
 function draw(bar: HTMLElement): void {
   bar.style.setProperty(CHROME_PROGRESS_PROPERTY, String(progress));
   bar.toggleAttribute(CHROME_SCRUBBING_ATTRIBUTE, scrubbing);
 }
 
+/**
+ * The one place the store writes to the page: the attribute on <html> and
+ * every bar's progress, from the state as it is now.
+ */
 function drawAll(): void {
+  document.documentElement.toggleAttribute(CHROME_TUCKED_ATTRIBUTE, tucked);
   for (const bar of followers) draw(bar);
+}
+
+let framePending = false;
+
+/**
+ * A scroll only reads (the offset, the page's height) and leaves its writes
+ * for the frame: a write in one scroll event would make the next one's read
+ * of the page's height force a layout first. One frame however many scroll
+ * events come before it, though a browser sends at most one a frame anyway.
+ */
+function drawNextFrame(): void {
+  if (framePending) return;
+  framePending = true;
+  requestAnimationFrame(() => {
+    framePending = false;
+    drawAll();
+  });
 }
 
 /**
@@ -136,15 +152,16 @@ function onScroll(): void {
     dy > 0
       ? Math.min(1, progress + dy / RANGE_PX)
       : Math.max(0, Math.min((progress * y) / prevY, progress + dy / RANGE_PX));
-  if (next >= 1) setTucked(true);
-  else if (!goingDown && next <= 1 - TURN) setTucked(false);
+  if (next >= 1) tucked = true;
+  // All the way out is never tucked, whichever way the reader last turned.
+  else if (next === 0 || (!goingDown && next <= 1 - TURN)) tucked = false;
 
   // Scrolling on past either end changes nothing drawn, and leaves a settle
   // still easing to run its course.
   if (next !== progress) {
     progress = next;
     scrubbing = true;
-    drawAll();
+    drawNextFrame();
   }
   if (scrubbing) scheduleSettle();
 }
@@ -158,7 +175,7 @@ function settle(): void {
   clearTimeout(settleTimer);
   if (!scrubbing) return;
   const next = goingDown ? progress >= 0.5 : progress > 1 - TURN;
-  setTucked(next);
+  tucked = next;
   progress = Number(next);
   scrubbing = false;
   drawAll();
@@ -205,7 +222,7 @@ export function revealChrome(): void {
   turnY = lastY;
   progress = 0;
   scrubbing = false;
-  setTucked(false);
+  tucked = false;
   drawAll();
 }
 
@@ -217,6 +234,9 @@ export function revealChrome(): void {
 function register(bar: HTMLElement): () => void {
   if (followers.size === 0) {
     touching = false;
+    // A frame asked for and never run (a spec's stubbed one) would hold back
+    // every frame after it. One still to come only draws the state as it is.
+    framePending = false;
     revealChrome();
     for (const [type, listener] of listeners) {
       window.addEventListener(type, listener, { passive: true });

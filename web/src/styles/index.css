@@ -480,9 +480,13 @@
   }
 }
 
-/* A top bar's slide out of the way, as far as the chrome is tucked. */
+/* A top bar's slide out of the way, as far as the chrome is tucked. Its own
+   layer from the start (`will-change`), so the first frame of a scroll moves
+   it rather than first promoting it, and the end does not drop the layer
+   only to build it again on the next scroll. */
 @utility chrome-slides-up {
   translate: 0 calc(-100% * var(--chrome-progress));
+  will-change: translate;
 }
 
 /* A phone's bottom bar — see `BottomBar`. Expanded it is the tabs; tucked it
@@ -510,7 +514,10 @@
    the way altogether: a phone's keyboard pushes it up to sit on top of the
    keys, over what the field finds. */
 @layer components {
+  /* Each part that moves is its own layer from the start, as a top bar is
+     (`chrome-slides-up`). */
   .bottom-bar-tabs {
+    will-change: scale, opacity;
     --chrome-progress: inherit;
     --bar-sx: calc(1 + (var(--pill-sx, 0.4) - 1) * var(--chrome-progress));
     --bar-sy: calc(1 + (var(--pill-sy, 0.4) - 1) * var(--chrome-progress));
@@ -521,10 +528,12 @@
     pointer-events: auto;
   }
   .bottom-bar-row {
+    will-change: opacity;
     --chrome-progress: inherit;
     opacity: clamp(0, 1 - var(--chrome-progress) / 0.3, 1);
   }
   .bottom-bar-pill {
+    will-change: opacity;
     --chrome-progress: inherit;
     opacity: clamp(0, (var(--chrome-progress) - 0.7) / 0.25, 1);
     pointer-events: none;

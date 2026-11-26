@@ -11,10 +11,22 @@ export function setScrollY(y: number): void {
   Object.defineProperty(window, "scrollY", { value: y, configurable: true });
 }
 
-/** Scrolls the window to an offset, as a reader's scroll would. */
+/**
+ * Scrolls the window to an offset, as a reader's scroll would, and runs the
+ * frame after it: the chrome draws a scroll on the next frame
+ * (`lib/scrollChrome`), which jsdom would otherwise leave for a timer.
+ */
 export function scrollToY(y: number): void {
   setScrollY(y);
-  fireEvent.scroll(window);
+  const frame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    callback(performance.now());
+    return 0;
+  });
+  try {
+    fireEvent.scroll(window);
+  } finally {
+    frame.mockRestore();
+  }
 }
 
 /**
