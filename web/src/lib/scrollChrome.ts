@@ -41,9 +41,8 @@ export const CHROME_PROGRESS_PROPERTY = "--chrome-scroll-progress";
 export const CHROME_SCRUBBING_ATTRIBUTE = "data-chrome-scrubbing";
 
 /**
- * How far a scroll takes the chrome from out to tucked, or back. Also how far
- * the reader must go down before the top bars leave: a nudge while reading is
- * not a decision to read on.
+ * How far a scroll takes the chrome from out to tucked, or back. The top bars
+ * leave once it is all the way tucked, and come back after `TURN_PX` up.
  */
 const RANGE_PX = 40;
 
@@ -75,7 +74,10 @@ let tucked = false;
 let progress = 0;
 let scrubbing = false;
 let lastY = 0;
+/** Which way the reader last went, turning only after `TURN_PX` the other way. */
 let goingDown = false;
+/** The furthest the page has gone the way it is going: a turn is measured from here. */
+let turnY = 0;
 /** A finger on the screen holds the chrome where the scroll left it, as Safari does. */
 let touching = false;
 let settleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -119,20 +121,36 @@ function onScroll(): void {
   const dy = y - lastY;
   lastY = y;
   if (dy === 0) return;
-  goingDown = dy > 0;
+  // Jitter the other way is no turn, so the settle does not read it as one.
+  if (goingDown ? y > turnY : y < turnY) turnY = y;
+  else if (Math.abs(y - turnY) >= TURN_PX) {
+    goingDown = !goingDown;
+    turnY = y;
+  }
 
-  const ceiling = Math.min(1, Math.max(0, (y - TOP_PX) / RANGE_PX));
-  const next = Math.min(ceiling, Math.max(0, progress + dy / RANGE_PX));
+  // Near the top it is out by the floor, by a share of the way there on the
+  // way up, so it never jumps. On the way down it tucks no further than the
+  // reader is past the floor, but never back out: settled tucked within that
+  // stretch, it stays tucked rather than jumping halfway open.
+  const prevY = y - dy;
+  const upper =
+    dy > 0
+      ? Math.max(progress, Math.min(1, (y - TOP_PX) / RANGE_PX))
+      : prevY > TOP_PX
+        ? (progress * Math.max(0, y - TOP_PX)) / (prevY - TOP_PX)
+        : 0;
+  const next = Math.min(upper, Math.max(0, progress + dy / RANGE_PX));
   if (next >= 1) setTucked(true);
   else if (!goingDown && next <= 1 - TURN) setTucked(false);
 
-  // Scrolling on past either end changes nothing drawn.
-  if (next !== progress || !scrubbing) {
+  // Scrolling on past either end changes nothing drawn, and leaves a settle
+  // still easing to run its course.
+  if (next !== progress) {
     progress = next;
     scrubbing = true;
     drawAll();
   }
-  scheduleSettle();
+  if (scrubbing) scheduleSettle();
 }
 
 /**
@@ -164,12 +182,13 @@ function onTouchStart(): void {
   clearTimeout(settleTimer);
 }
 
-function onTouchEnd(): void {
-  touching = false;
+/** Only the last finger off the screen lets go: a pinch lifts one at a time. */
+function onTouchEnd(event: Event): void {
+  touching = "touches" in event && (event as TouchEvent).touches.length > 0;
   scheduleSettle();
 }
 
-const listeners: [string, () => void][] = [
+const listeners: [string, (event: Event) => void][] = [
   ["scroll", onScroll],
   ["scrollend", onScrollEnd],
   ["touchstart", onTouchStart],
@@ -185,6 +204,7 @@ const listeners: [string, () => void][] = [
 export function revealChrome(): void {
   clearTimeout(settleTimer);
   lastY = window.scrollY;
+  turnY = lastY;
   progress = 0;
   scrubbing = false;
   setTucked(false);

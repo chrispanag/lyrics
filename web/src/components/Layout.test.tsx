@@ -297,6 +297,23 @@ describe("Bottom bar", () => {
     expect(progress()).toBe(0.75);
   });
 
+  // Settled tucked just past the floor, the way up shares out what is left,
+  // rather than dropping to the floor's limit at once.
+  it("comes out by the top's floor without a jump", () => {
+    renderWithProviders(<Layout />);
+
+    scrollToY(100);
+    scrollEnd();
+    expect(progress()).toBe(1);
+
+    scrollToY(99);
+    expect(progress()).toBe(0.95);
+    scrollToY(90);
+    expect(progress()).toBe(0.5);
+    scrollToY(80);
+    expect(progress()).toBe(0);
+  });
+
   // Once the scroll rests it finishes the way the reader went: tucked from
   // halfway down, out after a touch up.
   it("settles at one end when the scroll comes to rest", () => {
@@ -321,6 +338,33 @@ describe("Bottom bar", () => {
     scrollEnd();
     expect(progress()).toBe(0);
     expect(tucked()).toBe(false);
+  });
+
+  // Settled tucked a little way past the top's floor, a scroll on down holds
+  // it tucked rather than opening it to as far as the floor allows.
+  it("stays tucked on down from where it settled near the top", () => {
+    renderWithProviders(<Layout />);
+
+    scrollToY(80);
+    scrollToY(100);
+    scrollEnd();
+    expect(progress()).toBe(1);
+
+    scrollToY(102);
+    expect(progress()).toBe(1);
+    expect(tucked()).toBe(true);
+  });
+
+  // Jitter up at the end of a scroll down is no turn: it settles as down.
+  it("settles by the way the reader went, not by the jitter", () => {
+    renderWithProviders(<Layout />);
+
+    scrollToY(80);
+    scrollToY(105);
+    scrollToY(104);
+    scrollEnd();
+    expect(progress()).toBe(1);
+    expect(tucked()).toBe(true);
   });
 
   // A finger held on the screen leaves the bar where the scroll put it;
