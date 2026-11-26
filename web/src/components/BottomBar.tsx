@@ -228,9 +228,6 @@ function LitTabMark({ index, count }: { index: number; count: number }) {
       aria-hidden
       className={cn(
         "bottom-bar-mark absolute inset-y-0 left-0 rounded-full bg-accent-subtle",
-        // Forced colors paint over a background, so an outline shows the
-        // lit tab there, beside its `aria-current`.
-        "forced-colors:outline forced-colors:-outline-offset-1",
         "motion-safe:transition-[translate,opacity] motion-safe:duration-(--duration-chrome) motion-safe:ease-chrome",
         index < 0 && "opacity-0",
       )}

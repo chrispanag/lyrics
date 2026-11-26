@@ -325,6 +325,17 @@
     overscroll-behavior-y: none;
   }
 
+  /* Where the page is: a lit tab, the sidebar's current entry, the song open
+     in the list. Each draws it with a background, which forced colors paints
+     over, so there it is an outline. Before the focus ring, which takes the
+     outline over while the same control has focus. */
+  @media (forced-colors: active) {
+    [aria-current="page"] {
+      outline: 1px solid;
+      outline-offset: -1px;
+    }
+  }
+
   /* A visible focus ring is the only affordance keyboard users have. A control
      drawn by its label, its own input visually hidden (the theme switch's
      radios), takes the ring on the label, the one part anyone can see. */
@@ -542,14 +553,14 @@
      out here too, from the measures `BottomBar` writes on the bar, so the
      pill's words beside the surface can follow it.
 
-     A press is answered by the bar's own shading and scale, so not also by
-     the browser's tap highlight, a long press's link preview, or a selection
-     of a tab's label, none of which a phone's own tab bar draws. */
+     A press is answered by the bar's own shading and scale, so not also by a
+     long press's link preview or a selection of a tab's label, neither of
+     which a phone's own tab bar draws. (Tailwind's preflight already turns the
+     tap highlight off on <html>.) */
   .bottom-bar {
     --bar-progress: var(--chrome-progress);
     --bar-sx: calc(1 + (var(--pill-sx, 0.4) - 1) * var(--bar-progress));
     --bar-sy: calc(1 + (var(--pill-sy, 0.4) - 1) * var(--bar-progress));
-    -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     @apply select-none;
   }
@@ -559,6 +570,10 @@
   .bottom-bar-tabs,
   .bottom-bar-pill-face::before {
     @apply border border-line bg-surface/95;
+    /* Solid for a reader who asks for less transparency. */
+    @media (prefers-reduced-transparency: reduce) {
+      @apply bg-surface;
+    }
   }
   /* Each part that moves is its own layer from the start, as a top bar is
      (`chrome-slides-up`). */
