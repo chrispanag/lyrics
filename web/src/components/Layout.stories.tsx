@@ -156,11 +156,7 @@ export const PhoneSignedIn: Story = {
   },
 };
 
-/**
- * A phone's screen is itself the sheet a desk sets its content on: the page,
- * the content column and the sticky bars on it are all the surface's color,
- * as a sheet and its bars are at a desk.
- */
+/** On a phone the page, the content column and its sticky bars are the surface. */
 export const PhoneIsTheSheet: Story = {
   parameters: phoneParameters,
   globals: phoneGlobals,

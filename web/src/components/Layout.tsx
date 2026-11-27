@@ -62,9 +62,10 @@ export function Layout({ children }: { children?: ReactNode }) {
           keeps its own inset below them, so the room goes: the reader would
           only scroll past its panes.
 
-          Until then the column is the sheet itself, a window tall: the
-          surface, with its sticky bars on it, as a sheet's are
-          (`sheetChrome`). One look for content at every width. */}
+          Until then the column is the sheet itself, a window tall: a
+          phone's screen, and the band beside the rail before the panes split,
+          are the surface with their sticky bars on it (`sheet-surface`), as a
+          desk's sheets are. One look for content at every width. */}
       <main className="@container/app min-w-0 flex-1">
         {/* No Suspense boundary here: a server streams the shell the moment
             one sits above a page, so a page's `notFound()` or redirect
@@ -72,7 +73,7 @@ export function Layout({ children }: { children?: ReactNode }) {
         <div
           className={cn(
             "pb-[calc(var(--bottom-bar-clearance)+--spacing(4))] md:pb-8 @3xl/app:pb-0",
-            "@max-3xl/app:min-h-dvh @max-3xl/app:bg-surface @max-3xl/app:[--sticky-bar-bg:var(--color-surface)]",
+            "@max-3xl/app:min-h-dvh @max-3xl/app:sheet-surface",
           )}
         >
           {children}

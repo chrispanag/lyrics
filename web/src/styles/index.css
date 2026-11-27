@@ -326,9 +326,9 @@
     }
   }
 
-  /* A phone's screen is itself the sheet a desk sets its content on, so the
-     page is the surface there, notch and overscroll included. From `md` up
-     the canvas shows around the rail and the sheets. */
+  /* The surface below `md`, where the screen is the sheet (`Layout`), so the
+     notch and the overscroll match it; the canvas around the rail and the
+     sheets from there up. */
   body {
     @apply bg-surface text-fg antialiased md:bg-canvas;
     /* Prevents the whole page from bouncing on iOS while inner regions scroll. */
@@ -676,8 +676,16 @@
   @apply bg-(--sticky-bar-bg)/90 reduced-transparency:bg-(--sticky-bar-bg) reduced-transparency:backdrop-blur-none;
 }
 
-/* What a sticky bar is drawn on: the page's color, or a surface that hosts
-   one sets its own (a sheet, `sheetChrome` in cardStyles.ts). */
+/* A sheet's color, and its sticky bars drawn on it: a desk's sheets
+   (`sheetChrome`) and the content column that is the sheet until there is
+   room for them (`Layout`). One utility, so the two cannot drift apart. */
+@utility sheet-surface {
+  @apply bg-surface;
+  --sticky-bar-bg: var(--color-surface);
+}
+
+/* What a sticky bar is drawn on: the canvas, unless the surface it sits on
+   sets its own (`sheet-surface`). */
 :root {
   --sticky-bar-bg: var(--color-canvas);
   /* The room around a screen's sheets and between the reader's two
