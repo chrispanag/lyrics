@@ -351,6 +351,13 @@
     @apply outline-2 outline-offset-2 outline-focus;
   }
 
+  /* A text field already turns its border the focus color, so a ring set off
+     from it reads as a second ring around the first. Against the border, the
+     two draw one thicker ring. */
+  :is(input:not([type="checkbox"], [type="radio"]), textarea, select):focus-visible {
+    @apply outline-offset-0;
+  }
+
   ::selection {
     @apply bg-brand-200 text-stone-900;
   }

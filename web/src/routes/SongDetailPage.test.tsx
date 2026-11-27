@@ -837,6 +837,24 @@ describe("SongDetailPage recordings", () => {
     expect(screen.queryByRole("dialog", { name: /recordings/i })).not.toBeInTheDocument();
   });
 
+  // With no label to stand beside, the mark joins the performers it is about,
+  // rather than taking a line of its own under the year.
+  it("marks an unlabeled lone first recording on its performers' line", async () => {
+    withRecordings([makeRecording({ label: null, notes: null })]);
+
+    renderDetail();
+
+    const performer = getNarrow(await screen.findAllByText("Γιώργος Νταλάρας"));
+    const row = performer.closest("dd");
+    expect(row).toHaveTextContent("First recording");
+    expect(
+      within(row as HTMLElement)
+        .getByText("First recording")
+        .closest("[data-tier]"),
+    ).toHaveAttribute("data-tier", "narrow");
+    expect(screen.getAllByText("First recording")).toHaveLength(2); // the row's, and the column's list
+  });
+
   // Unmarked, unlabeled and without notes, it has nothing the page lacks.
   it("adds nothing for a lone recording with nothing of its own to say", async () => {
     withRecordings([makeRecording({ is_first: false })]);

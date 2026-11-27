@@ -19,3 +19,10 @@ export const cardHover = "transition-colors hover:border-line-accent hover:bg-ac
 
 /** A small label on a card or header: a genre on a song card, a list's visibility. */
 export const tagChrome = "rounded-full bg-subtle px-2 py-0.5 text-xs text-fg-tertiary";
+
+/**
+ * `tagChrome` for a tag that is a link: the same tag, padded to a 24px target
+ * and lit under the pointer. Its own string, since `cn` cannot replace padding.
+ */
+export const tagLinkChrome =
+  "inline-block rounded-full bg-subtle px-2.5 py-1 text-xs text-fg-tertiary transition-colors hover:bg-muted hover:text-fg-secondary";

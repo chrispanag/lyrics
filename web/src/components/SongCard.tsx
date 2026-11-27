@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { memo, useCallback } from "react";
 
 import { queries } from "@/api/hooks";
+import { GenreTag } from "./GenreTag";
 import { Snippet } from "./Snippet";
 import { cardChrome, cardHover, tagChrome } from "./cardStyles";
 import { cn } from "@/lib/cn";
@@ -79,11 +80,7 @@ export const SongCard = memo(function SongCard({
           only its padding. */}
       <div className="mt-3 flex flex-wrap gap-1.5">
         {song.genres.length > 0 ? (
-          song.genres.map((genre) => (
-            <span key={genre.id} className={tagChrome}>
-              {genre.name}
-            </span>
-          ))
+          song.genres.map((genre) => <GenreTag key={genre.id} genre={genre} />)
         ) : (
           <span aria-hidden className={cn(tagChrome, "invisible")}>
             {"\u00A0"}

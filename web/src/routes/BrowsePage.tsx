@@ -6,7 +6,7 @@ import { Plus, SixteenthNotes, SlidersHorizontal } from "lucide-react";
 import { errorMessage } from "@/api/client";
 import { useGenres, usePerson, useSongPages } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
-import { buttonClasses } from "@/components/buttonStyles";
+import { ButtonLink } from "@/components/ButtonLink";
 import { InfiniteScrollTrigger } from "@/components/InfiniteScrollTrigger";
 import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "@/components/SearchField";
@@ -17,6 +17,7 @@ import {
   Chip,
   EmptyState,
   ErrorMessage,
+  Field,
   Select,
   Sheet,
   Skeletons,
@@ -27,7 +28,7 @@ import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
 import { catalogName, catalogQuery, catalogView, viewGenre } from "@/lib/browse";
 import { useCatalogPaneShown } from "@/lib/catalogPane";
 import { songCount } from "@/lib/format";
-import { Link, useSearchParams, useSetSearchParams } from "@/lib/navigation";
+import { useSearchParams, useSetSearchParams } from "@/lib/navigation";
 
 /** Browse and search. Filter state lives in the URL, so it is shareable. */
 export function BrowsePage() {
@@ -89,6 +90,14 @@ export function BrowsePage() {
   } = useSongPages(filters, shown);
   const { data: genres } = useGenres(shown);
 
+  // Every key `filterCount` counts. The sort stays: it is not a filter.
+  const clearFilters = () =>
+    setParams((next) => {
+      next.delete("person");
+      next.delete("genre_slug");
+      next.delete("language");
+    });
+
   const setParam = (key: string, value: string | null) => {
     setParams((next) => {
       if (value) next.set(key, value);
@@ -107,7 +116,12 @@ export function BrowsePage() {
 
   // Named by the query or the landing filter, since each is a history entry
   // and a bookmark; `generateMetadata`'s `og:title` is the same name.
-  const name = catalogName(view, { person: activePerson, genre: activeGenre }) ?? "Browse";
+  const named = catalogName(view, { person: activePerson, genre: activeGenre });
+  const name = named ?? "Browse";
+  // A person's or a genre's page is a place of its own, linked to and indexed,
+  // so its name is shown; a search is named by its box, the catalog by nothing.
+  const landing = view.subject === "person" || view.subject === "genre" ? named : undefined;
+  const empty = !isPending && data !== undefined && songs.length === 0;
   // The filters each card's link keeps, so the list beside the song is this one.
   const cardSearch = catalogQuery(params);
 
@@ -168,16 +182,27 @@ export function BrowsePage() {
         </SearchHeader>
       }
     >
-      {/* Hidden: the search box is the pane's visible heading in all but name. */}
-      <PaneHeading className="sr-only">{name}</PaneHeading>
+      {/* Hidden on a search and the catalog: there the search box is the
+          pane's visible heading in all but name. */}
+      <PaneHeading
+        className={
+          landing ? "mb-1 text-2xl font-bold tracking-tight text-balance text-fg" : "sr-only"
+        }
+      >
+        {name}
+      </PaneHeading>
       <div className="mb-4 flex items-center justify-between gap-3">
-        <Tally>{isPending ? "Searching…" : songCount(total)}</Tally>
+        {/* Still announced when empty, but not drawn above the empty state,
+            which says the same. */}
+        <Tally className={empty ? "sr-only" : ""}>
+          {isPending ? "Searching…" : songCount(total)}
+        </Tally>
         {hasRole(user?.role, "contributor") && (
           // A styled Link: an anchor nested in a button is invalid.
-          <Link href="/songs/new" prefetch={false} className={buttonClasses("secondary", "sm")}>
+          <ButtonLink href="/songs/new" prefetch={false} variant="secondary" size="sm">
             <Plus aria-hidden className="size-4" />
             Add song
-          </Link>
+          </ButtonLink>
         )}
       </div>
 
@@ -189,14 +214,26 @@ export function BrowsePage() {
       {/* `h-28` restates a song card's height; update it if cards change. */}
       {isPending && <Skeletons count={5} className="h-28 w-full" />}
 
-      {!isPending && data && songs.length === 0 && (
+      {empty && (
         <EmptyState
           icon={<SixteenthNotes className="size-12" />}
-          title={query ? "No songs matched" : "No songs yet"}
+          // A filter that matches nothing is not an empty catalog.
+          title={query || hasFilters ? "No songs matched" : "No songs yet"}
           description={
-            query
-              ? "Try fewer words, or check the spelling."
-              : "Songs added to the catalog will appear here."
+            query && hasFilters
+              ? "Try fewer words, or remove a filter."
+              : query
+                ? "Try fewer words, or check the spelling."
+                : hasFilters
+                  ? "No song matches every filter. Try removing one."
+                  : "Songs added to the catalog will appear here."
+          }
+          action={
+            hasFilters && (
+              <Button variant="secondary" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )
           }
         />
       )}
@@ -259,13 +296,7 @@ export function BrowsePage() {
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="filter-language"
-                className="mb-2 block text-sm font-medium text-fg-secondary"
-              >
-                Language
-              </label>
+            <Field label="Language" htmlFor="filter-language">
               <Select
                 id="filter-language"
                 className="w-full"
@@ -276,15 +307,9 @@ export function BrowsePage() {
                 <option value="el">Greek</option>
                 <option value="en">English</option>
               </Select>
-            </div>
+            </Field>
 
-            <div>
-              <label
-                htmlFor="filter-sort"
-                className="mb-2 block text-sm font-medium text-fg-secondary"
-              >
-                Sort by
-              </label>
+            <Field label="Sort by" htmlFor="filter-sort">
               <Select
                 id="filter-sort"
                 className="w-full"
@@ -297,7 +322,7 @@ export function BrowsePage() {
                 <option value="newest">Newest first</option>
                 <option value="oldest">Oldest first</option>
               </Select>
-            </div>
+            </Field>
 
             <div className="flex gap-2 pt-2">
               <Button

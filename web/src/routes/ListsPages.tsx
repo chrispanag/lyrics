@@ -28,6 +28,7 @@ import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { paneActionLabel } from "@/components/buttonStyles";
 import { cardChrome, cardHover, tagChrome } from "@/components/cardStyles";
+import { linkClasses } from "@/components/textStyles";
 import { ListBar, ListSkeleton } from "@/components/ListBar";
 import { MenuItem, MoreActionsMenu } from "@/components/MoreActionsMenu";
 import { PageHeader } from "@/components/PageHeader";
@@ -262,7 +263,7 @@ export function ListDetailPage() {
     return (
       <ReaderPane header={<ListBar />} title="List not available">
         <ErrorMessage>This list is not available.</ErrorMessage>
-        <Link href="/lists" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
+        <Link href="/lists" className={linkClasses("accent", "mt-4 inline-block text-sm")}>
           Back to lists
         </Link>
       </ReaderPane>

@@ -1,5 +1,4 @@
-import type { ReactNode } from "react";
-
+import { Fact, FactList } from "@/components/FactList";
 import { Sheet } from "@/components/ui";
 import type { Song, SongPopularity } from "@/lib/types";
 
@@ -28,8 +27,8 @@ export function SongStats({ popularity }: { popularity: SongPopularity }) {
   const { anonymous_clicks, authenticated_clicks, list_adds, list_users } = popularity;
 
   return (
-    <dl className="divide-y divide-line">
-      <StatRow
+    <FactList layout="justified">
+      <Fact
         label="Views"
         detail={
           authenticated_clicks > 0
@@ -38,10 +37,10 @@ export function SongStats({ popularity }: { popularity: SongPopularity }) {
         }
       >
         {tally.format(anonymous_clicks + authenticated_clicks)}
-      </StatRow>
-      <StatRow label="Added to a list">{times(list_adds)}</StatRow>
-      <StatRow label="In lists of">{people(list_users)}</StatRow>
-    </dl>
+      </Fact>
+      <Fact label="Added to a list">{times(list_adds)}</Fact>
+      <Fact label="In lists of">{people(list_users)}</Fact>
+    </FactList>
   );
 }
 
@@ -59,25 +58,5 @@ export function SongStatsSheet({
     <Sheet open={open} onClose={onClose} title="Stats">
       <SongStats popularity={song.popularity} />
     </Sheet>
-  );
-}
-
-function StatRow({
-  label,
-  detail,
-  children,
-}: {
-  label: string;
-  detail?: string | undefined;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 py-3 first:pt-0 last:pb-0">
-      <dt className="text-fg-muted">{label}</dt>
-      <dd className="text-right font-medium">
-        {children}
-        {detail && <span className="block text-sm font-normal text-fg-muted">{detail}</span>}
-      </dd>
-    </div>
   );
 }
