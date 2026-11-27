@@ -156,6 +156,30 @@ export const PhoneSignedIn: Story = {
   },
 };
 
+/** On a phone the page, the content column and its sticky bars are the surface. */
+export const PhoneIsTheSheet: Story = {
+  parameters: phoneParameters,
+  globals: phoneGlobals,
+  play: async ({ canvas }) => {
+    const heading = await canvas.findByRole("heading", { name: "A page" });
+    // The color `bg-surface` paints, read from an element that carries it.
+    const probe = document.createElement("div");
+    probe.className = "bg-surface";
+    document.body.append(probe);
+    const surface = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+
+    await expect(getComputedStyle(document.body).backgroundColor).toBe(surface);
+    const column = heading.closest("main")?.firstElementChild;
+    if (!column) throw new Error("The screen has no content column.");
+    await expect(getComputedStyle(column).backgroundColor).toBe(surface);
+    // The sticky bars on it are drawn on the same color.
+    await expect(getComputedStyle(column).getPropertyValue("--sticky-bar-bg").trim()).toBe(
+      getComputedStyle(document.documentElement).getPropertyValue("--color-surface").trim(),
+    );
+  },
+};
+
 /** A guest's bar: Browse and Profile, which holds Sign in and the theme. */
 export const PhoneGuest: Story = {
   parameters: phoneParameters,

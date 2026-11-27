@@ -20,7 +20,7 @@ export const cardChrome = "rounded-card border border-line";
  * instead. The sticky bars on it are drawn on the sheet's color.
  */
 export const sheetChrome =
-  "@3xl/app:rounded-card @3xl/app:bg-surface @3xl/app:shadow-raised @3xl/app:ring-1 @3xl/app:ring-line @3xl/app:[--sticky-bar-bg:var(--color-surface)] forced-colors:@3xl/app:border";
+  "@3xl/app:rounded-card @3xl/app:sheet-surface @3xl/app:shadow-raised @3xl/app:ring-1 @3xl/app:ring-line forced-colors:@3xl/app:border";
 
 /**
  * Around a screen's sheets: the room between them and the window's edges,

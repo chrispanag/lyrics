@@ -300,8 +300,9 @@ function PictureButton({
         className={cn(
           // Straddles the perimeter: inside it covers the face.
           "absolute -right-0.5 -bottom-0.5 flex size-8 items-center justify-center rounded-full",
-          // The ring is the body's ground color, so it reads as a bite out of the circle.
-          "bg-accent text-fg-on-fill ring-2 ring-canvas transition-colors",
+          // The ring is the color the profile sits on, a phone's screen or a
+          // desk's sheet, so it reads as a bite out of the circle.
+          "bg-accent text-fg-on-fill ring-2 ring-surface transition-colors",
           !busy && "group-hover:bg-accent-hover group-active:bg-accent-active",
         )}
       >

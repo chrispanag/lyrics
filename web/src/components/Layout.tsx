@@ -60,12 +60,22 @@ export function Layout({ children }: { children?: ReactNode }) {
           infinite-scroll trigger all scroll clear of the bar. Once the column
           is `@3xl` every screen is set on sheets (`sheetFrame`), whose frame
           keeps its own inset below them, so the room goes: the reader would
-          only scroll past its panes. */}
+          only scroll past its panes.
+
+          Until then the column is the sheet itself, a window tall: a
+          phone's screen, and the band beside the rail before the panes split,
+          are the surface with their sticky bars on it (`sheet-surface`), as a
+          desk's sheets are. One look for content at every width. */}
       <main className="@container/app min-w-0 flex-1">
         {/* No Suspense boundary here: a server streams the shell the moment
             one sits above a page, so a page's `notFound()` or redirect
             arrives as a 200 with a meta tag rather than a 404 or a 308. */}
-        <div className="pb-[calc(var(--bottom-bar-clearance)+--spacing(4))] md:pb-8 @3xl/app:pb-0">
+        <div
+          className={cn(
+            "pb-[calc(var(--bottom-bar-clearance)+--spacing(4))] md:pb-8 @3xl/app:pb-0",
+            "@max-3xl/app:min-h-dvh @max-3xl/app:sheet-surface",
+          )}
+        >
           {children}
         </div>
       </main>
