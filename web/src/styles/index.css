@@ -86,7 +86,7 @@
    Naming: a bare name is a background, `fg-` is text and icons, `line-` is a
    border. `fg-accent-subtle` is the text that sits on `accent-subtle`, and so
    on. Hard-copied elsewhere, because nothing there can read a variable:
-   `canvas` as THEME_COLORS in lib/theme.ts, and `accent` as the icon sources'
+   `surface` as THEME_COLORS in lib/theme.ts, and `accent` as the icon sources'
    brand-600 (see the note on it above). */
 @layer base {
   :root {
@@ -326,8 +326,11 @@
     }
   }
 
+  /* A phone's screen is itself the sheet a desk sets its content on, so the
+     page is the surface there, notch and overscroll included. From `md` up
+     the canvas shows around the rail and the sheets. */
   body {
-    @apply bg-canvas text-fg antialiased;
+    @apply bg-surface text-fg antialiased md:bg-canvas;
     /* Prevents the whole page from bouncing on iOS while inner regions scroll. */
     overscroll-behavior-y: none;
   }

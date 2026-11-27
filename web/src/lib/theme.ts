@@ -5,10 +5,11 @@ const THEME_KEY = "lyrics:theme";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
 /**
- * The browser chrome's color per theme, the stone grounds; app/layout.tsx reads
- * them too, and public/manifest.json carries the dark one (theme.test.ts checks).
+ * The browser chrome's color per theme: the surface a phone's screens sit on,
+ * so its bars match the page. app/layout.tsx reads them, and
+ * public/manifest.json carries the dark one (theme.test.ts checks).
  */
-export const THEME_COLORS = { light: "#fafaf9", dark: "#0c0a09" } as const;
+export const THEME_COLORS = { light: "#ffffff", dark: "#1c1917" } as const;
 
 /**
  * Our own unscoped `theme-color` meta, present only while the theme is explicit.
