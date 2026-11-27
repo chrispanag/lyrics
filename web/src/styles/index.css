@@ -667,8 +667,17 @@
    and a song's tools bar on a phone. A utility, so the song's can be applied
    under `max-md:` alone. The slide out of the way is `chrome-slides-up`. */
 @utility sticky-bar {
-  @apply sticky top-0 z-sticky border-b border-line bg-canvas/90 pt-safe backdrop-blur;
-  @apply reduced-transparency:bg-canvas reduced-transparency:backdrop-blur-none;
+  @apply sticky top-0 z-sticky border-b border-line pt-safe backdrop-blur;
+  @apply bg-(--sticky-bar-bg)/90 reduced-transparency:bg-(--sticky-bar-bg) reduced-transparency:backdrop-blur-none;
+}
+
+/* What a sticky bar is drawn on: the page's color, or a surface that hosts
+   one sets its own (the reader's sheets, `ReaderSplit`). */
+:root {
+  --sticky-bar-bg: var(--color-canvas);
+  /* The room around the reader's sheets and between them (`ReaderSplit`),
+     which the rail and the details column measure from too. */
+  --reader-inset: 0.5rem;
 }
 
 /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the edges
@@ -692,14 +701,6 @@
 @container app (width >= 48rem) {
   .app-column:has(.reader-frame) {
     padding-bottom: 0;
-  }
-
-  /* The panes are sheets of the surface color (`ReaderSplit`), so the header
-     bands on them are too: a canvas band on a sheet would read as a third
-     surface. Opaque, since nothing scrolls under a pane's header. */
-  .reader-sheet [data-sticky-header] {
-    background-color: var(--color-surface);
-    backdrop-filter: none;
   }
 }
 

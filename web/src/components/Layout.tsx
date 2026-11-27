@@ -21,18 +21,16 @@ import { revealChrome } from "@/lib/scrollChrome";
 import { SITE_NAME } from "@/lib/site";
 
 /**
- * The lit and pressable treatments of the rail's entries. Only the lit one
- * carries a text color: at rest an entry is the rail's quieter gray.
+ * A rail entry: a square as tall as the search field and a song's tools,
+ * `group` for its label. Lit, it takes the accent's tint; at rest it shades
+ * under the pointer and keeps `rest`, its own text color, if any.
  */
-const RAIL_ACTIVE = "bg-accent-subtle text-fg-accent-subtle";
-const RAIL_HOVER = "hover:bg-subtle";
-
-/**
- * A rail entry's box: a square as tall as the search field and a song's tools.
- * `group` is for its label.
- */
-const RAIL_ENTRY =
-  "group relative grid size-12 place-items-center rounded-control transition-colors";
+function railEntryClass(lit: boolean, rest?: string): string {
+  return cn(
+    "group relative grid size-12 place-items-center rounded-control transition-colors",
+    lit ? "bg-accent-subtle text-fg-accent-subtle" : cn("hover:bg-subtle", rest),
+  );
+}
 
 /**
  * App shell: a rail of icons from `md` up, and below it the bottom bar
@@ -111,9 +109,7 @@ function RailEntry({ item, active }: { item: NavItem; active: boolean }) {
       active={active}
       data-guest-only={item.identityCard || undefined}
       {...(item.warmsLists ? intent : undefined)}
-      className={({ isActive }) =>
-        cn(RAIL_ENTRY, isActive ? RAIL_ACTIVE : cn(RAIL_HOVER, "text-fg-tertiary"))
-      }
+      className={({ isActive }) => railEntryClass(isActive, "text-fg-tertiary")}
     >
       <item.icon aria-hidden className="size-5" />
       <RailLabel>{item.label}</RailLabel>
@@ -139,11 +135,12 @@ function NavRail() {
 
   return (
     // `z-sticky` lifts the labels, which reach past the rail, over the page's
-    // sticky headers. `pt-5` is the reader frame's `py-2` and the header's
-    // `py-3`, so the brand's mark centers on the search field beside it.
-    <aside className="sticky top-0 z-sticky hidden h-dvh w-16 shrink-0 flex-col items-center pt-5 pb-4 md:flex">
+    // sticky headers. The top room is the reader frame's inset and the
+    // header's `py-3`, so the brand's mark centers on the search field beside
+    // it.
+    <aside className="sticky top-0 z-sticky hidden h-dvh w-16 shrink-0 flex-col items-center pt-[calc(var(--reader-inset)+--spacing(3))] pb-4 md:flex">
       {/* `mb-6` sets the brand apart from the entries under it. */}
-      <Link href="/" aria-label={SITE_NAME} className={cn(RAIL_ENTRY, RAIL_HOVER, "mb-6")}>
+      <Link href="/" aria-label={SITE_NAME} className={cn(railEntryClass(false), "mb-6")}>
         <BrandMark />
       </Link>
 
@@ -160,7 +157,7 @@ function NavRail() {
             <NavLink
               href="/profile"
               active={current?.identityCard === true}
-              className={({ isActive }) => cn(RAIL_ENTRY, isActive ? RAIL_ACTIVE : RAIL_HOVER)}
+              className={({ isActive }) => railEntryClass(isActive)}
             >
               <Avatar user={user} />
               <RailLabel>
@@ -169,11 +166,7 @@ function NavRail() {
               </RailLabel>
             </NavLink>
           ) : (
-            <Link
-              href="/login"
-              data-guest-only
-              className={cn(RAIL_ENTRY, RAIL_HOVER, "text-fg-accent")}
-            >
+            <Link href="/login" data-guest-only className={railEntryClass(false, "text-fg-accent")}>
               <LogIn aria-hidden className="size-5" />
               <RailLabel>Sign in</RailLabel>
             </Link>

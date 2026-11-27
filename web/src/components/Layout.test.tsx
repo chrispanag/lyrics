@@ -36,7 +36,7 @@ beforeEach(() => setScrollY(0));
  * jsdom has no breakpoints, so the rail and the bottom bar are both in the
  * document; each is asserted separately. See `identityCard` in navItems.ts.
  */
-const sidebar = () => screen.getByRole("complementary");
+const rail = () => screen.getByRole("complementary");
 const bar = () => screen.getByRole("navigation", { name: "Navigation" });
 
 /**
@@ -64,9 +64,9 @@ describe("Layout navigation", () => {
     renderWithProviders(<Layout />, { user: makeUser({ display_name: "Christos" }) });
 
     // Inside the `<nav>`, pinning the picture as part of the landmark.
-    const rail = within(sidebar()).getByRole("navigation");
-    expect(routesToProfile(rail)).toHaveLength(1);
-    expect(routesToProfile(rail)[0]).toBe(within(rail).getByRole("link", { name: /Christos/ }));
+    const nav = within(rail()).getByRole("navigation");
+    expect(routesToProfile(nav)).toHaveLength(1);
+    expect(routesToProfile(nav)[0]).toBe(within(nav).getByRole("link", { name: /Christos/ }));
   });
 
   // The rail draws icons alone; each link's label is its accessible name.
@@ -75,7 +75,7 @@ describe("Layout navigation", () => {
       user: makeUser({ display_name: "Christos", role: "admin" }),
     });
 
-    const links = within(sidebar()).getAllByRole("link");
+    const links = within(rail()).getAllByRole("link");
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/",
       "/",
@@ -91,14 +91,14 @@ describe("Layout navigation", () => {
   it("offers no control to put the rail away", () => {
     renderWithProviders(<Layout />, { user: makeUser() });
 
-    expect(within(sidebar()).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(rail()).queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("keeps the rail's link for a guest, who has no picture to press", () => {
     renderWithProviders(<Layout />, { user: null });
 
-    expect(routesToProfile(within(sidebar()).getByRole("navigation"))).toHaveLength(1);
-    expect(within(sidebar()).getByRole("link", { name: "Sign in" })).toBeInTheDocument();
+    expect(routesToProfile(within(rail()).getByRole("navigation"))).toHaveLength(1);
+    expect(within(rail()).getByRole("link", { name: "Sign in" })).toBeInTheDocument();
   });
 
   // A song has no entry of its own. It belongs to the list beside it: the one
@@ -113,7 +113,7 @@ describe("Layout navigation", () => {
     server.use(listById(makeList()));
     renderWithProviders(<Layout />, { route, user: makeUser() });
 
-    expect(lit(sidebar())).toEqual([entry]);
+    expect(lit(rail())).toEqual([entry]);
     expect(lit(bar())).toEqual([entry]);
   });
 });
@@ -211,7 +211,7 @@ describe("Bottom bar", () => {
 
     expect(within(bar()).queryByRole("link", { name: "Admin" })).toBeNull();
     expect(lit(bar())).toEqual(["Profile"]);
-    expect(lit(sidebar())).toEqual(["Admin"]);
+    expect(lit(rail())).toEqual(["Admin"]);
   });
 
   it("lights Profile on the profile", () => {

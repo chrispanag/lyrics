@@ -27,8 +27,8 @@ function stubResizeObserver(): () => void {
 }
 
 describe("InfiniteScrollTrigger", () => {
-  // Collapsing the navigation resizes the column every frame for 250ms. The
-  // scroller can only change with the width, so it is looked for once, after.
+  // Dragging the window's edge resizes the column every frame. The scroller
+  // can only change with the width, so it is looked for once, after.
   it("looks for its scroller again once the column's width settles", () => {
     vi.useFakeTimers();
     const restore = stubResizeObserver();
