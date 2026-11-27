@@ -9,6 +9,22 @@
 export const cardChrome = "rounded-card border border-line";
 
 /**
+ * A sheet: the surface every screen's content sits on at a desk, beside the
+ * rail — the reader's two panes, and each other screen whole. Only once the
+ * content column is `@3xl/app` wide; a phone's page is its own surface.
+ *
+ * A card's corners, lifted off the page by a hairline ring and a soft shadow.
+ * A ring rather than `cardChrome`'s border, which would take a pixel of layout
+ * off each edge and cannot be put under `@3xl/app:` from outside. Forced
+ * colors drops both ring and shadow, so there the sheet takes a border
+ * instead. The sticky bars on it are drawn on the sheet's color.
+ */
+export const sheetChrome = [
+  "@3xl/app:rounded-card @3xl/app:bg-surface @3xl/app:shadow-raised @3xl/app:ring-1 @3xl/app:ring-line",
+  "@3xl/app:[--sticky-bar-bg:var(--color-surface)] forced-colors:@3xl/app:border",
+].join(" ");
+
+/**
  * A filled panel set into the page rather than bordered: a song's notes, the
  * account details. Padding included, since every panel has the same.
  */

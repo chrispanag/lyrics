@@ -3,13 +3,15 @@ import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { Layout } from "./Layout";
 import { Page } from "./Page";
+import PlainLayout from "@/app/(shell)/(plain)/layout";
 import { makeUser } from "@/test/handlers";
 import { phoneGlobals, phoneParameters } from "@/test/viewport";
 
 /**
  * The app's shell: the navigation rail from `md` up, and below it the bottom
- * bar. Story tests run at 1200×900 unless a story names a viewport, as the
- * phone ones do.
+ * bar, around a screen of the `(plain)` group, which is a sheet at a desk.
+ * Story tests run at 1200×900 unless a story names a viewport, as the phone
+ * ones do.
  */
 const meta = {
   title: "Shell/Layout",
@@ -17,10 +19,12 @@ const meta = {
   parameters: { layout: "fullscreen" },
   render: () => (
     <Layout>
-      <Page width="content">
-        <h1 className="text-2xl font-semibold">A page</h1>
-        <p className="mt-2 text-fg-tertiary">The screen a route renders goes here.</p>
-      </Page>
+      <PlainLayout>
+        <Page width="content">
+          <h1 className="text-2xl font-semibold">A page</h1>
+          <p className="mt-2 text-fg-tertiary">The screen a route renders goes here.</p>
+        </Page>
+      </PlainLayout>
     </Layout>
   ),
 } satisfies Meta<typeof Layout>;
@@ -54,6 +58,32 @@ export const Guest: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("complementary")).toBeVisible();
     await expect(bottomBar(canvas)).toBeNull();
+  },
+};
+
+/**
+ * A screen of the `(plain)` group at a desk is one sheet beside the rail, as
+ * the reader's list and song are two: the same inset from the window's edges
+ * as theirs, at least a window tall, on the surface color.
+ */
+export const PlainSheet: Story = {
+  play: async ({ canvas }) => {
+    const heading = await canvas.findByRole("heading", { name: "A page" });
+    const sheet = heading.closest(".plain-frame")?.lastElementChild as HTMLElement | null;
+    if (!sheet) throw new Error("The screen has no sheet.");
+    const box = sheet.getBoundingClientRect();
+
+    await expect(box.left).toBe(64);
+    await expect(box.top).toBe(8);
+    // From the root's edge, short of the scrollbar's gutter, which a screen the
+    // window scrolls keeps (`scrollbar-gutter: stable`).
+    await expect(document.documentElement.getBoundingClientRect().right - box.right).toBe(8);
+    await expect(window.innerHeight - box.bottom).toBe(8);
+    await expect(getComputedStyle(sheet).backgroundColor).not.toBe(
+      getComputedStyle(document.body).backgroundColor,
+    );
+    // The window has nothing to scroll past the sheet.
+    await expect(document.documentElement.scrollHeight).toBe(window.innerHeight);
   },
 };
 
