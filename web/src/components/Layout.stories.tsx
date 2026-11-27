@@ -3,13 +3,13 @@ import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { Layout } from "./Layout";
 import { Page } from "./Page";
-import PlainLayout from "@/app/(shell)/(plain)/layout";
+import { PlainSheet } from "./PlainSheet";
 import { makeUser } from "@/test/handlers";
 import { phoneGlobals, phoneParameters } from "@/test/viewport";
 
 /**
  * The app's shell: the navigation rail from `md` up, and below it the bottom
- * bar, around a screen of the `(plain)` group, which is a sheet at a desk.
+ * bar, around a `PlainSheet`, as the `(plain)` group sets out its screens.
  * Story tests run at 1200×900 unless a story names a viewport, as the phone
  * ones do.
  */
@@ -19,12 +19,12 @@ const meta = {
   parameters: { layout: "fullscreen" },
   render: () => (
     <Layout>
-      <PlainLayout>
+      <PlainSheet>
         <Page width="content">
           <h1 className="text-2xl font-semibold">A page</h1>
           <p className="mt-2 text-fg-tertiary">The screen a route renders goes here.</p>
         </Page>
-      </PlainLayout>
+      </PlainSheet>
     </Layout>
   ),
 } satisfies Meta<typeof Layout>;
@@ -66,7 +66,7 @@ export const Guest: Story = {
  * the reader's list and song are two: the same inset from the window's edges
  * as theirs, at least a window tall, on the surface color.
  */
-export const PlainSheet: Story = {
+export const ScreenOnASheet: Story = {
   play: async ({ canvas }) => {
     const heading = await canvas.findByRole("heading", { name: "A page" });
     // The heading's page sits straight on the sheet.

@@ -137,10 +137,10 @@ function NavRail() {
 
   return (
     // `z-sticky` lifts the labels, which reach past the rail, over the page's
-    // sticky headers. The top room is the reader frame's inset and the
+    // sticky headers. The top room is the sheets' inset and the
     // header's `py-3`, so the brand's mark centers on the search field beside
     // it.
-    <aside className="sticky top-0 z-sticky hidden h-dvh w-16 shrink-0 flex-col items-center pt-[calc(var(--reader-inset)+--spacing(3))] pb-4 md:flex">
+    <aside className="sticky top-0 z-sticky hidden h-dvh w-16 shrink-0 flex-col items-center pt-[calc(var(--sheet-inset)+--spacing(3))] pb-4 md:flex">
       {/* `mb-6` sets the brand apart from the entries under it. */}
       <Link href="/" aria-label={SITE_NAME} className={cn(railEntryClass(false), "mb-6")}>
         <BrandMark />

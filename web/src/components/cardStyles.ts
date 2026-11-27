@@ -24,10 +24,10 @@ export const sheetChrome =
 
 /**
  * Around a screen's sheets: the room between them and the window's edges,
- * `--reader-inset`, except on the left, where the rail draws no edge of its
+ * `--sheet-inset`, except on the left, where the rail draws no edge of its
  * own. Takes the place of the shell's bottom padding (`Layout`).
  */
-export const sheetFrame = "@3xl/app:py-(--reader-inset) @3xl/app:pr-(--reader-inset)";
+export const sheetFrame = "@3xl/app:py-(--sheet-inset) @3xl/app:pr-(--sheet-inset)";
 
 /**
  * A filled panel set into the page rather than bordered: a song's notes, the

@@ -49,6 +49,12 @@ const SHEET = cn(
   sheetChrome,
 );
 
+/** The two panes' frame. `reader-frame`: the specs find the frame by it. */
+const FRAME = cn(
+  "reader-frame @3xl/app:flex @3xl/app:h-dvh @3xl/app:gap-(--sheet-inset) @3xl/app:overflow-hidden",
+  sheetFrame,
+);
+
 export function ReaderSplit({ catalog, children }: { catalog: ReactNode; children: ReactNode }) {
   const pathname = usePathname();
   const onSong = songRefFromPath(pathname) !== null;
@@ -85,14 +91,7 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
   }, []);
 
   return (
-    <div
-      ref={frame}
-      // `reader-frame`: the specs find the frame by it.
-      className={cn(
-        "reader-frame @3xl/app:flex @3xl/app:h-dvh @3xl/app:gap-(--reader-inset) @3xl/app:overflow-hidden",
-        sheetFrame,
-      )}
-    >
+    <div ref={frame} className={FRAME}>
       <section
         aria-label="Songs"
         className={cn(

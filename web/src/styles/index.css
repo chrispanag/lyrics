@@ -138,7 +138,9 @@
   .dark {
     --canvas: var(--color-stone-950);
     --surface: var(--color-stone-900);
-    --panel: var(--color-stone-900);
+    /* A step off `surface`, which every screen's sheet is at a desk, or a
+       panel on one would not show. */
+    --panel: color-mix(in oklab, var(--color-stone-900), var(--color-stone-800));
     --subtle: var(--color-stone-800);
     --muted: var(--color-stone-800);
     --muted-hover: var(--color-stone-700);
@@ -672,12 +674,12 @@
 }
 
 /* What a sticky bar is drawn on: the page's color, or a surface that hosts
-   one sets its own (the reader's sheets, `ReaderSplit`). */
+   one sets its own (a sheet, `sheetChrome` in cardStyles.ts). */
 :root {
   --sticky-bar-bg: var(--color-canvas);
-  /* The room around the reader's sheets and between them (`ReaderSplit`),
-     which the rail measures from too. */
-  --reader-inset: 0.5rem;
+  /* The room around a screen's sheets and between the reader's two
+     (`sheetFrame`, `ReaderSplit`), which the rail measures from too. */
+  --sheet-inset: 0.5rem;
 }
 
 /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the edges
