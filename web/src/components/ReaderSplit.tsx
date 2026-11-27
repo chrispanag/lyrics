@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 
+import { sheetChrome, sheetFrame } from "@/components/cardStyles";
 import { contentWidth } from "@/components/Page";
 import { PageTitle } from "@/components/PageTitle";
 import { CatalogPaneContext, SongOpenContext, useSongOpen } from "@/lib/catalogPane";
@@ -41,17 +42,17 @@ import { usePathname } from "@/lib/navigation";
  * (`html.reader-panes` in index.css).
  */
 /**
- * A pane, side by side: a column of the surface color with a card's corners,
- * lifted off the page by a hairline ring and a soft shadow. A ring rather than
- * `cardChrome`'s border, which would take a pixel of layout off each edge and
- * cannot be put under `@3xl/app:` from outside. Forced colors drops both ring
- * and shadow, so there the sheet takes a border instead. The sticky bars on it
- * (the list's header, a song's tools) are drawn on the sheet's color.
+ * A pane, side by side: a `sheetChrome` column that scrolls inside itself.
  */
 const SHEET = cn(
   "@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-col @3xl/app:overflow-hidden",
-  "@3xl/app:rounded-card @3xl/app:bg-surface @3xl/app:shadow-raised @3xl/app:ring-1 @3xl/app:ring-line",
-  "@3xl/app:[--sticky-bar-bg:var(--color-surface)] forced-colors:@3xl/app:border",
+  sheetChrome,
+);
+
+/** The two panes' frame. `reader-frame`: the specs find the frame by it. */
+const FRAME = cn(
+  "reader-frame @3xl/app:flex @3xl/app:h-dvh @3xl/app:gap-(--sheet-inset) @3xl/app:overflow-hidden",
+  sheetFrame,
 );
 
 export function ReaderSplit({ catalog, children }: { catalog: ReactNode; children: ReactNode }) {
@@ -90,11 +91,7 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
   }, []);
 
   return (
-    <div
-      ref={frame}
-      // `reader-frame`: index.css drops the shell's bottom padding around it.
-      className="reader-frame @3xl/app:flex @3xl/app:h-dvh @3xl/app:gap-(--reader-inset) @3xl/app:overflow-hidden @3xl/app:py-(--reader-inset) @3xl/app:pr-(--reader-inset)"
-    >
+    <div ref={frame} className={FRAME}>
       <section
         aria-label="Songs"
         className={cn(

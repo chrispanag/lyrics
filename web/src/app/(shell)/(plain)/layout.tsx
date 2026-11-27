@@ -1,16 +1,12 @@
+import { PlainSheet } from "@/components/PlainSheet";
+
 /*
- * Every shell screen without a header of its own. On a phone it keeps the
- * screen clear of the notch; from `md` up the rail is the navigation and the
- * screen starts at the top. A layout, so a new screen gets it by position. The
- * catalog, a list and the song page sit outside this group, in `(reader)`,
- * because their own headers keep the notch clear (`SearchHeader`,
- * `ToolbarHeader`).
+ * Every shell screen without a header of its own: your lists, the profile, the
+ * admin console, the song editor, each on a `PlainSheet`. A layout, so a new
+ * screen gets it by position. The catalog, a list and the song page sit
+ * outside this group, in `(reader)`, which sets out its own sheets
+ * (`ReaderSplit`).
  */
 export default function PlainLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <div aria-hidden className="pt-safe md:hidden" />
-      {children}
-    </>
-  );
+  return <PlainSheet>{children}</PlainSheet>;
 }

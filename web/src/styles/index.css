@@ -138,7 +138,9 @@
   .dark {
     --canvas: var(--color-stone-950);
     --surface: var(--color-stone-900);
-    --panel: var(--color-stone-900);
+    /* A step off `surface`, which every screen's sheet is at a desk, or a
+       panel on one would not show. */
+    --panel: color-mix(in oklab, var(--color-stone-900), var(--color-stone-800));
     --subtle: var(--color-stone-800);
     --muted: var(--color-stone-800);
     --muted-hover: var(--color-stone-700);
@@ -672,12 +674,12 @@
 }
 
 /* What a sticky bar is drawn on: the page's color, or a surface that hosts
-   one sets its own (the reader's sheets, `ReaderSplit`). */
+   one sets its own (a sheet, `sheetChrome` in cardStyles.ts). */
 :root {
   --sticky-bar-bg: var(--color-canvas);
-  /* The room around the reader's sheets and between them (`ReaderSplit`),
-     which the rail measures from too. */
-  --reader-inset: 0.5rem;
+  /* The room around a screen's sheets and between the reader's two
+     (`sheetFrame`, `ReaderSplit`), which the rail measures from too. */
+  --sheet-inset: 0.5rem;
 }
 
 /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the edges
@@ -688,20 +690,6 @@
 }
 @utility pt-safe {
   padding-top: env(safe-area-inset-top);
-}
-
-/* The shell's bottom padding (the bottom bar's clearance and a little more
-   below `md`, `pb-8` from it; see `Layout`). Once the content
-   column is wide enough for the list and the lyrics — `@3xl`, the same 48rem —
-   the reader fills the viewport and scrolls inside its panes, and the padding
-   would only make the window scroll past them. Only around the reader: every
-   other page still scrolls the window and keeps its room at the bottom.
-   Unlayered so it wins over those utilities. The column is `main`; a container
-   cannot query itself. */
-@container app (width >= 48rem) {
-  .app-column:has(.reader-frame) {
-    padding-bottom: 0;
-  }
 }
 
 /* `ReaderSplit` adds this while those panes are up. The frame is `h-dvh`, and
