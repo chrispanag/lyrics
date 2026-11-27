@@ -189,10 +189,9 @@ describe("a song's server-rendered document", () => {
 });
 
 describe("a song the API says does not exist", () => {
-  // The page's own words, under the search header that carries the way back to
-  // a collapsed column (a phone's navigation is the shell's bottom bar): a
-  // dead song link is no reason to strand a reader without it.
-  it("is named as not available, with the way to the navigation", () => {
+  // The page's own words, under the search box, from which the reader can look
+  // for the song they meant: a dead song link is no dead end.
+  it("is named as not available, under the search", () => {
     const html = renderToString(
       <TestProviders route="/songs/no-such-song">
         <SongNotFound />
@@ -201,6 +200,6 @@ describe("a song the API says does not exist", () => {
 
     expect(html).toContain("<title>Song not available — Songfolio</title>");
     expect(html).toContain("No song has this address.");
-    expect(html).toContain("Open menu");
+    expect(html).toContain('aria-label="Search songs"');
   });
 });

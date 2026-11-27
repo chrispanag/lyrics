@@ -20,7 +20,7 @@ backend/
   internal/testutil   test DB, token issuer, fixtures
   migrations/         SQL migrations (embedded via embed.go)
 web/
-  src/app/            App Router routes: (auth), (shell), (shell)/(menu), admin
+  src/app/            App Router routes: (auth), (shell), (shell)/(plain), admin
   src/routes/         screen components rendered by each page.tsx
   src/components/     shared UI
   src/lib/            helpers; navigation.tsx is the routing seam

@@ -19,14 +19,16 @@ import { usePathname } from "@/lib/navigation";
  * The catalog, or a list, on the left and the lyrics on the right, once the
  * content column can hold both — an inbox beside the message it has open.
  *
- * The column is what is left after the navigation. `@3xl` is 48rem, Tailwind's
- * `md`: with the column collapsed that is the window from `md` up, and with it
- * open (15rem) it is a window just under `lg`. Below that, the address picks
- * one screen and it fills the page. Which one is showing follows the address,
- * in CSS, so the server and the browser agree before either knows the width.
+ * The column is what is left after the navigation rail (4rem). `@3xl` is
+ * 48rem, so a window of 52rem and up. Below that, the address picks one screen
+ * and it fills the page. Which one is showing follows the address, in CSS, so
+ * the server and the browser agree before either knows the width.
  *
- * `@5xl` (64rem) is the column an `xl` window leaves beside the open navigation,
- * where the list widens.
+ * `@5xl` (64rem) is the column a 68rem window leaves, where the list widens.
+ *
+ * Side by side, the two panes are sheets on the page's color, set apart by
+ * the gap between them rather than a rule (`SHEET`). The rail on their left
+ * draws no edge of its own, so the frame has no padding there.
  *
  * Neither pane scrolls as a whole. The search and the song's tools stay put,
  * and each scrollbar belongs to the list or the lyrics under that bar. The
@@ -38,6 +40,20 @@ import { usePathname } from "@/lib/navigation";
  * both headers. While the panes are up the window does not scroll
  * (`html.reader-panes` in index.css).
  */
+/**
+ * A pane, side by side: a column of the surface color with a card's corners,
+ * lifted off the page by a hairline ring and a soft shadow. A ring rather than
+ * `cardChrome`'s border, which would take a pixel of layout off each edge and
+ * cannot be put under `@3xl/app:` from outside. Forced colors drops both ring
+ * and shadow, so there the sheet takes a border instead. The sticky bars on it
+ * (the list's header, a song's tools) are drawn on the sheet's color.
+ */
+const SHEET = cn(
+  "@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-col @3xl/app:overflow-hidden",
+  "@3xl/app:rounded-card @3xl/app:bg-surface @3xl/app:shadow-raised @3xl/app:ring-1 @3xl/app:ring-line",
+  "@3xl/app:[--sticky-bar-bg:var(--color-surface)] forced-colors:@3xl/app:border",
+);
+
 export function ReaderSplit({ catalog, children }: { catalog: ReactNode; children: ReactNode }) {
   const pathname = usePathname();
   const onSong = songRefFromPath(pathname) !== null;
@@ -77,14 +93,13 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
     <div
       ref={frame}
       // `reader-frame`: index.css drops the shell's bottom padding around it.
-      className="reader-frame @3xl/app:flex @3xl/app:h-dvh @3xl/app:overflow-hidden"
+      className="reader-frame @3xl/app:flex @3xl/app:h-dvh @3xl/app:gap-(--reader-inset) @3xl/app:overflow-hidden @3xl/app:py-(--reader-inset) @3xl/app:pr-(--reader-inset)"
     >
-      {/* The line is the edge between the search and the lyrics. Both header
-          bands are the page color, so the list's surface alone does not draw it. */}
       <section
         aria-label="Songs"
         className={cn(
-          "@3xl/app:flex @3xl/app:min-h-0 @3xl/app:w-80 @3xl/app:shrink-0 @3xl/app:flex-col @3xl/app:overflow-hidden @3xl/app:border-r @3xl/app:border-line @3xl/app:bg-surface @5xl/app:w-96",
+          SHEET,
+          "@3xl/app:w-80 @3xl/app:shrink-0 @5xl/app:w-96",
           onSong && "@max-3xl/app:hidden",
         )}
       >
@@ -96,7 +111,8 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
         className={cn(
           // A column the song fills, so the empty state can center in it and
           // the lyrics can scroll under the tools.
-          "@3xl/app:flex @3xl/app:min-h-0 @3xl/app:min-w-0 @3xl/app:flex-1 @3xl/app:flex-col @3xl/app:overflow-hidden",
+          SHEET,
+          "@3xl/app:min-w-0 @3xl/app:flex-1",
           !onSong && "@max-3xl/app:hidden",
         )}
       >

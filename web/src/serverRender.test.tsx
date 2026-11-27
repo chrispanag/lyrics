@@ -7,7 +7,6 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { getAccessToken } from "@/auth/session";
 import { ListSongSwipe } from "@/components/ListSongNav";
 import { DEFAULT_FONT_SIZE, storeFontSize, storedFontSize } from "@/lib/fontSize";
-import { storeNavCollapsed, storedNavCollapsed } from "@/lib/navCollapsed";
 import type { ListPosition } from "@/lib/listContext";
 import { storeTheme, storedTheme } from "@/lib/theme";
 import { makeSong, makeUser } from "@/test/handlers";
@@ -70,11 +69,6 @@ describe("rendering without a browser", () => {
     expect(() => storeFontSize(2)).not.toThrow();
   });
 
-  it("reads the navigation column as open, and records a collapse without complaint", () => {
-    expect(storedNavCollapsed()).toBe(false);
-    expect(() => storeNavCollapsed(true)).not.toThrow();
-  });
-
   /*
    * The swipe hint decides markup, so it must start spent on both sides. The spy
    * is the load-bearing half: a wrapped read in the render body would still
@@ -117,7 +111,8 @@ describe("rendering without a browser", () => {
       </TestProviders>,
     );
 
-    expect(html).toContain("Open menu");
+    // The rail's home link, named after the site.
+    expect(html).toContain('aria-label="Songfolio"');
   });
 
   // A server knows no session: guest chrome, whatever a browser remembers.

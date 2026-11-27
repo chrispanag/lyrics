@@ -2,7 +2,7 @@ import { ButtonLink } from "@/components/ButtonLink";
 import { PageTitle } from "@/components/PageTitle";
 import { EmptyState } from "@/components/ui";
 
-import MenuBarLayout from "./(shell)/(menu)/layout";
+import PlainLayout from "./(shell)/(plain)/layout";
 import ShellLayout from "./(shell)/layout";
 
 /*
@@ -15,7 +15,7 @@ import ShellLayout from "./(shell)/layout";
 export default function NotFound() {
   return (
     <ShellLayout>
-      <MenuBarLayout>
+      <PlainLayout>
         {/* Named, or the tab keeps the previous page's title. */}
         <PageTitle name="Page not found" />
         <EmptyState
@@ -27,7 +27,7 @@ export default function NotFound() {
             </ButtonLink>
           }
         />
-      </MenuBarLayout>
+      </PlainLayout>
     </ShellLayout>
   );
 }

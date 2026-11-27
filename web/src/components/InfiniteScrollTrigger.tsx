@@ -47,9 +47,9 @@ export function InfiniteScrollTrigger({ onLoadMore }: { onLoadMore: () => void }
 
     connect();
     // The content column's width is what decides whether the list scrolls
-    // inside itself. Collapsing the navigation changes it without a remount,
-    // over a transition that resizes the column every frame, so the walk waits
-    // for the width to settle. A height change, such as a page loading, is not
+    // inside itself. Resizing the window changes it without a remount, every
+    // frame while the edge is dragged, so the walk waits for the width to
+    // settle. A height change, such as a page loading, is not
     // a reason to look again.
     const box = element.closest("main") ?? document.documentElement;
     let width: number | undefined;

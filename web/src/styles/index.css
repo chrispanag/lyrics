@@ -330,7 +330,7 @@
     overscroll-behavior-y: none;
   }
 
-  /* Where the page is, and which toggles are on: a lit tab, the sidebar's
+  /* Where the page is, and which toggles are on: a lit tab, the rail's
      current entry, the song open in the list, a filter chip that is set. Each
      draws it with a background, which forced colors paints over, so there it
      is an outline. Placed before the focus ring, so the ring wins while the
@@ -667,8 +667,17 @@
    and a song's tools bar on a phone. A utility, so the song's can be applied
    under `max-md:` alone. The slide out of the way is `chrome-slides-up`. */
 @utility sticky-bar {
-  @apply sticky top-0 z-sticky border-b border-line bg-canvas/90 pt-safe backdrop-blur;
-  @apply reduced-transparency:bg-canvas reduced-transparency:backdrop-blur-none;
+  @apply sticky top-0 z-sticky border-b border-line pt-safe backdrop-blur;
+  @apply bg-(--sticky-bar-bg)/90 reduced-transparency:bg-(--sticky-bar-bg) reduced-transparency:backdrop-blur-none;
+}
+
+/* What a sticky bar is drawn on: the page's color, or a surface that hosts
+   one sets its own (the reader's sheets, `ReaderSplit`). */
+:root {
+  --sticky-bar-bg: var(--color-canvas);
+  /* The room around the reader's sheets and between them (`ReaderSplit`),
+     which the rail and the details column measure from too. */
+  --reader-inset: 0.5rem;
 }
 
 /* Safe-area helpers. Mobile Safari and Android gesture bars overlap the edges
@@ -679,92 +688,6 @@
 }
 @utility pt-safe {
   padding-top: env(safe-area-inset-top);
-}
-
-/* The navigation column, and the button that brings it back.
-   From `md` (48rem) up the column is part of the layout, unless the reader has
-   collapsed it: `data-nav-collapsed` on <html>, set before first paint by
-   `NAV_COLLAPSED_BOOT_SCRIPT`. Collapsed, the header's menu button is the way
-   to open the column again, and a screen whose only header was that button
-   gets the bar back too. Below `md` the button and that bar are not drawn at
-   all: the bottom bar is a phone's navigation. Unlayered, so these beat the
-   button's `inline-flex`.
-
-   `display` cannot move, so the phone keeps the column at `display: none` and
-   a desk slides its width. The panel inside stays at `--nav-width` (the old
-   `w-60`) and the column clips it, which is the same 250ms ease-out as a
-   sheet. Visibility waits out the slide, then leaves the tab order; opening
-   drops the attribute, so it returns at once. The first paint already has the
-   attribute, and a transition does not run for a style that was never
-   something else. Reduced motion zeroes the delay above. */
-.nav-sidebar {
-  --nav-width: 15rem;
-  display: none;
-}
-.nav-sidebar-panel {
-  width: var(--nav-width);
-}
-@media (width < 48rem) {
-  .nav-menu-button,
-  .nav-menu-header {
-    display: none;
-  }
-}
-@media (min-width: 48rem) {
-  .nav-sidebar {
-    display: flex;
-    width: 0;
-    min-width: 0;
-    overflow: hidden;
-    visibility: hidden;
-    pointer-events: none;
-    transition:
-      width 250ms ease-out,
-      visibility 0s linear 250ms;
-  }
-  html:not([data-nav-collapsed]) .nav-sidebar {
-    width: var(--nav-width);
-    visibility: visible;
-    pointer-events: auto;
-    transition: width 250ms ease-out;
-  }
-
-  /* `size-11` is 2.75rem. Width, rather than `display`, so the button eases
-     into the search row. The closed margin cancels that row's `gap-2`.
-     The shorthand stands in for `transition-colors` from `md` up. */
-  .nav-menu-button {
-    width: 2.75rem;
-    min-width: 0;
-    margin-inline-end: 0;
-    opacity: 1;
-    visibility: visible;
-    transition:
-      width 250ms ease-out,
-      margin-inline-end 250ms ease-out,
-      opacity 200ms ease-out,
-      color 150ms,
-      background-color 150ms,
-      border-color 150ms;
-  }
-  html:not([data-nav-collapsed]) .nav-menu-button {
-    width: 0;
-    margin-inline-end: -0.5rem;
-    overflow: hidden;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition:
-      width 250ms ease-out,
-      margin-inline-end 250ms ease-out,
-      opacity 200ms ease-out,
-      color 150ms,
-      background-color 150ms,
-      border-color 150ms,
-      visibility 0s linear 250ms;
-  }
-  html:not([data-nav-collapsed]) .nav-menu-header {
-    display: none;
-  }
 }
 
 /* The shell's bottom padding (the bottom bar's clearance and a little more

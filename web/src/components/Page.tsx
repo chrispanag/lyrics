@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 /**
  * The content column's width, shared with the header bar above every page
  * (`SearchHeader`) and the reader columns under it (`ReaderSplit`'s pane, a
- * song's page), so a page's edge and the hamburger stay on one line. A `form`
+ * song's page), so a page's edge and the search field's stay on one line. A `form`
  * page is narrower, so its edge sits inside the bar's.
  */
 export const contentWidth = "max-w-3xl";

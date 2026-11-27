@@ -29,11 +29,10 @@ function splitPanes(): void {
 }
 
 /*
- * Every screen inside the shell offers a phone's bottom bar, and the desk's
- * way back to a collapsed column. The shell supplies the bar, and
- * `SearchHeader` and the `(menu)` layout the menu button, independently, so
- * only the app directory itself, composed by position (`test/app.tsx`), can
- * check them all; a miss leaves a reader on a screen they cannot navigate off.
+ * Every screen inside the shell offers a phone's bottom bar and the desk's
+ * rail. The shell supplies both, so only the app directory itself, composed by
+ * position (`test/app.tsx`), can check that every screen sits inside it; a
+ * miss leaves a reader on a screen they cannot navigate off.
  */
 describe("Reaching the navigation from every screen", () => {
   const admin = makeUser({ role: "admin" });
@@ -66,10 +65,9 @@ describe("Reaching the navigation from every screen", () => {
     const bar = await screen.findByRole("navigation", { name: "Navigation" });
     expect(within(bar).getByRole("link", { name: "Browse" })).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: "Search" })).toBeInTheDocument();
-    // The reader mounts the list and the song together, and each carries the
-    // button. jsdom has no breakpoints, so the one a phone would hide is here
-    // too; either one is the way back to the column.
-    expect(screen.getAllByRole("button", { name: "Open menu" })).not.toHaveLength(0);
+    // The desk's rail: jsdom has no breakpoints, so it is here beside the bar.
+    const rail = screen.getByRole("link", { name: "Songfolio" }).closest("aside")!;
+    expect(within(rail).getByRole("link", { name: "Browse" })).toBeInTheDocument();
   });
 
   // The credential screens have no navigation by design.
@@ -78,7 +76,7 @@ describe("Reaching the navigation from every screen", () => {
 
     expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Navigation" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Open menu" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Songfolio" })).not.toBeInTheDocument();
   });
 
   it("puts the catalog beside the lyrics, and an empty pane where no song is open", async () => {
@@ -96,11 +94,11 @@ describe("Reaching the navigation from every screen", () => {
     ).toBeInTheDocument();
     // The list is still there: its search box, with the open song marked in it.
     expect(screen.getByRole("searchbox", { name: /search songs/i })).toBeInTheDocument();
-    // jsdom has no container width; the class is what draws the line once the
-    // panes sit side by side. The region itself does not scroll: the scrollbar
-    // belongs to the songs under the search.
+    // jsdom has no container width; the class is what makes the list a sheet
+    // once the panes sit side by side. The region itself does not scroll: the
+    // scrollbar belongs to the songs under the search.
     const songs = screen.getByRole("region", { name: "Songs" });
-    expect(songs).toHaveClass("@3xl/app:border-r");
+    expect(songs).toHaveClass("@3xl/app:rounded-card", "@3xl/app:bg-surface");
     expect(songs).not.toHaveClass("@3xl/app:overflow-y-auto");
     expect(await screen.findByRole("link", { name: /Θάλασσα Πλατιά/ })).toHaveAttribute(
       "aria-current",

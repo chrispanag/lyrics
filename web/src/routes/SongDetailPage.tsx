@@ -412,7 +412,7 @@ function SongToolsBar({ children }: { children: ReactNode }) {
       // stuck, and leaves it alone where it is an ordinary row.
       data-sticky-header="phone"
       className={cn(
-        "@3xl/app:shrink-0 @3xl/app:border-b @3xl/app:border-line @3xl/app:bg-canvas @3xl/app:pt-safe",
+        "@3xl/app:shrink-0 @3xl/app:border-b @3xl/app:border-line @3xl/app:pt-safe",
         "@3xl/app:min-h-[var(--sticky-header-height,0px)]",
         stickyBarClasses({ phoneOnly: true }),
       )}
@@ -435,9 +435,9 @@ function SongToolsBar({ children }: { children: ReactNode }) {
  *   width: the lyrics against its left edge, the column against its right, and
  *   the room left over between them rather than around a centered pair. 48rem
  *   leaves the lyrics at least 26rem beside a 16rem column, which a pane
- *   reaches in a 1280px window with the navigation put away, or a 1440px one
- *   with it open. From `@5xl` (64rem) the column widens to 20rem; the lyrics
- *   stay at most 40rem.
+ *   reaches beside the rail and the list in a window of 77rem (1232px) and up.
+ *   From `@5xl` (64rem) the column widens to 20rem; the lyrics stay at most
+ *   40rem.
  */
 const SONG_COLUMNS = cn(
   "p-4",
@@ -501,10 +501,11 @@ function SongDetails({
         "mt-3 mb-5",
         "@3xl/song:col-start-2 @3xl/song:row-span-2 @3xl/song:row-start-1 @3xl/song:m-0 @3xl/song:self-start",
         // Sticky in the lyrics' scroller and as tall as its view, so the rule
-        // on its left runs the pane's length like the one beside the list;
-        // scrolled on its own past that. The padding keeps a focus ring
-        // unclipped.
-        "@3xl/song:sticky @3xl/song:top-4 @3xl/song:h-[calc(100dvh-var(--sticky-header-height,0px)-2rem)] @3xl/song:overflow-y-auto @3xl/song:overscroll-y-contain @3xl/song:border-l @3xl/song:border-line @3xl/song:p-1 @3xl/song:pl-6",
+        // on its left runs the pane's length; scrolled on its own past that.
+        // The view is the window less the header, the reader frame's inset
+        // above and below, and the 1rem kept above and below the column. The
+        // padding keeps a focus ring unclipped.
+        "@3xl/song:sticky @3xl/song:top-4 @3xl/song:h-[calc(100dvh_-_var(--sticky-header-height,0px)_-_2_*_var(--reader-inset)_-_2rem)] @3xl/song:overflow-y-auto @3xl/song:overscroll-y-contain @3xl/song:border-l @3xl/song:border-line @3xl/song:p-1 @3xl/song:pl-6",
       )}
     >
       {song ? (

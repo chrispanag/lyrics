@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
-import { MenuHeader, SearchHeader } from "./SearchHeader";
+import { SearchHeader } from "./SearchHeader";
 
 // jsdom lays nothing out, so boxes are asserted through their classes.
 describe("SearchHeader", () => {
@@ -32,35 +32,5 @@ describe("SearchHeader", () => {
     expect(row().lastElementChild).not.toBe(box());
     expect(box()).toHaveClass("min-w-0", "flex-1");
     expect(screen.getByRole("button", { name: "Filters" }).parentElement).toHaveClass("shrink-0");
-  });
-
-  // First child, so the field's left edge is the same on every screen.
-  it("leads the row with the menu button, on any page that renders it", () => {
-    render(header(<button type="button">Filters</button>));
-
-    expect(row().firstElementChild).toBe(screen.getByRole("button", { name: "Open menu" }));
-  });
-});
-
-// Compares the two columns with each other rather than with hard-coded classes,
-// which would only pin a copy staying in sync.
-describe("MenuHeader", () => {
-  // The column is the header's first child in both bars.
-  const columnOf = (ui: ReactNode) => {
-    const { unmount } = render(ui);
-    const header = screen.getByRole("button", { name: "Open menu" }).closest("header")!;
-    const column = header.firstElementChild!.className;
-    unmount();
-    return column;
-  };
-
-  it("carries the same trigger in the same column as the search bar", () => {
-    expect(columnOf(<MenuHeader />)).toBe(
-      columnOf(
-        <SearchHeader>
-          <input aria-label="Search songs" />
-        </SearchHeader>,
-      ),
-    );
   });
 });

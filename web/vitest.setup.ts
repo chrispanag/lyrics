@@ -2,7 +2,6 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
-import { NAV_COLLAPSED_ATTRIBUTE } from "./src/lib/navCollapsed";
 import { installDialogStub } from "./src/test/dialog";
 import { StubIntersectionObserver } from "./src/test/intersection";
 import { installPopoverStub } from "./src/test/popover";
@@ -61,7 +60,6 @@ afterEach(() => {
     // A size button writes this on <html>, which outlives `cleanup()`, and the
     // buttons read it back (lib/fontSize.ts): left, it leaks into the next spec.
     document.documentElement.removeAttribute("data-lyrics-size");
-    document.documentElement.removeAttribute(NAV_COLLAPSED_ATTRIBUTE);
   }
   server.resetHandlers();
 });
