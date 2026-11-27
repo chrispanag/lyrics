@@ -7,8 +7,7 @@ import { embedUrl } from "@/lib/youtube";
 /**
  * The video, played in place on the song's page. Mounted only by a press (the
  * page's Watch button), so nothing comes from YouTube until the reader asks:
- * the player, its scripts and cookies arrive with it and start at once. The
- * caller keys it on the song, so another song never inherits a playing frame.
+ * the player, its scripts and cookies arrive with it and start at once.
  *
  * Takes the id, never `youtube_url`, as `WatchOnYouTube` does.
  */

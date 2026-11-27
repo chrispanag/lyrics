@@ -196,7 +196,7 @@ function SongArticle() {
 
   return (
     // Full width of the reading pane once the list is beside it. Only there is
-    // it the `song` container `SONG_COLUMNS` is laid out by: the pane's width,
+    // it the `song` container `SONG_COLUMN` is laid out by: the pane's width,
     // not the window's, decides whether the column is held to a line. A phone
     // has no `song` container.
     <article
@@ -267,8 +267,8 @@ function SongArticle() {
         ref={lyrics}
         className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain"
       >
-        <div className={SONG_COLUMNS}>
-          {/* The title, and the list's bar above it: the reading column's head. */}
+        <div className={SONG_COLUMN}>
+          {/* The title, and the list's bar above it: the column's head. */}
           <div>
             {position && (
               <>
@@ -411,7 +411,7 @@ function SongToolsBar({ children }: { children: ReactNode }) {
  * than a comfortable line, rather than run out to the pane's left edge. A phone
  * has no `song` container.
  */
-const SONG_COLUMNS = cn("p-4", "@2xl/song:mx-auto @2xl/song:max-w-168");
+const SONG_COLUMN = cn("p-4", "@2xl/song:mx-auto @2xl/song:max-w-168");
 
 /** The song's title, in the song's own language: the title is content too. */
 function SongTitle({ song }: { song: Song }) {
@@ -445,25 +445,26 @@ function SongDetails({
   onShowRecordings: () => void;
 }) {
   const playerId = useId();
+  // Gated on the id, never the URL; see WatchOnYouTube.
+  const videoId = song?.youtube_video_id;
 
   return (
     <aside aria-label="Song details" className="mt-3 mb-6 border-y border-line py-3">
       {song ? (
         <>
           <SongFacts song={song} onShowRecordings={onShowRecordings} />
-          {(song.genres.length > 0 || song.youtube_video_id) && (
+          {(song.genres.length > 0 || videoId) && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {song.genres.map((genre) => (
                 <GenreTag key={genre.id} genre={genre} linked />
               ))}
-              {/* Gated on the id, never the URL; see WatchOnYouTube. */}
-              {song.youtube_video_id && (
+              {videoId && (
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={onToggleVideo}
                   aria-expanded={videoOpen}
-                  aria-controls={playerId}
+                  aria-controls={videoOpen ? playerId : undefined}
                   className="ml-auto"
                 >
                   {videoOpen ? (
@@ -476,10 +477,11 @@ function SongDetails({
               )}
             </div>
           )}
-          {/* Keyed on the song, so another one never inherits a playing frame. */}
-          {song.youtube_video_id && videoOpen && (
+          {/* Closed on another song with the sheets (`SongArticle`), so a
+              frame never plays one song under the next one's words. */}
+          {videoId && videoOpen && (
             <div id={playerId} className="mt-3">
-              <YouTubePlayer key={song.id} videoId={song.youtube_video_id} title={song.title} />
+              <YouTubePlayer videoId={videoId} title={song.title} />
             </div>
           )}
         </>

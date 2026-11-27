@@ -7,16 +7,7 @@ import { SongsPane } from "./SongsPane";
 import { Layout } from "@/components/Layout";
 import { ReaderSplit } from "@/components/ReaderSplit";
 import { catalogList, catalogSongs, entechno } from "@/test/catalog";
-import {
-  API,
-  list,
-  listById,
-  makePopularity,
-  makeRecording,
-  makeSong,
-  makeUser,
-  songByRef,
-} from "@/test/handlers";
+import { API, list, listById, makeRecording, makeSong, makeUser, songByRef } from "@/test/handlers";
 import { deskViewport, phoneGlobals, phoneParameters } from "@/test/viewport";
 
 const documented = makeSong({
@@ -523,22 +514,16 @@ const besideTheList: Decorator = (Story) => (
 );
 
 /** Documented, and long enough to scroll, so the desk stories have a full song. */
-const wideSong = makeSong({
+const deskSong = makeSong({
   ...documented,
   id: "song-12",
   slug: "megalo-tragoydi",
   title: "Μεγάλο τραγούδι",
   lyrics: longSong.lyrics ?? "",
-  popularity: makePopularity({
-    anonymous_clicks: 120,
-    authenticated_clicks: 4,
-    list_adds: 7,
-    list_users: 5,
-  }),
 });
 
 /**
- * `wideSong` beside the list, in a desk window of the given size. The panes
+ * `deskSong` beside the list, in a desk window of the given size. The panes
  * start past the 4rem rail, the 24rem list and the 0.5rem gap between them:
  * the song's sheet, and its article, at 28.5rem (456px).
  */
@@ -552,7 +537,7 @@ function atADesk(width: number, height: number): Story {
     decorators: [besideTheList],
     beforeEach({ msw }) {
       msw.use(
-        songByRef(wideSong),
+        songByRef(deskSong),
         http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list(catalogSongs))),
       );
     },
