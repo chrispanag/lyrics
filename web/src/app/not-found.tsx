@@ -1,3 +1,4 @@
+import { ButtonLink } from "@/components/ButtonLink";
 import { PageTitle } from "@/components/PageTitle";
 import { EmptyState } from "@/components/ui";
 
@@ -17,7 +18,15 @@ export default function NotFound() {
       <MenuBarLayout>
         {/* Named, or the tab keeps the previous page's title. */}
         <PageTitle name="Page not found" />
-        <EmptyState title="Page not found" description="That link does not lead anywhere." />
+        <EmptyState
+          title="Page not found"
+          description="That link does not lead anywhere."
+          action={
+            <ButtonLink href="/" variant="secondary" size="sm">
+              Browse songs
+            </ButtonLink>
+          }
+        />
       </MenuBarLayout>
     </ShellLayout>
   );

@@ -820,8 +820,8 @@ describe("SongDetailPage recordings", () => {
     expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
   });
 
-  // Its performers and year are the song's own rows, so only the label, the
-  // mark and the notes are added, and the year is said once.
+  // Its performers and year are the song's own rows, so only the label and the
+  // notes are added, and the year is said once.
   it("shows a lone recording inline rather than offering a sheet", async () => {
     withRecordings([makeRecording({ label: "Columbia", notes: "Recorded in Athens." })]);
 
@@ -829,12 +829,32 @@ describe("SongDetailPage recordings", () => {
 
     const inline = getNarrow(await screen.findAllByText("Columbia")).closest("[data-tier]");
     expect(inline).toHaveAttribute("data-tier", "narrow");
-    expect(inline).toHaveTextContent("First recording");
     expect(inline).toHaveTextContent("Recorded in Athens.");
+    // The mark is on the performers' line, which it describes, not the label's.
+    expect(inline).not.toHaveTextContent("First recording");
     expect(getNarrow(screen.getAllByText("1964"))).toBeInTheDocument();
-    expect(getNarrow(screen.getAllByText("Γιώργος Νταλάρας"))).toBeInTheDocument();
+    const performer = getNarrow(screen.getAllByText("Γιώργος Νταλάρας"));
+    expect(performer.closest("dd")).toHaveTextContent("First recording");
     expect(screen.queryByRole("button", { name: /show all/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: /recordings/i })).not.toBeInTheDocument();
+  });
+
+  // The mark joins the performers it is about, rather than taking a line of its
+  // own under the year.
+  it("marks a lone first recording on its performers' line", async () => {
+    withRecordings([makeRecording({ label: null, notes: null })]);
+
+    renderDetail();
+
+    const performer = getNarrow(await screen.findAllByText("Γιώργος Νταλάρας"));
+    const row = performer.closest("dd");
+    expect(row).toHaveTextContent("First recording");
+    expect(
+      within(row as HTMLElement)
+        .getByText("First recording")
+        .closest("[data-tier]"),
+    ).toHaveAttribute("data-tier", "narrow");
+    expect(screen.getAllByText("First recording")).toHaveLength(2); // the row's, and the column's list
   });
 
   // Unmarked, unlabeled and without notes, it has nothing the page lacks.

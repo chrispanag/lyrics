@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 
 // Listed as values so the Primitives stories can offer every one of them.
 export const BUTTON_VARIANTS = ["primary", "secondary", "ghost", "danger"] as const;
-export const BUTTON_SIZES = ["sm", "md", "lg", "icon"] as const;
+export const BUTTON_SIZES = ["sm", "md", "lg", "icon", "icon-sm"] as const;
 export type ButtonVariant = (typeof BUTTON_VARIANTS)[number];
 export type ButtonSize = (typeof BUTTON_SIZES)[number];
 
@@ -28,6 +28,9 @@ const buttonSizes: Record<ButtonSize, string> = {
   // Square, level with `md`. A size rather than an override, since `cn` cannot
   // replace the padding.
   icon: "size-11",
+  // Square, level with `sm`: a tool beside a heading, such as the lyrics'
+  // text size, where a 44px square would tower over the row.
+  "icon-sm": "size-9",
 };
 
 export function buttonClasses(

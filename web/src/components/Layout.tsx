@@ -6,7 +6,7 @@ import { type ReactNode, useEffect, useLayoutEffect, useRef } from "react";
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { BottomBar } from "@/components/BottomBar";
-import { buttonClasses } from "@/components/buttonStyles";
+import { ButtonLink } from "@/components/ButtonLink";
 import {
   currentEntry,
   NAV_ITEMS,
@@ -198,13 +198,9 @@ function NavPanel() {
               </div>
             </NavLink>
           ) : (
-            <Link
-              href="/login"
-              data-guest-only
-              className={cn(buttonClasses("primary", "md"), "w-full")}
-            >
+            <ButtonLink href="/login" data-guest-only className="w-full">
               Sign in
-            </Link>
+            </ButtonLink>
           )}
         </div>
       </nav>

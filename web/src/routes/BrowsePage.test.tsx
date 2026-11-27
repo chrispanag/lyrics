@@ -93,6 +93,54 @@ describe("BrowsePage", () => {
     expect(await screen.findByText(/no songs matched/i)).toBeInTheDocument();
   });
 
+  // Filters that match nothing are not an empty catalog, and the way out is
+  // offered where the reader is looking.
+  it("says filters matched nothing, and clears them on request", async () => {
+    const requests = recordRequests();
+
+    renderWithProviders(<BrowsePage />, { route: "/?language=en&genre_slug=laiko&sort=title" });
+
+    expect(await screen.findByRole("heading", { name: /no songs matched/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no songs yet/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+
+    await waitFor(() => expect(requests.at(-1)?.get("language")).toBeNull());
+    expect(requests.at(-1)?.get("genre_slug")).toBeNull();
+    // The ordering is a preference, not a filter.
+    expect(requests.at(-1)?.get("sort")).toBe("title");
+  });
+
+  it("calls an unfiltered, empty catalog empty, with nothing to clear", async () => {
+    recordRequests();
+
+    renderWithProviders(<BrowsePage />);
+
+    expect(await screen.findByRole("heading", { name: /no songs yet/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+  });
+
+  it("names a person's page in a visible heading", async () => {
+    recordRequests();
+
+    renderWithProviders(<BrowsePage />, { route: "/?person=person-1" });
+
+    const heading = await screen.findByRole("heading", {
+      level: 1,
+      name: "Songs by Μίκης Θεοδωράκης",
+    });
+    expect(heading).not.toHaveClass("sr-only");
+  });
+
+  it("keeps a search's heading for assistive technology only", async () => {
+    recordRequests();
+
+    renderWithProviders(<BrowsePage />, { route: "/?q=thalassa" });
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Search: thalassa" })).toHaveClass(
+      "sr-only",
+    );
+  });
+
   it("surfaces an API failure instead of rendering an empty list", async () => {
     server.use(
       http.get(`${API}/api/v1/songs`, () =>
@@ -462,8 +510,8 @@ describe("BrowsePage filter sheet", () => {
     await waitFor(() => expect(requests.at(-1)?.get("sort")).toBe("popularity"));
   });
 
-  // `filterCount` and "Clear all" each name the filter keys; one missing from
-  // the second leaves a badge that nothing in the sheet can clear.
+  // A key the badge counts but "Clear all" misses leaves a badge that nothing
+  // in the sheet can clear.
   it("clears every filter and the ordering, and keeps the search", async () => {
     const user = userEvent.setup();
     const requests = recordSheetRequests();

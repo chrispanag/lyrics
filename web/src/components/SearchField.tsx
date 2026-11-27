@@ -49,7 +49,7 @@ export function SearchField({
         type="search"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Search lyrics, titles, artists…"
+        placeholder="Search songs and lyrics"
         aria-label="Search songs"
         className={fieldClasses}
         {...rest}

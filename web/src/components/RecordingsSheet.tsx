@@ -67,16 +67,20 @@ export function RecordingList({
                 {recording.label && hasPerformers && (
                   <p className="text-sm text-fg-muted">{recording.label}</p>
                 )}
+                {/* Keyed on the flag, never on index 0. Under the name, not
+                    beside it: in the details column a name beside the mark
+                    has room for a word a line. */}
+                {recording.is_first && (
+                  <p className="mt-1">
+                    <FirstRecordingBadge />
+                  </p>
+                )}
                 {recording.notes && <RecordingNotes notes={recording.notes} />}
               </div>
 
-              <div className="shrink-0 text-right text-sm">
-                {/* Keyed on the flag, never on index 0. */}
-                {recording.is_first && <FirstRecordingBadge />}
-                {recording.release_year !== null && hasOwnText && (
-                  <p className="mt-1 text-fg-muted">{recording.release_year}</p>
-                )}
-              </div>
+              {recording.release_year !== null && hasOwnText && (
+                <p className="shrink-0 text-sm text-fg-muted">{recording.release_year}</p>
+              )}
             </div>
 
             {/* The id, never the URL: only the id is validated. */}

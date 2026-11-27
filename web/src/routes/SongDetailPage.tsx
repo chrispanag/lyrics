@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, type Ref, useId, useLayoutEffect, useRef, useState } from "react";
-import { ChartColumn, Check, ListPlus, Minus, Pencil, Plus, Trash, Type } from "lucide-react";
+import { ChartColumn, Check, ListPlus, Pencil, SixteenthNotes, Trash } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
 import { useDeleteSong, useLists, useSong, useSongLists, useToggleSongInList } from "@/api/hooks";
@@ -15,30 +15,33 @@ import { PageTitle } from "@/components/PageTitle";
 import { PersonLinks } from "@/components/PersonLinks";
 import { SongSearch } from "@/components/SongSearch";
 import { WatchOnYouTube } from "@/components/WatchOnYouTube";
-import { actionLabel, buttonClasses } from "@/components/buttonStyles";
+import { ButtonLink } from "@/components/ButtonLink";
+import { Fact, FactList } from "@/components/FactList";
+import { GenreTag } from "@/components/GenreTag";
+import { TextSizeControl } from "@/components/TextSizeControl";
+import { actionLabel } from "@/components/buttonStyles";
 import { MenuItem, MoreActionsMenu } from "@/components/MoreActionsMenu";
 import { SongStats, SongStatsSheet } from "@/components/SongStatsSheet";
-import { Button, ConfirmSheet, ErrorMessage, Sheet, Skeleton, Spinner } from "@/components/ui";
-import { browseHref } from "@/lib/browse";
+import {
+  Button,
+  ConfirmSheet,
+  EmptyState,
+  ErrorMessage,
+  Sheet,
+  Skeleton,
+  Spinner,
+} from "@/components/ui";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
 import { cn } from "@/lib/cn";
 import { panelChrome } from "@/components/cardStyles";
-import {
-  DEFAULT_FONT_SIZE,
-  FONT_SIZES,
-  applyFontSize,
-  drawnFontSize,
-  storeFontSize,
-} from "@/lib/fontSize";
 import { songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Recording, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { headerBarPadding } from "@/components/SearchHeader";
-import { sectionLabel } from "@/components/textStyles";
+import { linkClasses, sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
 import { Link, useRouter } from "@/lib/navigation";
 import { stickyBarClasses, useStickyBar } from "@/components/stickyBar";
-import { useStoredState } from "@/lib/useStoredState";
 import {
   FirstRecordingBadge,
   RecordingList,
@@ -88,12 +91,30 @@ export function SongNotFound() {
   return (
     <>
       <SongSearchAbove />
-      <SongUnavailable message="No song has this address." />
+      {/* Nothing failed, so it is said calmly, as a dead link is (app/not-found). */}
+      <SongUnavailable>
+        <EmptyState
+          icon={<SixteenthNotes aria-hidden className="size-12" />}
+          title="Song not found"
+          description="No song has this address."
+          action={<BrowseSongs />}
+        />
+      </SongUnavailable>
     </>
   );
 }
 
-function SongUnavailable({ message }: { message: string }) {
+/** The way back from a song that is not there. */
+function BrowseSongs() {
+  return (
+    <ButtonLink href="/" variant="secondary" size="sm">
+      Browse songs
+    </ButtonLink>
+  );
+}
+
+/** Where a song would be, holding what is said in its place. */
+function SongUnavailable({ children }: { children: ReactNode }) {
   return (
     <div
       className={cn(
@@ -104,10 +125,7 @@ function SongUnavailable({ message }: { message: string }) {
       )}
     >
       <PageTitle name="Song not available" />
-      <ErrorMessage>{message}</ErrorMessage>
-      <Link href="/" className="mt-4 inline-block text-sm text-fg-accent hover:underline">
-        Back to browse
-      </Link>
+      {children}
     </div>
   );
 }
@@ -165,17 +183,6 @@ function SongArticle() {
     setStatsOpen(false);
     setConfirmDelete(false);
   }
-  // Only the buttons' limits read this: the lyrics are sized by CSS from the
-  // attribute the boot script set before first paint (lib/fontSize).
-  const [fontSizeIndex, setFontSizeIndex] = useStoredState(DEFAULT_FONT_SIZE, drawnFontSize);
-
-  const setFontSize = (index: number) => {
-    const clamped = Math.max(0, Math.min(FONT_SIZES.length - 1, index));
-    setFontSizeIndex(clamped);
-    applyFontSize(clamped);
-    storeFontSize(clamped);
-  };
-
   // May run before the song arrives: `canEditSong` answers admins without it.
   const canEdit = canEditSong(user, song);
 
@@ -183,7 +190,14 @@ function SongArticle() {
   // hand that only means a failed refetch, which must not take the lyrics away.
   // See CLAUDE.md, "Frontend".
   if (!isLoading && !song) {
-    return <SongUnavailable message={errorMessage(error, "This song could not be loaded.")} />;
+    return (
+      <SongUnavailable>
+        <ErrorMessage>{errorMessage(error, "This song could not be loaded.")}</ErrorMessage>
+        <div className="mt-4">
+          <BrowseSongs />
+        </div>
+      </SongUnavailable>
+    );
   }
 
   return (
@@ -238,14 +252,15 @@ function SongArticle() {
               <span className={actionLabel}>Add to list</span>
             </Button>
             {canEdit && (
-              <Link
+              <ButtonLink
                 href={`${songRefHref(id ?? "")}/edit`}
                 prefetch={false}
-                className={buttonClasses("ghost", "sm")}
+                variant="ghost"
+                size="sm"
               >
                 <Pencil aria-hidden className="size-4" />
                 <span className={actionLabel}>Edit</span>
-              </Link>
+              </ButtonLink>
             )}
             {/* A step away from a reader's thumb. Waits for the song: the
                 confirmation names it. Only an admin has anything in it, so no
@@ -289,30 +304,7 @@ function SongArticle() {
             <section aria-label="Lyrics">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className={sectionLabel}>Lyrics</h2>
-                {/* A fieldset is the native group; preflight zeroes its border, margin
-                and padding. Named by `aria-label`, not a <legend>: the controls
-                are icons, and a visible "Text size" would crowd the heading row. */}
-                <fieldset className="flex items-center gap-1" aria-label="Text size">
-                  <Type aria-hidden className="mr-1 size-4 text-fg-subtle" />
-                  <button
-                    type="button"
-                    onClick={() => setFontSize(fontSizeIndex - 1)}
-                    disabled={fontSizeIndex === 0}
-                    aria-label="Decrease text size"
-                    className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
-                  >
-                    <Minus aria-hidden className="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFontSize(fontSizeIndex + 1)}
-                    disabled={fontSizeIndex === FONT_SIZES.length - 1}
-                    aria-label="Increase text size"
-                    className="rounded-compact p-2 text-fg-tertiary hover:bg-muted disabled:opacity-40"
-                  >
-                    <Plus aria-hidden className="size-4" />
-                  </button>
-                </fieldset>
+                <TextSizeControl />
               </div>
 
               {!fullSong ? (
@@ -610,34 +602,42 @@ function SongFacts({ song, onShowRecordings }: { song: Song; onShowRecordings: (
   const performers = songPerformers(song);
   const year = song.release_year;
   const onlyRecording = song.recordings.length === 1 ? song.recordings[0] : undefined;
+  // A lone recording's mark goes on its performers' line, which it describes.
+  const markOnPerformers = Boolean(onlyRecording?.is_first && performers.length > 0);
 
   return (
     <div lang={song.language}>
-      <dl className="space-y-1 text-sm">
+      <FactList layout="aligned" className="text-sm">
         {/* Performers lead; the row is conditional, since most recordings
             name nobody. */}
         {performers.length > 0 && (
-          <CreditRow label="Performed by">
+          <Fact label="Performed by">
             <PersonLinks people={performers} />
-          </CreditRow>
+            {/* The column marks it in its recordings list instead. */}
+            {markOnPerformers && (
+              <span {...onTier(narrowOnly, "ml-2 inline-block")}>
+                <FirstRecordingBadge />
+              </span>
+            )}
+          </Fact>
         )}
         {creditsByRole.map(([role, names]) => (
-          <CreditRow key={role} label={CREDIT_DISPLAY_LABELS[role]}>
+          <Fact key={role} label={CREDIT_DISPLAY_LABELS[role]}>
             <PersonLinks people={names} />
-          </CreditRow>
+          </Fact>
         ))}
-        {year && <CreditRow label="Year">{year}</CreditRow>}
-      </dl>
+        {year && <Fact label="Year">{year}</Fact>}
+      </FactList>
 
       {/* Beside the lyrics the column lists every recording instead. */}
       {onlyRecording ? (
-        <OnlyRecording recording={onlyRecording} tier={narrowOnly} />
+        <OnlyRecording recording={onlyRecording} tier={narrowOnly} markShown={markOnPerformers} />
       ) : (
         song.recordings.length > 0 && (
           <button
             type="button"
             onClick={onShowRecordings}
-            {...onTier(narrowOnly, "mt-2 text-sm font-medium text-fg-accent hover:underline")}
+            {...onTier(narrowOnly, linkClasses("accent", "mt-2 text-sm"))}
           >
             Show all {recordingCount(song.recordings.length)}
           </button>
@@ -647,13 +647,7 @@ function SongFacts({ song, onShowRecordings }: { song: Song; onShowRecordings: (
       {song.genres.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {song.genres.map((genre) => (
-            <Link
-              key={genre.id}
-              href={browseHref({ genre_slug: genre.slug })}
-              className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-fg-secondary hover:bg-muted-hover"
-            >
-              {genre.name}
-            </Link>
+            <GenreTag key={genre.id} genre={genre} linked />
           ))}
         </div>
       )}
@@ -742,16 +736,26 @@ function AddToListSheet({
  * copies of this same row, so only the label, the first-recording mark and the
  * notes remain. Nothing at all when the row has none of them.
  */
-function OnlyRecording({ recording, tier }: { recording: Recording; tier: Tier }) {
-  if (!recording.label && !recording.is_first && !recording.notes) return null;
+function OnlyRecording({
+  recording,
+  tier,
+  markShown,
+}: {
+  recording: Recording;
+  tier: Tier;
+  /** The first-recording mark is already on the performers' line. */
+  markShown: boolean;
+}) {
+  const mark = recording.is_first && !markShown;
+  if (!recording.label && !mark && !recording.notes) return null;
 
   return (
     <div {...onTier(tier, "mt-2")}>
-      {(recording.label || recording.is_first) && (
+      {(recording.label || mark) && (
         <p className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
           {recording.label}
           {/* Keyed on the flag, as in the sheet: being the only one makes no claim. */}
-          {recording.is_first && <FirstRecordingBadge />}
+          {mark && <FirstRecordingBadge />}
         </p>
       )}
       {recording.notes && <RecordingNotes notes={recording.notes} />}
@@ -781,14 +785,4 @@ function LyricsLines({ lyrics }: { lyrics: string }) {
         {line.trim() ? line : <br />}
       </span>
     ));
-}
-
-/** One labeled row of the song's credits; the value is names or a year. */
-function CreditRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex gap-2">
-      <dt className="shrink-0 text-fg-muted">{label}</dt>
-      <dd className="font-medium">{children}</dd>
-    </div>
-  );
 }

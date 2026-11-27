@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { sectionLabel } from "./textStyles";
+import { pageTitle, sectionLabel } from "./textStyles";
 import { cn } from "@/lib/cn";
 
 /**
@@ -36,7 +36,7 @@ export function PageHeader({
           the row's whole width before the actions drop beneath it. */}
       <div className="min-w-0 grow">
         {eyebrow && <p className={cn(sectionLabel, "mb-1")}>{eyebrow}</p>}
-        <h1 className="text-2xl font-bold tracking-tight text-balance break-words">{title}</h1>
+        <h1 className={pageTitle}>{title}</h1>
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </header>

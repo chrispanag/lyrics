@@ -6,11 +6,13 @@ import { errorDetails, errorMessage } from "@/api/client";
 import { PASSWORD_CHANGE_UNAVAILABLE_ERROR, RESET_UNCONFIGURED_ERROR } from "@/auth/context";
 import { returnDestination } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
-import { buttonClasses } from "@/components/buttonStyles";
+import { ButtonLink } from "@/components/ButtonLink";
 import { PageTitle } from "@/components/PageTitle";
+import { linkClasses, pageTitle } from "@/components/textStyles";
 import { Waiting } from "@/routes/guards";
 import { Button, ErrorMessage, Field, Input, Notice } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
+import { cn } from "@/lib/cn";
 import { Link, Redirect, useRouter, useSearchParams } from "@/lib/navigation";
 
 /** Shell shared by every auth screen. */
@@ -29,12 +31,20 @@ function AuthShell({
       <PageTitle name={title} />
       <div className="mb-8 text-center">
         <Wordmark size="lg" />
-        <h1 className="mt-4 text-2xl font-bold tracking-tight">{title}</h1>
+        <h1 className={cn(pageTitle, "mt-4")}>{title}</h1>
         <p className="mt-1 text-sm text-fg-muted">{subtitle}</p>
       </div>
       {children}
     </div>
   );
+}
+
+/**
+ * The lines under an auth screen's form: the other ways on, each a paragraph,
+ * set in `linkClasses` tones.
+ */
+function AuthFooter({ children }: { children: React.ReactNode }) {
+  return <div className="mt-6 space-y-2 text-center text-sm text-fg-muted">{children}</div>;
 }
 
 export function LoginPage() {
@@ -104,22 +114,24 @@ export function LoginPage() {
       </form>
 
       <p className="mt-4 text-center text-sm">
-        <Link href="/forgot-password" className="text-fg-muted hover:underline">
+        <Link href="/forgot-password" className={linkClasses("quiet")}>
           Forgot your password?
         </Link>
       </p>
 
-      <p className="mt-6 text-center text-sm text-fg-muted">
-        No account?{" "}
-        <Link href="/register" className="font-medium text-fg-accent hover:underline">
-          Create one
-        </Link>
-      </p>
-      <p className="mt-2 text-center text-sm">
-        <Link href="/" className="text-fg-muted hover:underline">
-          Continue as guest
-        </Link>
-      </p>
+      <AuthFooter>
+        <p>
+          No account?{" "}
+          <Link href="/register" className={linkClasses("accent")}>
+            Create one
+          </Link>
+        </p>
+        <p>
+          <Link href="/" className={linkClasses("quiet")}>
+            Continue as guest
+          </Link>
+        </p>
+      </AuthFooter>
     </AuthShell>
   );
 }
@@ -215,7 +227,7 @@ function ResendCodeLink({
         type="button"
         onClick={onResend}
         disabled={resending || cooldown > 0}
-        className="font-medium text-fg-accent hover:underline disabled:cursor-not-allowed disabled:text-fg-subtle disabled:no-underline"
+        className={linkClasses("accent")}
       >
         {cooldown > 0 ? `Send another in ${cooldown}s` : "Send another"}
       </button>
@@ -302,12 +314,14 @@ export function RegisterPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-fg-muted">
-        Already have an account?{" "}
-        <Link href="/login" className="font-medium text-fg-accent hover:underline">
-          Sign in
-        </Link>
-      </p>
+      <AuthFooter>
+        <p>
+          Already have an account?{" "}
+          <Link href="/login" className={linkClasses("accent")}>
+            Sign in
+          </Link>
+        </p>
+      </AuthFooter>
     </AuthShell>
   );
 }
@@ -688,11 +702,13 @@ export function ForgotPasswordPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm">
-          <Link href="/login" className="text-fg-muted hover:underline">
-            Back to sign in
-          </Link>
-        </p>
+        <AuthFooter>
+          <p>
+            <Link href="/login" className={linkClasses("quiet")}>
+              Back to sign in
+            </Link>
+          </p>
+        </AuthFooter>
       </AuthShell>
     );
   }
@@ -720,19 +736,15 @@ export function ForgotPasswordPage() {
           </Button>
         </form>
 
-        <div className="mt-6 space-y-2 text-center text-sm text-fg-muted">
+        <AuthFooter>
           <ResendCodeLink resending={resending} cooldown={cooldown} onResend={onResend} />
           <p>
             Wrong address?{" "}
-            <button
-              type="button"
-              onClick={startOver}
-              className="font-medium text-fg-muted hover:underline"
-            >
+            <button type="button" onClick={startOver} className={linkClasses("muted")}>
               Start over
             </button>
           </p>
-        </div>
+        </AuthFooter>
       </AuthShell>
     );
   }
@@ -763,22 +775,18 @@ export function ForgotPasswordPage() {
           </Button>
         </form>
 
-        <div className="mt-6 space-y-2 text-center text-sm text-fg-muted">
+        <AuthFooter>
           <ResendCodeLink
             resending={resending}
             cooldown={cooldown}
             onResend={onResendConfirmCode}
           />
           <p>
-            <button
-              type="button"
-              onClick={startOver}
-              className="font-medium text-fg-muted hover:underline"
-            >
+            <button type="button" onClick={startOver} className={linkClasses("muted")}>
               Start over
             </button>
           </p>
-        </div>
+        </AuthFooter>
       </AuthShell>
     );
   }
@@ -801,15 +809,13 @@ export function ForgotPasswordPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-fg-muted">
-          <button
-            type="button"
-            onClick={startOver}
-            className="font-medium text-fg-muted hover:underline"
-          >
-            Start again with a new code
-          </button>
-        </p>
+        <AuthFooter>
+          <p>
+            <button type="button" onClick={startOver} className={linkClasses("muted")}>
+              Start again with a new code
+            </button>
+          </p>
+        </AuthFooter>
       </AuthShell>
     );
   }
@@ -819,10 +825,9 @@ export function ForgotPasswordPage() {
       <div className="space-y-4">
         <SignOutOthersPanel />
 
-        {/* A styled Link: a button inside an anchor is invalid. */}
-        <Link href="/" className={buttonClasses("primary", "lg", "w-full")}>
+        <ButtonLink href="/" variant="primary" size="lg" className="w-full">
           Continue to Songfolio
-        </Link>
+        </ButtonLink>
       </div>
     </AuthShell>
   );
@@ -945,20 +950,16 @@ export function VerifyEmailPage() {
         </Button>
       </form>
 
-      <div className="mt-6 space-y-2 text-center text-sm text-fg-muted">
+      <AuthFooter>
         {/* Held while the opening code is in flight, or a second step-up retires it. */}
         <ResendCodeLink resending={resending || sending} cooldown={cooldown} onResend={onResend} />
         <p>
           Wrong address?{" "}
-          <button
-            type="button"
-            onClick={() => logout()}
-            className="font-medium text-fg-muted hover:underline"
-          >
+          <button type="button" onClick={() => logout()} className={linkClasses("muted")}>
             Sign out
           </button>
         </p>
-      </div>
+      </AuthFooter>
     </AuthShell>
   );
 }
@@ -1114,12 +1115,12 @@ export function ChangePasswordPage() {
             You can still set a new password by resetting it, which emails you a code to confirm it
             is you.
           </p>
-          <Link href="/forgot-password" className={buttonClasses("primary", "lg", "w-full")}>
+          <ButtonLink href="/forgot-password" variant="primary" size="lg" className="w-full">
             Reset my password instead
-          </Link>
-          <Link href="/profile" className={buttonClasses("secondary", "lg", "w-full")}>
+          </ButtonLink>
+          <ButtonLink href="/profile" variant="secondary" size="lg" className="w-full">
             Back to profile
-          </Link>
+          </ButtonLink>
         </div>
       </AuthShell>
     );
@@ -1145,7 +1146,7 @@ export function ChangePasswordPage() {
           </Button>
         </form>
 
-        <div className="mt-6 space-y-2 text-center text-sm text-fg-muted">
+        <AuthFooter>
           {/* Held while the first code is in flight, as on the verification screen. */}
           <ResendCodeLink
             resending={resending || sending}
@@ -1153,11 +1154,11 @@ export function ChangePasswordPage() {
             onResend={onResend}
           />
           <p>
-            <Link href="/profile" className="font-medium text-fg-muted hover:underline">
+            <Link href="/profile" className={linkClasses("muted")}>
               Back to profile
             </Link>
           </p>
-        </div>
+        </AuthFooter>
       </AuthShell>
     );
   }
@@ -1180,17 +1181,19 @@ export function ChangePasswordPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-fg-muted">
-          {/* Disabled while working: no cooldown has started to stop a second code. */}
-          <button
-            type="button"
-            onClick={startAgain}
-            disabled={resending}
-            className="font-medium text-fg-muted hover:underline disabled:cursor-not-allowed disabled:text-fg-subtle disabled:no-underline"
-          >
-            Start again with a new code
-          </button>
-        </p>
+        <AuthFooter>
+          <p>
+            {/* Disabled while working: no cooldown has started to stop a second code. */}
+            <button
+              type="button"
+              onClick={startAgain}
+              disabled={resending}
+              className={linkClasses("muted")}
+            >
+              Start again with a new code
+            </button>
+          </p>
+        </AuthFooter>
       </AuthShell>
     );
   }
@@ -1200,9 +1203,9 @@ export function ChangePasswordPage() {
       <div className="space-y-4">
         <SignOutOthersPanel />
 
-        <Link href="/profile" className={buttonClasses("primary", "lg", "w-full")}>
+        <ButtonLink href="/profile" variant="primary" size="lg" className="w-full">
           Back to profile
-        </Link>
+        </ButtonLink>
       </div>
     </AuthShell>
   );

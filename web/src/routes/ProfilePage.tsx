@@ -1,13 +1,24 @@
 "use client";
 
 import { useId, useState, type ChangeEvent, type SubmitEvent } from "react";
-import { KeyRound, LoaderCircle, LogOut, Moon, Pencil, Sun, Trash, Upload } from "lucide-react";
+import {
+  KeyRound,
+  LoaderCircle,
+  LogOut,
+  Monitor,
+  Moon,
+  Pencil,
+  Sun,
+  Trash,
+  Upload,
+} from "lucide-react";
 
 import { errorDetails, errorMessage } from "@/api/client";
 import { useRemoveAvatar, useUpdateProfile, useUploadAvatar } from "@/api/hooks";
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { Button, ErrorMessage, Field, Input, Sheet } from "@/components/ui";
+import { ButtonLink } from "@/components/ButtonLink";
 import { buttonClasses, segmentClasses, segmentedTrack } from "@/components/buttonStyles";
 import { panelChrome } from "@/components/cardStyles";
 import { Page } from "@/components/Page";
@@ -23,7 +34,6 @@ import {
   MAX_SOURCE_MB,
   toSquareJpeg,
 } from "@/lib/image";
-import { Link } from "@/lib/navigation";
 import { applyTheme, storeTheme, storedTheme, type Theme } from "@/lib/theme";
 import { useStoredState } from "@/lib/useStoredState";
 
@@ -32,10 +42,10 @@ function normalizedName(name: string | null): string | null {
   return name?.trim() || null;
 }
 
-const THEME_OPTIONS: { value: Theme; label: string; icon?: typeof Sun }[] = [
+const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Light", icon: Sun },
   { value: "dark", label: "Dark", icon: Moon },
-  { value: "system", label: "System" },
+  { value: "system", label: "System", icon: Monitor },
 ];
 
 export function ProfilePage() {
@@ -79,12 +89,12 @@ export function ProfilePage() {
         <PageHeader title="You are browsing as a guest" />
         <p className="mt-2 text-sm text-fg-muted">Sign in to build lists of songs.</p>
         <div className="mt-6 flex flex-col gap-2">
-          <Link href="/login" className={buttonClasses("primary", "lg")}>
+          <ButtonLink href="/login" variant="primary" size="lg">
             Sign in
-          </Link>
-          <Link href="/register" className={buttonClasses("secondary", "lg")}>
+          </ButtonLink>
+          <ButtonLink href="/register" variant="secondary" size="lg">
             Create an account
-          </Link>
+          </ButtonLink>
         </div>
 
         <ThemeToggle theme={theme} onChange={selectTheme} className="mt-10" />
@@ -214,20 +224,20 @@ export function ProfilePage() {
       {offeredTo(ADMIN_ITEM, user) && (
         <div className="mt-8 md:hidden">
           <SectionHeading>Administration</SectionHeading>
-          <Link href={ADMIN_ITEM.to} className={buttonClasses("secondary", "lg", "w-full")}>
+          <ButtonLink href={ADMIN_ITEM.to} variant="secondary" size="lg" className="w-full">
             <ADMIN_ITEM.icon aria-hidden className="size-4" />
             Admin console
-          </Link>
+          </ButtonLink>
         </div>
       )}
 
       <div className="mt-8">
         <SectionHeading>Security</SectionHeading>
         {/* A link: changing a password is its own emailed-code flow. */}
-        <Link href="/change-password" className={buttonClasses("secondary", "lg", "w-full")}>
+        <ButtonLink href="/change-password" variant="secondary" size="lg" className="w-full">
           <KeyRound aria-hidden className="size-4" />
           Change password
-        </Link>
+        </ButtonLink>
       </div>
 
       <ThemeToggle theme={theme} onChange={selectTheme} className="mt-8" />
@@ -423,7 +433,7 @@ function ThemeToggle({
               onChange={() => onChange(option.value)}
               className="sr-only"
             />
-            {option.icon && <option.icon aria-hidden className="size-4" />}
+            <option.icon aria-hidden className="size-4" />
             {option.label}
           </label>
         ))}
