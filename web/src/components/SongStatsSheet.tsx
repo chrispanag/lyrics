@@ -15,8 +15,7 @@ function times(n: number): string {
 }
 
 /**
- * A song's tallies, as rows: in the Stats sheet, and in the song's details
- * column where there is room for them. Views are the song page's opens, each
+ * A song's tallies, as rows, in the Stats sheet. Views are the song page's opens, each
  * visitor counted once (`useRecordSongClick`). `list_adds` counts every
  * placement and never falls; `list_users` is who has it in a list now.
  *

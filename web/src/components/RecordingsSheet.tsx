@@ -26,8 +26,7 @@ export function RecordingNotes({ notes }: { notes: string }) {
 
 /**
  * Every recording of a song, in the order the server sent them. Not re-sorted:
- * the server owns the "first recording" order. Shared by the sheet and the
- * song's details column, so the two always say the same thing.
+ * the server owns the "first recording" order. The sheet's body.
  *
  * `language` marks the contributor's words: the sheet renders outside the
  * page's song-language blocks. `onNavigate` lets a modal close itself when a
@@ -68,8 +67,7 @@ export function RecordingList({
                   <p className="text-sm text-fg-muted">{recording.label}</p>
                 )}
                 {/* Keyed on the flag, never on index 0. Under the name, not
-                    beside it: in the details column a name beside the mark
-                    has room for a word a line. */}
+                    beside it, so a long name keeps the row's width. */}
                 {recording.is_first && (
                   <p className="mt-1">
                     <FirstRecordingBadge />

@@ -5,31 +5,28 @@ import { cn } from "@/lib/cn";
 /**
  * How a `FactList` sets out its rows:
  *
- * - `aligned`: label and value side by side, every value starting on one line
- *   and a long one wrapping under itself. Narrower than 20rem, too narrow for a
- *   second column of names, each label sits over its value instead. A song's
- *   credits, under its title and in the column beside the lyrics.
+ * - `inline`: the facts run on as one band, each label just before its value,
+ *   wrapping between facts, as a record sleeve prints its credits. A long value
+ *   wraps within its fact. A song's credits, under its title.
  * - `justified`: the label at the start and the value at the end, the rows
  *   ruled apart. A song's tallies.
  */
-export type FactLayout = "aligned" | "justified";
+export type FactLayout = "inline" | "justified";
 
-// The list is the container its rows ask about: its own width, not the
-// window's, decides whether two columns fit.
 const listLayouts: Record<FactLayout, string> = {
-  aligned: "@container grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1",
+  inline: "flex flex-wrap gap-x-6 gap-y-1",
   justified: "divide-y divide-line",
 };
 
 const rowLayouts: Record<FactLayout, { row: string; value: string }> = {
-  aligned: { row: "col-span-2 grid grid-cols-subgrid @max-xs:block @max-xs:pb-1", value: "" },
+  inline: { row: "flex min-w-0 items-baseline gap-1.5", value: "min-w-0" },
   justified: {
     row: "flex items-baseline justify-between gap-4 py-3 first:pt-0 last:pb-0",
     value: "text-right",
   },
 };
 
-const Layout = createContext<FactLayout>("aligned");
+const Layout = createContext<FactLayout>("inline");
 
 /** Labeled facts, as a description list: credits, tallies. */
 export function FactList({

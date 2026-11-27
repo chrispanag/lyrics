@@ -6,7 +6,7 @@ import { Fact, FactList } from "./FactList";
 describe("FactList", () => {
   it("pairs each label with its value", () => {
     render(
-      <FactList layout="aligned">
+      <FactList layout="inline">
         <Fact label="Music">Μίκης Θεοδωράκης</Fact>
         <Fact label="Year">1964</Fact>
       </FactList>,
@@ -32,15 +32,15 @@ describe("FactList", () => {
   });
 
   // jsdom draws nothing, so the classes are the layout.
-  it("gives every row its list's layout, stacking an aligned one when narrow", () => {
+  it("runs inline facts on as one band that wraps between them", () => {
     render(
-      <FactList layout="aligned">
+      <FactList layout="inline">
         <Fact label="Music">Μίκης Θεοδωράκης</Fact>
       </FactList>,
     );
 
     const row = screen.getByRole("term").parentElement;
-    expect(row?.parentElement).toHaveClass("@container");
-    expect(row).toHaveClass("grid-cols-subgrid", "@max-xs:block");
+    expect(row?.parentElement).toHaveClass("flex", "flex-wrap");
+    expect(row).toHaveClass("flex", "items-baseline");
   });
 });

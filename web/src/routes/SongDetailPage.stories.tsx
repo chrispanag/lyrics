@@ -76,10 +76,9 @@ export const Documented: Story = {
   parameters: { route: "/songs/to-palio-roloi" },
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole("heading", { name: "Το Παλιό Ρολόι" })).toBeVisible();
-    await expect(canvas.getByRole("link", { name: /watch on youtube/i })).toHaveAttribute(
-      "href",
-      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    );
+    // The video waits for a press: nothing from YouTube until then.
+    await expect(canvas.getByRole("button", { name: "Watch" })).toBeVisible();
+    await expect(document.querySelector("iframe")).toBeNull();
   },
 };
 
@@ -523,7 +522,7 @@ const besideTheList: Decorator = (Story) => (
   </Layout>
 );
 
-/** Documented, and long enough to scroll: what the details column is for. */
+/** Documented, and long enough to scroll, so the desk stories have a full song. */
 const wideSong = makeSong({
   ...documented,
   id: "song-12",
@@ -570,157 +569,74 @@ async function songParts(canvas: ReturnType<typeof within>) {
   };
 }
 
-/** The lyrics' own scroller: the first ancestor that scrolls. */
-function scrollerOf(element: HTMLElement): HTMLElement {
-  let node = element.parentElement;
-  while (node && getComputedStyle(node).overflowY !== "auto") node = node.parentElement;
-  if (!node) throw new Error("The lyrics have no scroller.");
-  return node;
+/**
+ * Checks the one reading column a desk shows: the title, the credits and the
+ * lyrics stacked in a 40rem column centered in the song's pane.
+ */
+async function oneCenteredColumn(canvas: ReturnType<typeof within>) {
+  const { details, lyrics, title } = await songParts(canvas);
+  const article = canvas.getByRole("article");
+  // The pane has its width once the list is the wider one beside it.
+  await waitFor(() => expect(article.getBoundingClientRect().left).toBe(SONG_PANE_LEFT));
+  const pane = article.getBoundingClientRect();
+  const column = lyrics.getBoundingClientRect();
+
+  // About 40rem, and as far from either edge of the pane.
+  await expect(Math.abs(column.width - 640)).toBeLessThanOrEqual(1);
+  await expect(Math.abs(column.left - pane.left - (pane.right - column.right))).toBeLessThanOrEqual(
+    16,
+  );
+  // The title and the credits on the same column, in that order, above the
+  // lyrics: nothing sits beside them.
+  for (const part of [title, details]) {
+    await expect(Math.abs(part.getBoundingClientRect().left - column.left)).toBeLessThanOrEqual(1);
+  }
+  await expect(details.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+    title.getBoundingClientRect().bottom,
+  );
+  await expect(details.getBoundingClientRect().bottom).toBeLessThanOrEqual(column.top);
+  return { details, lyrics };
 }
 
 /**
- * The pane's left and right edges as the content sees them: the lyrics'
- * scroller less its scrollbar, which a window that always shows one draws
- * between the details column and the pane's edge.
+ * 1440×900: the song's pane is 61rem, and the song is one 40rem column in it.
+ * The credits run on as a band of a line or two under the title, not a column
+ * of their own; the recordings and tallies are behind their buttons. Watch
+ * plays the video between the credits and the lyrics, as wide as the column.
  */
-function paneEdges(lyrics: HTMLElement): { left: number; right: number } {
-  const scroller = scrollerOf(lyrics);
-  const left = scroller.getBoundingClientRect().left + scroller.clientLeft;
-  return { left, right: left + scroller.clientWidth };
-}
-
-/**
- * 1440×900: the song's pane is 61rem, past `@3xl`, so the details sit in a
- * sticky column beside the lyrics, which start right under the title. The
- * recordings and tallies are shown in place, so the buttons for their sheets
- * are put away.
- */
-export const WideDetailsColumn: Story = {
+export const AtADesk: Story = {
   ...atADesk(1440, 900),
   play: async ({ canvas }) => {
-    const { details, lyrics, title } = await songParts(canvas);
-    // The column's height takes off the catalog header's (`published`): under
-    // load the song can render first, and the column is then the header's
-    // height too tall for the pane. The catalog's is the one
-    // <header> that publishes: the song's own <header> does not, and its
-    // tools bar is a <div>.
-    const header = document.querySelector<HTMLElement>("header[data-sticky-header]");
-    if (!header) throw new Error("The catalog's header is missing.");
-    await published(header);
+    const { details, lyrics } = await oneCenteredColumn(canvas);
 
-    // Beside, not above: the lyrics against the pane's left edge, the column
-    // against its right, not a pair centered in it.
-    await expect(details.getBoundingClientRect().left).toBeGreaterThan(
-      lyrics.getBoundingClientRect().right,
-    );
-    const pane = paneEdges(lyrics);
-    await expect(lyrics.getBoundingClientRect().left - pane.left).toBeLessThanOrEqual(24);
-    await expect(pane.right - details.getBoundingClientRect().right).toBeLessThanOrEqual(24);
-    // The lyrics start under the title, not under the credits.
-    const gap = lyrics.getBoundingClientRect().top - title.getBoundingClientRect().bottom;
-    await expect(gap).toBeGreaterThanOrEqual(0);
-    await expect(gap).toBeLessThan(40);
+    // Performed by, Music, Lyrics and Year side by side, not a row each.
+    const credits = within(details).getAllByRole("term");
+    await expect(credits.length).toBeGreaterThanOrEqual(3);
+    const firstTop = credits[0]?.getBoundingClientRect().top ?? 0;
+    await expect(credits[1]?.getBoundingClientRect().top).toBeCloseTo(firstTop, 0);
 
-    // A rule on its left, the length of the pane however little it holds.
-    await expect(getComputedStyle(details).borderLeftWidth).toBe("1px");
-    // No longer than the pane either, or it would run past its bottom.
-    const reading = scrollerOf(lyrics).getBoundingClientRect();
-    const below = reading.bottom - details.getBoundingClientRect().bottom;
-    await expect(below).toBeGreaterThanOrEqual(0);
-    await expect(below).toBeLessThanOrEqual(24);
-
-    // Every block under a heading.
-    for (const name of ["Credits", "Video", "Recordings", "Stats"]) {
-      await expect(within(details).getByRole("heading", { level: 2, name })).toBeVisible();
-    }
-    await expect(within(details).getByRole("region", { name: "Recordings" })).toBeVisible();
-    await expect(within(details).getByText("Χάρις Αλεξίου")).toBeVisible();
-    const stats = within(details).getByRole("region", { name: "Stats" });
-    await expect(stats).toBeVisible();
-    await expect(within(stats).getByText("Views").closest("div")).toHaveTextContent("124");
-    await expect(within(details).getByRole("button", { name: "Play video" })).toBeVisible();
-
-    // What the column replaces is put away, out of the accessibility tree too.
-    // The only Stats left is the column's heading; the recordings' own watch
-    // links stay, but not the one under the lyrics.
-    await expect(canvas.queryByRole("button", { name: "Stats" })).toBeNull();
-    await expect(canvas.queryByRole("button", { name: /show all/i })).toBeNull();
-    for (const link of canvas.getAllByRole("link", { name: /watch on youtube/i })) {
-      await expect(details).toContainElement(link);
-    }
-
-    // Sticky: the lyrics scroll away under it, and it stays where it was.
-    const scroller = scrollerOf(lyrics);
-    const before = details.getBoundingClientRect().top;
-    scroller.scrollTo({ top: 800, behavior: "instant" });
-    await waitFor(() =>
-      expect(title.getBoundingClientRect().bottom).toBeLessThan(
-        scroller.getBoundingClientRect().top,
-      ),
-    );
-    const after = details.getBoundingClientRect();
-    await expect(Math.abs(after.top - before)).toBeLessThanOrEqual(1);
-    await expect(after.bottom).toBeLessThanOrEqual(window.innerHeight);
-    await expect(within(details).getByRole("region", { name: "Stats" })).toBeVisible();
-  },
-};
-
-/**
- * 1920×1080: the song's pane is 91rem, far wider than the lyrics and the
- * column need. The lyrics keep to the pane's left edge at 40rem, the column to
- * its right, and the room left over is between them, not around a centered
- * pair.
- */
-export const WideDetailsColumnFullWidth: Story = {
-  ...atADesk(1920, 1080),
-  play: async ({ canvas }) => {
-    const { details, lyrics } = await songParts(canvas);
-    const article = canvas.getByRole("article");
-    await expect(article.getBoundingClientRect().left).toBe(SONG_PANE_LEFT);
-    const pane = paneEdges(lyrics);
-    const column = lyrics.getBoundingClientRect();
-    const aside = details.getBoundingClientRect();
-
-    // Past the 64rem a centered pair would have been held to.
-    await expect(pane.right - pane.left).toBeGreaterThan(1024);
-    await expect(Math.abs(column.width - 640)).toBeLessThanOrEqual(1);
-    await expect(column.left - pane.left).toBeLessThanOrEqual(24);
-    await expect(pane.right - aside.right).toBeLessThanOrEqual(24);
-    await expect(aside.left - column.right).toBeGreaterThan(32);
-  },
-};
-
-/**
- * 1200×900: the song's pane is 46rem, too narrow for the column but wider
- * than a comfortable line, so the title and the lyrics share one 40rem column
- * centered in the pane, the details above the lyrics as on a phone.
- */
-export const CenteredColumn: Story = {
-  ...atADesk(1200, 900),
-  play: async ({ canvas }) => {
-    const { details, lyrics, title } = await songParts(canvas);
-    const article = canvas.getByRole("article");
-    // The pane has its width once the list is the wider one beside it.
-    await waitFor(() => expect(article.getBoundingClientRect().left).toBe(SONG_PANE_LEFT));
-    const pane = article.getBoundingClientRect();
-    const column = lyrics.getBoundingClientRect();
-
-    // About 40rem, and as far from either edge of the pane.
-    await expect(Math.abs(column.width - 640)).toBeLessThanOrEqual(1);
-    await expect(pane.width).toBeGreaterThan(column.width + 32);
-    await expect(
-      Math.abs(column.left - pane.left - (pane.right - column.right)),
-    ).toBeLessThanOrEqual(16);
-    // The title on the same column.
-    await expect(Math.abs(title.getBoundingClientRect().left - column.left)).toBeLessThanOrEqual(1);
-
-    // No column beside it: the details sit above the lyrics, and its own
-    // block, and the player, are not drawn.
-    await expect(details.getBoundingClientRect().bottom).toBeLessThanOrEqual(column.top);
-    await expect(within(details).queryByRole("region", { name: "Recordings" })).toBeNull();
-    await expect(within(details).queryByRole("region", { name: "Stats" })).toBeNull();
-    await expect(canvas.queryByRole("button", { name: "Play video" })).toBeNull();
     await expect(canvas.getByRole("button", { name: "Stats" })).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Show all 2 recordings" })).toBeVisible();
+    await expect(document.querySelector("iframe")).toBeNull();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Watch" }));
+
+    const player = await canvas.findByTitle("Μεγάλο τραγούδι on YouTube");
+    const frame = player.getBoundingClientRect();
+    const column = lyrics.getBoundingClientRect();
+    await expect(Math.abs(frame.left - column.left)).toBeLessThanOrEqual(1);
+    await expect(Math.abs(frame.width - column.width)).toBeLessThanOrEqual(1);
+    await expect(frame.bottom).toBeLessThanOrEqual(column.top);
+  },
+};
+
+/**
+ * 1920×1080: the song's pane is 91rem, far wider than a line. The column stays
+ * 40rem and centered, with the room left over on either side.
+ */
+export const AtAWideDesk: Story = {
+  ...atADesk(1920, 1080),
+  play: async ({ canvas }) => {
+    await oneCenteredColumn(canvas);
   },
 };

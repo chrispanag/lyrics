@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { SongStats } from "./SongStatsSheet";
 import { makePopularity } from "@/test/handlers";
 
-/** The rows the Stats sheet and a song's details column both render. */
+/** The rows the Stats sheet renders. */
 describe("SongStats", () => {
   const row = (label: string) => screen.getByText(label).closest("div");
 

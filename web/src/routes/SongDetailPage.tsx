@@ -1,7 +1,7 @@
 "use client";
 
-import { type ReactNode, type Ref, useId, useLayoutEffect, useRef, useState } from "react";
-import { ChartColumn, Check, ListPlus, Pencil, SixteenthNotes, Trash } from "lucide-react";
+import { type ReactNode, useId, useLayoutEffect, useRef, useState } from "react";
+import { ChartColumn, Check, ListPlus, Pencil, Play, SixteenthNotes, Trash, X } from "lucide-react";
 
 import { errorMessage } from "@/api/client";
 import { useDeleteSong, useLists, useSong, useSongLists, useToggleSongInList } from "@/api/hooks";
@@ -14,14 +14,13 @@ import { contentWidth } from "@/components/Page";
 import { PageTitle } from "@/components/PageTitle";
 import { PersonLinks } from "@/components/PersonLinks";
 import { SongSearch } from "@/components/SongSearch";
-import { WatchOnYouTube } from "@/components/WatchOnYouTube";
 import { ButtonLink } from "@/components/ButtonLink";
 import { Fact, FactList } from "@/components/FactList";
 import { GenreTag } from "@/components/GenreTag";
 import { TextSizeControl } from "@/components/TextSizeControl";
 import { actionLabel } from "@/components/buttonStyles";
 import { MenuItem, MoreActionsMenu } from "@/components/MoreActionsMenu";
-import { SongStats, SongStatsSheet } from "@/components/SongStatsSheet";
+import { SongStatsSheet } from "@/components/SongStatsSheet";
 import {
   Button,
   ConfirmSheet,
@@ -42,12 +41,7 @@ import { linkClasses, sectionLabel } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
 import { Link, useRouter } from "@/lib/navigation";
 import { stickyBarClasses, useStickyBar } from "@/components/stickyBar";
-import {
-  FirstRecordingBadge,
-  RecordingList,
-  RecordingNotes,
-  RecordingsSheet,
-} from "@/components/RecordingsSheet";
+import { FirstRecordingBadge, RecordingNotes, RecordingsSheet } from "@/components/RecordingsSheet";
 import { YouTubePlayer } from "@/components/YouTubePlayer";
 
 /**
@@ -160,21 +154,20 @@ function SongArticle() {
   // The lyrics, under the tools. A new song opens at the top; the list beside
   // it keeps its own place.
   const lyrics = useRef<HTMLDivElement>(null);
-  // The details column beside them scrolls on its own, so it starts over too.
-  const details = useRef<HTMLElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: id is the trigger.
   useLayoutEffect(() => {
     lyrics.current?.scrollTo({ top: 0, behavior: "instant" });
-    details.current?.scrollTo({ top: 0, behavior: "instant" });
   }, [id]);
 
   const [listSheetOpen, setListSheetOpen] = useState(false);
   const [recordingsOpen, setRecordingsOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // A sheet belongs to the song it was opened on. Stepping to another (Back,
-  // Forward, a list's arrows) closes them, rather than showing the next song's
-  // counts or recordings under the same title.
+  const [videoOpen, setVideoOpen] = useState(false);
+  // A sheet, or the player, belongs to the song it was opened on. Stepping to
+  // another (Back, Forward, a list's arrows) closes them, rather than showing
+  // the next song's counts or recordings under the same title, or playing the
+  // last song over the next one's words.
   const [sheetsFor, setSheetsFor] = useState(id);
   if (sheetsFor !== id) {
     setSheetsFor(id);
@@ -182,6 +175,7 @@ function SongArticle() {
     setRecordingsOpen(false);
     setStatsOpen(false);
     setConfirmDelete(false);
+    setVideoOpen(false);
   }
   // May run before the song arrives: `canEditSong` answers admins without it.
   const canEdit = canEditSong(user, song);
@@ -203,7 +197,8 @@ function SongArticle() {
   return (
     // Full width of the reading pane once the list is beside it. Only there is
     // it the `song` container `SONG_COLUMNS` is laid out by: the pane's width,
-    // not the window's, picks the tier. A phone has no `song` container.
+    // not the window's, decides whether the column is held to a line. A phone
+    // has no `song` container.
     <article
       ref={surface}
       aria-busy={isLoading || isPlaceholderData}
@@ -227,15 +222,8 @@ function SongArticle() {
               the tools share its center. */}
           <div className="ml-auto flex items-center gap-1 @3xl/app:h-12">
             {/* For everyone. The card a reader clicked already carries the
-                tallies, so this need not wait for the full read. Not where
-                the details column shows the tallies themselves. */}
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={!song}
-              onClick={() => setStatsOpen(true)}
-              {...narrowOnly}
-            >
+                tallies, so this need not wait for the full read. */}
+            <Button variant="ghost" size="sm" disabled={!song} onClick={() => setStatsOpen(true)}>
               <ChartColumn aria-hidden className="size-4" />
               <span className={actionLabel}>Stats</span>
             </Button>
@@ -281,7 +269,7 @@ function SongArticle() {
       >
         <div className={SONG_COLUMNS}>
           {/* The title, and the list's bar above it: the reading column's head. */}
-          <div className="@3xl/song:mb-5">
+          <div>
             {position && (
               <>
                 <ListSongNavBar position={position} />
@@ -294,9 +282,9 @@ function SongArticle() {
           </div>
 
           <SongDetails
-            ref={details}
             song={song}
-            fullSong={fullSong}
+            videoOpen={videoOpen}
+            onToggleVideo={() => setVideoOpen((open) => !open)}
             onShowRecordings={() => setRecordingsOpen(true)}
           />
 
@@ -322,12 +310,6 @@ function SongArticle() {
                 <p className="text-sm italic text-fg-muted">No lyrics have been added yet.</p>
               )}
             </section>
-
-            {/* Gated on the id, never the URL; see WatchOnYouTube. The details
-                column plays the video in place instead. */}
-            {song?.youtube_video_id && (
-              <WatchOnYouTube videoId={song.youtube_video_id} {...onTier(narrowOnly, "mt-6")} />
-            )}
 
             {song?.notes && (
               <section className={cn(panelChrome, "mt-8")}>
@@ -423,42 +405,13 @@ function SongToolsBar({ children }: { children: ReactNode }) {
 }
 
 /**
- * The song's content under its tools, in the reading pane's `song` container
- * (see `SongArticle`), in three tiers by the pane's width:
- *
- * - Narrow, and on a phone, where there is no `song` container: one column,
- *   the details above the lyrics.
- * - From `@2xl` (42rem), wider than a comfortable line: the same column held
- *   to 40rem and centered in the pane, rather than run out to its left edge.
- * - From `@3xl` (48rem): the details move beside the lyrics, a sticky column
- *   on the right, and the lyrics start right under the title. The pane's full
- *   width: the lyrics against its left edge, the column against its right, and
- *   the room left over between them rather than around a centered pair. 48rem
- *   leaves the lyrics at least 26rem beside a 16rem column, which a pane
- *   reaches beside the rail and the list in a window of 77rem (1232px) and up.
- *   From `@5xl` (64rem) the column widens to 20rem; the lyrics stay at most
- *   40rem.
+ * The song's content under its tools: one column, the title, the credits and
+ * the lyrics, at every width. In the reading pane's `song` container (see
+ * `SongArticle`) it is held to 40rem and centered from `@2xl` (42rem), wider
+ * than a comfortable line, rather than run out to the pane's left edge. A phone
+ * has no `song` container.
  */
-const SONG_COLUMNS = cn(
-  "p-4",
-  "@2xl/song:mx-auto @2xl/song:max-w-168",
-  "@3xl/song:grid @3xl/song:max-w-none @3xl/song:grid-cols-[minmax(0,40rem)_16rem] @3xl/song:grid-rows-[auto_1fr] @3xl/song:justify-between @3xl/song:gap-x-8",
-  "@5xl/song:grid-cols-[minmax(0,40rem)_20rem]",
-);
-
-/**
- * What only a narrow pane shows, where the sheets' buttons stand in for the
- * details column, and what only that column shows. `data-tier` names the same
- * for the specs, since jsdom applies no CSS.
- */
-type Tier = { className: string; "data-tier": "narrow" | "column" };
-const narrowOnly: Tier = { className: "@3xl/song:hidden", "data-tier": "narrow" };
-const columnOnly: Tier = { className: "hidden @3xl/song:block", "data-tier": "column" };
-
-/** A tier's props, its classes after an element's own. */
-function onTier(tier: Tier, className: string): Tier {
-  return { ...tier, className: cn(className, tier.className) };
-}
+const SONG_COLUMNS = cn("p-4", "@2xl/song:mx-auto @2xl/song:max-w-168");
 
 /** The song's title, in the song's own language: the title is content too. */
 function SongTitle({ song }: { song: Song }) {
@@ -471,82 +424,69 @@ function SongTitle({ song }: { song: Song }) {
 }
 
 /**
- * What is known about a song besides its words. Under the title in a narrow
- * pane; beside the lyrics in a wide one (`SONG_COLUMNS`), where it also plays
- * the video and shows the recordings and tallies in place of their sheets.
- * One tree for every tier, so it is ahead of the lyrics in the DOM even beside
- * them: a phone reads the credits first.
+ * What is known about a song besides its words, between the title and the
+ * lyrics at every width, as a record sleeve prints its credits: the facts in
+ * one band that wraps, the recordings line, the genres, and the way to the
+ * video. The video plays here, above the lyrics, so the words stay readable
+ * while it plays; it opens on a press and is put away on another.
  *
- * The tallies wait for the full read: in view from the start, a cached card's
- * older numbers would change in front of the reader. The Stats sheet shows the
- * card's, since it opens only on a press. The skeleton mirrors the narrow tier's facts, so the lyrics under them
- * do not move as the song arrives; change the two together.
+ * The skeleton mirrors the band's first line and the genres, so the lyrics
+ * under them barely move as the song arrives; change the two together.
  */
 function SongDetails({
-  ref,
   song,
-  fullSong,
+  videoOpen,
+  onToggleVideo,
   onShowRecordings,
 }: {
-  ref: Ref<HTMLElement>;
   song: Song | undefined;
-  fullSong: Song | undefined;
+  videoOpen: boolean;
+  onToggleVideo: () => void;
   onShowRecordings: () => void;
 }) {
+  const playerId = useId();
+
   return (
-    <aside
-      ref={ref}
-      aria-label="Song details"
-      className={cn(
-        "mt-3 mb-5",
-        "@3xl/song:col-start-2 @3xl/song:row-span-2 @3xl/song:row-start-1 @3xl/song:m-0 @3xl/song:self-start",
-        // Sticky in the lyrics' scroller and as tall as its view, so the rule
-        // on its left runs the pane's length; scrolled on its own past that.
-        // The view is the window less the header, the reader frame's inset
-        // above and below, and the 1rem kept above and below the column. The
-        // padding keeps a focus ring unclipped.
-        "@3xl/song:sticky @3xl/song:top-4 @3xl/song:h-[calc(100dvh_-_var(--sticky-header-height,0px)_-_2_*_var(--reader-inset)_-_2rem)] @3xl/song:overflow-y-auto @3xl/song:overscroll-y-contain @3xl/song:border-l @3xl/song:border-line @3xl/song:p-1 @3xl/song:pl-6",
-      )}
-    >
+    <aside aria-label="Song details" className="mt-3 mb-6 border-y border-line py-3">
       {song ? (
         <>
-          {/* Named in the column only: under the title it needs no heading.
-              Nor over nothing, where the column puts the recordings line away. */}
-          {hasColumnFacts(song) ? (
-            <ColumnSection title="Credits" headingTier={columnOnly}>
-              <SongFacts song={song} onShowRecordings={onShowRecordings} />
-            </ColumnSection>
-          ) : (
-            <SongFacts song={song} onShowRecordings={onShowRecordings} />
-          )}
-          <div {...onTier(columnOnly, "space-y-6 @3xl/song:mt-6")}>
-            {song.youtube_video_id && (
-              <ColumnSection title="Video">
-                <YouTubePlayer key={song.id} videoId={song.youtube_video_id} title={song.title} />
-              </ColumnSection>
-            )}
-            {song.recordings.length > 0 && (
-              <ColumnSection title="Recordings">
-                <RecordingList recordings={song.recordings} language={song.language} />
-              </ColumnSection>
-            )}
-            <ColumnSection title="Stats">
-              {fullSong ? (
-                <SongStats popularity={fullSong.popularity} />
-              ) : (
-                <Skeleton className="h-24 w-full" />
+          <SongFacts song={song} onShowRecordings={onShowRecordings} />
+          {(song.genres.length > 0 || song.youtube_video_id) && (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              {song.genres.map((genre) => (
+                <GenreTag key={genre.id} genre={genre} linked />
+              ))}
+              {/* Gated on the id, never the URL; see WatchOnYouTube. */}
+              {song.youtube_video_id && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onToggleVideo}
+                  aria-expanded={videoOpen}
+                  aria-controls={playerId}
+                  className="ml-auto"
+                >
+                  {videoOpen ? (
+                    <X aria-hidden className="size-4" />
+                  ) : (
+                    <Play aria-hidden className="size-4" />
+                  )}
+                  {videoOpen ? "Hide video" : "Watch"}
+                </Button>
               )}
-            </ColumnSection>
-          </div>
+            </div>
+          )}
+          {/* Keyed on the song, so another one never inherits a playing frame. */}
+          {song.youtube_video_id && videoOpen && (
+            <div id={playerId} className="mt-3">
+              <YouTubePlayer key={song.id} videoId={song.youtube_video_id} title={song.title} />
+            </div>
+          )}
         </>
       ) : (
         <>
-          <div className="space-y-1">
-            <Skeleton className="h-5 w-1/2" />
-            <Skeleton className="h-5 w-1/3" />
-          </div>
+          <Skeleton className="h-5 w-2/3" />
           {/* No `rounded-full` on the chip: `cn` is a plain join. */}
-          <Skeleton className="mt-2 h-5 w-36" />
           <Skeleton className="mt-3 h-6 w-20" />
         </>
       )}
@@ -554,46 +494,7 @@ function SongDetails({
   );
 }
 
-/**
- * A block of the details column, a region named by its heading. A heading
- * shown in one tier only (`headingTier`) still names the region in the other.
- */
-function ColumnSection({
-  title,
-  headingTier,
-  children,
-}: {
-  title: string;
-  headingTier?: Tier;
-  children: ReactNode;
-}) {
-  const id = useId();
-  const heading = cn(sectionLabel, "mb-2");
-  return (
-    <section aria-labelledby={id} className="text-sm">
-      <h2 id={id} {...(headingTier ? onTier(headingTier, heading) : { className: heading })}>
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-/**
- * Whether `SongFacts` shows anything in the details column, where its
- * recordings line is put away. The same rows as `SongFacts`; change the two
- * together.
- */
-function hasColumnFacts(song: Song): boolean {
-  return (
-    songPerformers(song).length > 0 ||
-    groupCredits(song.credits).length > 0 ||
-    Boolean(song.release_year) ||
-    song.genres.length > 0
-  );
-}
-
-/** The credits, the recordings line and the genres, in the song's language. */
+/** The credits and the recordings line, in the song's language. */
 function SongFacts({ song, onShowRecordings }: { song: Song; onShowRecordings: () => void }) {
   const creditsByRole = groupCredits(song.credits);
 
@@ -608,15 +509,14 @@ function SongFacts({ song, onShowRecordings }: { song: Song; onShowRecordings: (
 
   return (
     <div lang={song.language}>
-      <FactList layout="aligned" className="text-sm">
+      <FactList layout="inline" className="text-sm">
         {/* Performers lead; the row is conditional, since most recordings
             name nobody. */}
         {performers.length > 0 && (
           <Fact label="Performed by">
             <PersonLinks people={performers} />
-            {/* The column marks it in its recordings list instead. */}
             {markOnPerformers && (
-              <span {...onTier(narrowOnly, "ml-2 inline-block")}>
+              <span className="ml-2 inline-block">
                 <FirstRecordingBadge />
               </span>
             )}
@@ -630,27 +530,18 @@ function SongFacts({ song, onShowRecordings }: { song: Song; onShowRecordings: (
         {year && <Fact label="Year">{year}</Fact>}
       </FactList>
 
-      {/* Beside the lyrics the column lists every recording instead. */}
       {onlyRecording ? (
-        <OnlyRecording recording={onlyRecording} tier={narrowOnly} markShown={markOnPerformers} />
+        <OnlyRecording recording={onlyRecording} markShown={markOnPerformers} />
       ) : (
         song.recordings.length > 0 && (
           <button
             type="button"
             onClick={onShowRecordings}
-            {...onTier(narrowOnly, linkClasses("accent", "mt-2 text-sm"))}
+            className={linkClasses("accent", "mt-2 text-sm")}
           >
             Show all {recordingCount(song.recordings.length)}
           </button>
         )
-      )}
-
-      {song.genres.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {song.genres.map((genre) => (
-            <GenreTag key={genre.id} genre={genre} linked />
-          ))}
-        </div>
       )}
     </div>
   );
@@ -739,11 +630,9 @@ function AddToListSheet({
  */
 function OnlyRecording({
   recording,
-  tier,
   markShown,
 }: {
   recording: Recording;
-  tier: Tier;
   /** The first-recording mark is already on the performers' line. */
   markShown: boolean;
 }) {
@@ -751,7 +640,7 @@ function OnlyRecording({
   if (!recording.label && !mark && !recording.notes) return null;
 
   return (
-    <div {...onTier(tier, "mt-2")}>
+    <div className="mt-2">
       {(recording.label || mark) && (
         <p className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
           {recording.label}

@@ -676,7 +676,7 @@
 :root {
   --sticky-bar-bg: var(--color-canvas);
   /* The room around the reader's sheets and between them (`ReaderSplit`),
-     which the rail and the details column measure from too. */
+     which the rail measures from too. */
   --reader-inset: 0.5rem;
 }
 
