@@ -18,10 +18,12 @@ const listLayouts: Record<FactLayout, string> = {
   justified: "divide-y divide-line",
 };
 
-const rowLayouts: Record<FactLayout, { row: string; value: string }> = {
-  inline: { row: "flex min-w-0 items-baseline gap-1.5", value: "min-w-0" },
+// An inline label keeps its line: a long value beside it wraps, not the label.
+const rowLayouts: Record<FactLayout, { row: string; label: string; value: string }> = {
+  inline: { row: "flex min-w-0 items-baseline gap-1.5", label: "shrink-0", value: "min-w-0" },
   justified: {
     row: "flex items-baseline justify-between gap-4 py-3 first:pt-0 last:pb-0",
+    label: "",
     value: "text-right",
   },
 };
@@ -55,10 +57,10 @@ export function Fact({
   detail?: string | undefined;
   children: ReactNode;
 }) {
-  const { row, value } = rowLayouts[useContext(Layout)];
+  const { row, label: labelLayout, value } = rowLayouts[useContext(Layout)];
   return (
     <div className={row}>
-      <dt className="text-fg-muted">{label}</dt>
+      <dt className={cn("text-fg-muted", labelLayout)}>{label}</dt>
       <dd className={cn("font-medium", value)}>
         {children}
         {detail && <span className="block text-sm font-normal text-fg-muted">{detail}</span>}

@@ -535,6 +535,35 @@ describe("SongDetailPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Song was not found.");
   });
 
+  // A video taken away and put back, as an editor fixing its link might: the
+  // player must not come back and play on its own.
+  it("closes the player for good when a refetch drops the video", async () => {
+    const user = userEvent.setup();
+    let videoId: string | null = "dQw4w9WgXcQ";
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(makeSong({ youtube_video_id: videoId })),
+      ),
+    );
+    const { queryClient } = renderDetail();
+
+    await user.click(await screen.findByRole("button", { name: "Watch" }));
+    expect(document.querySelector("iframe")).not.toBeNull();
+
+    videoId = null;
+    await act(() => queryClient.refetchQueries({ queryKey: keys.song("song-1") }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /hide video/i })).toBeNull());
+
+    videoId = "dQw4w9WgXcQ";
+    await act(() => queryClient.refetchQueries({ queryKey: keys.song("song-1") }));
+
+    expect(await screen.findByRole("button", { name: "Watch" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(document.querySelector("iframe")).toBeNull();
+  });
+
   // A failed refetch with the song in hand keeps the lyrics on screen.
   it("keeps a song a reader already has when a refetch fails", async () => {
     const { queryClient } = renderDetail();
@@ -1770,6 +1799,20 @@ describe("SongDetailPage credits", () => {
     expect(title.compareDocumentPosition(details)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(details.compareDocumentPosition(lyrics)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(within(details).getByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
+  });
+
+  // Two rules around nothing, and an empty landmark, would say less than none.
+  it("draws no band for a song with nothing to say", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(makeSong({ credits: [], release_year: null })),
+      ),
+    );
+
+    renderDetail();
+
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(screen.queryByRole("complementary", { name: "Song details" })).not.toBeInTheDocument();
   });
 
   // Started on one song, the player does not keep playing it under the next.

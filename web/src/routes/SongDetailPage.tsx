@@ -177,6 +177,9 @@ function SongArticle() {
     setConfirmDelete(false);
     setVideoOpen(false);
   }
+  // A refetch that takes the video away closes the player for good: were the
+  // id to come back, it must not start playing again without a press.
+  if (videoOpen && song && !song.youtube_video_id) setVideoOpen(false);
   // May run before the song arrives: `canEditSong` answers admins without it.
   const canEdit = canEditSong(user, song);
 
@@ -448,6 +451,10 @@ function SongDetails({
   // Gated on the id, never the URL; see WatchOnYouTube.
   const videoId = song?.youtube_video_id;
 
+  // A song with nothing to say gets no band: two rules around nothing, and an
+  // empty landmark.
+  if (song && !hasDetails(song)) return null;
+
   return (
     <aside aria-label="Song details" className="mt-3 mb-6 border-y border-line py-3">
       {song ? (
@@ -459,9 +466,10 @@ function SongDetails({
                 <GenreTag key={genre.id} genre={genre} linked />
               ))}
               {videoId && (
+                // Full size, not `sm`: a phone's thumb reaches for it beside
+                // the genres' links.
                 <Button
                   variant="secondary"
-                  size="sm"
                   onClick={onToggleVideo}
                   aria-expanded={videoOpen}
                   aria-controls={videoOpen ? playerId : undefined}
@@ -493,6 +501,23 @@ function SongDetails({
         </>
       )}
     </aside>
+  );
+}
+
+/**
+ * Whether `SongDetails` shows anything: the rows of `SongFacts` and
+ * `OnlyRecording`, the genres and the video. Change them together.
+ */
+function hasDetails(song: Song): boolean {
+  const only = song.recordings.length === 1 ? song.recordings[0] : undefined;
+  return (
+    songPerformers(song).length > 0 ||
+    groupCredits(song.credits).length > 0 ||
+    Boolean(song.release_year) ||
+    song.genres.length > 0 ||
+    Boolean(song.youtube_video_id) ||
+    song.recordings.length > 1 ||
+    Boolean(only && (only.label || only.is_first || only.notes))
   );
 }
 
