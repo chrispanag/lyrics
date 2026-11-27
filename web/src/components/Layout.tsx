@@ -57,13 +57,15 @@ export function Layout({ children }: { children?: ReactNode }) {
           panes once it is wide enough. The bottom room on a phone is what the
           bar floating over the page covers (`--bottom-bar-clearance`) and a
           little more, so the last lyric line, the end of a list and its
-          infinite-scroll trigger all scroll clear of the bar. index.css takes
-          it off once the panes are up, or the window would scroll past them. */}
+          infinite-scroll trigger all scroll clear of the bar. Once the column
+          is `@3xl` every screen is set on sheets (`sheetFrame`), whose frame
+          keeps its own inset below them, so the room goes: the reader would
+          only scroll past its panes. */}
       <main className="@container/app min-w-0 flex-1">
         {/* No Suspense boundary here: a server streams the shell the moment
             one sits above a page, so a page's `notFound()` or redirect
             arrives as a 200 with a meta tag rather than a 404 or a 308. */}
-        <div className="app-column pb-[calc(var(--bottom-bar-clearance)+--spacing(4))] md:pb-8">
+        <div className="pb-[calc(var(--bottom-bar-clearance)+--spacing(4))] md:pb-8 @3xl/app:pb-0">
           {children}
         </div>
       </main>

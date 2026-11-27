@@ -19,10 +19,15 @@ export const cardChrome = "rounded-card border border-line";
  * colors drops both ring and shadow, so there the sheet takes a border
  * instead. The sticky bars on it are drawn on the sheet's color.
  */
-export const sheetChrome = [
-  "@3xl/app:rounded-card @3xl/app:bg-surface @3xl/app:shadow-raised @3xl/app:ring-1 @3xl/app:ring-line",
-  "@3xl/app:[--sticky-bar-bg:var(--color-surface)] forced-colors:@3xl/app:border",
-].join(" ");
+export const sheetChrome =
+  "@3xl/app:rounded-card @3xl/app:bg-surface @3xl/app:shadow-raised @3xl/app:ring-1 @3xl/app:ring-line @3xl/app:[--sticky-bar-bg:var(--color-surface)] forced-colors:@3xl/app:border";
+
+/**
+ * Around a screen's sheets: the room between them and the window's edges,
+ * `--reader-inset`, except on the left, where the rail draws no edge of its
+ * own. Takes the place of the shell's bottom padding (`Layout`).
+ */
+export const sheetFrame = "@3xl/app:py-(--reader-inset) @3xl/app:pr-(--reader-inset)";
 
 /**
  * A filled panel set into the page rather than bordered: a song's notes, the

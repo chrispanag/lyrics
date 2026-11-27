@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-import { sheetChrome } from "@/components/cardStyles";
+import { sheetChrome, sheetFrame } from "@/components/cardStyles";
 import { contentWidth } from "@/components/Page";
 import { PageTitle } from "@/components/PageTitle";
 import { CatalogPaneContext, SongOpenContext, useSongOpen } from "@/lib/catalogPane";
@@ -87,8 +87,11 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
   return (
     <div
       ref={frame}
-      // `reader-frame`: index.css drops the shell's bottom padding around it.
-      className="reader-frame @3xl/app:flex @3xl/app:h-dvh @3xl/app:gap-(--reader-inset) @3xl/app:overflow-hidden @3xl/app:py-(--reader-inset) @3xl/app:pr-(--reader-inset)"
+      // `reader-frame`: the specs find the frame by it.
+      className={cn(
+        "reader-frame @3xl/app:flex @3xl/app:h-dvh @3xl/app:gap-(--reader-inset) @3xl/app:overflow-hidden",
+        sheetFrame,
+      )}
     >
       <section
         aria-label="Songs"

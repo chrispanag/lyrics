@@ -69,7 +69,8 @@ export const Guest: Story = {
 export const PlainSheet: Story = {
   play: async ({ canvas }) => {
     const heading = await canvas.findByRole("heading", { name: "A page" });
-    const sheet = heading.closest(".plain-frame")?.lastElementChild as HTMLElement | null;
+    // The heading's page sits straight on the sheet.
+    const sheet = heading.parentElement?.parentElement;
     if (!sheet) throw new Error("The screen has no sheet.");
     const box = sheet.getBoundingClientRect();
 

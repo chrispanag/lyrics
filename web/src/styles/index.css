@@ -690,21 +690,6 @@
   padding-top: env(safe-area-inset-top);
 }
 
-/* The shell's bottom padding (the bottom bar's clearance and a little more
-   below `md`, `pb-8` from it; see `Layout`). Once the content
-   column is wide enough for the list and the lyrics — `@3xl`, the same 48rem —
-   the reader fills the viewport and scrolls inside its panes, and the padding
-   would only make the window scroll past them. Every other screen is a sheet
-   by then (the `(plain)` layout), whose frame keeps its own inset below it.
-   Unlayered so it wins over those utilities. The column is `main`; a container
-   cannot query itself. */
-@container app (width >= 48rem) {
-  .app-column:has(.reader-frame),
-  .app-column:has(.plain-frame) {
-    padding-bottom: 0;
-  }
-}
-
 /* `ReaderSplit` adds this while those panes are up. The frame is `h-dvh`, and
    a fractional device pixel makes that a pixel taller than the window, which
    paints a scrollbar down the screen, through both headers. The window does
