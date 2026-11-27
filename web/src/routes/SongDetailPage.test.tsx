@@ -820,8 +820,8 @@ describe("SongDetailPage recordings", () => {
     expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
   });
 
-  // Its performers and year are the song's own rows, so only the label, the
-  // mark and the notes are added, and the year is said once.
+  // Its performers and year are the song's own rows, so only the label and the
+  // notes are added, and the year is said once.
   it("shows a lone recording inline rather than offering a sheet", async () => {
     withRecordings([makeRecording({ label: "Columbia", notes: "Recorded in Athens." })]);
 
@@ -833,7 +833,8 @@ describe("SongDetailPage recordings", () => {
     // The mark is on the performers' line, which it describes, not the label's.
     expect(inline).not.toHaveTextContent("First recording");
     expect(getNarrow(screen.getAllByText("1964"))).toBeInTheDocument();
-    expect(getNarrow(screen.getAllByText("Γιώργος Νταλάρας"))).toBeInTheDocument();
+    const performer = getNarrow(screen.getAllByText("Γιώργος Νταλάρας"));
+    expect(performer.closest("dd")).toHaveTextContent("First recording");
     expect(screen.queryByRole("button", { name: /show all/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: /recordings/i })).not.toBeInTheDocument();
   });

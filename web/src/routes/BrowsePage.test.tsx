@@ -510,8 +510,8 @@ describe("BrowsePage filter sheet", () => {
     await waitFor(() => expect(requests.at(-1)?.get("sort")).toBe("popularity"));
   });
 
-  // `filterCount` and "Clear all" each name the filter keys; one missing from
-  // the second leaves a badge that nothing in the sheet can clear.
+  // A key the badge counts but "Clear all" misses leaves a badge that nothing
+  // in the sheet can clear.
   it("clears every filter and the ordering, and keeps the search", async () => {
     const user = userEvent.setup();
     const requests = recordSheetRequests();

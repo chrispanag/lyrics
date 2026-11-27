@@ -10,8 +10,18 @@ import type { Genre, Person, SongFilters } from "@/lib/types";
  * drifting apart is a page that silently fetches everything twice.
  */
 
+/**
+ * The parameters that narrow the catalog, as opposed to searching or ordering
+ * it: what the filter badge counts and the clears lift.
+ */
+export const FILTER_KEYS = [
+  "person",
+  "genre_slug",
+  "language",
+] as const satisfies readonly (keyof SongFilters)[];
+
 /** The filters a catalog address carries, in the order `catalogView` reads them. */
-const CATALOG_KEYS = ["q", "person", "genre_slug", "language", "sort"] as const;
+const CATALOG_KEYS = ["q", ...FILTER_KEYS, "sort"] as const;
 
 /**
  * Those filters as a query string. A song opened from the list keeps them, so

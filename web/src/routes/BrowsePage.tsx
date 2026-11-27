@@ -26,13 +26,10 @@ import {
 } from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
 import { LANGUAGE_LABELS, hasRole } from "@/lib/types";
-import { catalogName, catalogQuery, catalogView, viewGenre } from "@/lib/browse";
+import { catalogName, catalogQuery, catalogView, FILTER_KEYS, viewGenre } from "@/lib/browse";
 import { useCatalogPaneShown } from "@/lib/catalogPane";
 import { songCount } from "@/lib/format";
 import { useSearchParams, useSetSearchParams } from "@/lib/navigation";
-
-/** The URL parameters that count as filters: what the badge counts and the clears lift. */
-const FILTER_KEYS = ["person", "genre_slug", "language"] as const;
 
 /** What an empty result suggests, by what narrowed it. */
 function emptyHint(searched: boolean, filtered: boolean): string {
@@ -119,14 +116,8 @@ export function BrowsePage() {
   const activeGenre = viewGenre(view, genres?.data);
   // Fetched by id so the chip can show a name rather than a UUID.
   const { data: activePerson } = usePerson(personId, shown);
-  // The view's own reading of each `FILTER_KEYS` parameter; the type keeps the
-  // two lists one. The button and its badge count these.
-  const activeFilters: Record<(typeof FILTER_KEYS)[number], string | undefined> = {
-    person: personId,
-    genre_slug: genreSlug,
-    language,
-  };
-  const filterCount = Object.values(activeFilters).filter(Boolean).length;
+  // The button and its badge count the same keys the clears lift.
+  const filterCount = FILTER_KEYS.filter((key) => filters[key]).length;
   const hasFilters = filterCount > 0;
   const total = data?.total ?? 0;
   const songs = data?.songs ?? [];
