@@ -7,8 +7,7 @@ import { makeRecording } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 
 /*
- * The list the recordings sheet and a song's details column both render. The
- * sheet's own behavior is pinned through the song page's specs.
+ * The list the recordings sheet renders. The sheet's own behavior is pinned through the song page's specs.
  */
 describe("RecordingList", () => {
   const recordings = [

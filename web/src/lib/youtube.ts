@@ -76,11 +76,6 @@ export function embedUrl(videoId: string): string {
   return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1`;
 }
 
-/** YouTube's thumbnail for a stored video id. */
-export function thumbnailUrl(videoId: string): string {
-  return `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
-}
-
 /** `strings.Trim(path, "/")`, which is what the server splits its segments off. */
 function trimSlashes(path: string): string {
   return path.replace(/^\/+|\/+$/g, "");

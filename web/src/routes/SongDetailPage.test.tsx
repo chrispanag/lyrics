@@ -28,7 +28,7 @@ import { intersectAll, observedElements } from "@/test/intersection";
 import { songMatchesRef } from "@/lib/listContext";
 import { CHROME_TUCKED_ATTRIBUTE } from "@/lib/scrollChrome";
 import type { Recording, Song } from "@/lib/types";
-import { embedUrl, thumbnailUrl } from "@/lib/youtube";
+import { embedUrl } from "@/lib/youtube";
 import { testQueryClient } from "@/test/providers";
 import { renderWithProviders } from "@/test/render";
 import { TestRoutes } from "@/test/routes";
@@ -73,32 +73,6 @@ function renderDetail(options: Parameters<typeof renderWithProviders>[1] = {}) {
     />,
     { route: "/songs/song-1", ...options },
   );
-}
-
-/**
- * The one element of `elements` a narrow pane shows, or null. jsdom applies no
- * CSS, so the details column's own block, which only a wide pane shows, is in
- * the DOM here too; this leaves out whatever sits in it.
- */
-function queryNarrow<T extends HTMLElement>(elements: T[]): T | null {
-  const shown = elements.filter((element) => !element.closest('[data-tier="column"]'));
-  if (shown.length > 1) throw new Error(`${shown.length} elements shown in a narrow pane.`);
-  return shown[0] ?? null;
-}
-
-/** As `queryNarrow`, for an element that must be there. */
-function getNarrow<T extends HTMLElement>(elements: T[]): T {
-  const shown = queryNarrow(elements);
-  if (!shown) throw new Error("Nothing shown in a narrow pane.");
-  return shown;
-}
-
-/** The details column's own block: what only a wide pane shows. */
-function columnBlock(): HTMLElement {
-  const details = screen.getByRole("complementary", { name: "Song details" });
-  const block = details.querySelector<HTMLElement>(':scope > [data-tier="column"]');
-  if (!block) throw new Error("The details column has no block of its own.");
-  return block;
 }
 
 /**
@@ -250,7 +224,7 @@ describe("SongDetailPage popularity", () => {
     const stats = await screen.findByRole("button", { name: "Stats" });
     await waitFor(() => expect(stats).toBeEnabled());
     // Off a narrow page until asked for.
-    expect(queryNarrow(screen.queryAllByText("4 times"))).toBeNull();
+    expect(screen.queryByText("4 times")).toBeNull();
     await userEvent.click(stats);
 
     const sheet = await screen.findByRole("dialog", { name: "Stats" });
@@ -478,9 +452,10 @@ describe("SongDetailPage", () => {
     expect(await screen.findByRole("link", { name: /edit/i })).toBeInTheDocument();
   });
 
-  // A link out, nothing loaded from YouTube. The fixture sets only the id, the
-  // gate: the importer stores `youtube_url` unvalidated.
-  it("links out to the video in a new tab instead of embedding it", async () => {
+  // Nothing loaded from YouTube until the reader asks. The fixture sets only
+  // the id, the gate: the importer stores `youtube_url` unvalidated.
+  it("plays the video above the lyrics on a press, and puts it away on another", async () => {
+    const user = userEvent.setup();
     server.use(
       http.get(`${API}/api/v1/songs/:id`, () =>
         HttpResponse.json(makeSong({ youtube_video_id: "dQw4w9WgXcQ" })),
@@ -489,10 +464,29 @@ describe("SongDetailPage", () => {
 
     const { container } = renderDetail();
 
-    const link = await screen.findByRole("link", { name: /watch on youtube/i });
-    expect(link).toHaveAttribute("href", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-    expect(link).toHaveAttribute("target", "_blank");
+    const watch = await screen.findByRole("button", { name: "Watch" });
+    expect(watch).toHaveAttribute("aria-expanded", "false");
     expect(container.querySelector("iframe")).toBeNull();
+
+    await user.click(watch);
+
+    const player = screen.getByTitle("Θάλασσα Πλατιά on YouTube");
+    expect(player).toHaveAttribute("src", embedUrl("dQw4w9WgXcQ"));
+    expect(player).toHaveFocus();
+    const hide = screen.getByRole("button", { name: "Hide video" });
+    expect(hide).toHaveAttribute("aria-expanded", "true");
+    expect(document.getElementById(hide.getAttribute("aria-controls") ?? "")).toContainElement(
+      player,
+    );
+    // Between the credits and the lyrics, so the words stay in view under it.
+    expect(player.compareDocumentPosition(screen.getByRole("region", { name: "Lyrics" }))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+
+    await user.click(hide);
+
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(screen.getByRole("button", { name: "Watch" })).toBeInTheDocument();
   });
 
   // The other half of the gate: a `youtube_url` with no id (an unparseable
@@ -509,7 +503,7 @@ describe("SongDetailPage", () => {
     renderDetail();
 
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
-    expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Watch" })).not.toBeInTheDocument();
   });
 
   // A guest is offered Add to list and sent to sign in.
@@ -539,6 +533,35 @@ describe("SongDetailPage", () => {
     renderDetail();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Song was not found.");
+  });
+
+  // A video taken away and put back, as an editor fixing its link might: the
+  // player must not come back and play on its own.
+  it("closes the player for good when a refetch drops the video", async () => {
+    const user = userEvent.setup();
+    let videoId: string | null = "dQw4w9WgXcQ";
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(makeSong({ youtube_video_id: videoId })),
+      ),
+    );
+    const { queryClient } = renderDetail();
+
+    await user.click(await screen.findByRole("button", { name: "Watch" }));
+    expect(document.querySelector("iframe")).not.toBeNull();
+
+    videoId = null;
+    await act(() => queryClient.refetchQueries({ queryKey: keys.song("song-1") }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /hide video/i })).toBeNull());
+
+    videoId = "dQw4w9WgXcQ";
+    await act(() => queryClient.refetchQueries({ queryKey: keys.song("song-1") }));
+
+    expect(await screen.findByRole("button", { name: "Watch" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(document.querySelector("iframe")).toBeNull();
   });
 
   // A failed refetch with the song in hand keeps the lyrics on screen.
@@ -777,11 +800,11 @@ describe("SongDetailPage recordings", () => {
     renderDetail();
 
     expect(await screen.findByText("Performed by")).toBeInTheDocument();
-    expect(getNarrow(screen.getAllByRole("link", { name: "Γιώργος Νταλάρας" }))).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Γιώργος Νταλάρας" })).toHaveAttribute(
       "href",
       "/?person=person-2",
     );
-    expect(getNarrow(screen.getAllByText("1971"))).toBeInTheDocument();
+    expect(screen.getByText("1971")).toBeInTheDocument();
   });
 
   // The commonest recording: a year and nobody named, so no "Performed by" row.
@@ -792,21 +815,24 @@ describe("SongDetailPage recordings", () => {
 
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
     expect(screen.queryByText("Performed by")).not.toBeInTheDocument();
-    expect(getNarrow(screen.getAllByText("1964"))).toBeInTheDocument();
+    expect(screen.getByText("1964")).toBeInTheDocument();
   });
 
   // Both halves of the video gate, per recording; see the pair above.
-  it("builds the watch link from the first recording's video id", async () => {
+  it("plays the first recording's video id", async () => {
+    const user = userEvent.setup();
     withRecordings([makeRecording({ youtube_video_id: "dQw4w9WgXcQ" })]);
 
     renderDetail();
 
-    expect(
-      getNarrow(await screen.findAllByRole("link", { name: /watch on youtube/i })),
-    ).toHaveAttribute("href", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    await user.click(await screen.findByRole("button", { name: "Watch" }));
+    expect(screen.getByTitle("Θάλασσα Πλατιά on YouTube")).toHaveAttribute(
+      "src",
+      embedUrl("dQw4w9WgXcQ"),
+    );
   });
 
-  it("offers no watch link for a recording whose link never parsed", async () => {
+  it("offers no video for a recording whose link never parsed", async () => {
     withRecordings([
       makeRecording({
         youtube_url: "https://youtube.com/watch?feature=share",
@@ -817,7 +843,7 @@ describe("SongDetailPage recordings", () => {
     renderDetail();
 
     await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
-    expect(screen.queryByRole("link", { name: /watch on youtube/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Watch" })).not.toBeInTheDocument();
   });
 
   // Its performers and year are the song's own rows, so only the label and the
@@ -827,13 +853,12 @@ describe("SongDetailPage recordings", () => {
 
     renderDetail();
 
-    const inline = getNarrow(await screen.findAllByText("Columbia")).closest("[data-tier]");
-    expect(inline).toHaveAttribute("data-tier", "narrow");
+    const inline = (await screen.findByText("Columbia")).parentElement;
     expect(inline).toHaveTextContent("Recorded in Athens.");
     // The mark is on the performers' line, which it describes, not the label's.
     expect(inline).not.toHaveTextContent("First recording");
-    expect(getNarrow(screen.getAllByText("1964"))).toBeInTheDocument();
-    const performer = getNarrow(screen.getAllByText("Γιώργος Νταλάρας"));
+    expect(screen.getByText("1964")).toBeInTheDocument();
+    const performer = screen.getByText("Γιώργος Νταλάρας");
     expect(performer.closest("dd")).toHaveTextContent("First recording");
     expect(screen.queryByRole("button", { name: /show all/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: /recordings/i })).not.toBeInTheDocument();
@@ -846,15 +871,11 @@ describe("SongDetailPage recordings", () => {
 
     renderDetail();
 
-    const performer = getNarrow(await screen.findAllByText("Γιώργος Νταλάρας"));
+    const performer = await screen.findByText("Γιώργος Νταλάρας");
     const row = performer.closest("dd");
     expect(row).toHaveTextContent("First recording");
-    expect(
-      within(row as HTMLElement)
-        .getByText("First recording")
-        .closest("[data-tier]"),
-    ).toHaveAttribute("data-tier", "narrow");
-    expect(screen.getAllByText("First recording")).toHaveLength(2); // the row's, and the column's list
+    // Once: no second list of recordings marks it again.
+    expect(screen.getAllByText("First recording")).toHaveLength(1);
   });
 
   // Unmarked, unlabeled and without notes, it has nothing the page lacks.
@@ -879,8 +900,8 @@ describe("SongDetailPage recordings", () => {
     expect(
       await screen.findByRole("button", { name: "Show all 2 recordings" }),
     ).toBeInTheDocument();
-    expect(queryNarrow(screen.queryAllByText("Columbia"))).toBeNull();
-    expect(queryNarrow(screen.queryAllByText(/first recording/i))).toBeNull();
+    expect(screen.queryByText("Columbia")).toBeNull();
+    expect(screen.queryByText(/first recording/i)).toBeNull();
   });
 
   it("offers nothing to open when the song has no recordings", async () => {
@@ -1766,68 +1787,10 @@ describe("SongDetailPage tools bar on a phone", () => {
   });
 });
 
-/*
- * The details column a wide pane puts beside the lyrics. jsdom has no
- * container queries, so the column's own block is in the DOM at every width:
- * these read it directly, and read the narrow-only controls' `data-tier` for
- * what a wide pane hides.
- */
-describe("SongDetailPage details column", () => {
-  it("holds the recordings, the player and the tallies, in place of their buttons", async () => {
-    server.use(
-      http.get(`${API}/api/v1/songs/:id`, () =>
-        HttpResponse.json(
-          makeSong({
-            youtube_video_id: "dQw4w9WgXcQ",
-            recordings: [
-              makeRecording({ id: "r1", label: "Columbia", youtube_video_id: "dQw4w9WgXcQ" }),
-              makeRecording({ id: "r2", is_first: false, release_year: 1988 }),
-            ],
-            popularity: makePopularity({
-              anonymous_clicks: 40,
-              authenticated_clicks: 2,
-              list_adds: 3,
-              list_users: 2,
-              score: 50,
-            }),
-          }),
-        ),
-      ),
-      http.post(`${API}/api/v1/songs/:id/clicks`, () => new Promise(() => {})),
-    );
-
-    renderDetail();
-
-    await screen.findByText("η αγάπη μου κοιμάται");
-    const column = columnBlock();
-    expect(column).toHaveClass("hidden", "@3xl/song:block");
-    // Every block of the column under a heading of its own.
-    expect(screen.getByRole("heading", { level: 2, name: "Credits" })).toHaveAttribute(
-      "data-tier",
-      "column",
-    );
-    const video = within(column).getByRole("region", { name: "Video" });
-    expect(within(video).getByRole("button", { name: "Play video" })).toBeInTheDocument();
-    const recordings = within(column).getByRole("region", { name: "Recordings" });
-    expect(within(recordings).getAllByRole("listitem")).toHaveLength(2);
-    const stats = within(column).getByRole("region", { name: "Stats" });
-    expect(within(stats).getByText("Views").closest("div")).toHaveTextContent("42");
-
-    // What the column makes redundant is put away where it shows.
-    expect(screen.getByRole("button", { name: "Stats" })).toHaveAttribute("data-tier", "narrow");
-    expect(screen.getByRole("button", { name: "Show all 2 recordings" })).toHaveAttribute(
-      "data-tier",
-      "narrow",
-    );
-    expect(getNarrow(screen.getAllByRole("link", { name: /watch on youtube/i }))).toHaveAttribute(
-      "data-tier",
-      "narrow",
-    );
-  });
-
-  // After the lyrics would put the credits after the song on a phone, where
-  // the column is the block under the title.
-  it("comes after the title and before the lyrics", async () => {
+describe("SongDetailPage credits", () => {
+  // As a record sleeve prints them: after the title, before the words, at
+  // every width, with no column of their own beside the lyrics.
+  it("come after the title and before the lyrics", async () => {
     renderDetail();
 
     const title = await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
@@ -1835,94 +1798,27 @@ describe("SongDetailPage details column", () => {
     const lyrics = screen.getByRole("region", { name: "Lyrics" });
     expect(title.compareDocumentPosition(details)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(details.compareDocumentPosition(lyrics)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(within(details).getByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
   });
 
-  it("heads no credits for a song with none to show beside the lyrics", async () => {
+  // Two rules around nothing, and an empty landmark, would say less than none.
+  it("draws no band for a song with nothing to say", async () => {
     server.use(
       http.get(`${API}/api/v1/songs/:id`, () =>
-        HttpResponse.json(
-          makeSong({
-            credits: [],
-            release_year: null,
-            recordings: [
-              makeRecording({ id: "r1", performers: [] }),
-              makeRecording({ id: "r2", is_first: false, performers: [] }),
-            ],
-          }),
-        ),
+        HttpResponse.json(makeSong({ credits: [], release_year: null })),
       ),
     );
 
     renderDetail();
 
-    await screen.findByText("η αγάπη μου κοιμάται");
-    expect(screen.queryByRole("heading", { name: "Credits" })).toBeNull();
-    // The narrow tier's recordings line is still there.
-    expect(screen.getByRole("button", { name: "Show all 2 recordings" })).toBeInTheDocument();
-  });
-
-  it("offers no player for a song without a video id", async () => {
-    server.use(
-      http.get(`${API}/api/v1/songs/:id`, () =>
-        HttpResponse.json(
-          makeSong({ youtube_url: "https://example.com/not-a-video", youtube_video_id: null }),
-        ),
-      ),
-    );
-
-    renderDetail();
-
-    await screen.findByText("η αγάπη μου κοιμάται");
-    expect(within(columnBlock()).queryByRole("button", { name: "Play video" })).toBeNull();
-  });
-
-  // The card's tallies are as old as the list it came from; the column waits
-  // for the song's own rather than show a count that then jumps.
-  it("shows no tallies from the cached card while the full read is on its way", async () => {
-    const [held, release] = deferred();
-    const { lyrics: _lyrics, ...card } = makeSong({
-      popularity: makePopularity({ anonymous_clicks: 6, list_adds: 2, list_users: 2, score: 10 }),
-    });
-    const queryClient = testQueryClient();
-    queryClient.setQueryData(keys.songs({}), {
-      data: [card],
-      meta: { total: 1, limit: 20, offset: 0 },
-    });
-    server.use(
-      http.get(`${API}/api/v1/songs/:id`, async () => {
-        await held;
-        return HttpResponse.json(
-          makeSong({
-            popularity: makePopularity({
-              anonymous_clicks: 9,
-              list_adds: 2,
-              list_users: 2,
-              score: 13,
-            }),
-          }),
-        );
-      }),
-      http.post(`${API}/api/v1/songs/:id/clicks`, () => new Promise(() => {})),
-    );
-
-    renderDetail({ route: "/songs/thalassa-platia", queryClient });
-
-    // The card's credits are up already; its tallies are not.
-    expect(screen.getByText("Μίκης Θεοδωράκης")).toBeInTheDocument();
-    const stats = within(columnBlock()).getByRole("region", { name: "Stats" });
-    expect(within(stats).queryByText("Views")).toBeNull();
-    expect(stats).not.toHaveTextContent("6");
-
-    release();
-    await waitFor(() =>
-      expect(within(stats).getByText("Views").closest("div")).toHaveTextContent("9"),
-    );
+    await screen.findByRole("heading", { name: "Θάλασσα Πλατιά" });
+    expect(screen.queryByRole("complementary", { name: "Song details" })).not.toBeInTheDocument();
   });
 
   // Started on one song, the player does not keep playing it under the next.
-  // The next song is a card already in the cache, so the column stays up
-  // through the step and only the reset can bring the thumbnail back.
-  it("puts the player back to its thumbnail when the address moves to another song", async () => {
+  // The next song is a card already in the cache, so the page stays up through
+  // the step and only the reset can put the player away.
+  it("puts the player away when the address moves to another song", async () => {
     const user = userEvent.setup();
     const { lyrics: _lyrics, ...next } = makeSong({
       id: "song-2",
@@ -1940,17 +1836,13 @@ describe("SongDetailPage details column", () => {
     );
     const router = renderWithRouter(queryClient);
 
-    await user.click(await screen.findByRole("button", { name: "Play video" }));
-    expect(screen.getByTitle("Θάλασσα Πλατιά on YouTube")).toHaveAttribute(
-      "src",
-      embedUrl("dQw4w9WgXcQ"),
-    );
+    await user.click(await screen.findByRole("button", { name: "Watch" }));
+    expect(document.querySelector("iframe")).not.toBeNull();
 
     stepTo(router, queryClient, next);
 
     await screen.findByRole("heading", { name: "Άλλο" });
     expect(document.querySelector("iframe")).toBeNull();
-    const play = screen.getByRole("button", { name: "Play video" });
-    expect(play.querySelector("img")).toHaveAttribute("src", thumbnailUrl("abcdefghijk"));
+    expect(screen.getByRole("button", { name: "Watch" })).toHaveAttribute("aria-expanded", "false");
   });
 });
