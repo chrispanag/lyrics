@@ -435,9 +435,9 @@ function SongToolsBar({ children }: { children: ReactNode }) {
  *   width: the lyrics against its left edge, the column against its right, and
  *   the room left over between them rather than around a centered pair. 48rem
  *   leaves the lyrics at least 26rem beside a 16rem column, which a pane
- *   reaches in a 1280px window with the navigation put away, or a 1440px one
- *   with it open. From `@5xl` (64rem) the column widens to 20rem; the lyrics
- *   stay at most 40rem.
+ *   reaches beside the rail and the list in a window of 77rem (1232px) and up.
+ *   From `@5xl` (64rem) the column widens to 20rem; the lyrics stay at most
+ *   40rem.
  */
 const SONG_COLUMNS = cn(
   "p-4",

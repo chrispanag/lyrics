@@ -511,7 +511,7 @@ export const PhoneInAList: Story = {
 /*
  * A desk, in the shell with the catalog beside the song, as the reader route
  * lays them out. The song's own pane decides the tier, not the window: the
- * navigation column and the list take their share first.
+ * navigation rail and the list take their share first.
  */
 
 /** The shell, and the catalog and the song side by side in it. */
