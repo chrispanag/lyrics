@@ -126,7 +126,7 @@ function stubbed(route: string, user: User | null) {
 describe("hydrating over a server render", () => {
   const reader = makeUser({ display_name: "Νίκος" });
 
-  // The shell around the catalog: the sidebar, the bottom bar and the search header.
+  // The shell around the catalog: the rail, the bottom bar and the search header.
   it("agrees about the catalog and its shell", async () => {
     const state = await dataFor("/", reader);
 

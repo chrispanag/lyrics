@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 
 import { SESSION_BOOT_SCRIPT } from "@/auth/storedUser";
 import { FONT_SIZE_BOOT_SCRIPT } from "@/lib/fontSize";
-import { NAV_COLLAPSED_BOOT_SCRIPT } from "@/lib/navCollapsed";
 import { OG_BASE, SITE_NAME, SITE_ORIGIN, SITE_SUMMARY } from "@/lib/site";
 import { THEME_BOOT_SCRIPT, THEME_COLORS } from "@/lib/theme";
 import "@/styles/index.css";
@@ -72,17 +71,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body>
         {/* Must run before anything with a background color paints, the
-            lyrics at their default size, a collapsed navigation column, or a
-            signed-in reader's Sign in. Four scripts' worth of source in one
-            tag; each has its own try. */}
+            lyrics at their default size, or a signed-in reader's Sign in.
+            Three scripts' worth of source in one tag; each has its own try. */}
         <script
           // biome-ignore lint/security/noDangerouslySetInnerHtml: constants written here, with no input in them.
           dangerouslySetInnerHTML={{
-            __html:
-              THEME_BOOT_SCRIPT +
-              FONT_SIZE_BOOT_SCRIPT +
-              NAV_COLLAPSED_BOOT_SCRIPT +
-              SESSION_BOOT_SCRIPT,
+            __html: THEME_BOOT_SCRIPT + FONT_SIZE_BOOT_SCRIPT + SESSION_BOOT_SCRIPT,
           }}
         />
         <Providers>{children}</Providers>

@@ -6,8 +6,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Layout, StickyHeader } from "./Layout";
 import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "./SearchField";
-import { MenuHeader } from "./SearchHeader";
-import { NAV_COLLAPSED_ATTRIBUTE } from "@/lib/navCollapsed";
 import { modalIsOpen } from "@/lib/modal";
 import { Link } from "@/lib/navigation";
 import {
@@ -35,7 +33,7 @@ import { server } from "@/test/server";
 beforeEach(() => setScrollY(0));
 
 /*
- * jsdom has no breakpoints, so the sidebar and the bottom bar are both in the
+ * jsdom has no breakpoints, so the rail and the bottom bar are both in the
  * document; each is asserted separately. See `identityCard` in navItems.ts.
  */
 const sidebar = () => screen.getByRole("complementary");
@@ -62,16 +60,41 @@ describe("Layout navigation", () => {
       .getAllByRole("link")
       .filter((link) => link.getAttribute("href") === "/profile");
 
-  it("reaches the profile from the column's identity card rather than a link", () => {
+  it("reaches the profile from the rail's picture rather than a link", () => {
     renderWithProviders(<Layout />, { user: makeUser({ display_name: "Christos" }) });
 
-    // Inside the `<nav>`, pinning the card as part of the landmark.
-    const column = within(sidebar()).getByRole("navigation");
-    expect(routesToProfile(column)).toHaveLength(1);
-    expect(routesToProfile(column)[0]).toBe(within(column).getByRole("link", { name: /Christos/ }));
+    // Inside the `<nav>`, pinning the picture as part of the landmark.
+    const rail = within(sidebar()).getByRole("navigation");
+    expect(routesToProfile(rail)).toHaveLength(1);
+    expect(routesToProfile(rail)[0]).toBe(within(rail).getByRole("link", { name: /Christos/ }));
   });
 
-  it("keeps the column's link for a guest, who has no identity card", () => {
+  // The rail draws icons alone; each link's label is its accessible name.
+  it("names every link on the rail, the brand's mark leading home", () => {
+    renderWithProviders(<Layout />, {
+      user: makeUser({ display_name: "Christos", role: "admin" }),
+    });
+
+    const links = within(sidebar()).getAllByRole("link");
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "/",
+      "/",
+      "/lists",
+      "/admin",
+      "/profile",
+    ]);
+    expect(links[0]).toHaveAccessibleName("Songfolio");
+    expect(links.slice(1, 4).map((link) => link.textContent)).toEqual(["Browse", "Lists", "Admin"]);
+    expect(links[4]).toHaveAccessibleName(/^Christos/);
+  });
+
+  it("offers no control to put the rail away", () => {
+    renderWithProviders(<Layout />, { user: makeUser() });
+
+    expect(within(sidebar()).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("keeps the rail's link for a guest, who has no picture to press", () => {
     renderWithProviders(<Layout />, { user: null });
 
     expect(routesToProfile(within(sidebar()).getByRole("navigation"))).toHaveLength(1);
@@ -86,7 +109,7 @@ describe("Layout navigation", () => {
     { route: "/lists", entry: "Lists" },
     { route: "/lists/list-1", entry: "Lists" },
     { route: "/songs/thalassa-platia?list=list-1", entry: "Lists" },
-  ])("lights $entry, and only it, at $route, in the column and the bar", ({ route, entry }) => {
+  ])("lights $entry, and only it, at $route, on the rail and the bar", ({ route, entry }) => {
     server.use(listById(makeList()));
     renderWithProviders(<Layout />, { route, user: makeUser() });
 
@@ -179,7 +202,7 @@ describe("Bottom bar", () => {
   });
 
   // A phone reaches the console from Profile (ProfilePage's spec holds the
-  // link there), which stays lit across it. The column keeps its own entry.
+  // link there), which stays lit across it. The rail keeps its own entry.
   it("leaves Admin to Profile, lit across the console", () => {
     renderWithProviders(<Layout />, {
       route: "/admin/genres",
@@ -766,45 +789,6 @@ describe("Search sheet", () => {
     expect(modalIsOpen()).toBe(false);
     // And the chrome is out, the header holding that field with it.
     expect(document.documentElement).not.toHaveAttribute(CHROME_TUCKED_ATTRIBUTE);
-  });
-});
-
-describe("Collapsible navigation", () => {
-  const renderShell = () =>
-    renderWithProviders(
-      <Layout>
-        <MenuHeader />
-      </Layout>,
-      { user: makeUser({ display_name: "Christos" }) },
-    );
-  const collapsed = () => document.documentElement.hasAttribute(NAV_COLLAPSED_ATTRIBUTE);
-
-  it("starts open, and applies a choice already stored", () => {
-    const { unmount } = renderShell();
-    expect(collapsed()).toBe(false);
-    unmount();
-
-    localStorage.setItem("lyrics:nav-collapsed", "1");
-    renderShell();
-    expect(collapsed()).toBe(true);
-  });
-
-  it("hides the column from its own button and opens it again from the menu", async () => {
-    const user = userEvent.setup();
-    renderShell();
-
-    await user.click(screen.getByRole("button", { name: "Hide navigation" }));
-
-    expect(collapsed()).toBe(true);
-    expect(localStorage.getItem("lyrics:nav-collapsed")).toBe("1");
-    expect(screen.getByRole("button", { name: "Open menu" })).toHaveFocus();
-
-    await user.click(screen.getByRole("button", { name: "Open menu" }));
-
-    expect(collapsed()).toBe(false);
-    expect(localStorage.getItem("lyrics:nav-collapsed")).toBeNull();
-    expect(modalIsOpen()).toBe(false);
-    expect(sidebar().contains(document.activeElement)).toBe(true);
   });
 });
 

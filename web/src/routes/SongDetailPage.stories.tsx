@@ -6,7 +6,6 @@ import { SongDetailPage } from "./SongDetailPage";
 import { SongsPane } from "./SongsPane";
 import { Layout } from "@/components/Layout";
 import { ReaderSplit } from "@/components/ReaderSplit";
-import { applyNavCollapsed, storeNavCollapsed } from "@/lib/navCollapsed";
 import { catalogList, catalogSongs, entechno } from "@/test/catalog";
 import {
   API,
@@ -540,10 +539,13 @@ const wideSong = makeSong({
 });
 
 /**
- * `wideSong` beside the list, in a desk window of the given size with the
- * navigation open or put away, which is put back open after.
+ * `wideSong` beside the list, in a desk window of the given size. The panes
+ * start past the 4rem rail, the 24rem list and the 0.5rem gap between them:
+ * the song's sheet, and its article, at 28.5rem (456px).
  */
-function atADesk(width: number, height: number, navCollapsed: boolean): Story {
+const SONG_PANE_LEFT = 456;
+
+function atADesk(width: number, height: number): Story {
   const desk = deskViewport(width, height);
   return {
     parameters: { ...desk.parameters, route: "/songs/megalo-tragoydi" },
@@ -554,12 +556,6 @@ function atADesk(width: number, height: number, navCollapsed: boolean): Story {
         songByRef(wideSong),
         http.get(`${API}/api/v1/songs`, () => HttpResponse.json(list(catalogSongs))),
       );
-      storeNavCollapsed(navCollapsed);
-      applyNavCollapsed(navCollapsed);
-      return () => {
-        storeNavCollapsed(false);
-        applyNavCollapsed(false);
-      };
     },
   };
 }
@@ -594,13 +590,13 @@ function paneEdges(lyrics: HTMLElement): { left: number; right: number } {
 }
 
 /**
- * 1440×900 with the navigation open: the song's pane is 51rem, past `@3xl`,
- * so the details sit in a sticky column beside the lyrics, which start right
- * under the title. The recordings and tallies are shown in place, so the
- * buttons for their sheets are put away.
+ * 1440×900: the song's pane is 61rem, past `@3xl`, so the details sit in a
+ * sticky column beside the lyrics, which start right under the title. The
+ * recordings and tallies are shown in place, so the buttons for their sheets
+ * are put away.
  */
 export const WideDetailsColumn: Story = {
-  ...atADesk(1440, 900, false),
+  ...atADesk(1440, 900),
   play: async ({ canvas }) => {
     const { details, lyrics, title } = await songParts(canvas);
     // The column's height takes off the catalog header's (`published`): under
@@ -670,18 +666,17 @@ export const WideDetailsColumn: Story = {
 };
 
 /**
- * 1920×1080 with the navigation put away: the song's pane is 96rem, far wider
- * than the lyrics and the column need. The lyrics keep to the pane's left edge
- * at 40rem, the column to its right, and the room left over is between them,
- * not around a centered pair.
+ * 1920×1080: the song's pane is 91rem, far wider than the lyrics and the
+ * column need. The lyrics keep to the pane's left edge at 40rem, the column to
+ * its right, and the room left over is between them, not around a centered
+ * pair.
  */
 export const WideDetailsColumnFullWidth: Story = {
-  ...atADesk(1920, 1080, true),
+  ...atADesk(1920, 1080),
   play: async ({ canvas }) => {
     const { details, lyrics } = await songParts(canvas);
     const article = canvas.getByRole("article");
-    // The navigation slides shut once the shell has read the stored choice.
-    await waitFor(() => expect(article.getBoundingClientRect().left).toBe(384));
+    await expect(article.getBoundingClientRect().left).toBe(SONG_PANE_LEFT);
     const pane = paneEdges(lyrics);
     const column = lyrics.getBoundingClientRect();
     const aside = details.getBoundingClientRect();
@@ -696,19 +691,17 @@ export const WideDetailsColumnFullWidth: Story = {
 };
 
 /**
- * 1100×900 with the navigation put away: the song's pane is about 45rem, too
- * narrow for the column but wider than a comfortable line, so the title and
- * the lyrics share one 40rem column centered in the pane, the details above
- * the lyrics as on a phone.
+ * 1200×900: the song's pane is 46rem, too narrow for the column but wider
+ * than a comfortable line, so the title and the lyrics share one 40rem column
+ * centered in the pane, the details above the lyrics as on a phone.
  */
 export const CenteredColumn: Story = {
-  ...atADesk(1100, 900, true),
+  ...atADesk(1200, 900),
   play: async ({ canvas }) => {
     const { details, lyrics, title } = await songParts(canvas);
     const article = canvas.getByRole("article");
-    // The navigation slides shut once the shell has read the stored choice;
-    // the pane has its width once the list is the wider one beside it.
-    await waitFor(() => expect(article.getBoundingClientRect().left).toBe(384));
+    // The pane has its width once the list is the wider one beside it.
+    await waitFor(() => expect(article.getBoundingClientRect().left).toBe(SONG_PANE_LEFT));
     const pane = article.getBoundingClientRect();
     const column = lyrics.getBoundingClientRect();
 

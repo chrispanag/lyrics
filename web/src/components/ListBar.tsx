@@ -15,7 +15,7 @@ import { useSongOpen } from "@/lib/catalogPane";
 
 /**
  * The list's bar, with `actions` opposite the way back. Back is hidden beside
- * the lyrics once they share the screen, as it is on the song: the sidebar is
+ * the lyrics once they share the screen, as it is on the song: the rail is
  * the way out. On the list's own page there are no lyrics, so it stays.
  */
 export function ListBar({ actions }: { actions?: ReactNode }) {

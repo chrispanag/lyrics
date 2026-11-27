@@ -412,7 +412,7 @@ function SongToolsBar({ children }: { children: ReactNode }) {
       // stuck, and leaves it alone where it is an ordinary row.
       data-sticky-header="phone"
       className={cn(
-        "@3xl/app:shrink-0 @3xl/app:border-b @3xl/app:border-line @3xl/app:bg-canvas @3xl/app:pt-safe",
+        "@3xl/app:shrink-0 @3xl/app:border-b @3xl/app:border-line @3xl/app:bg-surface @3xl/app:pt-safe",
         "@3xl/app:min-h-[var(--sticky-header-height,0px)]",
         stickyBarClasses({ phoneOnly: true }),
       )}
@@ -501,10 +501,11 @@ function SongDetails({
         "mt-3 mb-5",
         "@3xl/song:col-start-2 @3xl/song:row-span-2 @3xl/song:row-start-1 @3xl/song:m-0 @3xl/song:self-start",
         // Sticky in the lyrics' scroller and as tall as its view, so the rule
-        // on its left runs the pane's length like the one beside the list;
-        // scrolled on its own past that. The padding keeps a focus ring
-        // unclipped.
-        "@3xl/song:sticky @3xl/song:top-4 @3xl/song:h-[calc(100dvh-var(--sticky-header-height,0px)-2rem)] @3xl/song:overflow-y-auto @3xl/song:overscroll-y-contain @3xl/song:border-l @3xl/song:border-line @3xl/song:p-1 @3xl/song:pl-6",
+        // on its left runs the pane's length; scrolled on its own past that.
+        // The view is the window less the header, the reader frame's padding
+        // (1rem in all) and the 1rem kept above and below the column. The
+        // padding keeps a focus ring unclipped.
+        "@3xl/song:sticky @3xl/song:top-4 @3xl/song:h-[calc(100dvh-var(--sticky-header-height,0px)-3rem)] @3xl/song:overflow-y-auto @3xl/song:overscroll-y-contain @3xl/song:border-l @3xl/song:border-line @3xl/song:p-1 @3xl/song:pl-6",
       )}
     >
       {song ? (

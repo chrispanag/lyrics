@@ -9,7 +9,7 @@ import { hasRole, type User } from "@/lib/types";
 import { useIntentPrefetch } from "@/lib/useIntentPrefetch";
 
 /*
- * The navigation's entries, shared by the sidebar from `md` up and the bottom
+ * The navigation's entries, shared by the rail from `md` up and the bottom
  * bar below it, so the two offer the same screens to the same readers and
  * light the same one.
  */
