@@ -8,8 +8,10 @@ import { cn } from "@/lib/cn";
 /** The small capitals over a section or a screen: "Lyrics", "Admin". */
 export const sectionLabel = "text-sm font-semibold uppercase tracking-wide text-fg-muted";
 
-export const LINK_TONES = ["accent", "muted", "quiet"] as const;
-export type LinkTone = (typeof LINK_TONES)[number];
+/** A screen's title: a page header's, an auth screen's, a catalog page's. */
+export const pageTitle = "text-2xl font-bold tracking-tight text-balance break-words";
+
+export type LinkTone = "accent" | "muted" | "quiet";
 
 const linkTones: Record<LinkTone, string> = {
   // The way forward: "Create one", "Show all".

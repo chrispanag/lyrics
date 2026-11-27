@@ -12,6 +12,7 @@ import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
+import { pageTitle } from "@/components/textStyles";
 import {
   Button,
   Chip,
@@ -29,6 +30,17 @@ import { catalogName, catalogQuery, catalogView, viewGenre } from "@/lib/browse"
 import { useCatalogPaneShown } from "@/lib/catalogPane";
 import { songCount } from "@/lib/format";
 import { useSearchParams, useSetSearchParams } from "@/lib/navigation";
+
+/** The URL parameters that count as filters: what the badge counts and the clears lift. */
+const FILTER_KEYS = ["person", "genre_slug", "language"] as const;
+
+/** What an empty result suggests, by what narrowed it. */
+function emptyHint(searched: boolean, filtered: boolean): string {
+  if (searched && filtered) return "Try fewer words, or remove a filter.";
+  if (searched) return "Try fewer words, or check the spelling.";
+  if (filtered) return "No song matches every filter. Try removing one.";
+  return "Songs added to the catalog will appear here.";
+}
 
 /** Browse and search. Filter state lives in the URL, so it is shareable. */
 export function BrowsePage() {
@@ -90,12 +102,11 @@ export function BrowsePage() {
   } = useSongPages(filters, shown);
   const { data: genres } = useGenres(shown);
 
-  // Every key `filterCount` counts. The sort stays: it is not a filter.
-  const clearFilters = () =>
+  // The sort is not a filter, so only the sheet's "Clear all" takes it too.
+  const clearFilters = ({ sort = false } = {}) =>
     setParams((next) => {
-      next.delete("person");
-      next.delete("genre_slug");
-      next.delete("language");
+      for (const key of FILTER_KEYS) next.delete(key);
+      if (sort) next.delete("sort");
     });
 
   const setParam = (key: string, value: string | null) => {
@@ -108,8 +119,14 @@ export function BrowsePage() {
   const activeGenre = viewGenre(view, genres?.data);
   // Fetched by id so the chip can show a name rather than a UUID.
   const { data: activePerson } = usePerson(personId, shown);
-  // The one list of what counts as a filter; the button and badge both read it.
-  const filterCount = [personId, genreSlug, language].filter(Boolean).length;
+  // The view's own reading of each `FILTER_KEYS` parameter; the type keeps the
+  // two lists one. The button and its badge count these.
+  const activeFilters: Record<(typeof FILTER_KEYS)[number], string | undefined> = {
+    person: personId,
+    genre_slug: genreSlug,
+    language,
+  };
+  const filterCount = Object.values(activeFilters).filter(Boolean).length;
   const hasFilters = filterCount > 0;
   const total = data?.total ?? 0;
   const songs = data?.songs ?? [];
@@ -184,13 +201,7 @@ export function BrowsePage() {
     >
       {/* Hidden on a search and the catalog: there the search box is the
           pane's visible heading in all but name. */}
-      <PaneHeading
-        className={
-          landing ? "mb-1 text-2xl font-bold tracking-tight text-balance text-fg" : "sr-only"
-        }
-      >
-        {name}
-      </PaneHeading>
+      <PaneHeading className={landing ? `${pageTitle} mb-1` : "sr-only"}>{name}</PaneHeading>
       <div className="mb-4 flex items-center justify-between gap-3">
         {/* Still announced when empty, but not drawn above the empty state,
             which says the same. */}
@@ -198,7 +209,6 @@ export function BrowsePage() {
           {isPending ? "Searching…" : songCount(total)}
         </Tally>
         {hasRole(user?.role, "contributor") && (
-          // A styled Link: an anchor nested in a button is invalid.
           <ButtonLink href="/songs/new" prefetch={false} variant="secondary" size="sm">
             <Plus aria-hidden className="size-4" />
             Add song
@@ -219,18 +229,10 @@ export function BrowsePage() {
           icon={<SixteenthNotes className="size-12" />}
           // A filter that matches nothing is not an empty catalog.
           title={query || hasFilters ? "No songs matched" : "No songs yet"}
-          description={
-            query && hasFilters
-              ? "Try fewer words, or remove a filter."
-              : query
-                ? "Try fewer words, or check the spelling."
-                : hasFilters
-                  ? "No song matches every filter. Try removing one."
-                  : "Songs added to the catalog will appear here."
-          }
+          description={emptyHint(Boolean(query), hasFilters)}
           action={
             hasFilters && (
-              <Button variant="secondary" size="sm" onClick={clearFilters}>
+              <Button variant="secondary" size="sm" onClick={() => clearFilters()}>
                 Clear filters
               </Button>
             )
@@ -328,15 +330,7 @@ export function BrowsePage() {
               <Button
                 variant="secondary"
                 className="flex-1"
-                onClick={() =>
-                  setParams((next) => {
-                    // Every key `filterCount` counts must be cleared here.
-                    next.delete("person");
-                    next.delete("genre_slug");
-                    next.delete("language");
-                    next.delete("sort");
-                  })
-                }
+                onClick={() => clearFilters({ sort: true })}
               >
                 Clear all
               </Button>

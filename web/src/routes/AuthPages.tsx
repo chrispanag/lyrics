@@ -8,10 +8,11 @@ import { returnDestination } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { ButtonLink } from "@/components/ButtonLink";
 import { PageTitle } from "@/components/PageTitle";
-import { linkClasses } from "@/components/textStyles";
+import { linkClasses, pageTitle } from "@/components/textStyles";
 import { Waiting } from "@/routes/guards";
 import { Button, ErrorMessage, Field, Input, Notice } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
+import { cn } from "@/lib/cn";
 import { Link, Redirect, useRouter, useSearchParams } from "@/lib/navigation";
 
 /** Shell shared by every auth screen. */
@@ -30,7 +31,7 @@ function AuthShell({
       <PageTitle name={title} />
       <div className="mb-8 text-center">
         <Wordmark size="lg" />
-        <h1 className="mt-4 text-2xl font-bold tracking-tight">{title}</h1>
+        <h1 className={cn(pageTitle, "mt-4")}>{title}</h1>
         <p className="mt-1 text-sm text-fg-muted">{subtitle}</p>
       </div>
       {children}
@@ -824,7 +825,6 @@ export function ForgotPasswordPage() {
       <div className="space-y-4">
         <SignOutOthersPanel />
 
-        {/* A styled Link: a button inside an anchor is invalid. */}
         <ButtonLink href="/" variant="primary" size="lg" className="w-full">
           Continue to Songfolio
         </ButtonLink>

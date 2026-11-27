@@ -32,14 +32,15 @@ describe("FactList", () => {
   });
 
   // jsdom draws nothing, so the classes are the layout.
-  it("gives every row its layout, plus the caller's own", () => {
+  it("gives every row its list's layout, stacking an aligned one when narrow", () => {
     render(
-      <FactList layout="aligned" rowClassName="extra">
+      <FactList layout="aligned">
         <Fact label="Music">Μίκης Θεοδωράκης</Fact>
       </FactList>,
     );
 
     const row = screen.getByRole("term").parentElement;
-    expect(row).toHaveClass("grid-cols-subgrid", "extra");
+    expect(row?.parentElement).toHaveClass("@container");
+    expect(row).toHaveClass("grid-cols-subgrid", "@max-xs:block");
   });
 });

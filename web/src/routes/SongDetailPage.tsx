@@ -91,21 +91,30 @@ export function SongNotFound() {
   return (
     <>
       <SongSearchAbove />
-      <SongUnavailable message="No song has this address." missing />
+      {/* Nothing failed, so it is said calmly, as a dead link is (app/not-found). */}
+      <SongUnavailable>
+        <EmptyState
+          icon={<SixteenthNotes aria-hidden className="size-12" />}
+          title="Song not found"
+          description="No song has this address."
+          action={<BrowseSongs />}
+        />
+      </SongUnavailable>
     </>
   );
 }
 
-/**
- * A song that is not there. A missing one is an empty page, not an error:
- * nothing failed, so it is said calmly. A failed read is an error.
- */
-function SongUnavailable({ message, missing = false }: { message: string; missing?: boolean }) {
-  const browse = (
+/** The way back from a song that is not there. */
+function BrowseSongs() {
+  return (
     <ButtonLink href="/" variant="secondary" size="sm">
       Browse songs
     </ButtonLink>
   );
+}
+
+/** Where a song would be, holding what is said in its place. */
+function SongUnavailable({ children }: { children: ReactNode }) {
   return (
     <div
       className={cn(
@@ -116,19 +125,7 @@ function SongUnavailable({ message, missing = false }: { message: string; missin
       )}
     >
       <PageTitle name="Song not available" />
-      {missing ? (
-        <EmptyState
-          icon={<SixteenthNotes aria-hidden className="size-12" />}
-          title="Song not found"
-          description={message}
-          action={browse}
-        />
-      ) : (
-        <>
-          <ErrorMessage>{message}</ErrorMessage>
-          <div className="mt-4">{browse}</div>
-        </>
-      )}
+      {children}
     </div>
   );
 }
@@ -193,7 +190,14 @@ function SongArticle() {
   // hand that only means a failed refetch, which must not take the lyrics away.
   // See CLAUDE.md, "Frontend".
   if (!isLoading && !song) {
-    return <SongUnavailable message={errorMessage(error, "This song could not be loaded.")} />;
+    return (
+      <SongUnavailable>
+        <ErrorMessage>{errorMessage(error, "This song could not be loaded.")}</ErrorMessage>
+        <div className="mt-4">
+          <BrowseSongs />
+        </div>
+      </SongUnavailable>
+    );
   }
 
   return (
@@ -598,22 +602,12 @@ function SongFacts({ song, onShowRecordings }: { song: Song; onShowRecordings: (
   const performers = songPerformers(song);
   const year = song.release_year;
   const onlyRecording = song.recordings.length === 1 ? song.recordings[0] : undefined;
-  // An unlabeled lone recording's mark goes on its performers' line, which it
-  // describes, rather than on a line of its own under the year.
-  const markOnPerformers = Boolean(
-    onlyRecording?.is_first && !onlyRecording.label && performers.length > 0,
-  );
+  // A lone recording's mark goes on its performers' line, which it describes.
+  const markOnPerformers = Boolean(onlyRecording?.is_first && performers.length > 0);
 
   return (
     <div lang={song.language}>
-      {/* Under the title, two columns the rows share, so every value starts on
-          one line. The details column is too narrow for a second column of
-          names, so there each label sits over its value. */}
-      <FactList
-        layout="aligned"
-        className="text-sm @3xl/song:block @3xl/song:space-y-2"
-        rowClassName="@3xl/song:block"
-      >
+      <FactList layout="aligned" className="text-sm">
         {/* Performers lead; the row is conditional, since most recordings
             name nobody. */}
         {performers.length > 0 && (
