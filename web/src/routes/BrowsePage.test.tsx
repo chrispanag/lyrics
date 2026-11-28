@@ -149,7 +149,6 @@ describe("BrowsePage", () => {
   });
 
   it.each([
-    ["a search", "/?q=thalassa"],
     ["a filter", "/?language=el"],
     ["a person's page", "/?person=person-1"],
   ])("opens %s on what was asked for, with no title page", async (_, route) => {
@@ -159,6 +158,21 @@ describe("BrowsePage", () => {
 
     await screen.findByRole("heading", { level: 1 });
     expect(screen.queryByText("Songfolio")).not.toBeInTheDocument();
+  });
+
+  // A search reaches the address as the reader types; the title page above
+  // the field stays put, so the field does not jump under their thumb.
+  it("keeps the title page through a search", async () => {
+    const user = userEvent.setup();
+    recordRequests();
+
+    renderWithProviders(<BrowsePage />, { route: "/" });
+    await screen.findByText("Songfolio");
+
+    await user.type(screen.getByRole("searchbox"), "thalassa");
+    await screen.findByRole("heading", { level: 1, name: "Search: thalassa" });
+
+    expect(screen.getByText("Songfolio")).toBeInTheDocument();
   });
 
   it("keeps a search's heading for assistive technology only", async () => {
