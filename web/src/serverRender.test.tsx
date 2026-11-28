@@ -111,8 +111,8 @@ describe("rendering without a browser", () => {
       </TestProviders>,
     );
 
-    // The rail's home link, named after the site.
-    expect(html).toContain('aria-label="Songfolio"');
+    // The rail's home link, named by its label: the site's name.
+    expect(html).toContain("Songfolio</span></a>");
   });
 
   // A server knows no session: guest chrome, whatever a browser remembers.

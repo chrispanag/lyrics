@@ -25,10 +25,15 @@ import { SITE_NAME } from "@/lib/site";
  * A rail entry: a square as tall as the search field and a song's tools,
  * `group` for its label. Lit, it takes the accent's tint; at rest it shades
  * under the pointer and keeps `rest`, its own text color, if any.
+ *
+ * `named`: the entry's label sits under its icon on a touch screen, where
+ * nothing hovers to show it (`RailLabel`), so the square grows to hold it.
  */
-function railEntryClass(lit: boolean, rest?: string): string {
+function railEntryClass(lit: boolean, rest?: string, named = false): string {
   return cn(
     "group relative grid size-12 place-items-center rounded-control transition-colors",
+    named &&
+      "pointer-coarse:h-auto pointer-coarse:min-h-12 pointer-coarse:w-14 pointer-coarse:py-1.5",
     litFill(lit),
     lit ? "text-fg-accent-subtle" : rest,
   );
@@ -87,12 +92,21 @@ export function Layout({ children }: { children?: ReactNode }) {
   );
 }
 
+/** A `RailLabel` under its icon, on a touch screen. One string: `cn` is a plain join. */
+const LABEL_UNDER =
+  "pointer-coarse:static pointer-coarse:z-auto pointer-coarse:ml-0 pointer-coarse:translate-y-0 pointer-coarse:rounded-none pointer-coarse:bg-transparent pointer-coarse:p-0 pointer-coarse:text-center pointer-coarse:text-[0.6875rem] pointer-coarse:leading-tight pointer-coarse:text-current pointer-coarse:opacity-100 forced-colors:pointer-coarse:border-0";
+
 /**
  * An entry's name, drawn as a label beside the rail while the entry is hovered
  * or has visible focus. Hidden by opacity alone, so it stays the link's
  * accessible name.
+ *
+ * `under`: on a touch screen (`pointer-coarse`), where nothing hovers, the name
+ * sits under the icon instead, always shown, as the bottom bar's tabs carry
+ * theirs on a phone. The brand's mark and the reader's picture leave it out:
+ * they name themselves.
  */
-function RailLabel({ children }: { children: ReactNode }) {
+function RailLabel({ children, under = false }: { children: ReactNode; under?: boolean }) {
   return (
     <span
       className={cn(
@@ -101,6 +115,7 @@ function RailLabel({ children }: { children: ReactNode }) {
         "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 motion-safe:transition-opacity",
         // Forced colors paints over the fill, which leaves the text floating.
         "forced-colors:border",
+        under && LABEL_UNDER,
       )}
     >
       {children}
@@ -123,10 +138,10 @@ function RailEntry({ item, active }: { item: NavItem; active: boolean }) {
       active={active}
       data-guest-only={item.identityCard || undefined}
       {...(item.warmsLists ? intent : undefined)}
-      className={({ isActive }) => railEntryClass(isActive, "text-fg-tertiary")}
+      className={({ isActive }) => railEntryClass(isActive, "text-fg-tertiary", true)}
     >
       <item.icon aria-hidden className="size-5" />
-      <RailLabel>{item.label}</RailLabel>
+      <RailLabel under>{item.label}</RailLabel>
     </NavLink>
   );
 }
@@ -134,7 +149,8 @@ function RailEntry({ item, active }: { item: NavItem; active: boolean }) {
 /**
  * The navigation from `md` up: the brand's mark, which leads home, an icon for
  * each entry, and at its foot the reader's picture, which leads to their
- * profile, or Sign in. Each entry's name shows beside it on hover and focus.
+ * profile, or Sign in. Each entry's name shows beside it on hover and focus,
+ * and under it on a touch screen.
  *
  * It sits on the page's own color with no rule of its own, so it frames the
  * screen rather than reading as one of its columns. Below `md` the bottom bar
@@ -154,8 +170,11 @@ function NavRail() {
     // it.
     <aside className="sticky top-0 z-sticky hidden h-dvh w-16 shrink-0 flex-col items-center pt-[calc(var(--sheet-inset)+--spacing(3))] pb-4 md:flex">
       {/* `mb-6` sets the brand apart from the entries under it. */}
-      <Link href="/" aria-label={SITE_NAME} className={cn(railEntryClass(false), "mb-6")}>
+      {/* Named by its label, as the other entries are: the only place a desk
+          shows the site's name besides an empty reading pane. */}
+      <Link href="/" className={cn(railEntryClass(false), "mb-6")}>
         <BrandMark />
+        <RailLabel>{SITE_NAME}</RailLabel>
       </Link>
 
       {/* The picture stays inside the <nav> landmark: it is the way to
@@ -180,9 +199,13 @@ function NavRail() {
               </RailLabel>
             </NavLink>
           ) : (
-            <Link href="/login" data-guest-only className={railEntryClass(false, "text-fg-accent")}>
+            <Link
+              href="/login"
+              data-guest-only
+              className={railEntryClass(false, "text-fg-accent", true)}
+            >
               <LogIn aria-hidden className="size-5" />
-              <RailLabel>Sign in</RailLabel>
+              <RailLabel under>Sign in</RailLabel>
             </Link>
           )}
         </div>

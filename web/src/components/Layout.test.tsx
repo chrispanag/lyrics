@@ -94,6 +94,22 @@ describe("Layout navigation", () => {
     expect(within(rail()).queryByRole("button")).not.toBeInTheDocument();
   });
 
+  // jsdom matches no media, so the classes are the touch screen's layout: a
+  // name under each entry's icon, where nothing hovers to show it beside.
+  it("names its entries under their icons on a touch screen, but not the brand or the picture", () => {
+    renderWithProviders(<Layout />, {
+      user: makeUser({ display_name: "Christos", role: "admin" }),
+    });
+
+    const label = (name: string | RegExp) =>
+      within(rail()).getByRole("link", { name }).lastElementChild;
+    for (const name of ["Browse", "Lists", "Admin"]) {
+      expect(label(name)).toHaveClass("pointer-coarse:static", "pointer-coarse:opacity-100");
+    }
+    expect(label("Songfolio")).not.toHaveClass("pointer-coarse:static");
+    expect(label(/^Christos/)).not.toHaveClass("pointer-coarse:static");
+  });
+
   it("keeps the rail's link for a guest, who has no picture to press", () => {
     renderWithProviders(<Layout />, { user: null });
 
