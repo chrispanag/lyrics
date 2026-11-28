@@ -32,12 +32,11 @@ import {
 } from "@/components/ui";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
 import { cn } from "@/lib/cn";
-import { panelChrome } from "@/components/cardStyles";
 import { songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Recording, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { headerBarPadding } from "@/components/SearchHeader";
-import { linkClasses, sectionLabel } from "@/components/textStyles";
+import { linkClasses } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
 import { Link, useRouter } from "@/lib/navigation";
 import { stickyBarClasses, useStickyBar } from "@/components/stickyBar";
@@ -224,7 +223,10 @@ function SongArticle() {
           {/* As tall as the search field once the list is beside the song, so
               the tools share its center. */}
           <div className="ml-auto flex items-center gap-1 @3xl/app:h-12">
-            {/* For everyone. The card a reader clicked already carries the
+            {/* First, apart from the song's actions: it changes how the lyrics
+                read, not the song. */}
+            <TextSizeControl className="mr-2" />
+            {/* For everyone. The row a reader clicked already carries the
                 tallies, so this need not wait for the full read. */}
             <Button variant="ghost" size="sm" disabled={!song} onClick={() => setStatsOpen(true)}>
               <ChartColumn aria-hidden className="size-4" />
@@ -281,7 +283,7 @@ function SongArticle() {
                 {fullSong && <ListSongSwipe position={position} surface={surface} />}
               </>
             )}
-            {song ? <SongTitle song={song} /> : <Skeleton className="h-9 w-2/3" />}
+            {song ? <SongTitle song={song} /> : <Skeleton className="h-11 w-2/3" />}
           </div>
 
           <SongDetails
@@ -292,20 +294,16 @@ function SongArticle() {
           />
 
           <div>
+            {/* Named for assistive tech only: on screen the lyrics need no label,
+                and their text size is among the tools above. */}
             <section aria-label="Lyrics">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 className={sectionLabel}>Lyrics</h2>
-                <TextSizeControl />
-              </div>
-
               {!fullSong ? (
                 <Skeleton className="h-64 w-full" />
               ) : fullSong.lyrics?.trim() ? (
                 // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
                 <p
                   lang={fullSong.language}
-                  className="lyrics-size leading-loose text-fg"
-                  style={{ fontFamily: "var(--font-lyrics)" }}
+                  className="lyrics-size font-lyrics leading-loose text-fg"
                 >
                   <LyricsLines lyrics={fullSong.lyrics} />
                 </p>
@@ -314,12 +312,7 @@ function SongArticle() {
               )}
             </section>
 
-            {song?.notes && (
-              <section className={cn(panelChrome, "mt-8")}>
-                <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
-                <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
-              </section>
-            )}
+            {song?.notes && <SongNotes notes={song.notes} />}
           </div>
         </div>
 
@@ -416,13 +409,38 @@ function SongToolsBar({ children }: { children: ReactNode }) {
  */
 const SONG_COLUMN = cn("p-4", "@2xl/song:mx-auto @2xl/song:max-w-168");
 
-/** The song's title, in the song's own language: the title is content too. */
+/**
+ * The song's title, in the song's own language: the title is content too. It is
+ * set in the lyrics' serif, so the title and the words read as one printed
+ * piece. A serif is already dark at display sizes, so semibold rather than bold,
+ * and without the sans title's tight tracking, which crowds a serif's Greek.
+ */
 function SongTitle({ song }: { song: Song }) {
   return (
-    <header lang={song.language}>
-      <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">{song.title}</h1>
-      {song.alt_title && <p className="mt-1 text-lg text-fg-muted">{song.alt_title}</p>}
+    <header lang={song.language} className="font-lyrics">
+      <h1 className="text-4xl font-semibold leading-tight text-balance">{song.title}</h1>
+      {song.alt_title && <p className="mt-1 text-xl italic text-fg-muted">{song.alt_title}</p>}
     </header>
+  );
+}
+
+/**
+ * The song's notes, as a footnote after the last verse: the lyrics' serif,
+ * smaller, italic and muted, set off by a short rule rather than boxed, so the
+ * page stays one printed piece. The heading is for assistive tech only; the
+ * rule alone sets the notes apart to the eye. Plain text whose line breaks are
+ * kept: notes are user input, never markup.
+ */
+function SongNotes({ notes }: { notes: string }) {
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="mt-10 font-lyrics">
+      <h2 id={headingId} className="sr-only">
+        Notes
+      </h2>
+      <div aria-hidden className="mb-4 w-16 border-t border-line" />
+      <p className="whitespace-pre-line text-sm italic leading-relaxed text-fg-muted">{notes}</p>
+    </section>
   );
 }
 

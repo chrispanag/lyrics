@@ -5,6 +5,7 @@ import { ChevronDown, LoaderCircle, X } from "lucide-react";
 
 import { buttonClasses, type ButtonSize, type ButtonVariant } from "./buttonStyles";
 import { fieldChrome } from "@/components/fieldStyles";
+import { sectionLabel } from "@/components/textStyles";
 import { cn } from "@/lib/cn";
 import { useDialog } from "@/lib/modal";
 
@@ -122,7 +123,7 @@ export function Field({
 
   return (
     <div className="space-y-1.5">
-      <label htmlFor={htmlFor} className="block text-sm font-medium text-fg-secondary">
+      <label htmlFor={htmlFor} className={cn(sectionLabel, "block")}>
         {label}
       </label>
       <Described by={described}>{children}</Described>

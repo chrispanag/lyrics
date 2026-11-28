@@ -27,7 +27,14 @@ import {
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
 import { paneActionLabel } from "@/components/buttonStyles";
-import { cardChrome, cardHover, tagChrome } from "@/components/cardStyles";
+import {
+  cardChrome,
+  cardHover,
+  songStack,
+  songStackBleed,
+  songStackBleedStart,
+  tagChrome,
+} from "@/components/cardStyles";
 import { linkClasses } from "@/components/textStyles";
 import { ListBar, ListSkeleton } from "@/components/ListBar";
 import { MenuItem, MoreActionsMenu } from "@/components/MoreActionsMenu";
@@ -63,7 +70,7 @@ const SortableSongList = lazy(() =>
  * Without `onRemove` the rows are read-only.
  *
  * Memoized, as `SortableSongList` is: beside a song the list re-renders on
- * every step through it, and only the cards themselves follow the open song.
+ * every step through it, and only the rows themselves follow the open song.
  */
 const StaticSongList = memo(function StaticSongList({
   songs,
@@ -77,7 +84,8 @@ const StaticSongList = memo(function StaticSongList({
   pendingRemoval?: string | undefined;
 }) {
   return (
-    <ul className="space-y-3">
+    // Bled out on the left only when a remove button holds the right edge.
+    <ul className={cn(songStack, onRemove ? songStackBleedStart : songStackBleed)}>
       {songs.map((song) => (
         <li key={song.id}>
           <SongRow

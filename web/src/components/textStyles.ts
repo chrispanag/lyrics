@@ -5,8 +5,12 @@
 
 import { cn } from "@/lib/cn";
 
-/** The small capitals over a section or a screen: "Lyrics", "Admin". */
-export const sectionLabel = "text-sm font-semibold uppercase tracking-wide text-fg-muted";
+/**
+ * The name over a part of a screen: a profile section, an editor's fieldset,
+ * a song's notes. In sentence case and unspaced: a label set in letter-spaced
+ * capitals shouts over the content it names.
+ */
+export const sectionLabel = "text-sm font-medium text-fg-secondary";
 
 /** A screen's title: a page header's, an auth screen's, a catalog page's. */
 export const pageTitle = "text-2xl font-bold tracking-tight text-balance break-words";

@@ -3,6 +3,7 @@
 import { Minus, Plus, Type } from "lucide-react";
 
 import { Button } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import {
   DEFAULT_FONT_SIZE,
   FONT_SIZES,
@@ -19,9 +20,10 @@ import { useStoredState } from "@/lib/useStoredState";
  *
  * A fieldset is the native group; preflight zeroes its border, margin and
  * padding. Named by `aria-label`, not a <legend>: the controls are icons, and
- * a visible "Text size" would crowd the heading row it sits in.
+ * a visible "Text size" would crowd the song's tools bar it sits in.
+ * `className` may only add non-colliding utilities, such as a margin.
  */
-export function TextSizeControl() {
+export function TextSizeControl({ className }: { className?: string }) {
   const [index, setIndex] = useStoredState(DEFAULT_FONT_SIZE, drawnFontSize);
 
   const step = (by: number) => {
@@ -32,7 +34,7 @@ export function TextSizeControl() {
   };
 
   return (
-    <fieldset className="flex items-center" aria-label="Text size">
+    <fieldset className={cn("flex items-center", className)} aria-label="Text size">
       <Type aria-hidden className="mr-1 size-4 text-fg-subtle" />
       <Button
         variant="ghost"

@@ -12,7 +12,9 @@ import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
-import { pageTitle } from "@/components/textStyles";
+import { songStack, songStackBleed } from "@/components/cardStyles";
+import { pageTitle, sectionLabel } from "@/components/textStyles";
+import { cn } from "@/lib/cn";
 import {
   Button,
   Chip,
@@ -212,8 +214,15 @@ export function BrowsePage() {
         <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
       )}
 
-      {/* `h-28` restates a song card's height; update it if cards change. */}
-      {isPending && <Skeletons count={5} className="h-28 w-full" />}
+      {/* `h-14` restates the commonest song row's height, a title and a byline
+          (`SongCard`); update it if the rows change. */}
+      {isPending && (
+        <Skeletons
+          count={8}
+          className="h-14 w-full"
+          stackClassName={cn(songStackBleed, songStack)}
+        />
+      )}
 
       {empty && (
         <EmptyState
@@ -231,14 +240,18 @@ export function BrowsePage() {
         />
       )}
 
-      <div className="space-y-3">
+      <div className={cn(songStackBleed, songStack)}>
         {songs.map((song) => (
           <SongCard key={song.id} song={song} search={cardSearch} />
         ))}
       </div>
 
       {isFetchingNextPage && (
-        <Skeletons count={2} className="h-28 w-full" stackClassName="mt-3 space-y-3" />
+        <Skeletons
+          count={2}
+          className="h-14 w-full"
+          stackClassName={cn("mt-1", songStackBleed, songStack)}
+        />
       )}
 
       {isFetchNextPageError && (
@@ -267,7 +280,7 @@ export function BrowsePage() {
         <Sheet open onClose={() => setFiltersOpen(false)} title="Filters">
           <div className="space-y-5">
             <div>
-              <h3 className="mb-2 text-sm font-medium text-fg-secondary">Genre</h3>
+              <h3 className={cn(sectionLabel, "mb-2")}>Genre</h3>
               <div className="flex flex-wrap gap-2">
                 {genres?.data.map((genre) => (
                   <Chip

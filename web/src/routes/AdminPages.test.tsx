@@ -38,7 +38,9 @@ describe("admin console routing", () => {
 
     renderWithProviders(<TestApp />, { user: admin, route: "/admin" });
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Users" })).toBeInTheDocument();
+    const heading = await screen.findByRole("heading", { level: 1, name: "Users" });
+    // The tab's name alone: the rail and the tabs already say it is Admin.
+    expect(heading.closest("header")).toHaveTextContent(/^Users$/);
   });
 
   // Until the session restores, `user` is a snapshot or null; deciding then

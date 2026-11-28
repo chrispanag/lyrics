@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { usePeople } from "@/api/hooks";
+import { litFill } from "@/components/cardStyles";
 import { Input } from "@/components/ui";
 import { useDebounced } from "@/lib/useDebounced";
 import { cn } from "@/lib/cn";
@@ -162,7 +163,7 @@ export function PersonAutocomplete({
                 }}
                 className={cn(
                   "flex w-full items-center justify-between px-3 py-2 text-left text-sm",
-                  index === highlighted ? "bg-accent-subtle" : "hover:bg-subtle",
+                  litFill(index === highlighted),
                 )}
               >
                 <span className="truncate">{person.name}</span>

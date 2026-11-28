@@ -2,9 +2,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { memo, useCallback } from "react";
 
 import { queries } from "@/api/hooks";
+import { litFill, songRowInset } from "./cardStyles";
 import { GenreTag } from "./GenreTag";
 import { Snippet } from "./Snippet";
-import { cardChrome, cardHover, tagChrome } from "./cardStyles";
 import { cn } from "@/lib/cn";
 import { songByline } from "@/lib/credits";
 import { songHref, songMatchesRef, songRefFromPath } from "@/lib/listContext";
@@ -18,8 +18,10 @@ import type { Song } from "@/lib/types";
  *
  * `listId` (passed by list rows only) keeps `?list=` on the song's address.
  *
- * The subtitle and genre row keep their box when empty so cards stay level; the
- * snippet varies in height and is not reserved.
+ * A row of a song list rather than a card: no border and no box until the
+ * pointer or the open song gives it a fill. Its height follows its content, so
+ * a song with nobody credited and no genres is a title and a year. Separated
+ * from its neighbors by spacing alone, which the list sets.
  */
 export const SongCard = memo(function SongCard({
   song,
@@ -56,37 +58,43 @@ export const SongCard = memo(function SongCard({
       aria-current={current ? "page" : undefined}
       {...intent}
       className={cn(
-        cardChrome,
-        cardHover,
-        "block bg-surface p-4 active:bg-accent-subtle",
-        current && "border-line-accent bg-accent-subtle",
+        "group flex items-baseline gap-3 rounded-control py-2 transition-colors active:bg-accent-subtle",
+        songRowInset,
+        litFill(current),
       )}
     >
-      {/* h2: both pages that list cards (the catalog and a list) put them
-          directly under the page's h1, and an h3 there skips a level. */}
-      <h2 className="truncate font-semibold text-fg">{song.title}</h2>
-      {/* Always rendered; `min-h-lh` gives an empty <p> its line box. */}
-      <p className="mt-0.5 min-h-lh truncate text-sm text-fg-muted">{credits}</p>
+      <div className="min-w-0 flex-1">
+        {/* h2: both pages that list songs (the catalog and a list) put them
+            directly under the page's h1, and an h3 there skips a level. */}
+        <h2 className="truncate font-semibold text-fg">{song.title}</h2>
+        {/* fg-tertiary rather than fg-muted: under the pointer and on the open
+            song the row is a fill, where fg-muted is under 4.5:1. */}
+        {credits && <p className="truncate text-sm text-fg-tertiary">{credits}</p>}
 
-      {song.snippet && (
-        <Snippet
-          text={song.snippet}
-          className="mt-2 line-clamp-2 text-sm leading-relaxed whitespace-pre-line text-fg-tertiary"
-        />
-      )}
+        {song.snippet && (
+          <Snippet
+            text={song.snippet}
+            className="mt-1 line-clamp-2 text-sm leading-relaxed whitespace-pre-line text-fg-tertiary"
+          />
+        )}
 
-      {/* Held open when empty by an invisible chip rather than a measured
-          height. Its non-breaking space is load-bearing: an empty flex item is
-          only its padding. */}
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {song.genres.length > 0 ? (
-          song.genres.map((genre) => <GenreTag key={genre.id} genre={genre} />)
-        ) : (
-          <span aria-hidden className={cn(tagChrome, "invisible")}>
-            {"\u00A0"}
-          </span>
+        {/* A chip is drawn on `subtle`, the row's own fill under the pointer,
+            so there the chips step up a shade to keep their shape. */}
+        {song.genres.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5 group-hover:*:bg-muted">
+            {song.genres.map((genre) => (
+              <GenreTag key={genre.id} genre={genre} />
+            ))}
+          </div>
         )}
       </div>
+
+      {/* A column of its own, as wide with a year as without, so years line
+          up down the list and every title has the same room. On the title's
+          baseline: `items-baseline` takes the left column's first line. */}
+      <span className="w-[4ch] shrink-0 text-right text-sm tabular-nums text-fg-tertiary">
+        {song.release_year ?? ""}
+      </span>
     </Link>
   );
 });

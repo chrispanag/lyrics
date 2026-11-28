@@ -17,7 +17,7 @@ describe("GenreTag", () => {
     );
   });
 
-  // Inside a song card, which is a link itself.
+  // Inside a song's row, which is a link itself.
   it("is plain text unless linked", () => {
     renderWithProviders(<GenreTag genre={genre} />);
 

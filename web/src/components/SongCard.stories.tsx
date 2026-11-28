@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
+import { songStack } from "./cardStyles";
 import { SongCard } from "./SongCard";
 import { makeGenre, makeRecording, makeSong } from "@/test/handlers";
 
@@ -61,18 +62,52 @@ export const InAList: Story = {
   },
 };
 
-/** Cards stay level: an empty byline and genre row keep their height. */
-export const Level: Story = {
+/** The song the address has open: an accent fill, and no border. */
+export const Current: Story = {
+  parameters: { route: "/songs/thalassa-platia" },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("link")).toHaveAttribute("aria-current", "page");
+  },
+};
+
+/**
+ * Rows as a list stacks them: the years in one column down the right, a row
+ * without a year leaving its slot empty, and each row as tall as its content.
+ */
+export const Stacked: Story = {
   render: () => (
-    <div className="grid grid-cols-2 items-start gap-3">
-      <SongCard song={makeSong({ credits: [] })} />
-      <SongCard song={makeSong({ id: "song-2", genres: [makeGenre()] })} />
+    <div className={songStack}>
+      <SongCard song={makeSong({ genres: [makeGenre()] })} />
+      <SongCard
+        song={makeSong({ id: "song-2", slug: "s2", title: "Άρνηση", release_year: null })}
+      />
+      <SongCard
+        song={makeSong({
+          id: "song-3",
+          slug: "s3",
+          title: "Bare",
+          credits: [],
+          release_year: 2011,
+        })}
+      />
     </div>
   ),
   play: async ({ canvasElement }) => {
-    const [first, second] = canvasElement.querySelectorAll("a");
-    await expect(first?.getBoundingClientRect().height).toBe(
-      second?.getBoundingClientRect().height,
-    );
+    const rows = [...canvasElement.querySelectorAll("a")];
+    const years = rows.map((row) => row.lastElementChild?.getBoundingClientRect());
+    const titles = rows.map((row) => row.querySelector("h2")?.getBoundingClientRect());
+
+    // One column: every year's box shares its edges, the empty one included.
+    for (const year of years.slice(1)) {
+      await expect(year?.left).toBe(years[0]?.left);
+      await expect(year?.right).toBe(years[0]?.right);
+    }
+    await expect(rows[1]?.lastElementChild?.textContent).toBe("");
+    // So every title has the same room.
+    await expect(new Set(titles.map((title) => title?.width)).size).toBe(1);
+    // Height follows content: genres add a line, and a bare song is one line.
+    const heights = rows.map((row) => row.getBoundingClientRect().height);
+    await expect(heights[0]).toBeGreaterThan(heights[1] ?? 0);
+    await expect(heights[1]).toBeGreaterThan(heights[2] ?? 0);
   },
 };

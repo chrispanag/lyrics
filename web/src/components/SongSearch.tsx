@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { litFill } from "./cardStyles";
 import { SearchField } from "./SearchField";
 import { SearchHeader } from "./SearchHeader";
 import { Snippet } from "./Snippet";
@@ -343,7 +344,7 @@ const SongOption = memo(function SongOption({
       tabIndex={-1}
       href={href}
       replace={replace}
-      className={cn("block px-4 py-2.5 transition-colors hover:bg-subtle", active && "bg-subtle")}
+      className={cn("block px-4 py-2.5 transition-colors", litFill(active))}
     >
       <span className="block truncate font-medium">{song.title}</span>
       {/* fg-tertiary rather than fg-muted for the secondary lines: on the

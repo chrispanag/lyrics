@@ -27,6 +27,7 @@ import {
 import { songHref, songRefHref } from "@/lib/listContext";
 import { extractVideoId } from "@/lib/youtube";
 import { cn } from "@/lib/cn";
+import { sectionLabel } from "@/components/textStyles";
 import { CREDIT_PICKER_LABELS } from "@/lib/credits";
 import { Redirect, useParams, useRouter } from "@/lib/navigation";
 import {
@@ -393,7 +394,7 @@ export function SongEditorPage() {
         </Field>
 
         <fieldset className="space-y-2">
-          <legend className="mb-1 text-sm font-medium text-fg-secondary">Credits</legend>
+          <legend className={cn(sectionLabel, "mb-1")}>Credits</legend>
 
           {credits.map((credit, index) => {
             const error = creditError(credit);
@@ -475,7 +476,7 @@ export function SongEditorPage() {
         </fieldset>
 
         <fieldset>
-          <legend className="mb-2 text-sm font-medium text-fg-secondary">Genres</legend>
+          <legend className={cn(sectionLabel, "mb-2")}>Genres</legend>
           <div className="flex flex-wrap gap-2">
             {genres?.data.map((genre) => (
               <Chip
@@ -500,7 +501,7 @@ export function SongEditorPage() {
         </fieldset>
 
         <fieldset className="space-y-3">
-          <legend className="mb-1 text-sm font-medium text-fg-secondary">Recordings</legend>
+          <legend className={cn(sectionLabel, "mb-1")}>Recordings</legend>
           <p className="text-sm text-fg-muted">
             Each recording has its own performers, link and year. A song can have none.
           </p>
@@ -511,9 +512,7 @@ export function SongEditorPage() {
 
             return (
               <fieldset key={recording.key} className={cn(cardChrome, "space-y-3 p-4")}>
-                <legend className="px-1 text-sm font-medium text-fg-secondary">
-                  Recording {index + 1}
-                </legend>
+                <legend className={cn(sectionLabel, "px-1")}>Recording {index + 1}</legend>
 
                 <Field
                   label="Label"
@@ -564,7 +563,7 @@ export function SongEditorPage() {
                 {videoId && <WatchOnYouTube videoId={videoId} />}
 
                 <div className="space-y-2">
-                  <span className="block text-sm font-medium text-fg-secondary">Performers</span>
+                  <span className={cn(sectionLabel, "block")}>Performers</span>
                   {recording.performers.map((performer, performerIndex) => {
                     const error = performerError(recording, performer);
                     const errorId = `recording-${index}-performer-${performerIndex}-error`;

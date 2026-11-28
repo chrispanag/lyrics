@@ -8,13 +8,38 @@ import { makeGenre, makeRecording, makeSong } from "@/test/handlers";
 import { renderWithProviders } from "@/test/render";
 import { recordRequests } from "@/test/requests";
 
-// jsdom computes no layout, so reserved slots are pinned by what holds them open.
+// jsdom computes no layout, so a row's height is pinned by what it renders.
 describe("SongCard", () => {
-  // The only paragraph, since the fixture has no snippet (which is also a <p>).
-  it("keeps the subtitle's line on a song with nobody credited", () => {
-    renderWithProviders(<SongCard song={makeSong({ credits: [] })} />);
+  // A row's height follows its content: no empty byline or genre row holding
+  // a bare song open. The link's first child is the text column.
+  it("draws only a title and a year for a song with nobody credited and no genres", () => {
+    renderWithProviders(<SongCard song={makeSong({ credits: [], genres: [] })} />);
+    const link = screen.getByRole("link");
 
-    expect(screen.getByRole("paragraph")).toHaveClass("min-h-lh");
+    expect(screen.queryByRole("paragraph")).not.toBeInTheDocument();
+    expect(link.firstElementChild?.children).toHaveLength(1);
+    expect(link).toHaveTextContent(/^Θάλασσα Πλατιά1964$/);
+  });
+
+  it("gives the year a right-aligned column of its own, in tabular figures", () => {
+    renderWithProviders(<SongCard song={makeSong()} />);
+    const year = screen.getByText("1964");
+
+    expect(year).toBe(screen.getByRole("link").lastElementChild);
+    expect(year).toHaveClass("shrink-0", "text-right", "tabular-nums");
+  });
+
+  // The column stays, so the titles of rows with and without a year are as wide.
+  it("leaves the year's column empty for a song without one", () => {
+    const withYear = renderWithProviders(<SongCard song={makeSong()} />);
+    const column = withYear.container.querySelector("a")?.lastElementChild;
+    withYear.unmount();
+
+    renderWithProviders(<SongCard song={makeSong({ release_year: null })} />);
+    const empty = screen.getByRole("link").lastElementChild;
+
+    expect(empty?.textContent).toBe("");
+    expect(empty?.className).toBe(column?.className);
   });
 
   // Performers come from a different field than the credits, so a regression
@@ -73,13 +98,23 @@ describe("SongCard", () => {
     expect(screen.queryByText(/saved to a list/i)).not.toBeInTheDocument();
   });
 
-  it("marks the song the address has open", () => {
+  // The tint is a fill, not a border: a row draws no edge at rest.
+  it("marks the song the address has open, and tints its row", () => {
     renderWithProviders(<SongCard song={makeSong()} />, { route: "/songs/thalassa-platia" });
+    const link = screen.getByRole("link", { name: /Θάλασσα Πλατιά/ });
 
-    expect(screen.getByRole("link", { name: /Θάλασσα Πλατιά/ })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(link).toHaveAttribute("aria-current", "page");
+    expect(link).toHaveClass("bg-accent-subtle");
+    expect(link.className).not.toMatch(/(?:^|\s)border(?:\s|$)/);
+  });
+
+  it("draws no border or fill on a row at rest", () => {
+    renderWithProviders(<SongCard song={makeSong()} />);
+    const link = screen.getByRole("link");
+
+    expect(link).not.toHaveAttribute("aria-current");
+    expect(link.className).not.toMatch(/(?:^|\s)(?:border|bg-[\w-]+)(?:\s|$)/);
+    expect(link).toHaveClass("hover:bg-subtle");
   });
 
   it("shows no save badge when the song has never been added to a list", () => {
@@ -88,20 +123,12 @@ describe("SongCard", () => {
     expect(screen.queryByText(/saved/i)).not.toBeInTheDocument();
   });
 
-  // Compared against a real chip's classes, the nearest jsdom gets to its box.
-  it("holds the genre row open with a chip's box when a song has none", () => {
+  it("shows a song's genres under its byline", () => {
     const genre = makeGenre();
-    const withGenre = renderWithProviders(<SongCard song={makeSong({ genres: [genre] })} />);
-    const chip = screen.getByText(genre.name);
+    renderWithProviders(<SongCard song={makeSong({ genres: [genre] })} />);
 
-    // No placeholder beside real chips.
-    expect(withGenre.container.querySelector(".invisible")).toBeNull();
-
-    const { container } = renderWithProviders(<SongCard song={makeSong({ genres: [] })} />);
-    const placeholder = container.querySelector(".invisible");
-
-    expect(placeholder).toHaveClass(`${chip.className} invisible`, { exact: true });
-    expect(placeholder?.textContent).toBe("\u00A0");
+    expect(screen.getByText(genre.name)).toBeInTheDocument();
+    expect(screen.getByRole("link").querySelector(".invisible")).toBeNull();
   });
 });
 

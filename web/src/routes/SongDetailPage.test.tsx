@@ -372,6 +372,24 @@ describe("SongDetailPage", () => {
     expect(screen.getByRole("button", { name: "Back" })).toHaveClass("@3xl/app:hidden");
   });
 
+  // The lyrics are plainly lyrics: no label over them on screen, though the
+  // region keeps its name for assistive tech. Their text size is a tool like
+  // Stats, so it sits in the bar and stays reachable as the lyrics scroll.
+  it("sets the text size among the tools, with no label over the lyrics", async () => {
+    renderDetail();
+
+    const lyrics = await screen.findByRole("region", { name: "Lyrics" });
+    await screen.findByText(/Στης θάλασσας τα βάθη/);
+    const textSize = screen.getByRole("group", { name: "Text size" });
+    const tools = screen.getByRole("button", { name: "Stats" }).parentElement;
+
+    expect(within(lyrics).queryByRole("heading")).not.toBeInTheDocument();
+    expect(lyrics).not.toContainElement(textSize);
+    expect(tools).toContainElement(textSize);
+    // Ahead of the song's own actions.
+    expect(tools?.firstElementChild).toBe(textSize);
+  });
+
   // Lyrics are plain text whose line breaks carry the verses. Each line is its
   // own block, so a long one wraps under a hanging indent, and a blank line
   // keeps the gap between verses.
@@ -406,6 +424,36 @@ describe("SongDetailPage", () => {
     // a line of only spaces is just as blank.
     expect(lines[2]?.querySelector("br")).not.toBeNull();
     expect(lines[4]?.querySelector("br")).not.toBeNull();
+  });
+
+  // The title is set in the lyrics' serif, so the two read as one piece. jsdom
+  // resolves no fonts; the class says it, and the stories check the face.
+  it("sets the title in the lyrics' face", async () => {
+    renderDetail();
+
+    const title = await screen.findByRole("heading", { level: 1, name: "Θάλασσα Πλατιά" });
+    expect(title.closest("header")).toHaveClass("font-lyrics");
+  });
+
+  // Notes are a footnote after the last verse, in a region assistive tech can
+  // find, and user input shown as written.
+  it("follows the lyrics with the notes, as plain text", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(makeSong({ notes: "Πρώτη <i>ηχογράφηση</i>\nστην Αθήνα." })),
+      ),
+    );
+
+    renderDetail();
+
+    const notes = await screen.findByRole("region", { name: "Notes" });
+    const lyrics = screen.getByRole("region", { name: "Lyrics" });
+    expect(lyrics.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(notes).getByRole("heading", { name: "Notes" })).toBeInTheDocument();
+    const text = within(notes).getByText(/Πρώτη/);
+    expect(text.textContent).toBe("Πρώτη <i>ηχογράφηση</i>\nστην Αθήνα.");
+    expect(text.querySelector("i")).toBeNull();
+    expect(text).toHaveClass("whitespace-pre-line");
   });
 
   it("does not offer editing to a guest", async () => {
