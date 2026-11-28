@@ -114,7 +114,8 @@ export const RailLabels: Story = {
     await expect(rail.getBoundingClientRect().width).toBe(64);
 
     const lists = within(rail).getByRole("link", { name: "Lists" });
-    const label = within(lists).getByText("Lists");
+    // The hover label, not the touch screen's caption, which repeats it hidden.
+    const label = within(lists).getByText("Lists", { ignore: '[aria-hidden="true"]' });
     await expect(getComputedStyle(label).opacity).toBe("0");
 
     lists.focus();

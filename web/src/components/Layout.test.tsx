@@ -84,7 +84,10 @@ describe("Layout navigation", () => {
       "/profile",
     ]);
     expect(links[0]).toHaveAccessibleName("Songfolio");
-    expect(links.slice(1, 4).map((link) => link.textContent)).toEqual(["Browse", "Lists", "Admin"]);
+    // Named once each, though a touch screen's caption repeats the name on screen.
+    for (const [index, name] of ["Browse", "Lists", "Admin"].entries()) {
+      expect(links[index + 1]).toHaveAccessibleName(name);
+    }
     expect(links[4]).toHaveAccessibleName(/^Christos/);
   });
 
@@ -101,13 +104,17 @@ describe("Layout navigation", () => {
       user: makeUser({ display_name: "Christos", role: "admin" }),
     });
 
-    const label = (name: string | RegExp) =>
+    // The caption is the link's last child, hidden from assistive tech: the
+    // hover label stays the name, so each is named once.
+    const caption = (name: string | RegExp) =>
       within(rail()).getByRole("link", { name }).lastElementChild;
     for (const name of ["Browse", "Lists", "Admin"]) {
-      expect(label(name)).toHaveClass("pointer-coarse:static", "pointer-coarse:opacity-100");
+      expect(caption(name)).toHaveClass("hidden", "pointer-coarse:block");
+      expect(caption(name)).toHaveAttribute("aria-hidden", "true");
+      expect(caption(name)).toHaveTextContent(name);
     }
-    expect(label("Songfolio")).not.toHaveClass("pointer-coarse:static");
-    expect(label(/^Christos/)).not.toHaveClass("pointer-coarse:static");
+    expect(caption("Songfolio")).not.toHaveClass("pointer-coarse:block");
+    expect(caption(/^Christos/)).not.toHaveClass("pointer-coarse:block");
   });
 
   it("keeps the rail's link for a guest, who has no picture to press", () => {

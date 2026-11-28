@@ -444,7 +444,11 @@ function SongNotes({ notes }: { notes: string }) {
   );
 }
 
-/** The genres and the Watch button: one row, a full-size button's height. */
+/**
+ * The genres and the Watch button: one row, as tall as the button whether or
+ * not the song has a video, and the placeholder holds the same row, so the
+ * lyrics under it do not move as the song arrives or a video turns up.
+ */
 const GENRE_ROW = "mt-3 flex min-h-11 flex-wrap items-center gap-1.5";
 
 /**
@@ -454,9 +458,8 @@ const GENRE_ROW = "mt-3 flex min-h-11 flex-wrap items-center gap-1.5";
  * video. The video plays here, above the lyrics, so the words stay readable
  * while it plays; it opens on a press and is put away on another.
  *
- * The skeleton mirrors the band's first line and the genres row, which keeps
- * a full-size button's height whether or not the song has a video, so the
- * lyrics under them do not move as the song arrives; change the two together.
+ * The skeleton mirrors the band's first line and the genres row
+ * (`GENRE_ROW`); change the two together.
  */
 function SongDetails({
   song,
@@ -483,8 +486,6 @@ function SongDetails({
         <>
           <SongFacts song={song} onShowRecordings={onShowRecordings} />
           {(song.genres.length > 0 || videoId) && (
-            // As tall as the Watch button whether or not the song has a video,
-            // so the lyrics under it do not move when one turns up.
             <div className={GENRE_ROW}>
               {song.genres.map((genre) => (
                 <GenreTag key={genre.id} genre={genre} linked />
@@ -520,9 +521,7 @@ function SongDetails({
       ) : (
         <>
           <Skeleton className="h-5 w-2/3" />
-          {/* The genres row's height, a full-size button's, whatever the song
-              turns out to hold. No `rounded-full` on the chip: `cn` is a plain
-              join. */}
+          {/* No `rounded-full` on the chip: `cn` is a plain join. */}
           <div className={GENRE_ROW}>
             <Skeleton className="h-6 w-20" />
           </div>

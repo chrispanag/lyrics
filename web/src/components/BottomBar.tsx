@@ -8,7 +8,13 @@ import { useListPosition } from "@/api/useListPosition";
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { CATALOG_SEARCH_ATTRIBUTE } from "@/components/SearchField";
-import { currentEntry, type NavItem, offeredEntries, useWarmLists } from "@/components/navItems";
+import {
+  currentEntry,
+  type NavItem,
+  offeredEntries,
+  tabLabelText,
+  useWarmLists,
+} from "@/components/navItems";
 import { SongSearchBox } from "@/components/SongSearch";
 import { Sheet } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -208,8 +214,10 @@ const idleTab = "text-fg-tertiary hover:bg-subtle active:bg-subtle motion-safe:a
  * lifts it over the mark. `transition` rather than `transition-colors`, so a
  * press's scale (`idleTab`) eases too.
  */
-const tabChrome =
-  "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-1.5 text-[11px] leading-tight font-medium transition";
+const tabChrome = cn(
+  "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-1.5 transition",
+  tabLabelText,
+);
 
 /**
  * The lit tab's shading, one mark for the whole row, so a new lit tab is the
