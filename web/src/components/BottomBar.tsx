@@ -91,7 +91,7 @@ export function BottomBar() {
           // elsewhere has the keyboard up.
           onFocus={revealChrome}
           // Round, but by index.css, which rounds the shrunk pill too. No
-          // backdrop blur: through a 95% surface it was all but invisible,
+          // backdrop blur: through a 95% fill it was all but invisible,
           // and it was recomputed on every frame of the shrink.
           // Its surface is the pill's face's too (index.css).
           className="bottom-bar-tabs flex w-full max-w-md p-1 shadow-popover"

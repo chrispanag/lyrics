@@ -36,6 +36,16 @@ type Story = StoryObj<typeof meta>;
 const bottomBar = (canvas: ReturnType<typeof within>) =>
   canvas.queryByRole("navigation", { name: "Navigation" });
 
+/** The background color `className` paints, read from an element that carries it. */
+function paintedBy(className: string): string {
+  const probe = document.createElement("div");
+  probe.className = className;
+  document.body.append(probe);
+  const color = getComputedStyle(probe).backgroundColor;
+  probe.remove();
+  return color;
+}
+
 /** Waits until the lit tab's shading sits exactly under the tab named `name`. */
 async function markUnder(bar: HTMLElement, name: string) {
   // Read afresh each time: the mark is drawn anew when the tabs change.
@@ -157,18 +167,16 @@ export const PhoneSignedIn: Story = {
   },
 };
 
-/** On a phone the page, the content column and its sticky bars are the surface. */
+/**
+ * On a phone the page, the content column and its sticky bars are the surface,
+ * and the bottom bar is the canvas.
+ */
 export const PhoneIsTheSheet: Story = {
   parameters: phoneParameters,
   globals: phoneGlobals,
   play: async ({ canvas }) => {
     const heading = await canvas.findByRole("heading", { name: "A page" });
-    // The color `bg-surface` paints, read from an element that carries it.
-    const probe = document.createElement("div");
-    probe.className = "bg-surface";
-    document.body.append(probe);
-    const surface = getComputedStyle(probe).backgroundColor;
-    probe.remove();
+    const surface = paintedBy("bg-surface");
 
     await expect(getComputedStyle(document.body).backgroundColor).toBe(surface);
     const column = heading.closest("main")?.firstElementChild;
@@ -178,6 +186,16 @@ export const PhoneIsTheSheet: Story = {
     await expect(getComputedStyle(column).getPropertyValue("--sticky-bar-bg").trim()).toBe(
       getComputedStyle(document.documentElement).getPropertyValue("--color-surface").trim(),
     );
+
+    // The bottom bar is not: it is the navigation, on the canvas, as a desk's
+    // rail is.
+    const canvasColor = paintedBy("bg-canvas/95");
+    const tabs = bottomBar(canvas);
+    if (!tabs) throw new Error("No bottom bar on a phone.");
+    await expect(getComputedStyle(tabs).backgroundColor).toBe(canvasColor);
+    // Opaque, or a 95% fill would differ from the surface even with the two
+    // colors one.
+    await expect(paintedBy("bg-canvas")).not.toBe(surface);
   },
 };
 

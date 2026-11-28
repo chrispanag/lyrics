@@ -579,10 +579,11 @@
   }
   /* The bar's surface, which the pill's face draws too, on its `::before`:
      one fades into the other, so they are one rule. Each has its own shadow,
-     sized to it. */
+     sized to it. Drawn on the canvas, as a desk's rail is, over a screen that
+     is the surface: the navigation sits apart from the content it leads to. */
   .bottom-bar-tabs,
   .bottom-bar-pill-face::before {
-    @apply border border-line bg-surface/95 reduced-transparency:bg-surface;
+    @apply border border-line bg-canvas/95 reduced-transparency:bg-canvas;
   }
   /* Each part that moves is its own layer from the start, as a top bar is
      (`chrome-slides-up`). */
