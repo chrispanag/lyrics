@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { Profiler, useEffect } from "react";
@@ -24,7 +24,6 @@ import {
   makeUser,
   notFound,
 } from "@/test/handlers";
-import { intersectAll, observedElements } from "@/test/intersection";
 import { songMatchesRef } from "@/lib/listContext";
 import { CHROME_TUCKED_ATTRIBUTE } from "@/lib/scrollChrome";
 import type { Recording, Song } from "@/lib/types";
@@ -1043,8 +1042,12 @@ describe("SongDetailPage inside a list", () => {
     );
   }
 
+  /** The page turn's links, named by their direction and then the song's title. */
+  const NEXT = /^Next\b/;
+  const PREVIOUS = /^Previous\b/;
+
   // Both addresses: shared links hold either, and `listPosition` missing one
-  // silently drops the bar, swipe and arrow keys.
+  // silently drops the running head, the page turn, the swipe and the keys.
   it.each([
     ["by id", "/songs/song-2?list=list-1"],
     ["by slug", "/songs/second?list=list-1"],
@@ -1053,11 +1056,31 @@ describe("SongDetailPage inside a list", () => {
 
     renderDetail({ route });
 
-    expect(await screen.findByRole("link", { name: "Ρεμπέτικα" })).toHaveAttribute(
+    // The running head: Back, named by the list and the place in it.
+    expect(
+      await screen.findByRole("button", { name: "Back to Ρεμπέτικα, 2 of 3" }),
+    ).toBeInTheDocument();
+    // The page turn: each neighbor by its title, as links.
+    const turn = screen.getByRole("navigation", { name: "Song navigation" });
+    expect(within(turn).getByRole("link", { name: PREVIOUS })).toHaveTextContent("First");
+    expect(within(turn).getByRole("link", { name: NEXT })).toHaveTextContent("Third");
+    expect(within(turn).getByRole("link", { name: NEXT })).toHaveAttribute(
       "href",
-      "/lists/list-1",
+      "/songs/third?list=list-1",
     );
-    expect(screen.getByText("2 of 3")).toBeInTheDocument();
+  });
+
+  // From a shared link nothing in the app is behind the song, and the running
+  // head still leads to the list it names.
+  it("leads to the list it names from a shared link", async () => {
+    const user = userEvent.setup();
+    serveList();
+
+    renderDetail({ route: "/songs/song-2?list=list-1" });
+
+    await user.click(await screen.findByRole("button", { name: /^Back to Ρεμπέτικα/ }));
+
+    expect(await screen.findByRole("heading", { name: "List page" })).toBeInTheDocument();
   });
 
   // `?list=` must survive the step.
@@ -1067,7 +1090,7 @@ describe("SongDetailPage inside a list", () => {
 
     renderDetail({ route: "/songs/song-2?list=list-1" });
 
-    await user.click(await screen.findByRole("link", { name: "Next song" }));
+    await user.click(await screen.findByRole("link", { name: NEXT }));
 
     expect(await screen.findByRole("heading", { name: "Third" })).toBeInTheDocument();
     expect(screen.getByText("3 of 3")).toBeInTheDocument();
@@ -1080,7 +1103,7 @@ describe("SongDetailPage inside a list", () => {
 
   /** One press of the page's own Back, and the list is behind the reader. */
   async function backLeavesTheList(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(screen.getByRole("button", { name: "Back" }));
+    await user.click(screen.getByRole("button", { name: /^Back\b/ }));
     expect(await screen.findByRole("heading", { name: "List page" })).toBeInTheDocument();
   }
 
@@ -1091,9 +1114,9 @@ describe("SongDetailPage inside a list", () => {
 
     renderDetail({ route: ["/lists/list-1", "/songs/song-1?list=list-1"] });
 
-    await user.click(await screen.findByRole("link", { name: "Next song" }));
+    await user.click(await screen.findByRole("link", { name: NEXT }));
     await screen.findByRole("heading", { name: "Second" });
-    await user.click(screen.getByRole("link", { name: "Next song" }));
+    await user.click(screen.getByRole("link", { name: NEXT }));
     await screen.findByRole("heading", { name: "Third" });
 
     await backLeavesTheList(user);
@@ -1112,23 +1135,8 @@ describe("SongDetailPage inside a list", () => {
     await backLeavesTheList(user);
   });
 
-  // The exception: the list's name pushes. Replacing would leave two identical
-  // list entries and a Back that appears not to move.
-  it("keeps the song behind the list when the bar's own name is pressed", async () => {
-    const user = userEvent.setup();
-    serveList();
-
-    renderDetail({ route: ["/lists/list-1", "/songs/song-2?list=list-1"] });
-
-    await user.click(await screen.findByRole("link", { name: "Ρεμπέτικα" }));
-    await screen.findByRole("heading", { name: "List page" });
-
-    await user.click(screen.getByRole("button", { name: "Back" }));
-
-    expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
-  });
-
-  // The bar comes from the address, so it stays up while the next song loads.
+  // The list's navigation comes from the address, so it stays up while the
+  // next song loads.
   it("keeps the list navigation up while the next song loads", async () => {
     serveList();
     const [held, release] = deferred();
@@ -1144,37 +1152,11 @@ describe("SongDetailPage inside a list", () => {
 
     // The list is not the slow half.
     expect(await screen.findByText("2 of 3")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Next song" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: NEXT })).toBeInTheDocument();
 
     release();
     expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
     expect(screen.getByText("2 of 3")).toBeInTheDocument();
-  });
-
-  // The once-per-device swipe mark must not be built before the song arrives.
-  // Asserted as nothing being observed, since an unspent pill renders invisibly.
-  it("does not spend the swipe mark on a song still in flight", async () => {
-    serveList();
-    const [held, release] = deferred();
-    server.use(
-      http.get(`${API}/api/v1/songs/:id`, async ({ params }) => {
-        await held;
-        const found = inList.find((song) => songMatchesRef(song, String(params.id)));
-        return found ? HttpResponse.json(found) : notFound("Song was not found.");
-      }),
-    );
-
-    renderDetail({ route: "/songs/song-2?list=list-1" });
-
-    await screen.findByText("2 of 3");
-    expect(observedElements()).toHaveLength(0);
-    // Nothing observed, so an intersection spends nothing either.
-    act(() => intersectAll());
-    expect(localStorage.getItem("lyrics:swipe-hint-seen")).toBeNull();
-
-    release();
-    // The list's card stands in for the song meanwhile, so wait on the swipe.
-    await waitFor(() => expect(observedElements()).toHaveLength(1));
   });
 
   it("steps back with the left arrow key", async () => {
@@ -1209,8 +1191,8 @@ describe("SongDetailPage inside a list", () => {
 
     renderDetail({ route: "/songs/song-1?list=list-1" });
 
-    expect(await screen.findByRole("link", { name: "Next song" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Previous song" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: NEXT })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: PREVIOUS })).not.toBeInTheDocument();
   });
 
   /**
@@ -1344,42 +1326,9 @@ describe("SongDetailPage inside a list", () => {
   it("does not read a swipe that started on a control", async () => {
     await openSecond();
 
-    swipe(screen.getByRole("link", { name: "Next song" }), 500, 620);
+    swipe(screen.getByRole("link", { name: NEXT }), 500, 620);
 
     stillOnSecond();
-  });
-
-  // The once-per-device swipe mark is spent only when it is actually on screen.
-  it("shows the swipe mark when it comes into view, once per device", async () => {
-    await openSecond();
-
-    const mark = screen.getByText("Swipe through the list");
-    expect(mark).toHaveClass("opacity-0");
-
-    act(() => intersectAll());
-    expect(mark).toHaveClass("opacity-100");
-
-    // Once spent, the mark is not built at all.
-    cleanup();
-    serveList();
-    renderDetail({ route: "/songs/song-3?list=list-1" });
-    await screen.findByRole("heading", { name: "Third" });
-
-    act(() => intersectAll());
-    expect(screen.queryByText("Swipe through the list")).not.toBeInTheDocument();
-  });
-
-  // The swipe must outlive the spent mark: the hook runs above the component's
-  // early return, and the component must not be made conditional at its call site.
-  it("still pages the list on a device that has already seen the mark", async () => {
-    localStorage.setItem("lyrics:swipe-hint-seen", "1");
-
-    const lyrics = await openSecond();
-    expect(screen.queryByText("Swipe through the list")).not.toBeInTheDocument();
-
-    swipe(lyrics, 500, 380);
-
-    expect(await screen.findByRole("heading", { name: "Third" })).toBeInTheDocument();
   });
 
   // Every touch listener must be passive: `{ passive: false }` kills vertical
@@ -1425,56 +1374,15 @@ describe("SongDetailPage inside a list", () => {
     }
   });
 
-  // Past its showing the mark unmounts, after the fade: stepping to a cached song
-  // does not remount the page, so a transparent mark would linger.
-  it("drops the mark once the fade has run, rather than leaving it invisible", async () => {
-    await openSecond();
-
-    // Fake timers before the showing starts, so the dwell and fade use them.
-    vi.useFakeTimers();
-    try {
-      act(() => intersectAll());
-      expect(screen.getByText("Swipe through the list")).toHaveClass("opacity-100");
-
-      // HINT_VISIBLE_MS, and then the duration-700 the pill fades over.
-      act(() => vi.advanceTimersByTime(3500));
-      expect(screen.getByText("Swipe through the list")).toHaveClass("opacity-0");
-
-      act(() => vi.advanceTimersByTime(700));
-      expect(screen.queryByText("Swipe through the list")).not.toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  // `md:hidden` must be on the observed box, not the pill, or a desk spends the
-  // showing. jsdom applies no CSS, so the class is asserted.
-  it("watches the box that has no box at a desk, not the pill inside it", async () => {
-    await openSecond();
-
-    const observed = observedElements();
-    expect(observed).toHaveLength(1);
-    expect(observed[0]).toHaveClass("md:hidden");
-    expect(observed[0]).toContainElement(screen.getByText("Swipe through the list"));
-  });
-
-  // A list of one has nowhere to swipe, so no mark is built to spend its
-  // showing. The bar stays, with the link back to the list.
-  it("draws no swipe mark on a list of one, and spends no showing on it", async () => {
+  // A list of one has nowhere to turn to; Back still names it.
+  it("offers no page turn on a list of one", async () => {
     serveList([inList[1]!]);
 
     renderDetail({ route: "/songs/song-2?list=list-1" });
 
-    // Wait for the song: the swipe is not built before it.
     await screen.findByRole("heading", { name: "Second" });
-    expect(screen.getByText("1 of 1")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Next song" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Previous song" })).not.toBeInTheDocument();
-
-    expect(screen.queryByText("Swipe through the list")).not.toBeInTheDocument();
-    expect(observedElements()).toHaveLength(0);
-    act(() => intersectAll());
-    expect(localStorage.getItem("lyrics:swipe-hint-seen")).toBeNull();
+    expect(screen.getByRole("button", { name: "Back to Ρεμπέτικα, 1 of 1" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Song navigation" })).not.toBeInTheDocument();
   });
 
   // A song not in the named list still renders, without list navigation.

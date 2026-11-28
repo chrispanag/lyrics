@@ -194,14 +194,19 @@ export function searchFrom(params: NextSearchParams): URLSearchParams {
 /** Where a song sits in a list, and the addresses on either side of it. */
 export interface ListPosition {
   listName: string;
-  listHref: string;
   /** Zero-based, so what a reader is shown is `index + 1`. */
   index: number;
   total: number;
-  /** Absent on the first song of the list, which is what draws the dead arrow. */
-  previousHref?: string | undefined;
-  /** Absent on the last one, for the same reason. */
-  nextHref?: string | undefined;
+  /** Absent on the first song of the list. */
+  previous?: ListStep | undefined;
+  /** Absent on the last one. */
+  next?: ListStep | undefined;
+}
+
+/** A neighbor in a list: its address, which keeps `?list=`, and the song. */
+export interface ListStep {
+  href: string;
+  song: Song;
 }
 
 /** Where a song sits in its list, as a reader is shown it: "3 of 20". */
@@ -220,14 +225,14 @@ export function listPosition(list: SongList, ref: string): ListPosition | null {
   const index = songs.findIndex((song) => songMatchesRef(song, ref));
   if (index < 0) return null;
 
-  const href = (song: Song | undefined) => (song ? songHref(song, list.id) : undefined);
+  const step = (song: Song | undefined): ListStep | undefined =>
+    song ? { href: songHref(song, list.id), song } : undefined;
 
   return {
     listName: list.name,
-    listHref: listHref(list.id),
     index,
     total: songs.length,
-    previousHref: href(songs[index - 1]),
-    nextHref: href(songs[index + 1]),
+    previous: step(songs[index - 1]),
+    next: step(songs[index + 1]),
   };
 }

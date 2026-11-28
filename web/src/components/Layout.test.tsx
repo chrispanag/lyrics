@@ -624,8 +624,8 @@ describe("Bottom bar", () => {
       );
       renderWithProviders(<Layout />, { route: "/songs/frangosyriani?list=list-1" });
 
-      // Two spans a flex gap apart, so no space between them in the text.
-      await waitFor(() => expect(pill()).toHaveTextContent(/^Ρεμπέτικα\s*· 2 of 3$/));
+      // Spans a flex gap apart, so no spaces between them in the text.
+      await waitFor(() => expect(pill()).toHaveTextContent(/^Ρεμπέτικα\s*·\s*2 of 3$/));
     });
 
     it("names the screen anywhere else", () => {

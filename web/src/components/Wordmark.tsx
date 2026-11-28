@@ -1,4 +1,4 @@
-import { Disc3 } from "lucide-react";
+import { BrandIcon } from "@/components/brandIcon";
 
 import { cn } from "@/lib/cn";
 import { SITE_NAME } from "@/lib/site";
@@ -22,7 +22,7 @@ const markSizes = {
 export function BrandMark({ size = "md" }: { size?: keyof typeof markSizes }) {
   // The fill token, not `fg-accent`: the mark is the brand's own color in both
   // themes, like the icons drawn from it.
-  return <Disc3 aria-hidden className={cn(markSizes[size], "text-accent")} />;
+  return <BrandIcon aria-hidden className={cn(markSizes[size], "text-accent")} />;
 }
 
 export function Wordmark({ size = "md" }: { size?: keyof typeof markSizes }) {

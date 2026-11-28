@@ -108,15 +108,22 @@ export const CopiesVerseByVerse: Story = {
   },
 };
 
-/** Read from a list: the bar names the list and the place in it. */
+/**
+ * Read from a list: Back names the list and the place in it, as a running
+ * head, and the foot of the song turns the page to either neighbor.
+ */
 export const InAList: Story = {
   parameters: { route: "/songs/frangosyriani?list=list-1" },
   beforeEach({ msw }) {
     msw.use(listById(catalogList(3)));
   },
   play: async ({ canvas }) => {
-    await expect(await canvas.findByRole("link", { name: "Ρεμπέτικα" })).toBeVisible();
-    await expect(canvas.getByText("2 of 3")).toBeVisible();
+    await expect(
+      await canvas.findByRole("button", { name: "Back to Ρεμπέτικα, 2 of 3" }),
+    ).toBeVisible();
+    const turn = canvas.getByRole("navigation", { name: "Song navigation" });
+    await expect(within(turn).getByRole("link", { name: /^Previous\b/ })).toBeVisible();
+    await expect(within(turn).getByRole("link", { name: /^Next\b/ })).toBeVisible();
   },
 };
 
@@ -531,21 +538,31 @@ export const PhoneSearch: Story = {
   },
 };
 
-/** Read from a list: the swipe hint sits above the bottom bar, not under it. */
+/**
+ * Read from a list on a phone: the running head shares the tools' one row,
+ * its name cut short before it reaches them, and the title sits straight
+ * under the bar, with nothing between them.
+ */
 export const PhoneInAList: Story = {
   parameters: { ...phoneParameters, route: "/songs/frangosyriani?list=list-1" },
   globals: phoneGlobals,
   decorators: [inShell],
-  loaders: [() => localStorage.removeItem("lyrics:swipe-hint-seen")],
   beforeEach({ msw }) {
     msw.use(listById(catalogList(3)));
   },
   play: async ({ canvas }) => {
-    const hint = await canvas.findByText("Swipe through the list");
-    const { bar } = chrome();
-    await expect(hint.getBoundingClientRect().bottom).toBeLessThanOrEqual(
-      bar.getBoundingClientRect().top,
-    );
+    const back = await canvas.findByRole("button", { name: /^Back to Ρεμπέτικα/ });
+    const stats = canvas.getByRole("button", { name: "Stats" });
+    const head = back.getBoundingClientRect();
+    await expect(head.right).toBeLessThanOrEqual(stats.getBoundingClientRect().left);
+    await expect(Math.abs(head.top - stats.getBoundingClientRect().top)).toBeLessThan(12);
+
+    const title = await canvas.findByRole("heading", { level: 1 });
+    const tools = back.closest("[data-sticky-header]");
+    if (!tools) throw new Error("Back is not in the song's header.");
+    await expect(
+      title.getBoundingClientRect().top - tools.getBoundingClientRect().bottom,
+    ).toBeLessThan(32);
   },
 };
 
