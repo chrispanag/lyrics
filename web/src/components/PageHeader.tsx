@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 
-import { pageSubtitle, pageTitle } from "./textStyles";
+import { pageTitle } from "./textStyles";
 import { cn } from "@/lib/cn";
 
 /**
- * The heading of a single-column page: the lists index, Admin, Profile and the
- * song editor. It renders the screen's one h1, so a page renders one of these.
+ * The heading of a single-column page: the lists index, Admin, a guest's
+ * Profile and the song editor. It renders the screen's one h1, so a page renders one of these.
  *
  * The reader panes (a list, Browse, a song) do not use it: their way back and
  * their actions sit in a sticky toolbar, and their titles are what is read.
@@ -20,13 +20,10 @@ import { cn } from "@/lib/cn";
  */
 export function PageHeader({
   title,
-  subtitle,
   actions,
   className,
 }: {
   title: string;
-  /** A quieter line under the title, in italics: what the screen is about. */
-  subtitle?: ReactNode;
   actions?: ReactNode;
   className?: string;
 }) {
@@ -36,7 +33,6 @@ export function PageHeader({
           the row's whole width before the actions drop beneath it. */}
       <div className="min-w-0 grow">
         <h1 className={pageTitle}>{title}</h1>
-        {subtitle && <p className={pageSubtitle}>{subtitle}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </header>

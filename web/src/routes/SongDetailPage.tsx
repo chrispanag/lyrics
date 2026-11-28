@@ -37,7 +37,7 @@ import { songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Recording, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { headerBarPadding } from "@/components/SearchHeader";
-import { linkClasses } from "@/components/textStyles";
+import { linkClasses, subtitleFace, titleFace } from "@/components/textStyles";
 import { recordingCount, songCount } from "@/lib/format";
 import { Link, useRouter } from "@/lib/navigation";
 import { stickyBarClasses, useStickyBar } from "@/components/stickyBar";
@@ -417,9 +417,9 @@ const SONG_COLUMN = cn("p-4", "@2xl/song:mx-auto @2xl/song:max-w-168");
  */
 function SongTitle({ song }: { song: Song }) {
   return (
-    <header lang={song.language} className="font-lyrics">
-      <h1 className="text-4xl font-semibold leading-tight text-balance">{song.title}</h1>
-      {song.alt_title && <p className="mt-1 text-xl italic text-fg-muted">{song.alt_title}</p>}
+    <header lang={song.language}>
+      <h1 className={cn(titleFace, "text-4xl")}>{song.title}</h1>
+      {song.alt_title && <p className={cn(subtitleFace, "text-xl")}>{song.alt_title}</p>}
     </header>
   );
 }

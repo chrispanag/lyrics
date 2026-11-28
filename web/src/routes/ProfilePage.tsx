@@ -28,7 +28,7 @@ import { Waiting } from "@/routes/guards";
 import type { Identity } from "@/lib/avatar";
 import { ADMIN_ITEM, offeredTo } from "@/components/navItems";
 import { cn } from "@/lib/cn";
-import { pageSubtitle, pageTitle, sectionLabel } from "@/components/textStyles";
+import { linkClasses, pageSubtitle, pageTitle, sectionLabel } from "@/components/textStyles";
 import { Link } from "@/lib/navigation";
 import {
   IMAGE_TOO_LARGE_ERROR,
@@ -196,26 +196,31 @@ export function ProfilePage() {
 
       {/* The account as liner notes: facts on ruled rows, and the ways to
           change them as quiet links at the row's end, not filled buttons. */}
-      <FactList layout="justified" className="mb-8 border-y border-line py-3 text-sm">
-        <Fact label="Email">
-          <span className="block truncate" title={user.email}>
-            {user.email}
-          </span>
-        </Fact>
-        {/* A link: changing a password is its own emailed-code flow. */}
-        <Fact label="Password">
-          <RowLink href="/change-password">Change password</RowLink>
-        </Fact>
+      <div className="mb-8 border-y border-line text-sm">
+        <FactList layout="justified" className="py-3">
+          <Fact label="Email">
+            <span className="block truncate" title={user.email}>
+              {user.email}
+            </span>
+          </Fact>
+          {/* A link: changing a password is its own emailed-code flow. */}
+          <Fact label="Password">
+            <RowLink href="/change-password">Change password</RowLink>
+          </Fact>
+        </FactList>
         {/* A phone's way to the console: its bottom bar has room for the
             screens everyone uses, and an admin's Profile tab leads here. From
             `md` up the rail has an Admin entry of its own, offered to the same
-            readers. */}
+            readers. A list of its own, ruled off above, so the rows above end
+            the same whether or not CSS hides it. */}
         {offeredTo(ADMIN_ITEM, user) && (
-          <Fact label="Administration" className="md:hidden">
-            <RowLink href={ADMIN_ITEM.to}>Admin console</RowLink>
-          </Fact>
+          <FactList layout="justified" className="border-t border-line py-3 md:hidden">
+            <Fact label="Administration">
+              <RowLink href={ADMIN_ITEM.to}>Admin console</RowLink>
+            </Fact>
+          </FactList>
         )}
-      </FactList>
+      </div>
 
       <form onSubmit={onSubmit} className="space-y-4">
         {error && <ErrorMessage>{error}</ErrorMessage>}
@@ -372,23 +377,11 @@ function RowLink({ href, children }: { href: string; children: React.ReactNode }
   return (
     <Link
       href={href}
-      className="-my-3 inline-flex min-h-11 items-center gap-0.5 font-medium text-fg-accent hover:underline"
+      className={linkClasses("accent", "-my-3 inline-flex min-h-11 items-center gap-0.5")}
     >
       {children}
       <ChevronRight aria-hidden className="size-4" />
     </Link>
-  );
-}
-
-/**
- * The label above a group of settings, shared so the two groups cannot drift
- * apart — `cn()` is a plain join, so chrome is shared rather than overridden.
- */
-function SectionHeading({ children, id }: { children: React.ReactNode; id?: string }) {
-  return (
-    <h2 id={id} className={cn(sectionLabel, "mb-2")}>
-      {children}
-    </h2>
   );
 }
 
@@ -432,7 +425,9 @@ function ThemeToggle({
   // sibling and would repeat the heading's text.
   return (
     <div className={className}>
-      <SectionHeading id={`${id}-heading`}>Appearance</SectionHeading>
+      <h2 id={`${id}-heading`} className={cn(sectionLabel, "mb-2")}>
+        Appearance
+      </h2>
       <fieldset aria-labelledby={`${id}-heading`} className={segmentedTrack}>
         {THEME_OPTIONS.map((option) => (
           <label

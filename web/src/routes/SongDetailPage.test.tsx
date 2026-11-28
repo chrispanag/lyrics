@@ -431,7 +431,7 @@ describe("SongDetailPage", () => {
     renderDetail();
 
     const title = await screen.findByRole("heading", { level: 1, name: "Θάλασσα Πλατιά" });
-    expect(title.closest("header")).toHaveClass("font-lyrics");
+    expect(title).toHaveClass("font-lyrics");
   });
 
   // Notes are a footnote after the last verse, in a region assistive tech can

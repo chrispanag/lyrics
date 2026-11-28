@@ -250,8 +250,8 @@ describe("ProfilePage", () => {
 
     const link = screen.getByRole("link", { name: "Admin console" });
     expect(link).toHaveAttribute("href", "/admin");
-    // The fact's row, not the link: the whole row goes at a desk.
-    expect(link.closest("dl > div")).toHaveClass("md:hidden");
+    // Its whole list, not the link: the row and its rule go at a desk.
+    expect(link.closest("dl")).toHaveClass("md:hidden");
   });
 
   it("offers no console to anyone else", () => {
