@@ -216,7 +216,13 @@ export function BrowsePage() {
 
       {/* `h-14` restates the commonest song row's height, a title and a byline
           (`SongCard`); update it if the rows change. */}
-      {isPending && <Skeletons count={8} className="h-14 w-full" stackClassName={songStack} />}
+      {isPending && (
+        <Skeletons
+          count={8}
+          className="h-14 w-full"
+          stackClassName={cn(songStackBleed, songStack)}
+        />
+      )}
 
       {empty && (
         <EmptyState
@@ -241,7 +247,11 @@ export function BrowsePage() {
       </div>
 
       {isFetchingNextPage && (
-        <Skeletons count={2} className="h-14 w-full" stackClassName={cn("mt-1", songStack)} />
+        <Skeletons
+          count={2}
+          className="h-14 w-full"
+          stackClassName={cn("mt-1", songStackBleed, songStack)}
+        />
       )}
 
       {isFetchNextPageError && (

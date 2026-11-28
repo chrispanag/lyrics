@@ -1,9 +1,12 @@
 /*
- * The chrome of a card: the bordered panel lists and users are shown in. Not
- * songs, which a list draws as quiet rows (`SongCard`) rather than boxes.
+ * The surfaces content is drawn on and the fills that mark it: sheets, cards
+ * (the bordered panels lists and users are shown in), song rows (which a list
+ * draws as quiet rows rather than boxes), panels, tags, and the lit fill of
+ * the current or highlighted item.
  *
- * No background or padding, since `cn` cannot take a property back out; each
- * caller sets its own. The hover is separate, for cards that are links.
+ * No background or padding on the card chrome, since `cn` cannot take a
+ * property back out; each caller sets its own. The hover is separate, for
+ * cards that are links.
  */
 
 /**
@@ -15,9 +18,10 @@ export const songStack = "space-y-1";
 /**
  * A song row's inset (`SongCard`), and the stack pulled out by it, so that the
  * rows' titles line up with the text above the list while the fill keeps its
- * room. Written once, so the three cannot drift apart. `songStackBleedStart`
- * pulls the start edge only, for a list whose rows end in a control of their
- * own (a list's remove button), which keeps the end edge where it is.
+ * room. Kept side by side, since Tailwind needs each as a literal: change one,
+ * change all three. `songStackBleedStart` pulls the start edge only, for a list
+ * whose rows end in a control of their own (a list's remove button), which
+ * keeps the end edge where it is.
  */
 export const songRowInset = "px-3";
 export const songStackBleed = "-mx-3";
