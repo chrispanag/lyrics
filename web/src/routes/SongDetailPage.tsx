@@ -9,7 +9,7 @@ import { useRecordSongClick } from "@/api/recordSongClick";
 import { useListPosition } from "@/api/useListPosition";
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
-import { ListSongNavBar, ListSongSwipe } from "@/components/ListSongNav";
+import { ListPageTurn, ListPaging, ListPlace } from "@/components/ListSongNav";
 import { contentWidth } from "@/components/Page";
 import { PageTitle } from "@/components/PageTitle";
 import { PersonLinks } from "@/components/PersonLinks";
@@ -219,10 +219,14 @@ function SongArticle() {
             headerBarPadding,
           )}
         >
-          <BackButton className="@3xl/app:hidden" />
+          {/* Read from a list, Back names it and the place in it: the
+              running head, for the list a desk shows beside the song. */}
+          <BackButton className="@3xl/app:hidden">
+            {position ? <ListPlace position={position} /> : undefined}
+          </BackButton>
           {/* As tall as the search field once the list is beside the song, so
               the tools share its center. */}
-          <div className="ml-auto flex items-center gap-1 @3xl/app:h-12">
+          <div className="ml-auto flex shrink-0 items-center gap-1 @3xl/app:h-12">
             {/* First, apart from the song's actions: it changes how the lyrics
                 read, not the song. */}
             <TextSizeControl className="mr-2" />
@@ -273,16 +277,9 @@ function SongArticle() {
         className="@3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:overflow-y-auto @3xl/app:overscroll-y-contain"
       >
         <div className={SONG_COLUMN}>
-          {/* The title, and the list's bar above it: the column's head. */}
+          {/* The column's head. */}
           <div>
-            {position && (
-              <>
-                <ListSongNavBar position={position} />
-                {/* The swipe waits for the song: its once-per-device hint must not be
-                spent on a song that fails to load. */}
-                {fullSong && <ListSongSwipe position={position} surface={surface} />}
-              </>
-            )}
+            {position && <ListPaging position={position} surface={surface} />}
             {song ? <SongTitle song={song} /> : <Skeleton className="h-11 w-2/3" />}
           </div>
 
@@ -313,6 +310,7 @@ function SongArticle() {
             </section>
 
             {song?.notes && <SongNotes notes={song.notes} />}
+            {position && <ListPageTurn position={position} />}
           </div>
         </div>
 

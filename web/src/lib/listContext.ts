@@ -198,10 +198,13 @@ export interface ListPosition {
   /** Zero-based, so what a reader is shown is `index + 1`. */
   index: number;
   total: number;
-  /** Absent on the first song of the list, which is what draws the dead arrow. */
+  /** Absent on the first song of the list. */
   previousHref?: string | undefined;
-  /** Absent on the last one, for the same reason. */
+  /** Absent on the last one. */
   nextHref?: string | undefined;
+  /** The songs either side, whose titles the page turn shows. */
+  previousSong?: Song | undefined;
+  nextSong?: Song | undefined;
 }
 
 /** Where a song sits in its list, as a reader is shown it: "3 of 20". */
@@ -229,5 +232,7 @@ export function listPosition(list: SongList, ref: string): ListPosition | null {
     total: songs.length,
     previousHref: href(songs[index - 1]),
     nextHref: href(songs[index + 1]),
+    previousSong: songs[index - 1],
+    nextSong: songs[index + 1],
   };
 }

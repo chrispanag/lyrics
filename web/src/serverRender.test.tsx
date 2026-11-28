@@ -1,13 +1,11 @@
 // @vitest-environment node
 import { renderToString } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { keys } from "@/api/hooks";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { getAccessToken } from "@/auth/session";
-import { ListSongSwipe } from "@/components/ListSongNav";
 import { DEFAULT_FONT_SIZE, storeFontSize, storedFontSize } from "@/lib/fontSize";
-import type { ListPosition } from "@/lib/listContext";
 import { storeTheme, storedTheme } from "@/lib/theme";
 import { makeSong, makeUser } from "@/test/handlers";
 import { testQueryClient } from "@/test/providers";
@@ -39,18 +37,6 @@ vi.mock("@prelude.so/js-sdk/session", () => ({
   },
 }));
 
-const POSITION: ListPosition = {
-  listName: "Rebetika favourites",
-  listHref: "/lists/list-1",
-  index: 1,
-  total: 3,
-  previousHref: "/songs/first?list=list-1",
-  nextHref: "/songs/third?list=list-1",
-};
-
-// The last case stubs `localStorage`; it must not leak into the others.
-afterEach(() => vi.unstubAllGlobals());
-
 describe("rendering without a browser", () => {
   it("has no window, storage or document to fall back on", () => {
     // The premise of every case below; a jsdom leak would pass them all silently.
@@ -67,26 +53,6 @@ describe("rendering without a browser", () => {
   it("reads the reader's font size as the default, and records one without complaint", () => {
     expect(storedFontSize()).toBe(DEFAULT_FONT_SIZE);
     expect(() => storeFontSize(2)).not.toThrow();
-  });
-
-  /*
-   * The swipe hint decides markup, so it must start spent on both sides. The spy
-   * is the load-bearing half: a wrapped read in the render body would still
-   * render "", but it cannot hide the call.
-   */
-  it("draws no swipe mark, and asks storage nothing to decide it", () => {
-    const getItem = vi.fn(() => null);
-    vi.stubGlobal("localStorage", { getItem, setItem: vi.fn() });
-
-    const html = renderToString(
-      // `useSwipePaging` needs the router; the address is irrelevant.
-      <TestProviders>
-        <ListSongSwipe position={POSITION} surface={{ current: null }} />
-      </TestProviders>,
-    );
-
-    expect(html).toBe("");
-    expect(getItem).not.toHaveBeenCalled();
   });
 
   // Importing it is the whole registration, so a server imports it too.

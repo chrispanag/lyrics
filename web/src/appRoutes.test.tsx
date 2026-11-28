@@ -236,9 +236,10 @@ describe("A list beside the lyrics", () => {
       await screen.findByRole("heading", { level: 1, name: "Θάλασσα Πλατιά" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Songs" })).toHaveClass("@max-3xl/app:hidden");
-    const bar = await screen.findByRole("navigation", { name: "Song navigation" });
-    expect(bar).toHaveTextContent("1 of 3");
-    // Hidden only once the list is beside the song, which then says the same.
-    expect(bar).toHaveClass("@3xl/app:hidden");
+    // Back names the list and the place in it, hidden only once the list is
+    // beside the song, which then says the same.
+    expect(await screen.findByRole("button", { name: "Back to Ρεμπέτικα 1 of 3" })).toHaveClass(
+      "@3xl/app:hidden",
+    );
   });
 });

@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { ListSongNavBar } from "./ListSongNav";
+import { ListPaging } from "./ListSongNav";
 import type { ListPosition } from "@/lib/listContext";
 import { type NavigationBackend, NavigationProvider } from "@/lib/navigation";
 import { recordingBackend } from "@/test/backend";
@@ -22,18 +22,18 @@ const position: ListPosition = {
   nextHref: "/songs/c?list=l",
 };
 
-function renderBar(backend: NavigationBackend, at: ListPosition) {
+function renderPaging(backend: NavigationBackend, at: ListPosition) {
   return render(
     <NavigationProvider backend={backend}>
-      <ListSongNavBar position={at} />
+      <ListPaging position={at} surface={{ current: null }} />
     </NavigationProvider>,
   );
 }
 
-describe("ListSongNavBar", () => {
+describe("ListPaging", () => {
   it("loads both neighbors, and nothing else, as soon as it knows where it is", () => {
     const backend = recordingBackend(atSong);
-    renderBar(backend, position);
+    renderPaging(backend, position);
 
     // `?list=` included: a step is answered only from an entry for its own href.
     expect(backend.prefetch.mock.calls.map(([href]) => href).sort()).toEqual([
@@ -44,7 +44,7 @@ describe("ListSongNavBar", () => {
 
   it("loads only the neighbor there is at the end of a list", () => {
     const backend = recordingBackend(atSong);
-    renderBar(backend, { ...position, index: 2, nextHref: undefined });
+    renderPaging(backend, { ...position, index: 2, nextHref: undefined });
 
     expect(backend.prefetch).toHaveBeenCalledTimes(1);
     expect(backend.prefetch).toHaveBeenCalledWith("/songs/a?list=l");
