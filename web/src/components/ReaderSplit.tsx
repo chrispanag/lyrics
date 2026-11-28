@@ -131,10 +131,16 @@ export function ReaderSplit({ catalog, children }: { catalog: ReactNode; childre
  */
 export function ReaderPane({
   header,
+  masthead,
   title,
   children,
 }: {
   header: ReactNode;
+  /**
+   * Above the header, until the panes split: it scrolls away, and the header
+   * sticks where it was. Not drawn as a pane beside a song.
+   */
+  masthead?: ReactNode;
   title?: string | undefined;
   children: ReactNode;
 }) {
@@ -142,6 +148,7 @@ export function ReaderPane({
   return (
     <div className="@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:flex-col">
       {!songOpen && <PageTitle name={title} />}
+      {masthead && <div className="@3xl/app:hidden">{masthead}</div>}
       {/* `contents` below `@3xl`: a box only as tall as the header would be
           the sticky header's whole scroll range, and it would scroll away. */}
       <div className="contents @3xl/app:block @3xl/app:shrink-0">{header}</div>

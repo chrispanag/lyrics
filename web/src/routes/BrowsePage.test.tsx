@@ -131,6 +131,36 @@ describe("BrowsePage", () => {
     expect(heading).not.toHaveClass("sr-only");
   });
 
+  // Below the split the plain catalog opens on the site's name, which scrolls
+  // away above the search. Decorative: the tab and the pane's h1 name it.
+  it("opens the plain catalog on its title page, above the search", async () => {
+    recordRequests();
+
+    renderWithProviders(<BrowsePage />, { route: "/" });
+
+    const name = await screen.findByText("Songfolio");
+    const masthead = name.closest("[aria-hidden]");
+    expect(masthead).toHaveTextContent("Songs and their lyrics, in Greek and English");
+    // Before the search in the page, and gone once the panes split.
+    expect(masthead?.parentElement).toHaveClass("@3xl/app:hidden");
+    expect(masthead?.compareDocumentPosition(screen.getByRole("searchbox")) ?? 0).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it.each([
+    ["a search", "/?q=thalassa"],
+    ["a filter", "/?language=el"],
+    ["a person's page", "/?person=person-1"],
+  ])("opens %s on what was asked for, with no title page", async (_, route) => {
+    recordRequests();
+
+    renderWithProviders(<BrowsePage />, { route });
+
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByText("Songfolio")).not.toBeInTheDocument();
+  });
+
   it("keeps a search's heading for assistive technology only", async () => {
     recordRequests();
 

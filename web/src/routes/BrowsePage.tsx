@@ -13,7 +13,10 @@ import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "@/components/SearchField"
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
 import { songStack, songStackBleed } from "@/components/cardStyles";
-import { pageTitle, sectionLabel } from "@/components/textStyles";
+import { pageTitle, sectionLabel, subtitleFace, titleFace } from "@/components/textStyles";
+import { contentWidth } from "@/components/Page";
+import { BrandMark } from "@/components/Wordmark";
+import { SITE_NAME } from "@/lib/site";
 import { cn } from "@/lib/cn";
 import {
   Button,
@@ -42,6 +45,28 @@ function emptyHint(searched: boolean, filtered: boolean): string {
 }
 
 /** Browse and search. Filter state lives in the URL, so it is shareable. */
+/**
+ * The catalog's title page, until the panes split: the site's name, set as a
+ * song's title is, and what is inside, as its subtitle. A desk shows the name
+ * in the empty pane beside the catalog instead. It scrolls away, and the
+ * search sticks where it was, as a large title folds into a navigation bar.
+ * Decorative: the screen's heading is the pane's own, and the tab names the
+ * site.
+ */
+function CatalogMasthead() {
+  return (
+    <div aria-hidden className="pt-safe">
+      <div className={cn("mx-auto px-4 pt-8", contentWidth)}>
+        <p className={cn(titleFace, "flex items-center gap-2 text-4xl")}>
+          <BrandMark size="lg" />
+          {SITE_NAME}
+        </p>
+        <p className={cn(subtitleFace, "text-lg")}>Songs and their lyrics, in Greek and English</p>
+      </div>
+    </div>
+  );
+}
+
 export function BrowsePage() {
   const params = useSearchParams();
   const setParams = useSetSearchParams();
@@ -138,6 +163,9 @@ export function BrowsePage() {
   return (
     <ReaderPane
       title={name}
+      // The plain catalog only: a search, a filter, or a person's or genre's
+      // page opens on what was asked for.
+      masthead={!query && !hasFilters ? <CatalogMasthead /> : undefined}
       header={
         <SearchHeader
           trailing={
