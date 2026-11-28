@@ -32,7 +32,6 @@ import {
 } from "@/components/ui";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
 import { cn } from "@/lib/cn";
-import { panelChrome } from "@/components/cardStyles";
 import { songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Recording, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
@@ -281,7 +280,7 @@ function SongArticle() {
                 {fullSong && <ListSongSwipe position={position} surface={surface} />}
               </>
             )}
-            {song ? <SongTitle song={song} /> : <Skeleton className="h-9 w-2/3" />}
+            {song ? <SongTitle song={song} /> : <Skeleton className="h-11 w-2/3" />}
           </div>
 
           <SongDetails
@@ -314,12 +313,7 @@ function SongArticle() {
               )}
             </section>
 
-            {song?.notes && (
-              <section className={cn(panelChrome, "mt-8")}>
-                <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
-                <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
-              </section>
-            )}
+            {song?.notes && <SongNotes notes={song.notes} />}
           </div>
         </div>
 
@@ -416,13 +410,35 @@ function SongToolsBar({ children }: { children: ReactNode }) {
  */
 const SONG_COLUMN = cn("p-4", "@2xl/song:mx-auto @2xl/song:max-w-168");
 
-/** The song's title, in the song's own language: the title is content too. */
+/**
+ * The song's title, in the song's own language: the title is content too. It is
+ * set in the lyrics' serif, so the title and the words read as one printed
+ * piece. A serif is already dark at display sizes, so semibold rather than bold,
+ * and without the sans title's tight tracking, which crowds a serif's Greek.
+ */
 function SongTitle({ song }: { song: Song }) {
   return (
-    <header lang={song.language}>
-      <h1 className="text-3xl font-bold leading-tight tracking-tight text-balance">{song.title}</h1>
-      {song.alt_title && <p className="mt-1 text-lg text-fg-muted">{song.alt_title}</p>}
+    <header lang={song.language} className="font-lyrics">
+      <h1 className="text-4xl font-semibold leading-tight text-balance">{song.title}</h1>
+      {song.alt_title && <p className="mt-1 text-xl italic text-fg-muted">{song.alt_title}</p>}
     </header>
+  );
+}
+
+/**
+ * The song's notes, as a footnote after the last verse: the lyrics' serif,
+ * smaller, italic and muted, set off by a short rule rather than boxed, so the
+ * page stays one printed piece. The heading is for assistive tech only; the
+ * rule alone sets the notes apart to the eye. Plain text whose line breaks are
+ * kept: notes are user input, never markup.
+ */
+function SongNotes({ notes }: { notes: string }) {
+  return (
+    <section aria-label="Notes" className="mt-10 font-lyrics">
+      <h2 className="sr-only">Notes</h2>
+      <div aria-hidden className="mb-4 w-16 border-t border-line" />
+      <p className="whitespace-pre-line text-sm italic leading-relaxed text-fg-muted">{notes}</p>
+    </section>
   );
 }
 
