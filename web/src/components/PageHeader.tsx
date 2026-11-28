@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { pageTitle } from "./textStyles";
+import { pageSubtitle, pageTitle } from "./textStyles";
 import { cn } from "@/lib/cn";
 
 /**
@@ -20,10 +20,13 @@ import { cn } from "@/lib/cn";
  */
 export function PageHeader({
   title,
+  subtitle,
   actions,
   className,
 }: {
   title: string;
+  /** A quieter line under the title, in italics: what the screen is about. */
+  subtitle?: ReactNode;
   actions?: ReactNode;
   className?: string;
 }) {
@@ -33,6 +36,7 @@ export function PageHeader({
           the row's whole width before the actions drop beneath it. */}
       <div className="min-w-0 grow">
         <h1 className={pageTitle}>{title}</h1>
+        {subtitle && <p className={pageSubtitle}>{subtitle}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </header>

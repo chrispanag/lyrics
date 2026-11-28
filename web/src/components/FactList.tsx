@@ -47,19 +47,24 @@ export function FactList({
   );
 }
 
-/** One labeled fact. `detail` is a quieter line under the value. */
+/**
+ * One labeled fact. `detail` is a quieter line under the value. `className`
+ * may only add what the row's layout does not set, such as `md:hidden`.
+ */
 export function Fact({
   label,
   detail,
+  className,
   children,
 }: {
   label: string;
   detail?: string | undefined;
+  className?: string | undefined;
   children: ReactNode;
 }) {
   const { row, label: labelLayout, value } = rowLayouts[useContext(Layout)];
   return (
-    <div className={row}>
+    <div className={cn(row, className)}>
       <dt className={cn("text-fg-muted", labelLayout)}>{label}</dt>
       <dd className={cn("font-medium", value)}>
         {children}

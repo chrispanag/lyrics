@@ -2,7 +2,7 @@
 
 import { useId, useState, type ChangeEvent, type SubmitEvent } from "react";
 import {
-  KeyRound,
+  ChevronRight,
   LoaderCircle,
   LogOut,
   Monitor,
@@ -20,15 +20,16 @@ import { Avatar } from "@/components/Avatar";
 import { Button, ErrorMessage, Field, Input, Sheet } from "@/components/ui";
 import { ButtonLink } from "@/components/ButtonLink";
 import { buttonClasses, segmentClasses, segmentedTrack } from "@/components/buttonStyles";
-import { panelChrome } from "@/components/cardStyles";
 import { Page } from "@/components/Page";
+import { Fact, FactList } from "@/components/FactList";
 import { PageHeader } from "@/components/PageHeader";
 import { PageTitle } from "@/components/PageTitle";
 import { Waiting } from "@/routes/guards";
 import type { Identity } from "@/lib/avatar";
 import { ADMIN_ITEM, offeredTo } from "@/components/navItems";
 import { cn } from "@/lib/cn";
-import { sectionLabel } from "@/components/textStyles";
+import { pageSubtitle, pageTitle, sectionLabel } from "@/components/textStyles";
+import { Link } from "@/lib/navigation";
 import {
   IMAGE_TOO_LARGE_ERROR,
   IMAGE_UNREADABLE_ERROR,
@@ -160,16 +161,23 @@ export function ProfilePage() {
 
   return (
     <ProfileColumn>
-      <PageHeader title="Profile" className="mb-6" />
-
-      <div className="mb-6">
-        <PictureButton user={user} busy={busy} onClick={() => setPictureMenu(true)} />
-        {/* Announces the wait the aria-hidden badge spinner shows. Always
-            rendered: a live region must exist before its text changes. */}
-        <span role="status" className="sr-only">
-          {busy ? busyMessage(removeAvatar.isPending) : ""}
-        </span>
-      </div>
+      {/* The reader is the page's title, set as a song's is, with their role
+          as its italic subtitle, as a song's other title sits under it. The
+          tab still says Profile (`ProfileColumn`). */}
+      <header className="mb-8 flex items-center gap-4">
+        <div className="shrink-0">
+          <PictureButton user={user} busy={busy} onClick={() => setPictureMenu(true)} />
+          {/* Announces the wait the aria-hidden badge spinner shows. Always
+              rendered: a live region must exist before its text changes. */}
+          <span role="status" className="sr-only">
+            {busy ? busyMessage(removeAvatar.isPending) : ""}
+          </span>
+        </div>
+        <div className="min-w-0">
+          <h1 className={pageTitle}>{user.display_name || user.email}</h1>
+          <p className={cn(pageSubtitle, "capitalize")}>{user.role}</p>
+        </div>
+      </header>
 
       <PictureMenu
         open={pictureMenu}
@@ -186,18 +194,28 @@ export function ProfilePage() {
         </div>
       )}
 
-      <dl className={cn(panelChrome, "mb-6 space-y-2 text-sm")}>
-        <div className="flex justify-between gap-3">
-          <dt className="text-fg-tertiary">Email</dt>
-          <dd className="truncate font-medium" title={user.email}>
+      {/* The account as liner notes: facts on ruled rows, and the ways to
+          change them as quiet links at the row's end, not filled buttons. */}
+      <FactList layout="justified" className="mb-8 border-y border-line py-3 text-sm">
+        <Fact label="Email">
+          <span className="block truncate" title={user.email}>
             {user.email}
-          </dd>
-        </div>
-        <div className="flex justify-between gap-3">
-          <dt className="text-fg-tertiary">Role</dt>
-          <dd className="font-medium capitalize">{user.role}</dd>
-        </div>
-      </dl>
+          </span>
+        </Fact>
+        {/* A link: changing a password is its own emailed-code flow. */}
+        <Fact label="Password">
+          <RowLink href="/change-password">Change password</RowLink>
+        </Fact>
+        {/* A phone's way to the console: its bottom bar has room for the
+            screens everyone uses, and an admin's Profile tab leads here. From
+            `md` up the rail has an Admin entry of its own, offered to the same
+            readers. */}
+        {offeredTo(ADMIN_ITEM, user) && (
+          <Fact label="Administration" className="md:hidden">
+            <RowLink href={ADMIN_ITEM.to}>Admin console</RowLink>
+          </Fact>
+        )}
+      </FactList>
 
       <form onSubmit={onSubmit} className="space-y-4">
         {error && <ErrorMessage>{error}</ErrorMessage>}
@@ -217,29 +235,6 @@ export function ProfilePage() {
           {saved ? "Saved" : "Save changes"}
         </Button>
       </form>
-
-      {/* A phone's way to the console: its bottom bar has room for the
-          screens everyone uses, and an admin's Profile tab leads here. From
-          `md` up the column has an Admin entry of its own, offered to the same
-          readers. */}
-      {offeredTo(ADMIN_ITEM, user) && (
-        <div className="mt-8 md:hidden">
-          <SectionHeading>Administration</SectionHeading>
-          <ButtonLink href={ADMIN_ITEM.to} variant="secondary" size="lg" className="w-full">
-            <ADMIN_ITEM.icon aria-hidden className="size-4" />
-            Admin console
-          </ButtonLink>
-        </div>
-      )}
-
-      <div className="mt-8">
-        <SectionHeading>Security</SectionHeading>
-        {/* A link: changing a password is its own emailed-code flow. */}
-        <ButtonLink href="/change-password" variant="secondary" size="lg" className="w-full">
-          <KeyRound aria-hidden className="size-4" />
-          Change password
-        </ButtonLink>
-      </div>
 
       <ThemeToggle theme={theme} onChange={selectTheme} className="mt-8" />
 
@@ -365,6 +360,23 @@ function PictureMenu({
         )}
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * A way to change a fact, at the end of its row: the accent's text and a
+ * chevron, as a link in running text, rather than a filled button. As tall as
+ * a thumb, though the row's text is small.
+ */
+function RowLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="-my-3 inline-flex min-h-11 items-center gap-0.5 font-medium text-fg-accent hover:underline"
+    >
+      {children}
+      <ChevronRight aria-hidden className="size-4" />
+    </Link>
   );
 }
 
