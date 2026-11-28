@@ -426,6 +426,36 @@ describe("SongDetailPage", () => {
     expect(lines[4]?.querySelector("br")).not.toBeNull();
   });
 
+  // The title is set in the lyrics' serif, so the two read as one piece. jsdom
+  // resolves no fonts; the class says it, and the stories check the face.
+  it("sets the title in the lyrics' face", async () => {
+    renderDetail();
+
+    const title = await screen.findByRole("heading", { level: 1, name: "Θάλασσα Πλατιά" });
+    expect(title.closest("header")).toHaveClass("font-lyrics");
+  });
+
+  // Notes are a footnote after the last verse, in a region assistive tech can
+  // find, and user input shown as written.
+  it("follows the lyrics with the notes, as plain text", async () => {
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, () =>
+        HttpResponse.json(makeSong({ notes: "Πρώτη <i>ηχογράφηση</i>\nστην Αθήνα." })),
+      ),
+    );
+
+    renderDetail();
+
+    const notes = await screen.findByRole("region", { name: "Notes" });
+    const lyrics = screen.getByRole("region", { name: "Lyrics" });
+    expect(lyrics.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(notes).getByRole("heading", { name: "Notes" })).toBeInTheDocument();
+    const text = within(notes).getByText(/Πρώτη/);
+    expect(text.textContent).toBe("Πρώτη <i>ηχογράφηση</i>\nστην Αθήνα.");
+    expect(text.querySelector("i")).toBeNull();
+    expect(text).toHaveClass("whitespace-pre-line");
+  });
+
   it("does not offer editing to a guest", async () => {
     renderDetail();
 

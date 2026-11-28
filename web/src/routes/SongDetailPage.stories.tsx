@@ -14,6 +14,9 @@ const documented = makeSong({
   id: "song-9",
   slug: "to-palio-roloi",
   title: "Το Παλιό Ρολόι",
+  alt_title: "To Palio Roloi",
+  notes:
+    "First recorded in 1962 for the Columbia label.\nThe clock of the title is the one in the poet's room.",
   lyrics:
     "Το παλιό ρολόι χτυπά\nμεσάνυχτα στην κάμαρά μου\nκι εσύ δεν είσαι πια εδώ\nνα μου κρατάς τα χέρια μου\n\nΤο παλιό ρολόι χτυπά\nκαι μετρά τα βάσανά μου",
   credits: [
@@ -66,7 +69,21 @@ export const Minimal: Story = {
 export const Documented: Story = {
   parameters: { route: "/songs/to-palio-roloi" },
   play: async ({ canvas }) => {
-    await expect(await canvas.findByRole("heading", { name: "Το Παλιό Ρολόι" })).toBeVisible();
+    const title = await canvas.findByRole("heading", { name: "Το Παλιό Ρολόι" });
+    await expect(title).toBeVisible();
+
+    // The title, the lyrics and the notes footnote are one printed piece: one
+    // face throughout, the notes after the last verse.
+    const [verse] = await canvas.findAllByText("Το παλιό ρολόι χτυπά", { selector: "span" });
+    const notes = canvas.getByRole("region", { name: "Notes" });
+    const face = (element: Element | null | undefined) =>
+      element ? getComputedStyle(element).fontFamily : "";
+    await expect(face(title)).toBe(face(verse));
+    await expect(face(within(notes).getByText(/First recorded/))).toBe(face(verse));
+    await expect(notes.getBoundingClientRect().top).toBeGreaterThan(
+      canvas.getByRole("region", { name: "Lyrics" }).getBoundingClientRect().bottom,
+    );
+
     // The video waits for a press: nothing from YouTube until then.
     await expect(canvas.getByRole("button", { name: "Watch" })).toBeVisible();
     await expect(document.querySelector("iframe")).toBeNull();
