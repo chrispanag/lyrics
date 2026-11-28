@@ -28,6 +28,7 @@ import { Waiting } from "@/routes/guards";
 import type { Identity } from "@/lib/avatar";
 import { ADMIN_ITEM, offeredTo } from "@/components/navItems";
 import { cn } from "@/lib/cn";
+import { sectionLabel } from "@/components/textStyles";
 import {
   IMAGE_TOO_LARGE_ERROR,
   IMAGE_UNREADABLE_ERROR,
@@ -373,7 +374,7 @@ function PictureMenu({
  */
 function SectionHeading({ children, id }: { children: React.ReactNode; id?: string }) {
   return (
-    <h2 id={id} className="mb-2 text-sm font-medium text-fg-secondary">
+    <h2 id={id} className={cn(sectionLabel, "mb-2")}>
       {children}
     </h2>
   );

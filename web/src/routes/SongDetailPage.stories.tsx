@@ -331,6 +331,40 @@ export const PhoneChrome: Story = {
 };
 
 /**
+ * An admin's tools bar, the fullest there is: Back, the text size, then Stats,
+ * Add to list, Edit and More as icons. At 390px it is still one row, every
+ * control on screen and none overlapping the next.
+ */
+export const PhoneTools: Story = {
+  ...onAPhone,
+  parameters: { ...onAPhone.parameters, user: makeUser({ role: "admin" }) },
+  play: async ({ canvas }) => {
+    await canvas.findByText(LAST_LINE);
+    const { tools } = chrome();
+    const bar = tools.getBoundingClientRect();
+    const controls = [
+      within(tools).getByRole("button", { name: "Back" }),
+      within(tools).getByRole("button", { name: "Decrease text size" }),
+      within(tools).getByRole("button", { name: "Increase text size" }),
+      within(tools).getByRole("button", { name: "Stats" }),
+      within(tools).getByRole("button", { name: "Add to list" }),
+      await within(tools).findByRole("link", { name: "Edit" }),
+      within(tools).getByRole("button", { name: "More actions" }),
+    ].map((control) => control.getBoundingClientRect());
+
+    await expect(bar.height).toBeLessThanOrEqual(56);
+    for (const [index, control] of controls.entries()) {
+      await expect(control.left).toBeGreaterThanOrEqual(0);
+      await expect(control.right).toBeLessThanOrEqual(390);
+      // One row, in order.
+      await expect(Math.abs(control.top - (controls[0]?.top ?? 0))).toBeLessThanOrEqual(4);
+      const previous = controls[index - 1];
+      if (previous) await expect(control.left).toBeGreaterThanOrEqual(previous.right);
+    }
+  },
+};
+
+/**
  * Scrolled down, left there so the axe check sees the pill over the lyrics in
  * both themes. The tabs' own surface shrinks to the pill, whose face then
  * draws its own; thin, but a full thumb's height to press, with a chevron

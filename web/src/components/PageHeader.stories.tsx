@@ -28,11 +28,6 @@ export const WithActions: Story = {
   args: { actions: newList },
 };
 
-/** Admin: the section's name over the screen's. */
-export const WithEyebrow: Story = {
-  args: { eyebrow: "Admin", title: "Users" },
-};
-
 /**
  * A phone's width, less the page's gutters: a title too long to share its
  * line pushes the actions beneath it rather than out of the screen.

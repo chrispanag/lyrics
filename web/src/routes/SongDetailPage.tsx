@@ -224,6 +224,9 @@ function SongArticle() {
           {/* As tall as the search field once the list is beside the song, so
               the tools share its center. */}
           <div className="ml-auto flex items-center gap-1 @3xl/app:h-12">
+            {/* First, apart from the song's actions: it changes how the lyrics
+                read, not the song. */}
+            <TextSizeControl className="mr-2" />
             {/* For everyone. The card a reader clicked already carries the
                 tallies, so this need not wait for the full read. */}
             <Button variant="ghost" size="sm" disabled={!song} onClick={() => setStatsOpen(true)}>
@@ -292,12 +295,9 @@ function SongArticle() {
           />
 
           <div>
+            {/* Named for assistive tech only: on screen the lyrics need no label,
+                and their text size is among the tools above. */}
             <section aria-label="Lyrics">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 className={sectionLabel}>Lyrics</h2>
-                <TextSizeControl />
-              </div>
-
               {!fullSong ? (
                 <Skeleton className="h-64 w-full" />
               ) : fullSong.lyrics?.trim() ? (
@@ -316,7 +316,7 @@ function SongArticle() {
 
             {song?.notes && (
               <section className={cn(panelChrome, "mt-8")}>
-                <h2 className="mb-1 text-sm font-semibold text-fg-secondary">Notes</h2>
+                <h2 className={cn(sectionLabel, "mb-1")}>Notes</h2>
                 <p className="whitespace-pre-line text-sm text-fg-tertiary">{song.notes}</p>
               </section>
             )}

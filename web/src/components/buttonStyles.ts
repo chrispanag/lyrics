@@ -28,8 +28,8 @@ const buttonSizes: Record<ButtonSize, string> = {
   // Square, level with `md`. A size rather than an override, since `cn` cannot
   // replace the padding.
   icon: "size-11",
-  // Square, level with `sm`: a tool beside a heading, such as the lyrics'
-  // text size, where a 44px square would tower over the row.
+  // Square, level with `sm`: a tool in a bar of `sm` buttons, such as the
+  // lyrics' text size, where a 44px square would tower over the row.
   "icon-sm": "size-9",
 };
 

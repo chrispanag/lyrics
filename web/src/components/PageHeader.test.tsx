@@ -11,14 +11,6 @@ describe("PageHeader", () => {
     expect(screen.getAllByRole("heading")).toHaveLength(1);
   });
 
-  it("names the section above the title without making it a heading", () => {
-    render(<PageHeader eyebrow="Admin" title="Users" />);
-
-    // A second heading would put "Admin" in the outline as its own section.
-    expect(screen.getByText("Admin").tagName).toBe("P");
-    expect(screen.getAllByRole("heading")).toHaveLength(1);
-  });
-
   it("renders the page's actions", () => {
     render(<PageHeader title="Your lists" actions={<button type="button">New list</button>} />);
 

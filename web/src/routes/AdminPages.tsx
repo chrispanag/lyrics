@@ -62,6 +62,9 @@ function RowSkeletons() {
  * screens, wrapped once by `RequireAdmin`. The heading and title come from the
  * tab matching the address, and the tabs are the only way between screens: the
  * app nav has one `/admin` entry so its prefix match stays lit on both.
+ *
+ * The heading is the tab's name alone: the lit rail entry, the tab's own name
+ * and the browser tab already say this is Admin, so a label over it repeats.
  */
 export function AdminConsole({ children }: { children: ReactNode }) {
   // The tabs' own rule, so the heading names the tab that is lit.
@@ -71,7 +74,7 @@ export function AdminConsole({ children }: { children: ReactNode }) {
   return (
     <Page width="content">
       <PageTitle name={current ? `Admin · ${current.label}` : "Admin"} />
-      <PageHeader eyebrow={current && "Admin"} title={current?.label ?? "Admin"} />
+      <PageHeader title={current?.label ?? "Admin"} />
 
       {/* Views of one console, so drawn as the segmented control the theme
           switch is, not as buttons that read as actions. */}
