@@ -12,7 +12,8 @@ import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
-import { pageTitle } from "@/components/textStyles";
+import { pageTitle, sectionLabel } from "@/components/textStyles";
+import { cn } from "@/lib/cn";
 import {
   Button,
   Chip,
@@ -267,7 +268,7 @@ export function BrowsePage() {
         <Sheet open onClose={() => setFiltersOpen(false)} title="Filters">
           <div className="space-y-5">
             <div>
-              <h3 className="mb-2 text-sm font-medium text-fg-secondary">Genre</h3>
+              <h3 className={cn(sectionLabel, "mb-2")}>Genre</h3>
               <div className="flex flex-wrap gap-2">
                 {genres?.data.map((genre) => (
                   <Chip

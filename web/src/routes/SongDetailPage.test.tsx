@@ -372,6 +372,24 @@ describe("SongDetailPage", () => {
     expect(screen.getByRole("button", { name: "Back" })).toHaveClass("@3xl/app:hidden");
   });
 
+  // The lyrics are plainly lyrics: no label over them on screen, though the
+  // region keeps its name for assistive tech. Their text size is a tool like
+  // Stats, so it sits in the bar and stays reachable as the lyrics scroll.
+  it("sets the text size among the tools, with no label over the lyrics", async () => {
+    renderDetail();
+
+    const lyrics = await screen.findByRole("region", { name: "Lyrics" });
+    await screen.findByText(/Στης θάλασσας τα βάθη/);
+    const textSize = screen.getByRole("group", { name: "Text size" });
+    const tools = screen.getByRole("button", { name: "Stats" }).parentElement;
+
+    expect(within(lyrics).queryByRole("heading")).not.toBeInTheDocument();
+    expect(lyrics).not.toContainElement(textSize);
+    expect(tools).toContainElement(textSize);
+    // Ahead of the song's own actions.
+    expect(tools?.firstElementChild).toBe(textSize);
+  });
+
   // Lyrics are plain text whose line breaks carry the verses. Each line is its
   // own block, so a long one wraps under a hanging indent, and a blank line
   // keeps the gap between verses.
