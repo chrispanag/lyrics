@@ -410,10 +410,9 @@ function SongToolsBar({ children }: { children: ReactNode }) {
 const SONG_COLUMN = cn("p-4", "@2xl/song:mx-auto @2xl/song:max-w-168");
 
 /**
- * The song's title, in the song's own language: the title is content too. It is
- * set in the lyrics' serif, so the title and the words read as one printed
- * piece. A serif is already dark at display sizes, so semibold rather than bold,
- * and without the sans title's tight tracking, which crowds a serif's Greek.
+ * The song's title, in the song's own language: the title is content too. Set
+ * in `titleFace`, the largest of the titles, so the title and the words read as
+ * one printed piece.
  */
 function SongTitle({ song }: { song: Song }) {
   return (
