@@ -15,6 +15,13 @@ export const sectionLabel = "text-sm font-medium text-fg-secondary";
 /** A screen's title: a page header's, an auth screen's, a catalog page's. */
 export const pageTitle = "text-2xl font-bold tracking-tight text-balance break-words";
 
+/**
+ * The text of a navigation entry's name set under its icon: the bottom bar's
+ * tabs, and the rail's entries on a touch screen (`RailCaption`), so the two
+ * read alike.
+ */
+export const tabLabelText = "text-[11px] leading-tight font-medium";
+
 export type LinkTone = "accent" | "muted" | "quiet";
 
 const linkTones: Record<LinkTone, string> = {

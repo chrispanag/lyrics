@@ -11,11 +11,11 @@ import {
   NAV_ITEMS,
   type NavItem,
   offeredTo,
-  tabLabelText,
   useWarmLists,
 } from "@/components/navItems";
 import { stickyBarClasses, useStickyBar } from "@/components/stickyBar";
 import { litFill } from "@/components/cardStyles";
+import { tabLabelText } from "@/components/textStyles";
 import { BrandMark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { Link, NavLink, usePathname, useSearchParams } from "@/lib/navigation";
@@ -34,7 +34,7 @@ function railEntryClass(lit: boolean, rest?: string, named = false): string {
   return cn(
     "group relative grid size-12 place-items-center rounded-control transition-colors",
     named &&
-      "pointer-coarse:h-auto pointer-coarse:min-h-12 pointer-coarse:w-14 pointer-coarse:py-1.5",
+      "pointer-coarse:h-auto pointer-coarse:min-h-12 pointer-coarse:w-14 pointer-coarse:gap-0.5 pointer-coarse:py-1.5",
     litFill(lit),
     lit ? "text-fg-accent-subtle" : rest,
   );
@@ -97,14 +97,19 @@ export function Layout({ children }: { children?: ReactNode }) {
  * An entry's name, drawn as a label beside the rail while the entry is hovered
  * or has visible focus. Hidden by opacity alone, so it stays the link's
  * accessible name.
+ *
+ * `captioned`: the entry shows its name under its icon on a touch screen
+ * (`RailCaption`), so there this label stays unseen even under keyboard focus,
+ * rather than say the name twice. Still by opacity, so it still names the link.
  */
-function RailLabel({ children }: { children: ReactNode }) {
+function RailLabel({ children, captioned = false }: { children: ReactNode; captioned?: boolean }) {
   return (
     <span
       className={cn(
         "pointer-events-none absolute top-1/2 left-full z-floating ml-2 -translate-y-1/2",
         "rounded-compact bg-fg px-2.5 py-1.5 text-left text-xs font-medium whitespace-nowrap text-canvas",
         "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 motion-safe:transition-opacity",
+        captioned && "pointer-coarse:opacity-0!",
         // Forced colors paints over the fill, which leaves the text floating.
         "forced-colors:border",
       )}
@@ -123,7 +128,10 @@ function RailLabel({ children }: { children: ReactNode }) {
  */
 function RailCaption({ children }: { children: ReactNode }) {
   return (
-    <span aria-hidden className={cn("hidden pointer-coarse:block", tabLabelText)}>
+    <span
+      aria-hidden
+      className={cn("hidden max-w-full truncate pointer-coarse:block", tabLabelText)}
+    >
       {children}
     </span>
   );
@@ -147,7 +155,7 @@ function RailEntry({ item, active }: { item: NavItem; active: boolean }) {
       className={({ isActive }) => railEntryClass(isActive, "text-fg-tertiary", true)}
     >
       <item.icon aria-hidden className="size-5" />
-      <RailLabel>{item.label}</RailLabel>
+      <RailLabel captioned>{item.label}</RailLabel>
       <RailCaption>{item.label}</RailCaption>
     </NavLink>
   );
@@ -211,7 +219,7 @@ function NavRail() {
               className={railEntryClass(false, "text-fg-accent", true)}
             >
               <LogIn aria-hidden className="size-5" />
-              <RailLabel>Sign in</RailLabel>
+              <RailLabel captioned>Sign in</RailLabel>
               <RailCaption>Sign in</RailCaption>
             </Link>
           )}

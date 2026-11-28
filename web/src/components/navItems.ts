@@ -14,12 +14,6 @@ import { useIntentPrefetch } from "@/lib/useIntentPrefetch";
  * light the same one.
  */
 
-/**
- * The text of an entry's name set under its icon: the bottom bar's tabs, and
- * the rail's entries on a touch screen (`RailCaption`), so the two read alike.
- */
-export const tabLabelText = "text-[11px] leading-tight font-medium";
-
 export interface NavItem {
   to: string;
   label: string;

@@ -447,7 +447,8 @@ function SongNotes({ notes }: { notes: string }) {
 /**
  * The genres and the Watch button: one row, as tall as the button whether or
  * not the song has a video, and the placeholder holds the same row, so the
- * lyrics under it do not move as the song arrives or a video turns up.
+ * lyrics under it do not move as a song with genres or a video arrives, or as
+ * a video turns up. A song with neither drops the row, and its lyrics rise.
  */
 const GENRE_ROW = "mt-3 flex min-h-11 flex-wrap items-center gap-1.5";
 

@@ -104,17 +104,24 @@ describe("Layout navigation", () => {
       user: makeUser({ display_name: "Christos", role: "admin" }),
     });
 
-    // The caption is the link's last child, hidden from assistive tech: the
-    // hover label stays the name, so each is named once.
+    // The caption is hidden from assistive tech: the hover label stays the
+    // name, so each is named once.
     const caption = (name: string | RegExp) =>
-      within(rail()).getByRole("link", { name }).lastElementChild;
+      within(rail()).getByRole("link", { name }).querySelector(".pointer-coarse\\:block");
     for (const name of ["Browse", "Lists", "Admin"]) {
       expect(caption(name)).toHaveClass("hidden", "pointer-coarse:block");
       expect(caption(name)).toHaveAttribute("aria-hidden", "true");
       expect(caption(name)).toHaveTextContent(name);
+      // And the floating label, which still names the link, stays unseen
+      // there even under keyboard focus, so the name is not shown twice.
+      const label = within(rail())
+        .getByRole("link", { name })
+        .querySelector<HTMLElement>(":scope > span:not([aria-hidden])");
+      expect(label).toHaveClass("pointer-coarse:opacity-0!");
+      expect(label).not.toHaveClass("hidden");
     }
-    expect(caption("Songfolio")).not.toHaveClass("pointer-coarse:block");
-    expect(caption(/^Christos/)).not.toHaveClass("pointer-coarse:block");
+    expect(caption("Songfolio")).toBeNull();
+    expect(caption(/^Christos/)).toBeNull();
   });
 
   it("keeps the rail's link for a guest, who has no picture to press", () => {
