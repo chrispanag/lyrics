@@ -8,7 +8,7 @@ import { useListPosition } from "@/api/useListPosition";
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { CATALOG_SEARCH_ATTRIBUTE } from "@/components/SearchField";
-import { ListPlace } from "@/components/ListSongNav";
+import { ListPlace } from "@/components/ListPlace";
 import { currentEntry, type NavItem, offeredEntries, useWarmLists } from "@/components/navItems";
 import { SongSearchBox } from "@/components/SongSearch";
 import { tabLabelText } from "@/components/textStyles";

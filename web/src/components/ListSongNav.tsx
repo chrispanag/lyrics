@@ -2,14 +2,14 @@ import { type RefObject, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/cn";
-import { type ListPosition, type ListStep, positionLabel } from "@/lib/listContext";
+import type { ListPosition, ListStep } from "@/lib/listContext";
 import { FIELDS, modalIsOpen } from "@/lib/modal";
 import { startsClearOfEdges, swipeDirection } from "@/lib/swipe";
 import { Link, useRouter } from "@/lib/navigation";
 
 /*
  * Reading through a list without leaving it. A book's way: a running head
- * that says which list and where in it (`ListPlace`, on the song's Back), and a
+ * that says which list and where in it (`BackToList`, the song's Back), and a
  * page turn at the foot of the song (`ListPageTurn`, links, so a neighbor can
  * be opened in a new tab). Then the ways that draw nothing (`ListPaging`): the
  * arrow keys, the swipe, and the neighbors loaded ahead.
@@ -20,21 +20,6 @@ import { Link, useRouter } from "@/lib/navigation";
  * Every step *replaces* its history entry (each of the three ways separately,
  * so each is pinned separately), leaving Back as the way out of the list.
  */
-
-/**
- * The list's name and the place in it, as a book's running head says it
- * ("Ρεμπέτικα · 2 of 3"): on the song's Back, and on the shrunk bottom bar.
- * The name gives way first.
- */
-export function ListPlace({ position }: { position: ListPosition }) {
-  return (
-    <>
-      <span className="min-w-0 truncate">{position.listName}</span>
-      <span className="shrink-0 text-fg-muted">·</span>
-      <span className="shrink-0 tabular-nums text-fg-muted">{positionLabel(position)}</span>
-    </>
-  );
-}
 
 /**
  * The page turn at the foot of a song read from a list: the previous song and
@@ -105,9 +90,13 @@ export function ListPaging({
   position: ListPosition;
   surface: RefObject<HTMLElement | null>;
 }) {
-  useArrowKeyPaging(position);
-  usePrefetchedSteps(position);
-  useSwipePaging(position, surface);
+  // The strings, not `position`, which is a new object every render and would
+  // rebuild the hooks' effects each time.
+  const previousHref = position.previous?.href;
+  const nextHref = position.next?.href;
+  useArrowKeyPaging(previousHref, nextHref);
+  usePrefetchedSteps(previousHref, nextHref);
+  useSwipePaging(previousHref, nextHref, surface);
   return null;
 }
 
@@ -118,9 +107,7 @@ export function ListPaging({
  * prefetch: a link's waits for it to scroll into view, and the turn is at the
  * foot of the song.
  */
-function usePrefetchedSteps(position: ListPosition) {
-  const previousHref = position.previous?.href;
-  const nextHref = position.next?.href;
+function usePrefetchedSteps(previousHref: string | undefined, nextHref: string | undefined) {
   const { prefetch } = useRouter();
   useEffect(() => {
     if (previousHref) prefetch(previousHref);
@@ -139,12 +126,12 @@ const INTERACTIVE = `a, button, label, iframe, [role="button"], ${FIELDS}`;
  * scroll is untouched. Most guards run at touchstart; a second finger and a
  * changed selection are checked on move and end.
  */
-function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement | null>): void {
+function useSwipePaging(
+  previousHref: string | undefined,
+  nextHref: string | undefined,
+  surface: RefObject<HTMLElement | null>,
+): void {
   const router = useRouter();
-  // The strings, not `position`, which is a new object every render and would
-  // rebuild the listeners each time.
-  const previousHref = position.previous?.href;
-  const nextHref = position.next?.href;
 
   useEffect(() => {
     const element = surface.current;
@@ -235,11 +222,8 @@ function selectedText(): string {
  * Left and right arrow keys, for reading a list at a desk. Modified keys,
  * focused fields and open modals are left alone.
  */
-function useArrowKeyPaging(position: ListPosition): void {
+function useArrowKeyPaging(previousHref: string | undefined, nextHref: string | undefined): void {
   const router = useRouter();
-  // The strings, not `position`; see `useSwipePaging`.
-  const previousHref = position.previous?.href;
-  const nextHref = position.next?.href;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

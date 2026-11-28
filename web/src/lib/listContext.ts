@@ -214,11 +214,6 @@ export function positionLabel({ index, total }: ListPosition): string {
   return `${index + 1} of ${total}`;
 }
 
-/** What a Back that shows the list's place (`ListPlace`) is called: still Back. */
-export function backToListName(position: ListPosition): string {
-  return `Back to ${position.listName}, ${positionLabel(position)}`;
-}
-
 /**
  * Locates a song in a list, as the addresses around it. Null when the song is
  * not in the list, which leaves the page without list navigation, not an error.

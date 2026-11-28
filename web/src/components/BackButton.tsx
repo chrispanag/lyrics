@@ -20,7 +20,7 @@ export function BackButton({
   children = "Back",
   label,
 }: {
-  className?: string;
+  className?: string | undefined;
   children?: ReactNode;
   label?: string | undefined;
 }) {

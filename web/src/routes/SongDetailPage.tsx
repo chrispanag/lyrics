@@ -9,7 +9,8 @@ import { useRecordSongClick } from "@/api/recordSongClick";
 import { useListPosition } from "@/api/useListPosition";
 import { useSignInHref } from "@/auth/returnTo";
 import { useAuth } from "@/auth/useAuth";
-import { ListPageTurn, ListPaging, ListPlace } from "@/components/ListSongNav";
+import { BackToList } from "@/components/ListPlace";
+import { ListPageTurn, ListPaging } from "@/components/ListSongNav";
 import { contentWidth } from "@/components/Page";
 import { PageTitle } from "@/components/PageTitle";
 import { PersonLinks } from "@/components/PersonLinks";
@@ -32,7 +33,7 @@ import {
 } from "@/components/ui";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
 import { cn } from "@/lib/cn";
-import { backToListName, songRefHref } from "@/lib/listContext";
+import { songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Recording, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { headerBarPadding } from "@/components/SearchHeader";
@@ -184,7 +185,6 @@ function SongArticle() {
 
   // Settled with no song (a missing `id` too). Not `isError`: with a song in
   // hand that only means a failed refetch, which must not take the lyrics away.
-  // See CLAUDE.md, "Frontend".
   if (!isLoading && !song) {
     return (
       <SongUnavailable>
@@ -221,12 +221,11 @@ function SongArticle() {
         >
           {/* Read from a list, Back names it and the place in it: the
               running head, for the list a desk shows beside the song. */}
-          <BackButton
-            className="@3xl/app:hidden"
-            label={position ? backToListName(position) : undefined}
-          >
-            {position ? <ListPlace position={position} /> : undefined}
-          </BackButton>
+          {position ? (
+            <BackToList position={position} className="@3xl/app:hidden" />
+          ) : (
+            <BackButton className="@3xl/app:hidden" />
+          )}
           {/* As tall as the search field once the list is beside the song, so
               the tools share its center. */}
           <div className="ml-auto flex shrink-0 items-center gap-1 @3xl/app:h-12">
