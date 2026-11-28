@@ -5,7 +5,7 @@ import { SongCard } from "./SongCard";
 import type { Song } from "@/lib/types";
 
 /**
- * One song as a list shows it: the card, the controls the viewer has earned,
+ * One song as a list shows it: its row, the controls the viewer has earned,
  * and the chrome that lines them up.
  *
  * Every rendering of a list builds its rows here, so a per-row control added

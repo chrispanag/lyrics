@@ -20,6 +20,7 @@ import { GripVertical } from "lucide-react";
 import { memo } from "react";
 
 import { rowControlChrome } from "./buttonStyles";
+import { songStack } from "./cardStyles";
 import { SongRow } from "./SongRow";
 import { cn } from "@/lib/cn";
 import { verticalWithinList } from "@/lib/dragBounds";
@@ -81,7 +82,7 @@ export const SortableSongList = memo(function SortableSongList({
       onDragEnd={onDragEnd}
     >
       <SortableContext items={songs.map((song) => song.id)} strategy={verticalListSortingStrategy}>
-        <ul className="space-y-3">
+        <ul className={songStack}>
           {songs.map((song) => (
             <SortableRow
               key={song.id}
