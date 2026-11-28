@@ -12,6 +12,7 @@ import { PaneHeading, ReaderPane } from "@/components/ReaderSplit";
 import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "@/components/SearchField";
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
+import { songStack, songStackBleed } from "@/components/cardStyles";
 import { pageTitle, sectionLabel } from "@/components/textStyles";
 import { cn } from "@/lib/cn";
 import {
@@ -213,8 +214,9 @@ export function BrowsePage() {
         <ErrorMessage>{errorMessage(error, "Songs could not be loaded.")}</ErrorMessage>
       )}
 
-      {/* `h-28` restates a song card's height; update it if cards change. */}
-      {isPending && <Skeletons count={5} className="h-28 w-full" />}
+      {/* `h-14` restates the commonest song row's height, a title and a byline
+          (`SongCard`); update it if the rows change. */}
+      {isPending && <Skeletons count={8} className="h-14 w-full" stackClassName={songStack} />}
 
       {empty && (
         <EmptyState
@@ -232,14 +234,14 @@ export function BrowsePage() {
         />
       )}
 
-      <div className="space-y-3">
+      <div className={`${songStackBleed} ${songStack}`}>
         {songs.map((song) => (
           <SongCard key={song.id} song={song} search={cardSearch} />
         ))}
       </div>
 
       {isFetchingNextPage && (
-        <Skeletons count={2} className="h-28 w-full" stackClassName="mt-3 space-y-3" />
+        <Skeletons count={2} className="h-14 w-full" stackClassName={`mt-1 ${songStack}`} />
       )}
 
       {isFetchNextPageError && (

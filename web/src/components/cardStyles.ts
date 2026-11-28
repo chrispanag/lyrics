@@ -1,9 +1,22 @@
 /*
- * The chrome of a card: the bordered panel songs, lists and users are shown in.
+ * The chrome of a card: the bordered panel lists and users are shown in. Not
+ * songs, which a list draws as quiet rows (`SongCard`) rather than boxes.
  *
  * No background or padding, since `cn` cannot take a property back out; each
  * caller sets its own. The hover is separate, for cards that are links.
  */
+
+/**
+ * The stack of song rows (`SongCard`) in a list: spacing alone between them, no
+ * dividers, since a row draws no edge until it has a fill.
+ */
+export const songStack = "space-y-1";
+
+/**
+ * Pulls a stack of song rows out by a row's own inset (`px-3`), so that their
+ * titles line up with the text above the list while the fill keeps its room.
+ */
+export const songStackBleed = "-mx-3";
 
 /** The resting border, shared by everything card-shaped. */
 export const cardChrome = "rounded-card border border-line";
@@ -38,7 +51,7 @@ export const panelChrome = "rounded-card bg-panel p-4";
 /** The accent a card takes under the pointer, for the cards that are links. */
 export const cardHover = "transition-colors hover:border-line-accent hover:bg-accent-subtle";
 
-/** A small label on a card or header: a genre on a song card, a list's visibility. */
+/** A small label on a card or header: a genre on a song's row, a list's visibility. */
 export const tagChrome = "rounded-full bg-subtle px-2 py-0.5 text-xs text-fg-tertiary";
 
 /**
