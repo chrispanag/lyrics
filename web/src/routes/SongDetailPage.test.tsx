@@ -1058,7 +1058,7 @@ describe("SongDetailPage inside a list", () => {
 
     // The running head: Back, named by the list and the place in it.
     expect(
-      await screen.findByRole("button", { name: "Back to Ρεμπέτικα 2 of 3" }),
+      await screen.findByRole("button", { name: "Back to Ρεμπέτικα, 2 of 3" }),
     ).toBeInTheDocument();
     // The page turn: each neighbor by its title, as links.
     const turn = screen.getByRole("navigation", { name: "Song navigation" });
@@ -1381,7 +1381,7 @@ describe("SongDetailPage inside a list", () => {
     renderDetail({ route: "/songs/song-2?list=list-1" });
 
     await screen.findByRole("heading", { name: "Second" });
-    expect(screen.getByRole("button", { name: "Back to Ρεμπέτικα 1 of 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to Ρεμπέτικα, 1 of 1" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Song navigation" })).not.toBeInTheDocument();
   });
 

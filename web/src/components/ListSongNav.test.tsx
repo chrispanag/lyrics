@@ -5,6 +5,7 @@ import { ListPaging } from "./ListSongNav";
 import type { ListPosition } from "@/lib/listContext";
 import { type NavigationBackend, NavigationProvider } from "@/lib/navigation";
 import { recordingBackend } from "@/test/backend";
+import { makeSong } from "@/test/handlers";
 
 /*
  * What a list position loads ahead of a step, seen through a backend that
@@ -15,11 +16,10 @@ const atSong = { pathname: "/songs/b", search: "list=l" };
 
 const position: ListPosition = {
   listName: "Summer",
-  listHref: "/lists/l",
   index: 1,
   total: 3,
-  previousHref: "/songs/a?list=l",
-  nextHref: "/songs/c?list=l",
+  previous: { href: "/songs/a?list=l", song: makeSong({ id: "a", slug: "a" }) },
+  next: { href: "/songs/c?list=l", song: makeSong({ id: "c", slug: "c" }) },
 };
 
 function renderPaging(backend: NavigationBackend, at: ListPosition) {
@@ -44,7 +44,7 @@ describe("ListPaging", () => {
 
   it("loads only the neighbor there is at the end of a list", () => {
     const backend = recordingBackend(atSong);
-    renderPaging(backend, { ...position, index: 2, nextHref: undefined });
+    renderPaging(backend, { ...position, index: 2, next: undefined });
 
     expect(backend.prefetch).toHaveBeenCalledTimes(1);
     expect(backend.prefetch).toHaveBeenCalledWith("/songs/a?list=l");

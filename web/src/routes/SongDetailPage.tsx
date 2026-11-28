@@ -32,7 +32,7 @@ import {
 } from "@/components/ui";
 import { CREDIT_DISPLAY_LABELS, groupCredits, songPerformers } from "@/lib/credits";
 import { cn } from "@/lib/cn";
-import { songRefHref } from "@/lib/listContext";
+import { backToListName, songRefHref } from "@/lib/listContext";
 import { canEditSong, hasRole, type Recording, type Song } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
 import { headerBarPadding } from "@/components/SearchHeader";
@@ -164,7 +164,7 @@ function SongArticle() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
   // A sheet, or the player, belongs to the song it was opened on. Stepping to
-  // another (Back, Forward, a list's arrows) closes them, rather than showing
+  // another (Back, Forward, a step through a list) closes them, rather than showing
   // the next song's counts or recordings under the same title, or playing the
   // last song over the next one's words.
   const [sheetsFor, setSheetsFor] = useState(id);
@@ -221,7 +221,10 @@ function SongArticle() {
         >
           {/* Read from a list, Back names it and the place in it: the
               running head, for the list a desk shows beside the song. */}
-          <BackButton className="@3xl/app:hidden">
+          <BackButton
+            className="@3xl/app:hidden"
+            label={position ? backToListName(position) : undefined}
+          >
             {position ? <ListPlace position={position} /> : undefined}
           </BackButton>
           {/* As tall as the search field once the list is beside the song, so

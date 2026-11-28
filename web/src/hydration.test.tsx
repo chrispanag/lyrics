@@ -156,8 +156,8 @@ describe("hydrating over a server render", () => {
     expect(document.title).toBe(`Songs by ${person.name} — Songfolio`);
   });
 
-  // The font size and the swipe mark are both stored per device and both
-  // decide markup; a list context is what puts the mark on the page.
+  // The font size is stored per device and decides markup; a song read from
+  // a list has the most chrome of any page that shows it.
   it("agrees about a song page reached from a list", async () => {
     server.use(listById(catalogList(3)));
     const route = `/songs/${catalogSongs[0]?.slug}?list=list-1`;
@@ -165,7 +165,6 @@ describe("hydrating over a server render", () => {
 
     const { problems, container } = await hydrationProblems(stubbed(route, null), {
       state,
-      // The swipe hint is left unspent: no key is what makes it showable.
       seed: () => storeFontSize(3),
     });
 

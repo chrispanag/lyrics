@@ -119,7 +119,7 @@ export const InAList: Story = {
   },
   play: async ({ canvas }) => {
     await expect(
-      await canvas.findByRole("button", { name: "Back to Ρεμπέτικα 2 of 3" }),
+      await canvas.findByRole("button", { name: "Back to Ρεμπέτικα, 2 of 3" }),
     ).toBeVisible();
     const turn = canvas.getByRole("navigation", { name: "Song navigation" });
     await expect(within(turn).getByRole("link", { name: /^Previous\b/ })).toBeVisible();

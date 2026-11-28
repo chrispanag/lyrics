@@ -2,15 +2,14 @@ import { type RefObject, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/cn";
-import { type ListPosition, positionLabel } from "@/lib/listContext";
+import { type ListPosition, type ListStep, positionLabel } from "@/lib/listContext";
 import { FIELDS, modalIsOpen } from "@/lib/modal";
 import { startsClearOfEdges, swipeDirection } from "@/lib/swipe";
 import { Link, useRouter } from "@/lib/navigation";
-import type { Song } from "@/lib/types";
 
 /*
  * Reading through a list without leaving it. A book's way: a running head
- * that says which list and where in it (`ListPlace`, the song's Back), and a
+ * that says which list and where in it (`ListPlace`, on the song's Back), and a
  * page turn at the foot of the song (`ListPageTurn`, links, so a neighbor can
  * be opened in a new tab). Then the ways that draw nothing (`ListPaging`): the
  * arrow keys, the swipe, and the neighbors loaded ahead.
@@ -19,26 +18,19 @@ import type { Song } from "@/lib/types";
  * `lib/listContext`, so `?list=` cannot be dropped.
  *
  * Every step *replaces* its history entry (each of the three ways separately,
- * so each is pinned separately), leaving Back as the way out of the list. See
- * "Frontend" in CLAUDE.md.
+ * so each is pinned separately), leaving Back as the way out of the list.
  */
 
 /**
- * What the song's Back says while it is read from a list: the list's name and
- * the place in it, as a book's running head does ("Ρεμπέτικα · 2 of 3"). Back
- * leads to the list: the one behind the song, or, from a shared link, the one
- * above it (`upHref`). Its name stays "Back to …", so it still reads as Back.
+ * The list's name and the place in it, as a book's running head says it
+ * ("Ρεμπέτικα · 2 of 3"): on the song's Back, and on the shrunk bottom bar.
+ * The name gives way first.
  */
 export function ListPlace({ position }: { position: ListPosition }) {
   return (
     <>
-      {/* The spaces keep the words apart in the accessible name, where the
-          row's gap does not reach: "Back to Ρεμπέτικα 2 of 3". */}
-      <span className="sr-only">Back to</span>{" "}
-      <span className="min-w-0 truncate font-medium">{position.listName}</span>{" "}
-      <span aria-hidden className="text-fg-muted">
-        ·
-      </span>{" "}
+      <span className="min-w-0 truncate">{position.listName}</span>
+      <span className="shrink-0 text-fg-muted">·</span>
       <span className="shrink-0 tabular-nums text-fg-muted">{positionLabel(position)}</span>
     </>
   );
@@ -49,16 +41,16 @@ export function ListPlace({ position }: { position: ListPosition }) {
  * the next, each by its title. Nothing at all on a list of one.
  */
 export function ListPageTurn({ position }: { position: ListPosition }) {
-  const { previousHref, previousSong, nextHref, nextSong } = position;
-  if (!previousHref && !nextHref) return null;
+  const { previous, next } = position;
+  if (!previous && !next) return null;
 
   return (
     <nav
       aria-label="Song navigation"
       className="mt-12 grid grid-cols-2 gap-4 border-t border-line pt-3"
     >
-      {previousHref && <PageTurn href={previousHref} song={previousSong} back />}
-      {nextHref && <PageTurn href={nextHref} song={nextSong} />}
+      {previous && <PageTurn step={previous} back />}
+      {next && <PageTurn step={next} />}
     </nav>
   );
 }
@@ -68,38 +60,35 @@ export function ListPageTurn({ position }: { position: ListPosition }) {
  * own serif and language. The next song sits in the right-hand column even
  * when there is no previous one.
  */
-function PageTurn({
-  href,
-  song,
-  back,
-}: {
-  href: string;
-  song: Song | undefined;
-  back?: boolean | undefined;
-}) {
+function PageTurn({ step, back }: { step: ListStep; back?: boolean | undefined }) {
   const Icon = back ? ChevronLeft : ChevronRight;
   return (
     <Link
-      href={href}
+      href={step.href}
       replace
       className={cn(
         "group flex min-w-0 flex-col gap-0.5 rounded-control py-2",
         back ? "items-start text-left" : "col-start-2 items-end text-right",
       )}
     >
-      <span className="flex items-center gap-0.5 text-sm text-fg-tertiary">
-        {back && <Icon aria-hidden className="size-4" />}
+      {/* The icon leads on its own side. The space keeps the two words
+          apart in the link's name ("Next Το Βαλς…"), read from its content so
+          the title keeps its `lang`. */}
+      <span
+        className={cn(
+          "flex items-center gap-0.5 text-sm text-fg-tertiary",
+          !back && "flex-row-reverse",
+        )}
+      >
+        <Icon aria-hidden className="size-4" />
         {back ? "Previous" : "Next"}
-        {!back && <Icon aria-hidden className="size-4" />}
       </span>{" "}
-      {song && (
-        <span
-          lang={song.language}
-          className="max-w-full truncate font-lyrics text-lg font-semibold text-fg transition-colors group-hover:text-fg-accent"
-        >
-          {song.title}
-        </span>
-      )}
+      <span
+        lang={step.song.language}
+        className="max-w-full truncate font-lyrics text-lg font-semibold text-fg transition-colors group-hover:text-fg-accent"
+      >
+        {step.song.title}
+      </span>
     </Link>
   );
 }
@@ -124,12 +113,14 @@ export function ListPaging({
 
 /**
  * Loads both neighbors once the position is known, so whichever way the reader
- * steps (an arrow, a key, a swipe) the page paints at once rather than after a
- * server round trip. An effect rather than the arrows' own prefetch: a link's
- * waits for it to scroll into view, and the keys and the swipe must not depend
- * on where the bar is.
+ * steps (the page turn, a key, a swipe) the page paints at once rather than
+ * after a server round trip. An effect rather than the page turn's own
+ * prefetch: a link's waits for it to scroll into view, and the turn is at the
+ * foot of the song.
  */
-function usePrefetchedSteps({ previousHref, nextHref }: ListPosition) {
+function usePrefetchedSteps(position: ListPosition) {
+  const previousHref = position.previous?.href;
+  const nextHref = position.next?.href;
   const { prefetch } = useRouter();
   useEffect(() => {
     if (previousHref) prefetch(previousHref);
@@ -152,7 +143,8 @@ function useSwipePaging(position: ListPosition, surface: RefObject<HTMLElement |
   const router = useRouter();
   // The strings, not `position`, which is a new object every render and would
   // rebuild the listeners each time.
-  const { previousHref, nextHref } = position;
+  const previousHref = position.previous?.href;
+  const nextHref = position.next?.href;
 
   useEffect(() => {
     const element = surface.current;
@@ -246,7 +238,8 @@ function selectedText(): string {
 function useArrowKeyPaging(position: ListPosition): void {
   const router = useRouter();
   // The strings, not `position`; see `useSwipePaging`.
-  const { previousHref, nextHref } = position;
+  const previousHref = position.previous?.href;
+  const nextHref = position.next?.href;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

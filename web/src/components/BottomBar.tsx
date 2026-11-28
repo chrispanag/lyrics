@@ -8,12 +8,12 @@ import { useListPosition } from "@/api/useListPosition";
 import { useAuth } from "@/auth/useAuth";
 import { Avatar } from "@/components/Avatar";
 import { CATALOG_SEARCH_ATTRIBUTE } from "@/components/SearchField";
+import { ListPlace } from "@/components/ListSongNav";
 import { currentEntry, type NavItem, offeredEntries, useWarmLists } from "@/components/navItems";
 import { SongSearchBox } from "@/components/SongSearch";
 import { tabLabelText } from "@/components/textStyles";
 import { Sheet } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { positionLabel } from "@/lib/listContext";
 import { NavLink, useNavigationKey, usePathname, useSearchParams } from "@/lib/navigation";
 import type { User } from "@/lib/types";
 import { revealChrome, scrollToTop, useChromeScroll } from "@/lib/scrollChrome";
@@ -293,8 +293,7 @@ function Whereabouts({ entry }: { entry: NavItem | undefined }) {
     return (
       <>
         <ListMusic aria-hidden className="size-3.5 shrink-0" />
-        <span className="truncate">{position.listName}</span>
-        <span className="shrink-0 tabular-nums text-fg-tertiary">· {positionLabel(position)}</span>
+        <ListPlace position={position} />
       </>
     );
   }

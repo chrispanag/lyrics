@@ -1,8 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Disc3, ListMusic, Search, Shield, User as UserIcon } from "lucide-react";
+import { ListMusic, Search, Shield, User as UserIcon } from "lucide-react";
 import { useCallback } from "react";
 
 import { queries } from "@/api/hooks";
+import { BrandIcon } from "@/components/brandIcon";
 import { songSection } from "@/lib/listContext";
 import { pathMatches } from "@/lib/navigation";
 import { hasRole, type User } from "@/lib/types";
@@ -39,7 +40,7 @@ const BROWSE: NavItem = {
   // A magnifier beside the bar's Search button would be two of the same mark
   // for two different things. The brand's mark instead, which leads home from
   // the top of a desk's rail too, drawn in the tab's own color.
-  barIcon: Disc3,
+  barIcon: BrandIcon,
 };
 
 const PROFILE: NavItem = { to: "/profile", label: "Profile", icon: UserIcon, identityCard: true };

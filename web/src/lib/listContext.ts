@@ -194,22 +194,29 @@ export function searchFrom(params: NextSearchParams): URLSearchParams {
 /** Where a song sits in a list, and the addresses on either side of it. */
 export interface ListPosition {
   listName: string;
-  listHref: string;
   /** Zero-based, so what a reader is shown is `index + 1`. */
   index: number;
   total: number;
   /** Absent on the first song of the list. */
-  previousHref?: string | undefined;
+  previous?: ListStep | undefined;
   /** Absent on the last one. */
-  nextHref?: string | undefined;
-  /** The songs either side, whose titles the page turn shows. */
-  previousSong?: Song | undefined;
-  nextSong?: Song | undefined;
+  next?: ListStep | undefined;
+}
+
+/** A neighbor in a list: its address, which keeps `?list=`, and the song. */
+export interface ListStep {
+  href: string;
+  song: Song;
 }
 
 /** Where a song sits in its list, as a reader is shown it: "3 of 20". */
 export function positionLabel({ index, total }: ListPosition): string {
   return `${index + 1} of ${total}`;
+}
+
+/** What a Back that shows the list's place (`ListPlace`) is called: still Back. */
+export function backToListName(position: ListPosition): string {
+  return `Back to ${position.listName}, ${positionLabel(position)}`;
 }
 
 /**
@@ -223,16 +230,14 @@ export function listPosition(list: SongList, ref: string): ListPosition | null {
   const index = songs.findIndex((song) => songMatchesRef(song, ref));
   if (index < 0) return null;
 
-  const href = (song: Song | undefined) => (song ? songHref(song, list.id) : undefined);
+  const step = (song: Song | undefined): ListStep | undefined =>
+    song ? { href: songHref(song, list.id), song } : undefined;
 
   return {
     listName: list.name,
-    listHref: listHref(list.id),
     index,
     total: songs.length,
-    previousHref: href(songs[index - 1]),
-    nextHref: href(songs[index + 1]),
-    previousSong: songs[index - 1],
-    nextSong: songs[index + 1],
+    previous: step(songs[index - 1]),
+    next: step(songs[index + 1]),
   };
 }

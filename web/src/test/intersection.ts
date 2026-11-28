@@ -39,11 +39,6 @@ class StubIntersectionObserver implements IntersectionObserver {
     return [];
   }
 
-  /** What it has been given, for the spec that asks which element that is. */
-  observed(): Element[] {
-    return [...this.targets];
-  }
-
   /** Reports every observed element as showing `ratio` of itself. */
   report(ratio: number): void {
     const entries = [...this.targets].map(
@@ -68,12 +63,4 @@ export { StubIntersectionObserver };
  */
 export function intersectAll(ratio = 1): void {
   for (const observer of [...live]) observer.report(ratio);
-}
-
-/**
- * Everything currently being watched, whichever observer is watching it. Lets a
- * spec check `md:hidden` sits on the observed box itself (jsdom applies no CSS).
- */
-export function observedElements(): Element[] {
-  return [...live].flatMap((observer) => observer.observed());
 }
