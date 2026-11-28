@@ -14,7 +14,6 @@ import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
 import { songStack, songStackBleed } from "@/components/cardStyles";
 import { pageTitle, sectionLabel, subtitleFace, titleFace } from "@/components/textStyles";
-import { contentWidth } from "@/components/Page";
 import { BrandMark } from "@/components/Wordmark";
 import { SITE_NAME } from "@/lib/site";
 import { cn } from "@/lib/cn";
@@ -55,14 +54,12 @@ function emptyHint(searched: boolean, filtered: boolean): string {
  */
 function CatalogMasthead() {
   return (
-    <div aria-hidden className="pt-safe">
-      <div className={cn("mx-auto px-4 pt-8", contentWidth)}>
-        <p className={cn(titleFace, "flex items-center gap-2 text-4xl")}>
-          <BrandMark size="lg" />
-          {SITE_NAME}
-        </p>
-        <p className={cn(subtitleFace, "text-lg")}>Songs and their lyrics, in Greek and English</p>
-      </div>
+    <div aria-hidden className="pt-8">
+      <p className={cn(titleFace, "flex items-center gap-2 text-4xl")}>
+        <BrandMark size="lg" />
+        {SITE_NAME}
+      </p>
+      <p className={cn(subtitleFace, "text-lg")}>Songs and their lyrics, in Greek and English</p>
     </div>
   );
 }

@@ -142,7 +142,7 @@ describe("BrowsePage", () => {
     const masthead = name.closest("[aria-hidden]");
     expect(masthead).toHaveTextContent("Songs and their lyrics, in Greek and English");
     // Before the search in the page, and gone once the panes split.
-    expect(masthead?.parentElement).toHaveClass("@3xl/app:hidden");
+    expect(masthead?.closest(".pt-safe")).toHaveClass("@3xl/app:hidden");
     expect(masthead?.compareDocumentPosition(screen.getByRole("searchbox")) ?? 0).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );

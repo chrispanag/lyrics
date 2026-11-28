@@ -148,7 +148,13 @@ export function ReaderPane({
   return (
     <div className="@3xl/app:flex @3xl/app:min-h-0 @3xl/app:flex-1 @3xl/app:flex-col">
       {!songOpen && <PageTitle name={title} />}
-      {masthead && <div className="@3xl/app:hidden">{masthead}</div>}
+      {/* In the pane's own column, clear of a notched phone's status bar,
+          since nothing is above it. */}
+      {masthead && (
+        <div className="pt-safe @3xl/app:hidden">
+          <div className={cn("mx-auto px-4", contentWidth)}>{masthead}</div>
+        </div>
+      )}
       {/* `contents` below `@3xl`: a box only as tall as the header would be
           the sticky header's whole scroll range, and it would scroll away. */}
       <div className="contents @3xl/app:block @3xl/app:shrink-0">{header}</div>
