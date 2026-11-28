@@ -84,7 +84,10 @@ describe("Layout navigation", () => {
       "/profile",
     ]);
     expect(links[0]).toHaveAccessibleName("Songfolio");
-    expect(links.slice(1, 4).map((link) => link.textContent)).toEqual(["Browse", "Lists", "Admin"]);
+    // Named once each, though a touch screen's caption repeats the name on screen.
+    for (const [index, name] of ["Browse", "Lists", "Admin"].entries()) {
+      expect(links[index + 1]).toHaveAccessibleName(name);
+    }
     expect(links[4]).toHaveAccessibleName(/^Christos/);
   });
 
@@ -92,6 +95,33 @@ describe("Layout navigation", () => {
     renderWithProviders(<Layout />, { user: makeUser() });
 
     expect(within(rail()).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  // jsdom matches no media, so the classes are the touch screen's layout: a
+  // name under each entry's icon, where nothing hovers to show it beside.
+  it("names its entries under their icons on a touch screen, but not the brand or the picture", () => {
+    renderWithProviders(<Layout />, {
+      user: makeUser({ display_name: "Christos", role: "admin" }),
+    });
+
+    // The caption is hidden from assistive tech: the hover label stays the
+    // name, so each is named once.
+    const caption = (name: string | RegExp) =>
+      within(rail()).getByRole("link", { name }).querySelector(".pointer-coarse\\:block");
+    for (const name of ["Browse", "Lists", "Admin"]) {
+      expect(caption(name)).toHaveClass("hidden", "pointer-coarse:block");
+      expect(caption(name)).toHaveAttribute("aria-hidden", "true");
+      expect(caption(name)).toHaveTextContent(name);
+      // And the floating label, which still names the link, stays unseen
+      // there even under keyboard focus, so the name is not shown twice.
+      const label = within(rail())
+        .getByRole("link", { name })
+        .querySelector<HTMLElement>(":scope > span:not([aria-hidden])");
+      expect(label).toHaveClass("pointer-coarse:opacity-0!");
+      expect(label).not.toHaveClass("hidden");
+    }
+    expect(caption("Songfolio")).toBeNull();
+    expect(caption(/^Christos/)).toBeNull();
   });
 
   it("keeps the rail's link for a guest, who has no picture to press", () => {

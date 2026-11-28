@@ -445,14 +445,22 @@ function SongNotes({ notes }: { notes: string }) {
 }
 
 /**
+ * The genres and the Watch button: one row, as tall as the button whether or
+ * not the song has a video, and the placeholder holds the same row, so the
+ * lyrics under it do not move as a song with genres or a video arrives, or as
+ * a video turns up. A song with neither drops the row, and its lyrics rise.
+ */
+const GENRE_ROW = "mt-3 flex min-h-11 flex-wrap items-center gap-1.5";
+
+/**
  * What is known about a song besides its words, between the title and the
  * lyrics at every width, as a record sleeve prints its credits: the facts in
  * one band that wraps, the recordings line, the genres, and the way to the
  * video. The video plays here, above the lyrics, so the words stay readable
  * while it plays; it opens on a press and is put away on another.
  *
- * The skeleton mirrors the band's first line and the genres, so the lyrics
- * under them barely move as the song arrives; change the two together.
+ * The skeleton mirrors the band's first line and the genres row
+ * (`GENRE_ROW`); change the two together.
  */
 function SongDetails({
   song,
@@ -479,7 +487,7 @@ function SongDetails({
         <>
           <SongFacts song={song} onShowRecordings={onShowRecordings} />
           {(song.genres.length > 0 || videoId) && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <div className={GENRE_ROW}>
               {song.genres.map((genre) => (
                 <GenreTag key={genre.id} genre={genre} linked />
               ))}
@@ -515,7 +523,9 @@ function SongDetails({
         <>
           <Skeleton className="h-5 w-2/3" />
           {/* No `rounded-full` on the chip: `cn` is a plain join. */}
-          <Skeleton className="mt-3 h-6 w-20" />
+          <div className={GENRE_ROW}>
+            <Skeleton className="h-6 w-20" />
+          </div>
         </>
       )}
     </aside>

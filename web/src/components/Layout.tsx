@@ -15,6 +15,7 @@ import {
 } from "@/components/navItems";
 import { stickyBarClasses, useStickyBar } from "@/components/stickyBar";
 import { litFill } from "@/components/cardStyles";
+import { tabLabelText } from "@/components/textStyles";
 import { BrandMark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { Link, NavLink, usePathname, useSearchParams } from "@/lib/navigation";
@@ -25,10 +26,15 @@ import { SITE_NAME } from "@/lib/site";
  * A rail entry: a square as tall as the search field and a song's tools,
  * `group` for its label. Lit, it takes the accent's tint; at rest it shades
  * under the pointer and keeps `rest`, its own text color, if any.
+ *
+ * `named`: the entry carries a `RailCaption`, so on a touch screen the square
+ * grows to hold it.
  */
-function railEntryClass(lit: boolean, rest?: string): string {
+function railEntryClass(lit: boolean, rest?: string, named = false): string {
   return cn(
     "group relative grid size-12 place-items-center rounded-control transition-colors",
+    named &&
+      "pointer-coarse:h-auto pointer-coarse:min-h-12 pointer-coarse:w-14 pointer-coarse:gap-0.5 pointer-coarse:py-1.5",
     litFill(lit),
     lit ? "text-fg-accent-subtle" : rest,
   );
@@ -91,17 +97,40 @@ export function Layout({ children }: { children?: ReactNode }) {
  * An entry's name, drawn as a label beside the rail while the entry is hovered
  * or has visible focus. Hidden by opacity alone, so it stays the link's
  * accessible name.
+ *
+ * `captioned`: the entry shows its name under its icon on a touch screen
+ * (`RailCaption`), so there this label stays unseen even under keyboard focus,
+ * rather than say the name twice. Still by opacity, so it still names the link.
  */
-function RailLabel({ children }: { children: ReactNode }) {
+function RailLabel({ children, captioned = false }: { children: ReactNode; captioned?: boolean }) {
   return (
     <span
       className={cn(
         "pointer-events-none absolute top-1/2 left-full z-floating ml-2 -translate-y-1/2",
         "rounded-compact bg-fg px-2.5 py-1.5 text-left text-xs font-medium whitespace-nowrap text-canvas",
         "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 motion-safe:transition-opacity",
+        captioned && "pointer-coarse:opacity-0!",
         // Forced colors paints over the fill, which leaves the text floating.
         "forced-colors:border",
       )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * An entry's name under its icon, shown only on a touch screen
+ * (`pointer-coarse`), where nothing hovers to bring up its `RailLabel`. Set as
+ * the bottom bar's tabs set theirs on a phone. Hidden from assistive tech: the
+ * `RailLabel` is the name. The brand's mark and the reader's picture have none:
+ * they name themselves.
+ */
+function RailCaption({ children }: { children: ReactNode }) {
+  return (
+    <span
+      aria-hidden
+      className={cn("hidden max-w-full truncate pointer-coarse:block", tabLabelText)}
     >
       {children}
     </span>
@@ -123,10 +152,11 @@ function RailEntry({ item, active }: { item: NavItem; active: boolean }) {
       active={active}
       data-guest-only={item.identityCard || undefined}
       {...(item.warmsLists ? intent : undefined)}
-      className={({ isActive }) => railEntryClass(isActive, "text-fg-tertiary")}
+      className={({ isActive }) => railEntryClass(isActive, "text-fg-tertiary", true)}
     >
       <item.icon aria-hidden className="size-5" />
-      <RailLabel>{item.label}</RailLabel>
+      <RailLabel captioned>{item.label}</RailLabel>
+      <RailCaption>{item.label}</RailCaption>
     </NavLink>
   );
 }
@@ -134,7 +164,8 @@ function RailEntry({ item, active }: { item: NavItem; active: boolean }) {
 /**
  * The navigation from `md` up: the brand's mark, which leads home, an icon for
  * each entry, and at its foot the reader's picture, which leads to their
- * profile, or Sign in. Each entry's name shows beside it on hover and focus.
+ * profile, or Sign in. Each entry's name shows beside it on hover and focus,
+ * and under it on a touch screen.
  *
  * It sits on the page's own color with no rule of its own, so it frames the
  * screen rather than reading as one of its columns. Below `md` the bottom bar
@@ -153,9 +184,11 @@ function NavRail() {
     // header's `py-3`, so the brand's mark centers on the search field beside
     // it.
     <aside className="sticky top-0 z-sticky hidden h-dvh w-16 shrink-0 flex-col items-center pt-[calc(var(--sheet-inset)+--spacing(3))] pb-4 md:flex">
-      {/* `mb-6` sets the brand apart from the entries under it. */}
-      <Link href="/" aria-label={SITE_NAME} className={cn(railEntryClass(false), "mb-6")}>
+      {/* Named by its label, as the other entries are. `mb-6` sets it apart
+          from the entries under it. */}
+      <Link href="/" className={cn(railEntryClass(false), "mb-6")}>
         <BrandMark />
+        <RailLabel>{SITE_NAME}</RailLabel>
       </Link>
 
       {/* The picture stays inside the <nav> landmark: it is the way to
@@ -180,9 +213,14 @@ function NavRail() {
               </RailLabel>
             </NavLink>
           ) : (
-            <Link href="/login" data-guest-only className={railEntryClass(false, "text-fg-accent")}>
+            <Link
+              href="/login"
+              data-guest-only
+              className={railEntryClass(false, "text-fg-accent", true)}
+            >
               <LogIn aria-hidden className="size-5" />
-              <RailLabel>Sign in</RailLabel>
+              <RailLabel captioned>Sign in</RailLabel>
+              <RailCaption>Sign in</RailCaption>
             </Link>
           )}
         </div>

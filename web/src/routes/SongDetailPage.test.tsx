@@ -1836,6 +1836,29 @@ describe("SongDetailPage tools bar on a phone", () => {
 });
 
 describe("SongDetailPage credits", () => {
+  // jsdom lays nothing out, so the classes are the heights: the row the
+  // placeholder holds is the one the song fills, as tall as the Watch button
+  // whether or not a video turns up, so the lyrics under it stay where they are.
+  it("hold the genres row's height while the song loads", async () => {
+    const [held, release] = deferred();
+    server.use(
+      http.get(`${API}/api/v1/songs/:id`, async () => {
+        await held;
+        return HttpResponse.json(makeSong({ youtube_video_id: "dQw4w9WgXcQ" }));
+      }),
+    );
+
+    renderDetail();
+
+    const placeholder = screen.getByRole("complementary", { name: "Song details" });
+    const reserved = placeholder.lastElementChild?.className;
+    expect(reserved).toContain("min-h-11");
+
+    release();
+    const watch = await screen.findByRole("button", { name: "Watch" });
+    expect(watch.parentElement?.className).toBe(reserved);
+  });
+
   // As a record sleeve prints them: after the title, before the words, at
   // every width, with no column of their own beside the lyrics.
   it("come after the title and before the lyrics", async () => {
