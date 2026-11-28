@@ -14,6 +14,7 @@ import {
   useWarmLists,
 } from "@/components/navItems";
 import { stickyBarClasses, useStickyBar } from "@/components/stickyBar";
+import { litFill } from "@/components/cardStyles";
 import { BrandMark } from "@/components/Wordmark";
 import { cn } from "@/lib/cn";
 import { Link, NavLink, usePathname, useSearchParams } from "@/lib/navigation";
@@ -28,7 +29,8 @@ import { SITE_NAME } from "@/lib/site";
 function railEntryClass(lit: boolean, rest?: string): string {
   return cn(
     "group relative grid size-12 place-items-center rounded-control transition-colors",
-    lit ? "bg-accent-subtle text-fg-accent-subtle" : cn("hover:bg-subtle", rest),
+    litFill(lit),
+    lit ? "text-fg-accent-subtle" : rest,
   );
 }
 

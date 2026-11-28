@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { memo, useCallback } from "react";
 
 import { queries } from "@/api/hooks";
+import { litFill, songRowInset } from "./cardStyles";
 import { GenreTag } from "./GenreTag";
 import { Snippet } from "./Snippet";
 import { cn } from "@/lib/cn";
@@ -57,8 +58,9 @@ export const SongCard = memo(function SongCard({
       aria-current={current ? "page" : undefined}
       {...intent}
       className={cn(
-        "group flex items-baseline gap-3 rounded-control px-3 py-2 transition-colors active:bg-accent-subtle",
-        current ? "bg-accent-subtle" : "hover:bg-subtle",
+        "group flex items-baseline gap-3 rounded-control py-2 transition-colors active:bg-accent-subtle",
+        songRowInset,
+        litFill(current),
       )}
     >
       <div className="min-w-0 flex-1">

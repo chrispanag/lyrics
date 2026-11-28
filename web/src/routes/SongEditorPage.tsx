@@ -563,7 +563,7 @@ export function SongEditorPage() {
                 {videoId && <WatchOnYouTube videoId={videoId} />}
 
                 <div className="space-y-2">
-                  <span className="block text-sm font-medium text-fg-secondary">Performers</span>
+                  <span className={cn(sectionLabel, "block")}>Performers</span>
                   {recording.performers.map((performer, performerIndex) => {
                     const error = performerError(recording, performer);
                     const errorId = `recording-${index}-performer-${performerIndex}-error`;

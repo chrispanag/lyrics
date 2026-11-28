@@ -32,6 +32,7 @@ import {
   cardHover,
   songStack,
   songStackBleed,
+  songStackBleedStart,
   tagChrome,
 } from "@/components/cardStyles";
 import { linkClasses } from "@/components/textStyles";
@@ -84,7 +85,7 @@ const StaticSongList = memo(function StaticSongList({
 }) {
   return (
     // Bled out on the left only when a remove button holds the right edge.
-    <ul className={cn(songStack, onRemove ? "-ml-3" : songStackBleed)}>
+    <ul className={cn(songStack, onRemove ? songStackBleedStart : songStackBleed)}>
       {songs.map((song) => (
         <li key={song.id}>
           <SongRow

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
+import { songStack } from "./cardStyles";
 import { SongCard } from "./SongCard";
 import { makeGenre, makeRecording, makeSong } from "@/test/handlers";
 
@@ -75,7 +76,7 @@ export const Current: Story = {
  */
 export const Stacked: Story = {
   render: () => (
-    <div className="space-y-1">
+    <div className={songStack}>
       <SongCard song={makeSong({ genres: [makeGenre()] })} />
       <SongCard
         song={makeSong({ id: "song-2", slug: "s2", title: "Άρνηση", release_year: null })}

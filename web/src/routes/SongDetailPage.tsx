@@ -226,7 +226,7 @@ function SongArticle() {
             {/* First, apart from the song's actions: it changes how the lyrics
                 read, not the song. */}
             <TextSizeControl className="mr-2" />
-            {/* For everyone. The card a reader clicked already carries the
+            {/* For everyone. The row a reader clicked already carries the
                 tallies, so this need not wait for the full read. */}
             <Button variant="ghost" size="sm" disabled={!song} onClick={() => setStatsOpen(true)}>
               <ChartColumn aria-hidden className="size-4" />
@@ -303,8 +303,7 @@ function SongArticle() {
                 // `lang` pairs with `<html lang="en">`: the lyrics are mostly Greek.
                 <p
                   lang={fullSong.language}
-                  className="lyrics-size leading-loose text-fg"
-                  style={{ fontFamily: "var(--font-lyrics)" }}
+                  className="lyrics-size font-lyrics leading-loose text-fg"
                 >
                   <LyricsLines lyrics={fullSong.lyrics} />
                 </p>
@@ -433,9 +432,12 @@ function SongTitle({ song }: { song: Song }) {
  * kept: notes are user input, never markup.
  */
 function SongNotes({ notes }: { notes: string }) {
+  const headingId = useId();
   return (
-    <section aria-label="Notes" className="mt-10 font-lyrics">
-      <h2 className="sr-only">Notes</h2>
+    <section aria-labelledby={headingId} className="mt-10 font-lyrics">
+      <h2 id={headingId} className="sr-only">
+        Notes
+      </h2>
       <div aria-hidden className="mb-4 w-16 border-t border-line" />
       <p className="whitespace-pre-line text-sm italic leading-relaxed text-fg-muted">{notes}</p>
     </section>

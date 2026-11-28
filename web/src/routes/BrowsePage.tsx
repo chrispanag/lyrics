@@ -234,14 +234,14 @@ export function BrowsePage() {
         />
       )}
 
-      <div className={`${songStackBleed} ${songStack}`}>
+      <div className={cn(songStackBleed, songStack)}>
         {songs.map((song) => (
           <SongCard key={song.id} song={song} search={cardSearch} />
         ))}
       </div>
 
       {isFetchingNextPage && (
-        <Skeletons count={2} className="h-14 w-full" stackClassName={`mt-1 ${songStack}`} />
+        <Skeletons count={2} className="h-14 w-full" stackClassName={cn("mt-1", songStack)} />
       )}
 
       {isFetchNextPageError && (

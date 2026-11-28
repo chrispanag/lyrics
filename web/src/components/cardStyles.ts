@@ -13,10 +13,25 @@
 export const songStack = "space-y-1";
 
 /**
- * Pulls a stack of song rows out by a row's own inset (`px-3`), so that their
- * titles line up with the text above the list while the fill keeps its room.
+ * A song row's inset (`SongCard`), and the stack pulled out by it, so that the
+ * rows' titles line up with the text above the list while the fill keeps its
+ * room. Written once, so the three cannot drift apart. `songStackBleedStart`
+ * pulls the start edge only, for a list whose rows end in a control of their
+ * own (a list's remove button), which keeps the end edge where it is.
  */
+export const songRowInset = "px-3";
 export const songStackBleed = "-mx-3";
+export const songStackBleedStart = "-ms-3";
+
+/**
+ * The fill of an item that can be lit (the current song, the rail's entry for
+ * the screen, the highlighted suggestion): the accent's tint when lit, and the
+ * soft hover fill at rest. One pair, so the current item looks the same
+ * wherever it is.
+ */
+export function litFill(lit: boolean): string {
+  return lit ? "bg-accent-subtle" : "hover:bg-subtle";
+}
 
 /** The resting border, shared by everything card-shaped. */
 export const cardChrome = "rounded-card border border-line";
@@ -43,8 +58,8 @@ export const sheetChrome =
 export const sheetFrame = "@3xl/app:py-(--sheet-inset) @3xl/app:pr-(--sheet-inset)";
 
 /**
- * A filled panel set into the page rather than bordered: a song's notes, the
- * account details. Padding included, since every panel has the same.
+ * A filled panel set into the page rather than bordered: the account
+ * details. Padding included, since every panel has the same.
  */
 export const panelChrome = "rounded-card bg-panel p-4";
 
