@@ -178,6 +178,18 @@ export const PhoneIsTheSheet: Story = {
     await expect(getComputedStyle(column).getPropertyValue("--sticky-bar-bg").trim()).toBe(
       getComputedStyle(document.documentElement).getPropertyValue("--color-surface").trim(),
     );
+
+    // The bottom bar is not: it is the navigation, on the canvas, as a desk's
+    // rail is.
+    const canvasProbe = document.createElement("div");
+    canvasProbe.className = "bg-canvas/95";
+    document.body.append(canvasProbe);
+    const canvasColor = getComputedStyle(canvasProbe).backgroundColor;
+    canvasProbe.remove();
+    const tabs = bottomBar(canvas);
+    if (!tabs) throw new Error("No bottom bar on a phone.");
+    await expect(getComputedStyle(tabs).backgroundColor).toBe(canvasColor);
+    await expect(canvasColor).not.toBe(surface);
   },
 };
 
