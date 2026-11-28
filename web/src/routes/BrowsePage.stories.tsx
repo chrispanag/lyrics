@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { HttpResponse, delay, http } from "msw";
 import { expect } from "storybook/test";
+import { phoneGlobals, phoneParameters } from "@/test/viewport";
 
 import { BrowsePage } from "./BrowsePage";
 import type { Song } from "@/lib/types";
@@ -35,6 +36,23 @@ export const Catalog: Story = {
   play: async ({ canvas }) => {
     await expect(await canvas.findByText("Φραγκοσυριανή")).toBeVisible();
     await expect(canvas.queryByRole("link", { name: /add song/i })).toBeNull();
+  },
+};
+
+/**
+ * The plain catalog on a phone opens on its title page: the site's name in
+ * the titles' serif, above the search.
+ */
+export const PhoneTitlePage: Story = {
+  parameters: phoneParameters,
+  globals: phoneGlobals,
+  play: async ({ canvas }) => {
+    await canvas.findByText("Φραγκοσυριανή");
+    const name = canvas.getByText("Songfolio");
+    await expect(name).toBeVisible();
+    await expect(name.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      canvas.getByRole("searchbox").getBoundingClientRect().top,
+    );
   },
 };
 

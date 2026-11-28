@@ -13,7 +13,9 @@ import { CATALOG_SEARCH_ATTRIBUTE, SearchField } from "@/components/SearchField"
 import { SearchHeader } from "@/components/SearchHeader";
 import { SongCard } from "@/components/SongCard";
 import { songStack, songStackBleed } from "@/components/cardStyles";
-import { pageTitle, sectionLabel } from "@/components/textStyles";
+import { pageSubtitle, pageTitle, sectionLabel, titleFace } from "@/components/textStyles";
+import { BrandMark } from "@/components/Wordmark";
+import { SITE_NAME } from "@/lib/site";
 import { cn } from "@/lib/cn";
 import {
   Button,
@@ -39,6 +41,26 @@ function emptyHint(searched: boolean, filtered: boolean): string {
   if (searched) return "Try fewer words, or check the spelling.";
   if (filtered) return "No song matches every filter. Try removing one.";
   return "Songs added to the catalog will appear here.";
+}
+
+/**
+ * The catalog's title page, until the panes split: the site's name, set as a
+ * song's title is, and what is inside, as its subtitle. A desk shows the name
+ * in the empty pane beside the catalog instead. It scrolls away, and the
+ * search sticks where it was, as a large title folds into a navigation bar.
+ * Decorative: the screen's heading is the pane's own, and the tab names the
+ * site.
+ */
+function CatalogMasthead() {
+  return (
+    <div aria-hidden className="pt-8">
+      <p className={cn(titleFace, "flex items-center gap-2 text-4xl")}>
+        <BrandMark size="lg" />
+        {SITE_NAME}
+      </p>
+      <p className={pageSubtitle}>Songs and their lyrics, in Greek and English</p>
+    </div>
+  );
 }
 
 /** Browse and search. Filter state lives in the URL, so it is shareable. */
@@ -138,6 +160,11 @@ export function BrowsePage() {
   return (
     <ReaderPane
       title={name}
+      // The catalog's, searched or not: a filter, or a person's or genre's
+      // page, opens on what was asked for. Not keyed on the search, which
+      // reaches the address as the reader types: the field would jump under
+      // their thumb with the title page coming and going above it.
+      masthead={hasFilters ? undefined : <CatalogMasthead />}
       header={
         <SearchHeader
           trailing={
