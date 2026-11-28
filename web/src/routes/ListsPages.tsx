@@ -35,7 +35,7 @@ import {
   songStackBleedStart,
   tagChrome,
 } from "@/components/cardStyles";
-import { linkClasses } from "@/components/textStyles";
+import { linkClasses, pageSubtitle, pageTitle } from "@/components/textStyles";
 import { ListBar, ListSkeleton } from "@/components/ListBar";
 import { MenuItem, MoreActionsMenu } from "@/components/MoreActionsMenu";
 import { PageHeader } from "@/components/PageHeader";
@@ -390,10 +390,9 @@ export function ListDetailPage() {
     <ReaderPane header={<ListBar actions={actions} />} title={list.name}>
       {/* Not a <header>: the bar above is the pane's banner. */}
       <div className="mb-6">
-        <PaneHeading className="text-3xl font-bold leading-tight tracking-tight text-balance @3xl/app:text-2xl">
-          {list.name}
-        </PaneHeading>
-        {list.description && <p className="mt-1 text-lg text-fg-muted">{list.description}</p>}
+        {/* Set as a song's title and its other title are. */}
+        <PaneHeading className={pageTitle}>{list.name}</PaneHeading>
+        {list.description && <p className={pageSubtitle}>{list.description}</p>}
         <div className="mt-3 flex items-center gap-2">
           <p className="text-sm text-fg-muted">{songCount(list.item_count)}</p>
           <VisibilityTag isPublic={list.is_public} />

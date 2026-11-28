@@ -4,8 +4,9 @@ import { pageTitle } from "./textStyles";
 import { cn } from "@/lib/cn";
 
 /**
- * The heading of a single-column page: the lists index, Admin, Profile and the
- * song editor. It renders the screen's one h1, so a page renders one of these.
+ * The heading of a single-column page: the lists index, Admin, a guest's
+ * Profile and the song editor. It renders the screen's one h1, so a page
+ * renders one of these.
  *
  * The reader panes (a list, Browse, a song) do not use it: their way back and
  * their actions sit in a sticky toolbar, and their titles are what is read.

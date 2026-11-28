@@ -12,8 +12,24 @@ import { cn } from "@/lib/cn";
  */
 export const sectionLabel = "text-sm font-medium text-fg-secondary";
 
-/** A screen's title: a page header's, an auth screen's, a catalog page's. */
-export const pageTitle = "text-2xl font-bold tracking-tight text-balance break-words";
+/**
+ * The face of every title, without its size: a song's (`SongTitle`), which is
+ * the largest, and a screen's (`pageTitle`). The lyrics' serif, so every screen
+ * reads as part of the same printed piece: semibold, since a serif is already
+ * dark at display sizes, and without a sans title's tight tracking, which
+ * crowds a serif's Greek. `break-words`: a title is user input, and one long
+ * word must wrap rather than push the column wider than a phone.
+ */
+export const titleFace = "font-lyrics font-semibold leading-tight text-balance break-words";
+
+/** The face of the line under a title, without its size: italic, quiet, just under it. */
+export const subtitleFace = "mt-1 font-lyrics italic text-fg-muted";
+
+/** A screen's title: a page header's, a list's, an auth screen's, a catalog page's. */
+export const pageTitle = cn(titleFace, "text-3xl");
+
+/** The line under a `pageTitle`: a list's description, a reader's role. */
+export const pageSubtitle = cn(subtitleFace, "text-lg");
 
 /**
  * The text of a navigation entry's name set under its icon: the bottom bar's

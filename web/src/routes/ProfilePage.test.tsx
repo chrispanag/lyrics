@@ -207,6 +207,32 @@ describe("ProfilePage", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 
+  // The reader is the page's title, as a song is its own, and the account's
+  // facts sit on ruled rows with their changes as links at the row's end.
+  it("titles the page with the reader, and sets out the account as facts", () => {
+    renderWithProviders(<ProfilePage />, {
+      user: makeUser({ display_name: "Μαρία", email: "maria@example.com", role: "contributor" }),
+    });
+
+    expect(screen.getByRole("heading", { level: 1, name: "Μαρία" })).toBeInTheDocument();
+    expect(screen.getByText("contributor")).toBeInTheDocument();
+    expect(screen.getByText("Email").nextElementSibling).toHaveTextContent("maria@example.com");
+    expect(screen.getByRole("link", { name: "Change password" })).toHaveAttribute(
+      "href",
+      "/change-password",
+    );
+  });
+
+  it("titles the page with the email when there is no display name", () => {
+    renderWithProviders(<ProfilePage />, {
+      user: makeUser({ display_name: null, email: "maria@example.com" }),
+    });
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "maria@example.com" }),
+    ).toBeInTheDocument();
+  });
+
   it("signs out from the button at the foot of the page", async () => {
     const logout = vi.fn(async () => {});
 
@@ -224,7 +250,8 @@ describe("ProfilePage", () => {
 
     const link = screen.getByRole("link", { name: "Admin console" });
     expect(link).toHaveAttribute("href", "/admin");
-    expect(link.parentElement).toHaveClass("md:hidden");
+    // Its whole list, not the link: the row and its rule go at a desk.
+    expect(link.closest("dl")).toHaveClass("md:hidden");
   });
 
   it("offers no console to anyone else", () => {

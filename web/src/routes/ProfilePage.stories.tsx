@@ -40,6 +40,9 @@ export const SignedIn: Story = {
     a11y: { config: { rules: [{ id: "label-content-name-mismatch", enabled: false }] } },
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole("heading", { name: "Profile" })).toBeVisible();
+    // The reader is the title, with their role under it.
+    await expect(canvas.getByRole("heading", { level: 1, name: "Μαρία Φαραντούρη" })).toBeVisible();
+    await expect(canvas.getByText("contributor")).toBeVisible();
+    await expect(canvas.getByRole("link", { name: "Change password" })).toBeVisible();
   },
 };
